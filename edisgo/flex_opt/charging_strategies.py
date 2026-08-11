@@ -65,7 +65,7 @@ def charging_strategy(
     timestamp_share_threshold: Number = 0.2,
     minimum_charging_capacity_factor: Number = 0.1,
     charging_park_ids: Iterable[int] | None = None,
-):
+) -> None:
     """
     Applies charging strategy to set EV charging time series at charging parks.
 
@@ -172,6 +172,11 @@ def charging_strategy(
 
     if strategy == "dumb":
         # "dumb" charging
+        # Collect each charging park's series and add them to the time series in a
+        # single call after the loop. Adding them one at a time concatenates onto
+        # the growing loads_active_power frame on every iteration (O(parks^2)),
+        # which dominated the runtime on large grids.
+        cp_ts = {}
         for cp in charging_parks:
             dummy_ts = np.zeros(len_ts)
 
@@ -189,13 +194,19 @@ def charging_strategy(
             ].itertuples():
                 dummy_ts[start : start + stop] += cap
 
+            cp_ts[cp.edisgo_id] = dummy_ts
+
+        if cp_ts:
             edisgo_obj.timeseries.add_component_time_series(
                 "loads_active_power",
-                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex),
+                pd.DataFrame(data=cp_ts, index=timeindex),
             )
 
     elif strategy == "reduced":
         # "reduced" charging
+        # See the "dumb" branch above: accumulate all park columns and add them
+        # once to avoid the O(parks^2) per-park concatenation.
+        cp_ts = {}
         for cp in charging_parks:
             dummy_ts = np.zeros(len_ts)
 
@@ -227,9 +238,12 @@ def charging_strategy(
                 else:
                     dummy_ts[start : start + stop_reduced] += cap_reduced
 
+            cp_ts[cp.edisgo_id] = dummy_ts
+
+        if cp_ts:
             edisgo_obj.timeseries.add_component_time_series(
                 "loads_active_power",
-                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex),
+                pd.DataFrame(data=cp_ts, index=timeindex),
             )
 
     elif strategy == "residual":

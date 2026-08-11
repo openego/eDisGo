@@ -64,7 +64,10 @@ from edisgo.opf.results.opf_result_class import OPFResults
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
-from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
+from edisgo.tools.spatial_complexity_reduction import (
+    apply_reduced_results_to_full_grid,
+    spatial_complexity_reduction,
+)
 from edisgo.tools.tools import (
     determine_grid_integration_voltage_level,
     get_path_length_to_station,
@@ -1243,7 +1246,7 @@ class EDisGo:
         If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
         True input for `timesteps_pfa` is overwritten and therefore ignored.
 
-        See :ref:`features-in-detail` for more information on how network
+        See :ref:`grid-reinforcement` for more information on how network
         reinforcement is conducted.
 
         Parameters
@@ -2104,7 +2107,7 @@ class EDisGo:
         :attr:`~.edisgo.EDisGo.import_electromobility`.
 
         It is assumed that only 'private' charging processes at 'home' or at 'work' can
-        be flexibilized. 'public' charging processes will always be 'dumb'.
+        be flexibilized. 'public' and 'hpc' charging processes will always be 'dumb'.
 
         The charging time series at each charging parks are written to
         :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
@@ -2348,8 +2351,9 @@ class EDisGo:
         Gets industrial and CTS DSM profiles from the
         `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
-        Profiles comprise minimum and maximum load increase in MW as well as maximum
-        energy pre- and postponing in MWh. The data is written to the
+        Profiles comprise the maximum load decrease (``p_min``) and maximum load
+        increase (``p_max``) in MW as well as the maximum energy preponing (``e_min``)
+        and postponing (``e_max``) in MWh. The data is written to the
         :class:`~.network.dsm.DSM` object.
 
         Currently, the only supported data source is scenario data generated
@@ -2358,7 +2362,6 @@ class EDisGo:
 
         Parameters
         ----------
-        edisgo_object : :class:`~.EDisGo`
         scenario : str
             Scenario for which to retrieve DSM data. Possible options
             are 'eGon2035' and 'eGon100RE'.
@@ -2921,15 +2924,14 @@ class EDisGo:
         if dist_a.isna().any():
             try:
                 mv_graph = mv_a.graph
+                # Compute all path lengths from source at once using BFS instead
+                # of one shortest_path call per bus.
+                path_lengths_a = nx.single_source_shortest_path_length(
+                    mv_graph, source=source_a
+                )
                 for bus in mv_buses_a:
                     if pd.isna(dist_a.loc[bus]):
-                        try:
-                            path = nx.shortest_path(
-                                mv_graph, source=source_a, target=bus
-                            )
-                            dist_a.loc[bus] = len(path) - 1  # number of edges
-                        except (nx.NetworkXNoPath, nx.NodeNotFound):
-                            dist_a.loc[bus] = 0
+                        dist_a.loc[bus] = path_lengths_a.get(bus, 0)
             except Exception:
                 # Fallback: set all NaN values to 0
                 dist_a = dist_a.fillna(0)
@@ -2937,15 +2939,14 @@ class EDisGo:
         if dist_b.isna().any():
             try:
                 mv_graph = mv_b.graph
+                # Compute all path lengths from source at once using BFS instead
+                # of one shortest_path call per bus.
+                path_lengths_b = nx.single_source_shortest_path_length(
+                    mv_graph, source=source_b
+                )
                 for bus in mv_buses_b:
                     if pd.isna(dist_b.loc[bus]):
-                        try:
-                            path = nx.shortest_path(
-                                mv_graph, source=source_b, target=bus
-                            )
-                            dist_b.loc[bus] = len(path) - 1  # number of edges
-                        except (nx.NetworkXNoPath, nx.NodeNotFound):
-                            dist_b.loc[bus] = 0
+                        dist_b.loc[bus] = path_lengths_b.get(bus, 0)
             except Exception:
                 # Fallback: set all NaN values to 0
                 dist_b = dist_b.fillna(0)
@@ -3552,6 +3553,65 @@ class EDisGo:
             **kwargs,
         )
         return edisgo_obj, busmap_df, linemap_df
+
+    def map_reduced_results_to_full_grid(
+        self,
+        reduced_grid: EDisGo,
+        flexible_cps: list | None = None,
+        flexible_hps: list | None = None,
+        flexible_loads: list | None = None,
+        flexible_storage_units: list | None = None,
+    ) -> EDisGo:
+        """
+        Writes optimized flexible-component dispatch from a spatially-reduced
+        grid back onto this (full) grid.
+
+        Counterpart to :meth:`spatial_complexity_reduction`: where that
+        method shrinks this grid for a faster OPF, this method maps the OPF's
+        active-power results from ``reduced_grid`` back onto ``self`` so
+        reinforcement can run on the full topology. Only components the OPF
+        actually rewrites are touched — flexible charging points, heat pumps,
+        DSM loads, and storage units. Inflexible loads/generators are
+        untouched, since the OPF never changed their series and ``self``
+        already holds the correct values for them.
+
+        See
+        :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
+        for the full matching/disaggregation rules and the reactive-power
+        recompute this method triggers as a side effect.
+
+        Parameters
+        ----------
+        reduced_grid : :class:`~.EDisGo`
+            The spatially-reduced EDisGo instance the OPF ran on. Supplies
+            the optimized active-power series and, if aggregated, the
+            ``old_name`` provenance for disaggregation.
+        flexible_cps : list of str, optional
+            Names of flexible charging points in ``reduced_grid`` to map
+            back.
+        flexible_hps : list of str, optional
+            Names of flexible heat-pump loads in ``reduced_grid`` to map
+            back.
+        flexible_loads : list of str, optional
+            Names of flexible DSM loads in ``reduced_grid`` to map back.
+        flexible_storage_units : list of str, optional
+            Names of flexible storage units in ``reduced_grid`` to map back.
+
+        Returns
+        -------
+        :class:`~.EDisGo`
+            ``self``, with active power written for the given flexible
+            components and reactive power recomputed.
+
+        """
+        return apply_reduced_results_to_full_grid(
+            full_grid=self,
+            reduced_grid=reduced_grid,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+        )
 
     def check_integrity(self):
         """

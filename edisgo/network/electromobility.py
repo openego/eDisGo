@@ -9,19 +9,27 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+from __future__ import annotations
+
 import logging
 import os
 
+from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
+import numpy as np
 import pandas as pd
 
 from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
+from edisgo.tools.tools import align_series_to_timeindex
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -357,7 +365,13 @@ class Electromobility:
     def flexibility_bands(self, flex_dict):
         self._flexibility_bands = flex_dict
 
-    def get_flexibility_bands(self, edisgo_obj, use_case, resample=True, tol=1e-6):
+    def get_flexibility_bands(
+        self,
+        edisgo_obj: EDisGo,
+        use_case: str | list[str],
+        resample: bool = True,
+        tol: float = 1e-6,
+    ) -> dict[str, pd.DataFrame]:
         """
         Method to determine flexibility bands (lower and upper energy band as well as
         upper power band).
@@ -383,6 +397,21 @@ class Electromobility:
             for more information. To avoid this behaviour, set `tol` to 0.0.
             Default: 1e-6.
 
+        Notes
+        -----
+        The bands are always built spanning SimBEV's own native calendar and
+        simulated date range (independent of ``edisgo_obj.timeseries.timeindex``
+        - a charging process straddling a later window's boundary must still
+        count toward the band inside that window). If
+        ``edisgo_obj.timeseries.timeindex`` is non-empty, the returned/stored
+        bands are then year-aligned (SimBEV's calendar is commonly a fixed
+        reference year, independent of the scenario year) and trimmed to
+        exactly that timeindex - this is done regardless of `resample`, since
+        it is a correctness fix (avoiding a ``KeyError`` when a consumer later
+        indexes the bands by ``edisgo_obj.timeseries.timeindex``), not an
+        optional resampling convenience. When the timeindex is empty, the
+        bands are returned untouched, spanning SimBEV's own range/calendar.
+
         Returns
         --------
         dict(str, :pandas:`pandas.DataFrame<DataFrame>`)
@@ -391,6 +420,42 @@ class Electromobility:
             point of the specified use case. Columns of the dataframe are the
             charging point names as in :attr:`~.network.topology.Topology.loads_df`.
             Index is a time index.
+
+        Notes
+        -----
+        Each charging process (a car parking at a charging point from time step
+        ``start`` to ``end`` and charging at a given power) contributes a constant
+        value to a *contiguous range* of time steps of its charging point's band.
+
+        The bands are built without any Python-level loop over processes, using the
+        *difference-array* (prefix-sum) technique. Adding a constant ``v`` to a
+        half-open range ``[start, stop)`` of an array is equivalent to two point
+        updates on a difference array, ``diff[start] += v`` and ``diff[stop] -= v``,
+        followed by a single ``cumsum`` along the time axis that reconstructs the
+        band (``a[t] = sum(diff[: t + 1])``). Because every process is reduced to
+        two point updates, *all* processes are applied at once with a handful of
+        vectorised ``numpy.add.at`` calls -- ``add.at`` (and not plain ``+=``)
+        because several processes may write to the same (time step, charging point)
+        cell and their contributions must accumulate.
+
+        The three bands are assembled as follows (a pandas label slice ``.loc[a:b]``
+        is inclusive of ``b``, so the half-open numpy stop is ``b + 1``):
+
+        * ``upper_power`` -- ``power / eta`` on the inclusive range
+          ``[start, end]``.
+        * ``upper_energy`` -- ``power`` on ``[start, start + full)`` plus the
+          partial-step contribution ``power * part`` at index ``start + full``,
+          where ``full`` is the number of fully-charged time steps and ``part`` the
+          fractional remainder of the charging time.
+        * ``lower_energy`` -- ``power`` on ``[end - full + 1, end + 1]`` plus the
+          partial-step contribution ``power * part`` at index ``end - full`` (only
+          where a partial step exists, which also avoids a negative index when
+          ``full == end - start + 1``).
+
+        Both energy bands are cumulated over time afterwards to obtain cumulative
+        energy. As the band values are summed in floating point via ``numpy.add.at``
+        and ``cumsum``, results may carry negligible reordering noise (on the order
+        of ``1e-13``).
 
         """
 
@@ -425,56 +490,79 @@ class Electromobility:
             )
 
         # set up bands
-        tmp_idx = range(len(flex_band_index))
-        upper_power = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
-        upper_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
-        lower_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+        n_steps = len(flex_band_index)
+        tmp_idx = range(n_steps)
         hourly_steps = 60 / self.stepsize
-        for cp in cps.index:
-            # get index of charging park used in charging processes
-            charging_park_id = self.integrated_charging_parks_df.loc[
-                self.integrated_charging_parks_df.edisgo_id == cp
-            ].index
-            # get relevant charging processes
-            charging_processes = self.charging_processes_df.loc[
-                self.charging_processes_df.charging_park_id.isin(charging_park_id)
-            ]
-            # iterate through charging processes and fill matrices
-            for idx, charging_process in charging_processes.iterrows():
-                # Last time steps can lead to problems --> skip
-                if charging_process.park_end_timesteps == max(tmp_idx):
-                    continue
+        eta = edisgo_obj.electromobility.eta_charging_points
+        n_cps = len(cps.index)
 
-                start = charging_process.park_start_timesteps
-                end = charging_process.park_end_timesteps
-                power = charging_process.nominal_charging_capacity_kW
+        # Build the three bands with the vectorised difference-array technique
+        # described in the Notes section of this method's docstring.
 
-                # charging power
-                upper_power.loc[start:end, cp] += (
-                    power / edisgo_obj.electromobility.eta_charging_points
-                )
-                # energy bands
-                charging_time = (
-                    charging_process.chargingdemand_kWh / power * hourly_steps
-                )
-                if charging_time - (end - start + 1) > 1e-6:
-                    raise ValueError(
-                        f"Charging demand cannot be fulfilled for charging process {idx}. "
-                        "Please check."
-                    )
-                full_charging_steps = int(charging_time)
-                part_time_step = charging_time - full_charging_steps
-                # lower band
-                lower_energy.loc[end - full_charging_steps + 1 : end, cp] += power
-                if part_time_step != 0.0:
-                    lower_energy.loc[end - full_charging_steps, cp] += (
-                        part_time_step * power
-                    )
-                # upper band
-                upper_energy.loc[start : start + full_charging_steps - 1, cp] += power
-                upper_energy.loc[start + full_charging_steps, cp] += (
-                    part_time_step * power
-                )
+        # map every charging process to the column (charging point) it belongs to;
+        # processes of charging points outside `cps` map to -1 and are dropped
+        park_to_cp = self.integrated_charging_parks_df["edisgo_id"]
+        proc = self.charging_processes_df
+        col = cps.index.get_indexer(proc["charging_park_id"].map(park_to_cp))
+        end_all = proc["park_end_timesteps"].to_numpy()
+        # the last time step can lead to problems --> skip those processes
+        keep = (col >= 0) & (end_all != n_steps - 1)
+
+        col = col[keep]
+        sub = proc.loc[keep]
+        start = sub["park_start_timesteps"].to_numpy().astype(int)
+        end = sub["park_end_timesteps"].to_numpy().astype(int)
+        power = sub["nominal_charging_capacity_kW"].to_numpy(dtype=float)
+
+        charging_time = (
+            sub["chargingdemand_kWh"].to_numpy(dtype=float) / power * hourly_steps
+        )
+        violation = charging_time - (end - start + 1) > 1e-6
+        if violation.any():
+            bad_idx = sub.index[violation][0]
+            raise ValueError(
+                f"Charging demand cannot be fulfilled for charging process {bad_idx}. "
+                "Please check."
+            )
+        full_charging_steps = charging_time.astype(int)
+        part_time_step = charging_time - full_charging_steps
+
+        # difference arrays; the extra row lets a range ending at the last time
+        # step be closed at index n_steps and is dropped after the cumsum
+        d_pow = np.zeros((n_steps + 1, n_cps))
+        d_up = np.zeros((n_steps + 1, n_cps))
+        d_low = np.zeros((n_steps + 1, n_cps))
+
+        # charging power band
+        np.add.at(d_pow, (start, col), power / eta)
+        np.add.at(d_pow, (end + 1, col), -power / eta)
+
+        # upper energy band
+        np.add.at(d_up, (start, col), power)
+        np.add.at(d_up, (start + full_charging_steps, col), -power)
+        np.add.at(d_up, (start + full_charging_steps, col), part_time_step * power)
+        np.add.at(d_up, (start + full_charging_steps + 1, col), -part_time_step * power)
+
+        # lower energy band (the partial step is applied only where it exists)
+        np.add.at(d_low, (end - full_charging_steps + 1, col), power)
+        np.add.at(d_low, (end + 1, col), -power)
+        has_part = part_time_step != 0.0
+        low_idx = (end - full_charging_steps)[has_part]
+        low_col = col[has_part]
+        low_val = (part_time_step * power)[has_part]
+        np.add.at(d_low, (low_idx, low_col), low_val)
+        np.add.at(d_low, (low_idx + 1, low_col), -low_val)
+
+        # reconstruct the per-time-step bands from the difference arrays
+        upper_power = pd.DataFrame(
+            np.cumsum(d_pow[:n_steps], axis=0), index=tmp_idx, columns=cps.index
+        )
+        upper_energy = pd.DataFrame(
+            np.cumsum(d_up[:n_steps], axis=0), index=tmp_idx, columns=cps.index
+        )
+        lower_energy = pd.DataFrame(
+            np.cumsum(d_low[:n_steps], axis=0), index=tmp_idx, columns=cps.index
+        )
 
         # convert to MW and cumulate energy
         upper_power = upper_power / 1e3
@@ -510,15 +598,26 @@ class Electromobility:
 
         # sanity check
         self.check_integrity()
-        # check time index
+
+        # Scope the bands to edisgo_obj's own timeindex, so this method is
+        # correct regardless of caller (not just the run pipeline, which
+        # previously had to patch this up itself via
+        # reduce_timeseries_data_to_given_timeindex right after calling this
+        # method). The bands built above always span SimBEV's own native
+        # calendar (its start_date, typically a fixed reference year like
+        # 2011) and simulated range - independent of edisgo_timeindex, which
+        # is why this can't just be a `.loc[edisgo_timeindex]` here: a year
+        # mismatch alone would raise KeyError, and a shorter/different-range
+        # edisgo_timeindex would too. align_series_to_timeindex year-shifts
+        # and reindexes (filling any still-missing steps with NaN rather than
+        # raising) before the final trim below.
         if len(edisgo_timeindex) > 0:
-            missing_indices = [_ for _ in edisgo_timeindex if _ not in flex_band_index]
-            if len(missing_indices) > 0:
-                logger.warning(
-                    "There are time steps in timeindex of TimeSeries object that "
-                    "are not in the index of the flexibility bands. This may lead "
-                    "to problems."
-                )
+            for key, df in self.flexibility_bands.items():
+                if not df.empty:
+                    self.flexibility_bands[key] = align_series_to_timeindex(
+                        df, edisgo_timeindex
+                    ).loc[edisgo_timeindex]
+
         return self.flexibility_bands
 
     def fix_flexibility_bands_rounding_errors(self, tol=1e-6):
@@ -817,7 +916,7 @@ class Electromobility:
           :py:attr:`~integrated_charging_parks_df` is saved to
           `integrated_charging_parks.csv`.
         * 'simbev_config_df' : Attribute :py:attr:`~simbev_config_df` is
-          saved to `simbev_config.csv`.
+          saved to `metadata_simbev_run.csv`.
         * 'flexibility_bands' : The three flexibility bands in attribute
           :py:attr:`~flexibility_bands` are saved to
           `flexibility_band_upper_power.csv`, `flexibility_band_lower_energy.csv`, and
