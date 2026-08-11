@@ -92,8 +92,8 @@ class Grid(ABC):
         -------
         :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
-            where lines are represented by edges in the graph, and buses and
-            transformers are represented by nodes.
+            where lines are represented by edges in the graph and buses are
+            represented by nodes. Transformers are not included.
 
         """
         return translate_df_to_graph(self.buses_df, self.lines_df)

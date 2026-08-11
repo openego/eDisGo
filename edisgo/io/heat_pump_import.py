@@ -337,8 +337,13 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         ["egon_map_zensus_mvgd_buildings", "egon_map_zensus_weather_cell"],
         "boundaries",
     )
+    # egon_etrago_bus/egon_etrago_link live in schema "grid" in a local
+    # egon-data database, whereas the OEP path resolves them via the table/schema
+    # alias mapping keyed on "supply". Only switch the schema for the local
+    # (SSH/psycopg2) backend; keep "supply" for the remote OEP.
+    etrago_schema = "supply" if "openenergyplatform" in str(engine.url) else "grid"
     egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
-        engine, ["egon_etrago_bus", "egon_etrago_link"], "supply"
+        engine, ["egon_etrago_bus", "egon_etrago_link"], etrago_schema
     )
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
@@ -496,12 +501,18 @@ def _grid_integration(
             [edisgo_object.topology.loads_df, hp_individual_small]
         )
 
-        integrated_hps = hp_individual_small.index
+        # accumulate integrated heat pump names in a plain list (built into an Index
+        # once at the end) to avoid O(n^2) per-iteration Index.append below
+        integrated_hps_list: list = list(hp_individual_small.index)
 
         # integrate large individual heat pumps - if building is already connected to
         # higher voltage level it can be integrated at same bus, otherwise it is
         # integrated based on geolocation
-        integrated_hps_own_grid_conn = pd.Index([])
+        integrated_hps_own_grid_conn_list: list = []
+        # collect same-bus rows and concat them into loads_df once after the loop to
+        # avoid O(n^2) per-iteration pd.concat (rows are independent additions, so
+        # batching keeps the same resulting frame and row order)
+        same_bus_rows: list = []
         for hp in hp_individual_large.index:
             # check if building is already connected to a voltage level equal to or
             # higher than the voltage level the heat pump should be connected to
@@ -515,10 +526,8 @@ def _grid_integration(
 
             if voltage_level_hp >= voltage_level_building:
                 # integrate at same bus as building
-                edisgo_object.topology.loads_df = pd.concat(
-                    [edisgo_object.topology.loads_df, hp_individual_large.loc[[hp], :]]
-                )
-                integrated_hps = integrated_hps.append(pd.Index([hp]))
+                same_bus_rows.append(hp_individual_large.loc[[hp], :])
+                integrated_hps_list.append(hp)
             else:
                 # integrate based on geolocation
                 hp_name = edisgo_object.integrate_component_based_on_geolocation(
@@ -534,10 +543,16 @@ def _grid_integration(
                     sector="individual_heating",
                     building_id=hp_individual_large.at[hp, "building_id"],
                 )
-                integrated_hps = integrated_hps.append(pd.Index([hp_name]))
-                integrated_hps_own_grid_conn = integrated_hps_own_grid_conn.append(
-                    pd.Index([hp])
-                )
+                integrated_hps_list.append(hp_name)
+                integrated_hps_own_grid_conn_list.append(hp)
+
+        # concat all collected same-bus rows in one operation (O(n) instead of O(n^2))
+        if same_bus_rows:
+            edisgo_object.topology.loads_df = pd.concat(
+                [edisgo_object.topology.loads_df, *same_bus_rows]
+            )
+        integrated_hps = pd.Index(integrated_hps_list)
+        integrated_hps_own_grid_conn = pd.Index(integrated_hps_own_grid_conn_list)
         # logging messages
         logger.debug(
             f"{sum(hp_individual.p_set):.2f} MW of heat pumps for individual heating "

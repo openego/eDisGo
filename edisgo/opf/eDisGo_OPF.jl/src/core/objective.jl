@@ -1,3 +1,9 @@
+"""
+Objective: minimise total ohmic line losses, summed over all time steps, as
+`Σ ccm[b]·r[b]` over the non-storage branches. (Defined as an alternative
+objective; the multi-network build uses `objective_min_line_loading_max` for
+`opf_version` 1.)
+"""
 function objective_min_losses(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
@@ -17,6 +23,15 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
     )
 end
 
+"""
+Objective for `opf_version` 2 — Eq. (3.2 iii) of the eDisGo OPF formulation:
+minimise a weighted sum of line losses and the grid-restriction slacks. Combines
+ohmic losses (`Σ ccm·r`) with penalties on non-dispatchable curtailment (`pgc`),
+dispatchable-generation curtailment (`pgens`), load shedding (`pds`),
+charging-point shedding (`pcps`) and heat-pump shedding (`phps`), weighted by
+`factor_slacks`, plus a large penalty on the heat-storage / heat-pump operation
+slacks (`phss`, `phps2`).
+"""
 function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
@@ -40,6 +55,12 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     )
 end
 
+"""
+Objective for `opf_version` 1 — Eq. (3.2 ii) of the eDisGo OPF formulation:
+minimise a weighted sum of line losses (`Σ ccm·r`) and the maximum line loading
+`ll` (weighted by `factor_ll`, scaled by branch cost × length) over the
+non-storage branches.
+"""
 function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
@@ -57,6 +78,12 @@ end
 
 
 # OPF with overlying grid
+"""
+Objective for `opf_version` 4 (with overlying grid): like
+`objective_min_losses_slacks`, but additionally penalises the overlying-grid (HV)
+requirement slacks `phvs` (with a reduced weight for DSM requirements). The HV
+penalty factor is scaled from the branch resistances.
+"""
 function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
@@ -88,6 +115,12 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
     )
 end
 
+"""
+Objective for `opf_version` 3 (with overlying grid): like
+`objective_min_line_loading_max` (losses + maximum line loading), but additionally
+penalises the overlying-grid (HV) requirement slacks `phvs` (reduced weight for
+DSM).
+"""
 function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)

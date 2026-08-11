@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import atexit
 import importlib.util
 import logging
 import os
@@ -35,6 +36,41 @@ if TYPE_CHECKING:
     from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
+
+
+def _close_ssh_tunnel(server):
+    """Best-effort stop of an SSH tunnel (used as an atexit cleanup)."""
+    try:
+        server.stop()
+    except Exception:  # pragma: no cover - cleanup at interpreter shutdown
+        pass
+
+#: Default location of the egon-data SSH tunnel configuration file. Used when
+#: no explicit config path is passed and the connection mode is not forced.
+#: Can be overridden through the ``EGON_DATA_CONFIG`` environment variable.
+DEFAULT_EGON_DATA_CONFIG = "~/.ssh/egon-data.configuration.yaml"
+
+
+def default_config_path() -> Path | None:
+    """
+    Return the path to the egon-data SSH configuration file, or ``None``.
+
+    The location is read from the ``EGON_DATA_CONFIG`` environment variable and
+    falls back to :data:`DEFAULT_EGON_DATA_CONFIG`
+    (``~/.ssh/egon-data.configuration.yaml``). ``None`` is returned when the
+    resolved path does not point to an existing file, which callers use as the
+    signal to fall back to the Open Energy Platform (OEP).
+
+    Returns
+    -------
+    pathlib.Path or None
+        Path to an existing egon-data configuration file, or ``None`` if none
+        was found.
+
+    """
+    raw = os.environ.get("EGON_DATA_CONFIG", DEFAULT_EGON_DATA_CONFIG)
+    path = Path(raw).expanduser()
+    return path if path.is_file() else None
 
 
 def config_settings(path: Path | str) -> dict[str, dict[str, str | int | Path]]:
@@ -76,7 +112,7 @@ def config_settings(path: Path | str) -> dict[str, dict[str, str | int | Path]]:
 
 def credentials(path: Path | str) -> dict[str, str | int | Path]:
     """
-    Return local database connection parameters.
+    Return database connection parameters for the egon-data database.
 
     Parameters
     ----------
@@ -152,35 +188,76 @@ def ssh_tunnel(cred: dict) -> str:
         Name of local port.
 
     """
+    # paramiko logs every keepalive request ("Sending global request
+    # keepalive@lag.net") at DEBUG from a daemon transport thread. The tunnel
+    # opened here outlives the caller (it is never explicitly stopped), so that
+    # thread can still fire after the interpreter / pytest has closed the log
+    # streams, raising a noisy "ValueError: I/O operation on closed file" for
+    # every keepalive. Lifting the paramiko.transport logger to WARNING drops
+    # those DEBUG keepalive messages (the emit becomes a no-op) without
+    # affecting the tunnel itself or any real warnings/errors.
+    logging.getLogger("paramiko.transport").setLevel(logging.WARNING)
     server = SSHTunnelForwarder(
         ssh_address_or_host=(cred["SSH_HOST"], 22),
         ssh_username=cred["SSH_USER"],
-        ssh_pkey=cred["SSH_PKEY"],
+        # SSHTunnelForwarder only accepts a string path (or a loaded paramiko
+        # PKey) here. Passing the pathlib.Path produced by credentials() makes
+        # sshtunnel silently ignore the key and fall back to the default keys
+        # in ~/.ssh, which fails authentication against the gateway.
+        ssh_pkey=str(cred["SSH_PKEY"]),
         remote_bind_address=(cred["PGRES_HOST"], cred["PORT"]),
+        # Keep the SSH transport alive during long idle periods (e.g. a
+        # multi-minute OPF between database queries in multi-grid eGo runs) so
+        # the tunnel is not torn down and connections stay usable.
+        set_keepalive=30.0,
     )
     server.start()
+    # The tunnel is intentionally kept open for the lifetime of the engine
+    # (which is cached and reused across tasks/grids), but it used to leak: the
+    # SSHTunnelForwarder was never referenced again, so it — and its keepalive
+    # daemon thread — lived until the process died without ever being stopped.
+    # Register an atexit hook so every tunnel is torn down cleanly at process
+    # exit (also stops the keepalive thread before shutdown).
+    atexit.register(_close_ssh_tunnel, server)
 
     return str(server.local_bind_port)
 
 
 def engine(
-    path: Path | str = None, ssh: bool = False, token: Path | str = None
+    path: Path | str = None, ssh: bool = None, token: Path | str = None
 ) -> Engine:
     """
-    Engine for local or remote database.
+    Engine for an egon-data database or the remote OEP.
+
+    Which database is used is resolved in this order:
+
+    1. `path` given — connect to the egon-data database described by that
+       configuration file.
+    2. ``ssh=True`` — connect to the egon-data database described by the
+       configuration file at the default location (``EGON_DATA_CONFIG``
+       environment variable or ``~/.ssh/egon-data.configuration.yaml``, see
+       :func:`default_config_path`). Raises if no file is found.
+    3. ``ssh=False`` — connect to the remote Open Energy Platform (OEP).
+    4. Nothing given (auto-detect) — if a configuration file exists at the
+       default location, the egon-data database is used, otherwise the OEP.
+       The choice is logged.
+
+    Whether the egon-data connection is tunnelled depends solely on the
+    configuration file: if it contains an ``ssh-tunnel`` section an SSH
+    tunnel is established, otherwise the database is reached directly.
 
     Parameters
     ----------
     path : str or pathlib.Path, optional (default=None)
-        Path to configuration YAML file of egon-data database.
-    ssh : bool (default=False)
-        If True try to establish ssh tunnel from given information within the
-        configuration YAML. If False try to connect to local database.
+        Path to configuration YAML file of an egon-data database.
+    ssh : bool, optional (default=None)
+        Explicitly select the egon-data database (True) or the OEP (False).
+        If None, the database is auto-detected (see above).
     token : str or pathlib.Path, optional (default=None)
-        Token for database connection or path to text file containing token.
-        If empty the default token file in the config folder OEP_TOKEN.txt
-        will be used. If the default token file is not found, no token
-        will be used and the connection will be established without token.
+        Token for the OEP connection or path to a text file containing the
+        token. If empty the default token file in the config folder
+        OEP_TOKEN.txt will be used. If the default token file is not found,
+        the connection is established without a token.
 
     Returns
     -------
@@ -188,11 +265,37 @@ def engine(
         Database engine
 
     """
+    if path is not None:
+        path = Path(path).expanduser()
+        if not path.is_file():
+            raise ValueError(f"egon-data configuration file {path} not found.")
+    elif ssh is None:
+        # Auto-detect: an egon-data configuration file at the default location
+        # selects the egon-data database, otherwise fall back to the OEP.
+        path = default_config_path()
+        if path is not None:
+            logger.info(
+                f"Auto-detected egon-data configuration file {path} — using "
+                f"the egon-data database. Pass ssh=False to force the OEP."
+            )
+        else:
+            logger.info(
+                "No egon-data configuration file found — using the OEP. Pass "
+                "a configuration file path to use an egon-data database."
+            )
+    elif ssh:
+        path = default_config_path()
+        if path is None:
+            raise ValueError(
+                "egon-data database requested but no configuration file was "
+                "found (checked the EGON_DATA_CONFIG environment variable "
+                f"and the default location {DEFAULT_EGON_DATA_CONFIG})."
+            )
 
-    if not ssh:
-        # Github Actions KHs token
-        if "OEP_TOKEN_KH" in os.environ:
-            token = os.environ["OEP_TOKEN_KH"]
+    if path is None:
+        # Github Actions token
+        if "OEP_TOKEN" in os.environ:
+            token = os.environ["OEP_TOKEN"]
 
             read = True
         else:
@@ -238,14 +341,86 @@ def engine(
         )
 
     cred = credentials(path=path)
-    local_port = ssh_tunnel(cred)
+
+    if "SSH_HOST" in cred:
+        local_port = ssh_tunnel(cred)
+        host, port = cred["PGRES_HOST"], local_port
+    else:
+        # Configuration file without an ssh-tunnel section: the database is
+        # reachable directly (local docker or same machine).
+        host, port = cred["HOST"], cred["PORT"]
+        logger.info(
+            f"egon-data configuration has no ssh-tunnel section — connecting "
+            f"directly to {host}:{port}."
+        )
 
     return create_engine(
         f"postgresql+psycopg2://{cred['POSTGRES_USER']}:"
-        f"{cred['POSTGRES_PASSWORD']}@{cred['PGRES_HOST']}:"
-        f"{local_port}/{cred['POSTGRES_DB']}",
+        f"{cred['POSTGRES_PASSWORD']}@{host}:"
+        f"{port}/{cred['POSTGRES_DB']}",
         echo=False,
+        # This engine is typically cached and reused across many long-running
+        # tasks/grids (e.g. one eGo run computes grid after grid, each with a
+        # multi-minute OPF during which the pooled connection sits idle). The
+        # server or SSH tunnel closes such idle connections, so a later grid
+        # would otherwise get a dead connection ("server closed the connection
+        # unexpectedly"). pool_pre_ping validates (and transparently replaces)
+        # a connection before use; pool_recycle proactively drops connections
+        # older than an hour.
+        pool_pre_ping=True,
+        pool_recycle=3600,
     )
+
+
+def engine_from_settings(database: dict | None = None) -> Engine:
+    """
+    Build a database engine from a scenario ``database`` settings section.
+
+    This maps the data source configured in the scenario JSON onto
+    :func:`engine`. Recognised keys of `database`:
+
+    * ``source`` — ``"egon-data"`` connects to the egon-data database
+      described by the configuration file; ``"oep"`` connects to the remote
+      Open Energy Platform (OEP). If missing or empty, the database is
+      auto-detected: the egon-data database if a configuration file is found
+      at the default location, otherwise the OEP (see :func:`engine`).
+    * ``config_path`` — optional path to the egon-data configuration YAML.
+      If omitted, the default location is used (``EGON_DATA_CONFIG``
+      environment variable or ``~/.ssh/egon-data.configuration.yaml``, see
+      :func:`default_config_path`).
+
+    Parameters
+    ----------
+    database : dict or None
+        The ``database`` section of the scenario configuration. If None or
+        empty, the database is auto-detected.
+
+    Returns
+    -------
+    :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Raises
+    ------
+    ValueError
+        If ``source`` is neither ``"egon-data"``, ``"oep"``, nor empty.
+
+    """
+    database = database or {}
+    source = str(database.get("source") or "").lower()
+    config_path = database.get("config_path")
+
+    if source == "oep":
+        return engine(ssh=False)
+    if source == "egon-data":
+        return engine(path=config_path, ssh=True)
+    if source:
+        raise ValueError(
+            f"Unknown database source '{source}'. Use 'egon-data', 'oep', or "
+            f"leave it empty to auto-detect."
+        )
+    # No source given: auto-detect (an explicit config_path selects egon-data).
+    return engine(path=config_path)
 
 
 @contextmanager
@@ -264,6 +439,21 @@ def session_scope_egon_data(engine: Engine):
 
 
 def sql_grid_geom(edisgo_obj: EDisGo) -> Geometry:
+    """
+    Returns the grid district geometry as a PostGIS geometry.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo object whose grid district geometry is used.
+
+    Returns
+    -------
+    Geometry
+        Grid district geometry built from its WKT and SRID, for use in spatial SQL
+        queries.
+
+    """
     return func.ST_GeomFromText(
         edisgo_obj.topology.grid_district["geom"].wkt,
         edisgo_obj.topology.grid_district["srid"],
@@ -271,6 +461,22 @@ def sql_grid_geom(edisgo_obj: EDisGo) -> Geometry:
 
 
 def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute) -> int:
+    """
+    Returns the SRID of a geometry column in a database table.
+
+    Parameters
+    ----------
+    session : Session
+        SQLAlchemy session used to query the database.
+    geom_col : InstrumentedAttribute
+        Geometry column whose spatial reference identifier is determined.
+
+    Returns
+    -------
+    int
+        Spatial reference identifier (SRID) of the geometry column.
+
+    """
     query = session.query(func.ST_SRID(geom_col)).limit(1)
 
     return pd.read_sql(sql=query.statement, con=query.session.bind).iat[0, 0]
@@ -304,6 +510,19 @@ def sql_within(geom_a: Geometry, geom_b: Geometry, srid: int):
 
 
 def sql_intersects(geom_col: InstrumentedAttribute, geom_shape: Geometry, srid: int):
+    """
+    Checks if a geometry column intersects a given geometry.
+
+    Parameters
+    ----------
+    geom_col : InstrumentedAttribute
+        Geometry column to test for intersection.
+    geom_shape : Geometry
+        Geometry to test the column against.
+    srid : int
+        SRID both geometries are transformed to before the intersection test.
+
+    """
     return func.ST_Intersects(
         func.ST_Transform(
             geom_col,

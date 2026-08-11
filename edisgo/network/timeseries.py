@@ -544,10 +544,10 @@ class TimeSeries:
             'mv_feed-in_case_cp_public', and 'mv_feed-in_case_cp_hpc',
             'lv_feed-in_case_cp_home', 'lv_feed-in_case_cp_work',
             'lv_feed-in_case_cp_public', and 'lv_feed-in_case_cp_hpc',
-            'mv_load-in_case_cp_home', 'mv_load-in_case_cp_work',
-            'mv_load-in_case_cp_public', and 'mv_load-in_case_cp_hpc',
-            'lv_load-in_case_cp_home', 'lv_load-in_case_cp_work',
-            'lv_load-in_case_cp_public', and 'lv_load-in_case_cp_hpc'.
+            'mv_load_case_cp_home', 'mv_load_case_cp_work',
+            'mv_load_case_cp_public', and 'mv_load_case_cp_hpc',
+            'lv_load_case_cp_home', 'lv_load_case_cp_work',
+            'lv_load_case_cp_public', and 'lv_load_case_cp_hpc'.
 
             For reactive power a fixed cosphi is assumed. A different reactive power
             factor is used for charging points in the MV and charging points in the LV.
@@ -1389,14 +1389,22 @@ class TimeSeries:
         generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
 
         # scale time series by nominal power
-        ts_scaled = generators_df.apply(
-            lambda x: (
-                ts_generators[x.type] * x.p_nom
-                if x.type in ts_generators.columns
-                else ts_generators["other"] * x.p_nom
-            ),
-            axis=1,
-        ).T
+        # vectorised equivalent of the per-generator
+        # ``ts_generators[type] * p_nom`` (with fallback to the 'other' column
+        # for types not contained in ``ts_generators``): select the matching
+        # ts column per generator (in generators_df row order) and broadcast
+        # multiply along the time axis by the nominal power
+        types: pd.Series = generators_df["type"].where(
+            generators_df["type"].isin(ts_generators.columns), "other"
+        )
+        scaled: np.ndarray = (
+            ts_generators[types].to_numpy() * generators_df["p_nom"].to_numpy()
+        )
+        ts_scaled: pd.DataFrame = pd.DataFrame(
+            scaled,
+            index=ts_generators.index,
+            columns=generators_df.index,
+        )
         if not ts_scaled.empty:
             self.add_component_time_series("generators_active_power", ts_scaled)
 
@@ -1472,10 +1480,20 @@ class TimeSeries:
             )
 
         # scale time series by annual consumption
-        ts_scaled = loads_df.apply(
-            lambda x: ts_loads[x.sector] * x.annual_consumption,
-            axis=1,
-        ).T
+        # vectorised equivalent of the per-load
+        # ``ts_loads[sector] * annual_consumption``: select the sector ts column
+        # per load (in loads_df row order) and broadcast multiply along the
+        # time axis by the annual consumption (KeyError on a missing sector is
+        # preserved by the fancy column selection)
+        scaled: np.ndarray = (
+            ts_loads[loads_df["sector"]].to_numpy()
+            * loads_df["annual_consumption"].to_numpy()
+        )
+        ts_scaled: pd.DataFrame = pd.DataFrame(
+            scaled,
+            index=ts_loads.index,
+            columns=loads_df.index,
+        )
         self.add_component_time_series("loads_active_power", ts_scaled)
 
     def predefined_charging_points_by_use_case(
@@ -1531,10 +1549,19 @@ class TimeSeries:
                 " adapt if necessary."
             )
         # scale time series by nominal power
-        ts_scaled = loads_df.apply(
-            lambda x: ts_loads[x.sector] * x.p_set,
-            axis=1,
-        ).T
+        # vectorised equivalent of the per-load ``ts_loads[sector] * p_set``:
+        # select the use-case ts column per charging point (in loads_df row
+        # order) and broadcast multiply along the time axis by the nominal
+        # power (KeyError on a missing use case is preserved by the fancy
+        # column selection)
+        scaled: np.ndarray = (
+            ts_loads[loads_df["sector"]].to_numpy() * loads_df["p_set"].to_numpy()
+        )
+        ts_scaled: pd.DataFrame = pd.DataFrame(
+            scaled,
+            index=ts_loads.index,
+            columns=loads_df.index,
+        )
         self.add_component_time_series("loads_active_power", ts_scaled)
 
     def fixed_cosphi(
@@ -1843,16 +1870,15 @@ class TimeSeries:
         """
         Contains residual load and information on feed-in and load case.
 
-        Residual load is calculated from total (load - generation) in the
-        network. Grid losses are not considered.
+        Residual load is calculated from total load minus total generation minus
+        storage active power (discharge counted as positive) over the whole network.
+        Grid losses are not considered.
 
         Feed-in and load case are identified based on the
         generation, load and storage time series and defined as follows:
 
-        1. Load case: positive (load - generation - storage) at HV/MV
-           substation
-        2. Feed-in case: negative (load - generation - storage) at HV/MV
-           substation
+        1. Load case: non-negative residual load (load - generation - storage)
+        2. Feed-in case: negative residual load (load - generation - storage)
 
         Returns
         -------
@@ -1971,7 +1997,10 @@ class TimeSeries:
             if not getattr(self, attr).empty:
                 getattr(self, attr).to_csv(os.path.join(directory, f"{attr}.csv"))
 
-        if hasattr(self, "timeindex_worst_cases") and len(self.timeindex_worst_cases) > 0:
+        if (
+            hasattr(self, "timeindex_worst_cases")
+            and len(self.timeindex_worst_cases) > 0
+        ):
             self.timeindex_worst_cases.to_frame("timeindex_worst_cases").to_csv(
                 os.path.join(directory, "timeindex_worst_cases.csv")
             )
@@ -2075,7 +2104,9 @@ class TimeSeries:
 
             self.timeindex_worst_cases = pd.to_datetime(df.iloc[:, 0])
             self.timeindex_worst_cases.name = df.columns[0]
-            if (timeindex is None or len(timeindex) == 0) and not self.timeindex_worst_cases.empty:
+            if (
+                timeindex is None or len(timeindex) == 0
+            ) and not self.timeindex_worst_cases.empty:
                 timeindex = pd.DatetimeIndex(self.timeindex_worst_cases.values)
 
         if from_zip_archive:

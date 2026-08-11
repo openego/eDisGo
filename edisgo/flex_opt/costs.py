@@ -28,7 +28,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     Calculates topology expansion costs for each reinforced transformer and line
     in kEUR.
 
-    Attributes
+    Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
     without_generator_import : bool
@@ -55,15 +55,11 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
             For transformers quantity is always one, for lines it specifies the
             number of parallel lines.
 
-        line_length : float
+        length : float
             Length of line or in case of parallel lines all lines in km.
 
         voltage_level : str {'lv' | 'mv' | 'mv/lv'}
             Specifies voltage level the equipment is in.
-
-        mv_feeder : :class:`~.network.components.Line`
-            First line segment of half-ring used to identify in which
-            feeder the network expansion was conducted in.
 
     Notes
     -------
@@ -125,11 +121,12 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
 
     def _get_line_costs(lines_added):
         costs_lines = line_expansion_costs(edisgo_obj, lines_added.index)
-        costs_lines["costs"] = costs_lines.apply(
-            lambda x: (
-                x.costs_earthworks + x.costs_cable * lines_added.loc[x.name, "quantity"]
-            ),
-            axis=1,
+        # Align quantity to costs_lines index and compute elementwise (vectorised
+        # equivalent of the former per-row apply).
+        quantity_aligned = lines_added["quantity"].reindex(costs_lines.index)
+        costs_lines["costs"] = (
+            costs_lines["costs_earthworks"]
+            + costs_lines["costs_cable"] * quantity_aligned
         )
 
         return costs_lines[["costs", "voltage_level"]]

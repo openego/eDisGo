@@ -38,6 +38,55 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def align_series_to_timeindex(ts, timeindex, extra_step=False):
+    """
+    Align a time series to a target time index, tolerating a year mismatch.
+
+    Data imported for the overlying grid (from CSV or eTraGo) may be indexed
+    in a different year than the EDisGo time index. This helper shifts the
+    series' index by whole years to match ``timeindex`` (using
+    :class:`pandas.DateOffset`, which — unlike ``Timestamp.replace(year=...)``
+    — does not raise on a Feb-29 timestamp when the target year is not a leap
+    year) and reindexes onto it. Missing steps become ``NaN`` rather than
+    raising a ``KeyError``.
+
+    Parameters
+    ----------
+    ts : :pandas:`pandas.Series<Series>` or \
+        :pandas:`pandas.DataFrame<DataFrame>` or None
+        The time series to align. Returned unchanged if ``None``, empty, or
+        when ``timeindex`` is empty.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Target time index to align to.
+    extra_step : bool, optional
+        If ``True``, append one trailing step to the target index (used for
+        state-of-charge series that carry an end-of-period value). The step
+        width is taken from ``timeindex.freq``, falling back to the spacing
+        of the first two entries; if neither is available (single-entry
+        index without freq) no extra step is added.
+
+    Returns
+    -------
+    Same type as ``ts``
+        ``ts`` reindexed onto the (optionally extended) target index.
+
+    """
+    if ts is None or ts.empty or timeindex.empty:
+        return ts
+    year_diff = timeindex[0].year - ts.index[0].year
+    if year_diff != 0:
+        ts = ts.copy()
+        ts.index = ts.index + pd.DateOffset(years=year_diff)
+    target = timeindex
+    if extra_step:
+        freq = timeindex.freq or (
+            timeindex[1] - timeindex[0] if len(timeindex) > 1 else None
+        )
+        if freq is not None:
+            target = timeindex.union([timeindex[-1] + freq])
+    return ts.reindex(target)
+
+
 def select_worstcase_snapshots(edisgo_obj):
     """
     Select two worst-case snapshots from time series
@@ -363,7 +412,8 @@ def calculate_voltage_diff_pu_per_line_from_type(
     ----------
     edisgo_obj : :class:`~.EDisGo`
     cable_names : str or array-like
-        Resistance per kilometer of the cable in ohm/km.
+        Name(s) of the cable type(s) (as in the index of the equipment data) to
+        calculate the voltage difference for.
     length : float
         Length of the cable in km.
     num_parallel : int
@@ -372,10 +422,9 @@ def calculate_voltage_diff_pu_per_line_from_type(
         Nominal voltage of the cable(s) in kV.
     s_max : float
         Apparent power the cable must carry in MVA.
-    component_type : str, optional
+    component_type : str
         Type of the component to be connected, used to obtain the default reactive power
-        mode and power factor from the configuration file. If this is given,
-        `reactive_power_mode` and `power_factor` are not considered.
+        mode and power factor from the configuration file.
         Possible options are "generator", "conventional_load", "charging_point",
         "heat_pump" and "storage_unit".
 
@@ -556,7 +605,7 @@ def select_cable(
     return cable_type, cable_count
 
 
-def get_path_length_to_station(edisgo_obj):
+def get_path_length_to_station(edisgo_obj: EDisGo) -> pd.Series:
     """
     Determines path length from each bus to HV-MV station.
 
@@ -576,9 +625,16 @@ def get_path_length_to_station(edisgo_obj):
     graph = edisgo_obj.topology.mv_grid.graph
     mv_station = edisgo_obj.topology.mv_grid.station.index[0]
 
+    # Compute the path length (number of edges) from the MV station to every MV
+    # bus in a single single-source traversal instead of one shortest_path call
+    # per bus. ``nx.shortest_path_length(graph, source)`` returns a dict mapping
+    # each reachable bus to its edge count, which equals ``len(path) - 1`` of the
+    # previous per-bus ``nx.shortest_path`` result.
+    mv_dist = nx.shortest_path_length(graph, source=mv_station)
+    buses_at = edisgo_obj.topology.buses_df.at
     for bus in edisgo_obj.topology.mv_grid.buses_df.index:
-        path = nx.shortest_path(graph, source=mv_station, target=bus)
-        edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = len(path) - 1
+        # ``len(path) - 1`` == number of edges from station to bus == mv_dist[bus]
+        buses_at[bus, "path_length_to_station"] = mv_dist[bus]
         if bus.split("_")[0] == "BusBar" and bus.split("_")[-1] == "MV":
             # check if there is an underlying LV grid
             lv_grid_id = int(bus.split("_")[-2])
@@ -586,10 +642,19 @@ def get_path_length_to_station(edisgo_obj):
                 lvgrid = edisgo_obj.topology.get_lv_grid(lv_grid_id)
                 lv_graph = lvgrid.graph
                 lv_station = lvgrid.station.index[0]
-                for bus in lvgrid.buses_df.index:
-                    lv_path = nx.shortest_path(lv_graph, source=lv_station, target=bus)
-                    edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = (
-                        len(path) + len(lv_path)
+                lv_dist = nx.shortest_path_length(lv_graph, source=lv_station)
+                # NOTE: The LV metric is intentionally computed as node counts
+                # (``len(path) + len(lv_path)``) while MV buses use the edge count
+                # (``len(path) - 1``). This inconsistency is a known bug tracked
+                # separately in #681 and is deliberately preserved here to keep
+                # the output byte-identical. ``len(path)`` is the node count of
+                # the MV path to this BusBar (== mv_dist[bus] + 1) and
+                # ``len(lv_path)`` is the node count of the LV path
+                # (== lv_dist[lv_bus] + 1), hence the constant +2 offset below.
+                mv_path_nodes = mv_dist[bus] + 1
+                for lv_bus in lvgrid.buses_df.index:
+                    buses_at[lv_bus, "path_length_to_station"] = (
+                        mv_path_nodes + lv_dist[lv_bus] + 1
                     )
     return edisgo_obj.topology.buses_df.path_length_to_station
 
@@ -971,9 +1036,9 @@ def calculate_impedance_for_parallel_components(parallel_components, pu=False):
 
 
 def add_line_susceptance(
-    edisgo_obj,
-    mode="mv_b",
-):
+    edisgo_obj: EDisGo,
+    mode: str = "mv_b",
+) -> EDisGo:
     """
     Adds line susceptance information in Siemens to lines in existing grids.
 
@@ -1023,22 +1088,36 @@ def add_line_susceptance(
     lines_df = edisgo_obj.topology.lines_df
     buses_df = edisgo_obj.topology.buses_df
 
-    for index, bus0, type_info, length, num_parallel in lines_df[
-        ["bus0", "type_info", "length", "num_parallel"]
-    ].itertuples():
-        v_nom = buses_df.loc[bus0].v_nom
+    # Map each line's bus0 to its nominal voltage in one vectorised lookup.
+    v_nom = lines_df["bus0"].map(buses_df["v_nom"])
 
-        try:
-            line_capacitance_per_km = (
-                line_data_df.loc[line_data_df.U_n == v_nom].loc[type_info].C_per_km
-            )
-        except KeyError:
-            line_capacitance_per_km = line_data_df.loc[type_info].C_per_km
+    # Build an O(1) capacitance lookup keyed on (U_n, type_info). This replaces
+    # the per-line full-frame boolean filter ``line_data_df[line_data_df.U_n ==
+    # v_nom]`` followed by ``.loc[type_info]`` with a single vectorised reindex.
+    cap_by_key = line_data_df.set_index("U_n", append=True)["C_per_km"].swaplevel()
+    capacitance = pd.Series(
+        cap_by_key.reindex(
+            pd.MultiIndex.from_arrays([v_nom.to_numpy(), lines_df["type_info"]])
+        ).to_numpy(),
+        index=lines_df.index,
+    )
+
+    # Lines whose (U_n, type_info) combination was not found fall back to the
+    # type_info-only lookup, replicating the original ``except KeyError`` branch
+    # (incl. one warning log per affected line).
+    missing = capacitance.isna()
+    if missing.any():
+        fallback = line_data_df["C_per_km"]
+        for index in lines_df.index[missing]:
+            type_info = lines_df.at[index, "type_info"]
+            capacitance.at[index] = fallback.loc[type_info]
             logger.warning(f"False voltage level for line {index}.")
 
-        lines_df.loc[index, "b"] = calculate_line_susceptance(
-            line_capacitance_per_km, length, num_parallel
-        )
+    # Compute the susceptance for all lines as a single vector operation,
+    # equivalent to calling ``calculate_line_susceptance`` per line.
+    lines_df["b"] = (
+        capacitance / 1e6 * lines_df["length"] * 2 * pi * 50 * lines_df["num_parallel"]
+    )
 
     return edisgo_obj
 
@@ -1240,6 +1319,25 @@ def reduce_timeseries_data_to_given_timeindex(
                 )
     # Battery electric vehicle timeseries
     if electromobility:
+        # The EV flexibility bands are built in import_electromobility from the
+        # raw SimBEV grid (typically 15-min and in the reference year 2011),
+        # independently of the analysis time index. Before slicing by datetime,
+        # align them to the target index: first resample to its frequency
+        # (Electromobility.resample uses the correct per-band aggregation —
+        # mean for power, max for energy), then shift the year and reindex via
+        # align_series_to_timeindex so datetime .loc lookups below succeed.
+        _bands = edisgo_obj.electromobility.flexibility_bands
+        _band0 = next((b for b in _bands.values() if not b.empty), None)
+        if _band0 is not None and len(_band0.index) > 1:
+            band_freq = _band0.index[1] - _band0.index[0]
+            if band_freq != frequency:
+                edisgo_obj.electromobility.resample(freq=frequency)
+            # year-align every (now correctly-sampled) band onto the timeindex
+            for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+                if not df.empty:
+                    edisgo_obj.electromobility.flexibility_bands[key] = (
+                        align_series_to_timeindex(df, timeindex)
+                    )
         if save_ev_soc_initial:
             # timestep EV SOC from timestep before if possible
             ts_before = timeindex[0] - frequency
@@ -1435,7 +1533,7 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
     for col in df.columns:
         col_type = df[col].dtype
 
-        if col_type != object and str(col_type) != "category":
+        if not pd.api.types.is_object_dtype(col_type) and str(col_type) != "category":
             c_min = df[col].min()
             c_max = df[col].max()
 

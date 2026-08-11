@@ -266,8 +266,8 @@ def mv_grid_topology(
         options are:
 
         * 'loading'
-          Line color is set according to loading of the line. Loading of MV
-          lines must be provided by parameter `line_load`.
+          Line color is set according to loading of the line. Line loading is
+          calculated internally from the power flow results in `edisgo_obj.results`.
         * 'expansion_costs'
           Line color is set according to investment costs of the line. This
           option also effects node colors and sizes by plotting investment in
@@ -306,11 +306,6 @@ def mv_grid_topology(
         * 'charging_park'
           Plots nodes with charging stations in red.
 
-    line_load : :pandas:`pandas.DataFrame<DataFrame>` or None
-        Dataframe with current results from power flow analysis in A. Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
-        columns are the line representatives. Only needs to be provided when
-        parameter `line_color` is set to 'loading'. Default: None.
     grid_expansion_costs : :pandas:`pandas.DataFrame<DataFrame>` or None
         Dataframe with network expansion costs in kEUR. See `grid_expansion_costs`
         in :class:`~.network.results.Results` for more information. Only needs to
@@ -402,7 +397,7 @@ def mv_grid_topology(
         else:
             return colors_dict["else"], sizes_dict["else"]
 
-    def nodes_by_technology(buses, edisgo_obj):
+    def nodes_by_technology(buses, edisgo_obj, grid_area=1):
         bus_sizes = {}
         bus_colors = {}
         colors_dict = {
@@ -416,17 +411,18 @@ def mv_grid_topology(
             "DisconnectingPoint": "0.75",
             "else": "orange",
         }
-        sizes_dict = {
-            "BranchTee": 10000,
-            "GeneratorFluctuating": 100000,
-            "Generator": 100000,
-            "Load": 100000,
-            "LVStation": 50000,
-            "MVStation": 120000,
-            "Storage": 100000,
-            "DisconnectingPoint": 75000,
-            "else": 200000,
+        fractions_dict = {
+            "BranchTee": 0.00005,
+            "GeneratorFluctuating": 0.0005,
+            "Generator": 0.0005,
+            "Load": 0.0005,
+            "LVStation": 0.00025,
+            "MVStation": 0.0006,
+            "Storage": 0.0005,
+            "DisconnectingPoint": 0.00035,
+            "else": 0.001,
         }
+        sizes_dict = {k: v * grid_area for k, v in fractions_dict.items()}
         for bus in buses:
             connected_components = (
                 edisgo_obj.topology.get_connected_components_from_bus(bus)
@@ -593,7 +589,8 @@ def mv_grid_topology(
 
     # bus colors and sizes
     if node_color == "technology":
-        bus_sizes, bus_colors = nodes_by_technology(pypsa_plot.buses.index, edisgo_obj)
+        bus_sizes = 0  # placeholder; overwritten after Mercator conversion
+        bus_colors = "r"
         bus_cmap = None
     elif node_color == "voltage":
         bus_sizes, bus_colors = nodes_by_voltage(
@@ -660,6 +657,14 @@ def mv_grid_topology(
         )
         pypsa_plot.buses.loc[:, "x"] = x2
         pypsa_plot.buses.loc[:, "y"] = y2
+    if node_color == "technology":
+        x_range = pypsa_plot.buses.x.max() - pypsa_plot.buses.x.min()
+        y_range = pypsa_plot.buses.y.max() - pypsa_plot.buses.y.min()
+        grid_area = x_range * y_range
+        bus_sizes, bus_colors = nodes_by_technology(
+            pypsa_plot.buses.index, edisgo_obj, grid_area=grid_area
+        )
+        bus_cmap = None
 
     # plot
     plt.figure(figsize=(12, 8))
@@ -949,7 +954,8 @@ def plot_plotly(
         * 'voltage_deviation' (default)
             Node color is set according to voltage deviation from 1 p.u..
         * None
-            Line color is black. This is also the fallback, in case other options fail.
+            Nodes are colored grey. This is also the fallback, in case other
+            options fail.
 
     line_result_selection : str
         Defines which values are shown for the load of the lines:
