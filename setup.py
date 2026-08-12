@@ -39,7 +39,7 @@ requirements = [
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
     "egoio >= 0.4.7, < 0.5.0",
-    "geoalchemy2 < 0.7.0",
+    "geoalchemy2 == 0.11.1",
     "geopandas >= 0.12.0, < 1.2.0",
     "geopy >= 2.0.0, < 2.5.0",
     "jupyterlab < 4.6.0",
