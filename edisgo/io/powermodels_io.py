@@ -1327,7 +1327,10 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         flexible_hps, edisgo_obj.heat_pump.thermal_storage_units_df.index.values
     )
     df = pd.DataFrame(index=hp_no_tes, columns=["efficiency", "capacity"], data=0.0)
-    heat_storage_df = pd.concat([edisgo_obj.heat_pump.thermal_storage_units_df, df])
+    tes_df = edisgo_obj.heat_pump.thermal_storage_units_df
+    # only concat non-empty frames so empty/all-NA columns don't get excluded when
+    # determining result dtypes (pandas deprecation); fall back to df if tes is empty
+    heat_storage_df = pd.concat([tes_df, df]) if not tes_df.empty else df
     decentral_hps = np.intersect1d(
         edisgo_obj.topology.loads_df.loc[
             edisgo_obj.topology.loads_df.sector == "individual_heating"
