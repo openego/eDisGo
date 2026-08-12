@@ -4,6 +4,7 @@ import os
 import shutil
 
 from copy import deepcopy
+from unittest.mock import Mock
 from zipfile import ZipFile
 
 import numpy as np
@@ -17,7 +18,65 @@ from shapely.geometry import Point
 from edisgo import EDisGo
 from edisgo.edisgo import import_edisgo_from_files
 from edisgo.flex_opt.reinforce_grid import enhanced_reinforce_grid
+from edisgo.io import timeseries_import
 from edisgo.network.results import Results
+
+
+@pytest.fixture
+def mock_oep_time_series_import(monkeypatch):
+    """Replace OEP time-series retrieval with small local DataFrames."""
+
+    def apply_mocks(*, edisgo_object, timeindex, load_name):
+        """Defines the helper function that applies the mocks
+        for the OEP time-series retrieval functions."""
+
+        # Create minimal load and feed-in profiles
+        # for the requested timeindex:
+        load_profiles = pd.DataFrame(
+            {
+                load_name: np.linspace(
+                    0.1,
+                    0.2,
+                    len(timeindex),
+                )
+            },
+            index=timeindex,
+        )
+
+        fluctuating_gens = edisgo_object.topology.generators_df.query(
+            "type in ['wind', 'solar']"
+        )
+        profile_columns = pd.MultiIndex.from_frame(
+            fluctuating_gens[["type", "weather_cell_id"]].drop_duplicates()
+        )
+
+        feedin_profiles = pd.DataFrame(
+            0.5,
+            index=timeindex,
+            columns=profile_columns,
+        )
+
+        # Creates replacement functions that return the mock profiles
+        # instead of querying the OEP database:
+        demand_mock = Mock(return_value=load_profiles)
+        feedin_mock = Mock(return_value=feedin_profiles)
+
+        # Temporarily replace the OEP time-series retrieval functions
+        # with the mocks:
+        monkeypatch.setattr(
+            timeseries_import,
+            "electricity_demand_oedb",
+            demand_mock,
+        )
+        monkeypatch.setattr(
+            timeseries_import,
+            "feedin_oedb",
+            feedin_mock,
+        )
+
+        return demand_mock, feedin_mock
+
+    return apply_mocks
 
 
 class TestEDisGo:
@@ -271,59 +330,97 @@ class TestEDisGo:
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 0)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
 
-    @pytest.mark.oep
-    def test_set_time_series_active_power_predefined_oedb(self, oep_engine):
-        # test conventional_loads_ts="oedb" for all loads in grid
-        edisgo_object = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
-        )
-        edisgo_object.set_timeindex(pd.date_range("1/1/2011", periods=8760, freq="H"))
-        edisgo_object.set_time_series_active_power_predefined(
-            conventional_loads_ts="oedb",
-            fluctuating_generators_ts="oedb",
-            scenario="eGon2035",
-            engine=oep_engine,
-            timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
-            conventional_loads_names=[
-                "Load_mvgd_33535_lvgd_1164210000_244_residential"
-            ],
-        )
-
-        assert edisgo_object.timeseries.loads_active_power.dropna().shape == (
-            2,
-            1,
-        )
-        fluctuating_gens = edisgo_object.topology.generators_df[
-            edisgo_object.topology.generators_df.type.isin(["wind", "solar"])
-        ]
-        assert edisgo_object.timeseries.generators_active_power.dropna().shape == (
-            2,
-            len(fluctuating_gens),
-        )
-
-    @pytest.mark.slow
-    @pytest.mark.oep
-    def test_set_time_series_active_power_predefined_oedb_auto_sets_timeindex(
-        self, oep_engine
+    def test_set_time_series_active_power_predefined_oedb(
+        self, mock_oep_time_series_import
     ):
+        """Test processing mocked OEDB profiles for a two-hour time range."""
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path,
             legacy_ding0_grids=False,
         )
 
+        edisgo_object.set_timeindex(pd.date_range("1/1/2011", periods=8760, freq="H"))
+        requested_timeindex = pd.date_range(
+            "1/1/2011 12:00",
+            periods=2,
+            freq="H",
+        )
+        load_name = "Load_mvgd_33535_lvgd_1164210000_244_residential"
+
+        # Create the fake data (mocks)
+        demand_mock, feedin_mock = mock_oep_time_series_import(
+            edisgo_object=edisgo_object,
+            timeindex=requested_timeindex,
+            load_name=load_name,
+        )
+
+        # Execute the function using its real "oedb" code paths. Only the OEP
+        # time-series retrieval functions are mocked.
         edisgo_object.set_time_series_active_power_predefined(
             conventional_loads_ts="oedb",
             fluctuating_generators_ts="oedb",
             scenario="eGon2035",
-            engine=oep_engine,
-            conventional_loads_names=[
-                "Load_mvgd_33535_lvgd_1164210000_244_residential"
-            ],
+            engine=None,
+            timeindex=requested_timeindex,
+            conventional_loads_names=[load_name],
         )
 
-        assert not edisgo_object.timeseries.timeindex.empty
-        assert edisgo_object.timeseries.timeindex[0].year == 2035
-        assert edisgo_object.timeseries.timeindex.shape == (8760,)
+        fluctuating_gens = edisgo_object.topology.generators_df.query(
+            "type in ['wind', 'solar']"
+        )
+
+        assert edisgo_object.timeseries.loads_active_power.dropna().shape == (2, 1)
+        assert edisgo_object.timeseries.generators_active_power.dropna().shape == (
+            2,
+            len(fluctuating_gens),
+        )
+
+        demand_mock.assert_called_once()
+        feedin_mock.assert_called_once()
+
+        assert demand_mock.call_args.kwargs["timeindex"] is requested_timeindex
+        assert feedin_mock.call_args.kwargs["timeindex"] is requested_timeindex
+
+    @pytest.mark.slow
+    def test_set_time_series_active_power_predefined_oedb_auto_sets_timeindex(
+        self, mock_oep_time_series_import
+    ):
+        """Test automatic time-index creation for mocked OEDB data."""
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path,
+            legacy_ding0_grids=False,
+        )
+
+        expected_timeindex = pd.date_range(
+            "1/1/2035",
+            periods=8760,
+            freq="H",
+        )
+        load_name = "Load_mvgd_33535_lvgd_1164210000_244_residential"
+
+        # Create the fake data (mocks)
+        demand_mock, feedin_mock = mock_oep_time_series_import(
+            edisgo_object=edisgo_object,
+            timeindex=expected_timeindex,
+            load_name=load_name,
+        )
+        # Execute the function using its real "oedb" code paths. Only the OEP
+        # time-series retrieval functions are mocked.
+        edisgo_object.set_time_series_active_power_predefined(
+            conventional_loads_ts="oedb",
+            fluctuating_generators_ts="oedb",
+            scenario="eGon2035",
+            engine=None,
+            conventional_loads_names=[load_name],
+        )
+
+        assert edisgo_object.timeseries.timeindex.equals(expected_timeindex)
+
+        demand_mock.assert_called_once()
+        feedin_mock.assert_called_once()
+
+        assert demand_mock.call_args.kwargs["timeindex"] is None
+        assert feedin_mock.call_args.kwargs["timeindex"] is None
 
     def test_set_time_series_reactive_power_control(self):
         # set active power time series for fixed cosphi
