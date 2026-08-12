@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import random
@@ -112,6 +113,7 @@ class Topology:
     def __init__(self, **kwargs):
         # load technical data of equipment
         self._equipment_data = self._load_equipment_data(kwargs.get("config", None))
+        self._original_grid_topology = None
 
     @staticmethod
     def _load_equipment_data(config=None):
@@ -649,15 +651,10 @@ class Topology:
         """
         Returns a subset of :py:attr:`~loads_df` containing only charging points.
 
-        Parameters
-        ----------
-        type : str
-            Load type. Default: "charging_point"
-
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            Pandas DataFrame with all loads of the given type.
+            DataFrame with all chargings points in the grid.
 
         """
         if "charging_point" in self.loads_df.type.unique():
@@ -864,6 +861,37 @@ class Topology:
 
         """
         return self._equipment_data
+
+    @property
+    def original_grid_topology(self):
+        """
+        Network topology before components are added or removed and grid is reinforced.
+
+        This is set up when the ding0 grid is loaded.
+
+        Parameters
+        ----------
+        :py:class:`~.network.topology.Topology`
+            Topology class with original grid topology data.
+
+        Returns
+        --------
+        :py:class:`~.network.topology.Topology`
+
+        """
+        return self._original_grid_topology
+
+    @original_grid_topology.setter
+    def original_grid_topology(self, topo):
+        if topo is not None:
+            # deepcopy is used so that in case topology object is changed the original
+            # topology is not changed
+            topo = copy.deepcopy(topo)
+            # make sure the original topology is set to None, to avoid recursive
+            # behavior when topology object is written to csv
+            if topo._original_grid_topology is not None:
+                topo._original_grid_topology = None
+        self._original_grid_topology = topo
 
     def get_connected_lines_from_bus(self, bus_name):
         """
@@ -1985,7 +2013,7 @@ class Topology:
             # object)
             comp_connected = False
             for dist_min_obj in conn_objects_min_stack:
-                # do not allow connection to virtual busses
+                # do not allow connection to virtual buses
                 if "virtual" not in dist_min_obj["repr"]:
                     target_obj_result = self._connect_mv_bus_to_target_object(
                         edisgo_object=edisgo_object,
@@ -2567,10 +2595,6 @@ class Topology:
             # switch data
             if switch_bus and switch_bus == line_data.bus0:
                 self.switches_df.loc[switch_data.name, "branch"] = line_name_bus0
-            # add line to equipment changes
-            edisgo_object.results._add_line_to_equipment_changes(
-                line=self.lines_df.loc[line_name_bus0, :],
-            )
 
             # add new line between newly created branch tee and line's bus0
             line_length = geo.calc_geo_dist_vincenty(
@@ -2596,10 +2620,6 @@ class Topology:
             # switch data
             if switch_bus and switch_bus == line_data.bus1:
                 self.switches_df.loc[switch_data.name, "branch"] = line_name_bus1
-            # add line to equipment changes
-            edisgo_object.results._add_line_to_equipment_changes(
-                line=self.lines_df.loc[line_name_bus1, :],
-            )
 
             # add new line for new bus
             line_length = geo.calc_geo_dist_vincenty(
@@ -2891,6 +2911,39 @@ class Topology:
             axis=1,
         ).to_csv(os.path.join(directory, "network.csv"))
 
+        # original network
+        if self.original_grid_topology is not None:
+            self.original_grid_topology.to_csv(
+                os.path.join(directory, "original_grid_topology")
+            )
+
+    def _get_matching_dict_of_attributes_and_file_names(self):
+        """
+        Helper function that matches attribute names to file names.
+
+        Is used in function :attr:`~.network.topology.TopologyBase.from_csv` to set
+        which attribute of :class:`~.network.topology.TopologyBase` is saved under
+        which file name.
+
+        Returns
+        -------
+        dict
+            Dictionary matching attribute names and file names with attribute
+            names as keys and corresponding file names as values.
+
+        """
+        return {
+            "buses_df": "buses.csv",
+            "lines_df": "lines.csv",
+            "loads_df": "loads.csv",
+            "generators_df": "generators.csv",
+            "storage_units_df": "storage_units.csv",
+            "transformers_df": "transformers.csv",
+            "transformers_hvmv_df": "transformers_hvmv.csv",
+            "switches_df": "switches.csv",
+            "network": "network.csv",
+        }
+
     def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
         """
         Restores topology from csv files.
@@ -2905,36 +2958,69 @@ class Topology:
 
         """
 
-        def _get_matching_dict_of_attributes_and_file_names():
+        def _set_data(attrs_to_set, set_obj):
             """
-            Helper function that matches attribute names to file names.
+            Sets topology attributes from csv files.
 
-            Is used in function :attr:`~.network.topology.Topology.from_csv` to set
-            which attribute of :class:`~.network.topology.Topology` is saved under
-            which file name.
-
-            Returns
-            -------
-            dict
-                Dictionary matching attribute names and file names with attribute
-                names as keys and corresponding file names as values.
+            Parameters
+            ----------
+            attrs_to_set : dict
+                Dictionary with attributes to set in the form as returned by
+                _get_matching_dict_of_attributes_and_file_names().
+            set_obj : Topology
+                Topology object on which to set the data, as data can be set to the
+                Topology object in Topology.original_grid_data as well.
 
             """
-            return {
-                "buses_df": "buses.csv",
-                "lines_df": "lines.csv",
-                "loads_df": "loads.csv",
-                "generators_df": "generators.csv",
-                "charging_points_df": "charging_points.csv",
-                "storage_units_df": "storage_units.csv",
-                "transformers_df": "transformers.csv",
-                "transformers_hvmv_df": "transformers_hvmv.csv",
-                "switches_df": "switches.csv",
-                "network": "network.csv",
-            }
+            for attr, file in attrs_to_set.items():
+                if from_zip_archive:
+                    # open zip file to make it readable for pandas
+                    with zip.open(file) as f:
+                        df = pd.read_csv(f, index_col=0)
+                else:
+                    path = os.path.join(data_path, file)
+                    df = pd.read_csv(path, index_col=0)
+
+                if attr == "generators_df":
+                    # delete slack if it was included
+                    df = df.loc[df.control != "Slack"]
+                elif "transformers" in attr:
+                    # rename columns to match convention
+                    df = df.rename(columns={"x": "x_pu", "r": "r_pu"})
+                elif attr == "network":
+                    # rename columns to match convention
+                    df = df.rename(
+                        columns={
+                            "mv_grid_district_geom": "geom",
+                            "mv_grid_district_population": "population",
+                        }
+                    )
+
+                    # set grid district information
+                    setattr(
+                        set_obj,
+                        "grid_district",
+                        {
+                            "population": df.population.iat[0],
+                            "geom": wkt_loads(df.geom.iat[0]),
+                            "srid": df.srid.iat[0],
+                        },
+                    )
+
+                    # set up medium voltage grid
+                    setattr(
+                        set_obj,
+                        "mv_grid",
+                        MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]),
+                    )
+
+                    continue
+
+                # set attribute
+                setattr(set_obj, attr, df)
 
         # get all attributes and corresponding file names
-        attrs = _get_matching_dict_of_attributes_and_file_names()
+        attrs = self._get_matching_dict_of_attributes_and_file_names()
 
         if from_zip_archive:
             # read from zip archive
@@ -2953,49 +3039,29 @@ class Topology:
             files = os.listdir(data_path)
 
         attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+        _set_data(attrs_to_read, self)
 
-        for attr, file in attrs_to_read.items():
-            if from_zip_archive:
-                # open zip file to make it readable for pandas
-                with zip.open(file) as f:
-                    df = pd.read_csv(f, index_col=0)
+        # read original grid topology data
+        attrs = self._get_matching_dict_of_attributes_and_file_names()
+        if from_zip_archive:
+            # add directory to attributes to match zip archive
+            attrs = {
+                k: f"topology/original_grid_topology/{v}" for k, v in attrs.items()
+            }
+            attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+        else:
+            if "original_grid_topology" in files:
+                files = os.listdir(os.path.join(data_path, "original_grid_topology"))
+                attrs_to_read = {
+                    k: f"original_grid_topology/{v}"
+                    for k, v in attrs.items()
+                    if v in files
+                }
             else:
-                path = os.path.join(data_path, file)
-                df = pd.read_csv(path, index_col=0)
-
-            if attr == "generators_df":
-                # delete slack if it was included
-                df = df.loc[df.control != "Slack"]
-            elif "transformers" in attr:
-                # rename columns to match convention
-                df = df.rename(columns={"x": "x_pu", "r": "r_pu"})
-            elif attr == "network":
-                # rename columns to match convention
-                df = df.rename(
-                    columns={
-                        "mv_grid_district_geom": "geom",
-                        "mv_grid_district_population": "population",
-                    }
-                )
-
-                # set grid district information
-                setattr(
-                    self,
-                    "grid_district",
-                    {
-                        "population": df.population.iat[0],
-                        "geom": wkt_loads(df.geom.iat[0]),
-                        "srid": df.srid.iat[0],
-                    },
-                )
-
-                # set up medium voltage grid
-                setattr(self, "mv_grid", MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]))
-
-                continue
-
-            # set attribute
-            setattr(self, attr, df)
+                attrs_to_read = {}
+        if attrs_to_read:
+            self.original_grid_topology = Topology()
+            _set_data(attrs_to_read, self.original_grid_topology)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
