@@ -18,6 +18,7 @@ if "READTHEDOCS" not in os.environ:
     from shapely.ops import transform
 
 from edisgo.tools.geo import proj2equidistant
+from edisgo.tools.tools import is_ront
 
 logger = logging.getLogger(__name__)
 
@@ -82,13 +83,34 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
             },
             index=hvmv_trafos,
         )
+        # RONT transformers get a surcharge on top of the standard MV/LV
+        # transformer cost (`ront_surcharge`), instead of a separate, fully
+        # independent replacement price -- consistent with the flat,
+        # size-independent cost model already used for standard lines and
+        # transformers here. As with the line cross-section cost model (see
+        # the crosssection_escalation PR), this is a simplified cost
+        # assumption; `ront_surcharge` is a placeholder value, source to be
+        # verified before merging (see CONCEPT_ront.md).
+        mvlv_cost_base = float(edisgo_obj.config["costs_transformers"]["lv"])
+        mvlv_ront_surcharge = float(
+            edisgo_obj.config["costs_transformers"].get("ront_surcharge", 0.0)
+        )
+        mvlv_type_info = edisgo_obj.topology.transformers_df.loc[
+            mvlv_trafos, "type_info"
+        ]
+        mvlv_costs = mvlv_type_info.apply(
+            lambda type_info: (
+                mvlv_cost_base + mvlv_ront_surcharge
+                if is_ront(type_info)
+                else mvlv_cost_base
+            )
+        )
         costs_trafos = pd.concat(
             [
                 costs_trafos,
                 pd.DataFrame(
                     {
-                        "costs_transformers": len(mvlv_trafos)
-                        * [float(edisgo_obj.config["costs_transformers"]["lv"])],
+                        "costs_transformers": mvlv_costs.values,
                         "voltage_level": len(mvlv_trafos) * ["mv/lv"],
                     },
                     index=mvlv_trafos,
@@ -133,6 +155,19 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         added_transformers = added_transformers[
             ~added_transformers["equipment"].isin(added_removed_transformers.equipment)
         ]
+        # "changed" transformers (currently only RONT conversions, see
+        # CONCEPT_ront.md -- the transformer itself is not replaced, only its
+        # type_info changes) must be costed alongside added ones, just like
+        # "changed" lines already are (see costs for lines below). A
+        # "changed" transformer that was later removed (e.g. because a
+        # subsequent, more severe overload replaced the whole station) no
+        # longer exists in the final topology and must not be costed --
+        # mirrors the added/removed cancellation above.
+        changed_transformers = transformers[transformers["change"] == "changed"]
+        changed_transformers = changed_transformers[
+            ~changed_transformers["equipment"].isin(removed_transformers["equipment"])
+        ]
+        costable_transformers = pd.concat([added_transformers, changed_transformers])
         # calculate costs for transformers
         all_trafos = pd.concat(
             [
@@ -140,7 +175,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                 edisgo_obj.topology.transformers_df,
             ]
         )
-        trafos = all_trafos.loc[added_transformers["equipment"]]
+        trafos = all_trafos.loc[costable_transformers["equipment"]]
         # calculate costs for each transformer
         transformer_costs = _get_transformer_costs(trafos)
         costs = pd.concat(
