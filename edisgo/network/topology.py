@@ -513,6 +513,10 @@ class Topology:
                 Resistance of line (or in case of multiple parallel lines
                 total resistance of lines) in Ohm.
 
+            b : float
+                Shunt susceptance of line (or in case of multiple parallel lines
+                total shunt susceptance of lines) in Siemens.
+
             s_nom : float
                 Apparent power which can pass through the line (or in case of
                 multiple parallel lines total apparent power which can pass
