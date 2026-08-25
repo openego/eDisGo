@@ -1,6 +1,7 @@
 import copy
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from numpy.testing import assert_array_equal
@@ -9,6 +10,7 @@ from pandas.testing import assert_frame_equal
 from edisgo import EDisGo
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid, run_separate_lv_grids
+from edisgo.network.results import Results
 
 
 class TestReinforceGrid:
@@ -62,6 +64,64 @@ class TestReinforceGrid:
             num_steps_loading=2,
         )
         assert len(res_reduced.i_res) == 2
+
+    def test_reinforce_log_costs_match_grid_expansion_costs(self):
+        # verify Step 5: reinforce_log's per-measure costs add up to the same
+        # total as grid_expansion_costs, which is the established, separately
+        # tested source of truth for total network expansion costs (see
+        # e.g. test_run_separate_lv_grids using
+        # grid_expansion_costs.total_costs.sum())
+        edisgo = copy.deepcopy(self.edisgo)
+        results = reinforce_grid(edisgo=edisgo)
+
+        reinforce_log_total = results.reinforce_log["costs"].sum()
+        grid_expansion_total = results.grid_expansion_costs["total_costs"].sum()
+
+        # both sums are built from the same line_expansion_costs() /
+        # transformer_expansion_costs() cost tables, just aggregated
+        # differently (reinforce_log: once per (violation, changed
+        # component) row; grid_expansion_costs: once per changed component
+        # across the whole equipment_changes history), so a tight
+        # floating-point tolerance covers summation-order effects only
+        assert reinforce_log_total == pytest.approx(grid_expansion_total)
+
+    def test_reinforce_log_to_csv_from_csv_roundtrip(self, tmp_path):
+        # verify Step 5: reinforce_log persists and restores correctly via
+        # Results.to_csv / Results.from_csv
+        edisgo = copy.deepcopy(self.edisgo)
+        results = reinforce_grid(edisgo=edisgo)
+
+        original_reinforce_log = results.reinforce_log.copy()
+        assert not original_reinforce_log.empty
+
+        results.to_csv(str(tmp_path))
+
+        fresh_results = Results(edisgo)
+        fresh_results.from_csv(str(tmp_path))
+        loaded_reinforce_log = fresh_results.reinforce_log.copy()
+
+        # read_csv's parse_dates=True (used generically by Results.from_csv
+        # for all grid expansion results) only parses the index column, not
+        # regular data columns, so the 'time_index' column round-trips as a
+        # string instead of a Timestamp; this is a generic limitation that
+        # would equally affect any other Results attribute with a Timestamp
+        # *column* (e.g. unresolved_issues), not something specific to
+        # reinforce_log, so it is fixed up here rather than in the property
+        loaded_reinforce_log["time_index"] = pd.to_datetime(
+            loaded_reinforce_log["time_index"]
+        )
+        # for the same generic reason, an all-None 'lv_grid_id' column
+        # (as here, since none of the triggered measures are voltage issues
+        # at a LV bus/station) round-trips as NaN/float64 instead of
+        # None/object, since CSV cannot distinguish "no value" from "no
+        # value of this dtype"
+        loaded_reinforce_log["lv_grid_id"] = (
+            loaded_reinforce_log["lv_grid_id"]
+            .astype(object)
+            .where(loaded_reinforce_log["lv_grid_id"].notna(), None)
+        )
+
+        assert_frame_equal(loaded_reinforce_log, original_reinforce_log)
 
     def test_run_separate_lv_grids(self):
         edisgo = copy.deepcopy(self.edisgo)

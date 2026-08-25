@@ -54,6 +54,7 @@ def _get_matching_dict_of_attributes_and_file_names():
         "grid_expansion_costs": "grid_expansion_costs",
         "unresolved_issues": "unresolved_issues",
         "equipment_changes": "equipment_changes",
+        "reinforce_log": "reinforce_log",
     }
     return powerflow_results_dict, grid_expansion_results_dict
 
@@ -347,6 +348,40 @@ class Results:
     @equipment_changes.setter
     def equipment_changes(self, df):
         self._equipment_changes = df
+
+    @property
+    def reinforce_log(self):
+        """
+        Tracks per-violation reinforcement measures in long format.
+
+        For each grid reinforcement iteration step, holds one row per
+        combination of a detected issue (voltage or overloading violation)
+        and the equipment changed to resolve it, so that measures can be
+        traced back to the violation that triggered them.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with one row per (violation, changed component) pair.
+
+            Provide this if you want to set values. For retrieval of data do
+            not pass an argument.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with one row per (violation, changed component) pair.
+            For more information on the dataframe see input parameter `df`.
+
+        """
+        try:
+            return self._reinforce_log
+        except Exception:
+            return pd.DataFrame()
+
+    @reinforce_log.setter
+    def reinforce_log(self, df):
+        self._reinforce_log = df
 
     @property
     def grid_expansion_costs(self):
@@ -725,6 +760,7 @@ class Results:
             "pfa_v_mag_pu_seed",
             "v_res",
             "i_res",
+            "reinforce_log",
         ]
         try:
             for attr in attr_to_check:
@@ -778,6 +814,8 @@ class Results:
           is saved to `equipment_changes.csv`.
         * unresolved_issues : Attribute :py:attr:`~unresolved_issues`
           is saved to `unresolved_issues.csv`.
+        * reinforce_log : Attribute :py:attr:`~reinforce_log`
+          is saved to `reinforce_log.csv`.
 
         Parameters
         ----------
