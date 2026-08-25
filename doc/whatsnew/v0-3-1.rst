@@ -1,0 +1,12 @@
+Release v0.3.1
+================
+
+Release date: <month> <day>, <year>
+
+Changes
+-------
+
+* Fixed simple example notebook: disabled the background map on the MV grid topology
+  plots (fetching map tiles could take tens of minutes or fail without a fast
+  internet connection) and replaced a hardcoded LV grid selection that broke when
+  used with certain grid data `#276 <https://github.com/openego/eDisGo/issues/276>`_
