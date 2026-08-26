@@ -812,7 +812,10 @@ def get_weather_cells_intersecting_with_grid_district(
 
     if edisgo_obj.legacy_grids is True:
         table = climate.Cosmoclmgrid
-        with session_scope() as session:
+        session_context = (
+            session_scope() if engine is None else session_scope_egon_data(engine)
+        )
+        with session_context as session:
             query = session.query(
                 table.gid,
             ).filter(sql_intersects(table.geom, sql_geom, srid))

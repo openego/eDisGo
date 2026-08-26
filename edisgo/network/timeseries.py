@@ -1269,7 +1269,9 @@ class TimeSeries:
         if isinstance(ts_generators, str) and ts_generators == "oedb":
             if edisgo_object.legacy_grids is True:
                 ts_generators = timeseries_import.feedin_oedb_legacy(
-                    edisgo_object, timeindex=timeindex
+                    edisgo_object,
+                    timeindex=timeindex,
+                    engine=engine,
                 )
             else:
                 ts_generators = timeseries_import.feedin_oedb(

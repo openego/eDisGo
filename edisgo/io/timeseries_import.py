@@ -83,7 +83,7 @@ def _timeindex_helper_func(
     return timeindex, timeindex_full
 
 
-def feedin_oedb_legacy(edisgo_object, timeindex=None):
+def feedin_oedb_legacy(edisgo_object, timeindex=None, engine=None):
     """
     Import feed-in time series data for wind and solar power plants from the
     `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
@@ -99,6 +99,8 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
         :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
         If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
         is indexed using the default year 2011 and returned for the whole year.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+        Optional database engine. If omitted, the legacy database connection is used.
 
     Returns
     -------
@@ -109,40 +111,15 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
 
     """
 
-    def _retrieve_timeseries_from_oedb(session):
-        """Retrieve time series from oedb"""
-        feedin_sqla = session.query(
-            orm_feedin.w_id.label("weather_cell_id"),
-            orm_feedin.source.label("carrier"),
-            orm_feedin.feedin,
-        ).filter(
-            orm_feedin.w_id.in_(weather_cell_ids),
-            orm_feedin.power_class.in_([0, 4]),
-            orm_feedin_version,
-            orm_feedin.weather_year == 2011,
-        )
-        return pd.read_sql_query(
-            feedin_sqla.statement,
-            session.bind,
-        )
-
-    if edisgo_object.config["data_source"]["oedb_data_source"] == "model_draft":
-        orm_feedin_name = edisgo_object.config["model_draft"]["res_feedin_data"]
-        orm_feedin = model_draft.__getattribute__(orm_feedin_name)
-        orm_feedin_version = 1 == 1
-    else:
-        orm_feedin_name = edisgo_object.config["versioned"]["res_feedin_data"]
-        orm_feedin = supply.__getattribute__(orm_feedin_name)
-        orm_feedin_version = (
-            orm_feedin.version == edisgo_object.config["versioned"]["version"]
-        )
-
     weather_cell_ids = tools.get_weather_cells_intersecting_with_grid_district(
-        edisgo_object
+        edisgo_object,
+        engine=engine,
     )
-
-    with session_scope() as session:
-        feedin_df = _retrieve_timeseries_from_oedb(session)
+    feedin_df = _query_feedin_oedb_legacy(
+        edisgo_object,
+        weather_cell_ids,
+        engine=engine,
+    )
 
     # rename wind_onshore to wind
     feedin_df.carrier = feedin_df.carrier.str.replace("_onshore", "")
@@ -161,6 +138,37 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
     feedin_df.index = timeindex_full
 
     return feedin_df.loc[timeindex, :].astype("float")
+
+
+def _query_feedin_oedb_legacy(edisgo_object, weather_cell_ids, engine=None):
+    """Query annual legacy wind and solar feed-in arrays from the OEP."""
+
+    if edisgo_object.config["data_source"]["oedb_data_source"] == "model_draft":
+        orm_feedin_name = edisgo_object.config["model_draft"]["res_feedin_data"]
+        orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+        orm_feedin_version = 1 == 1
+    else:
+        orm_feedin_name = edisgo_object.config["versioned"]["res_feedin_data"]
+        orm_feedin = supply.__getattribute__(orm_feedin_name)
+        orm_feedin_version = (
+            orm_feedin.version == edisgo_object.config["versioned"]["version"]
+        )
+
+    session_context = (
+        session_scope() if engine is None else session_scope_egon_data(engine)
+    )
+    with session_context as session:
+        query = session.query(
+            orm_feedin.w_id.label("weather_cell_id"),
+            orm_feedin.source.label("carrier"),
+            orm_feedin.feedin,
+        ).filter(
+            orm_feedin.w_id.in_(weather_cell_ids),
+            orm_feedin.power_class.in_([0, 4]),
+            orm_feedin_version,
+            orm_feedin.weather_year == 2011,
+        )
+        return pd.read_sql_query(query.statement, session.bind)
 
 
 def feedin_oedb(
@@ -199,27 +207,7 @@ def feedin_oedb(
         edisgo_object, engine=engine
     )
 
-    config = Config()
-    (egon_era5_renewable_feedin,) = config.import_tables_from_oep(
-        engine, ["egon_era5_renewable_feedin"], "supply"
-    )
-
-    with session_scope_egon_data(engine) as session:
-        query = (
-            session.query(
-                egon_era5_renewable_feedin.w_id.label("weather_cell_id"),
-                egon_era5_renewable_feedin.carrier,
-                egon_era5_renewable_feedin.feedin,
-            )
-            .filter(
-                egon_era5_renewable_feedin.w_id.in_(weather_cell_ids),
-                egon_era5_renewable_feedin.carrier.in_(["pv", "wind_onshore"]),
-            )
-            .order_by(
-                egon_era5_renewable_feedin.w_id, egon_era5_renewable_feedin.carrier
-            )
-        )
-        feedin_df = pd.read_sql(sql=query.statement, con=engine)
+    feedin_df = _query_feedin_oedb(engine, weather_cell_ids)
 
     # rename pv to solar and wind_onshore to wind
     feedin_df.carrier = feedin_df.carrier.str.replace("pv", "solar").str.replace(
@@ -240,6 +228,32 @@ def feedin_oedb(
     feedin_df.index = timeindex_full
 
     return feedin_df.loc[timeindex, :].astype("float")
+
+
+def _query_feedin_oedb(engine, weather_cell_ids):
+    """Query annual wind and solar feed-in arrays from the OEP."""
+
+    config = Config()
+    (egon_era5_renewable_feedin,) = config.import_tables_from_oep(
+        engine, ["egon_era5_renewable_feedin"], "supply"
+    )
+
+    with session_scope_egon_data(engine) as session:
+        query = (
+            session.query(
+                egon_era5_renewable_feedin.w_id.label("weather_cell_id"),
+                egon_era5_renewable_feedin.carrier,
+                egon_era5_renewable_feedin.feedin,
+            )
+            .filter(
+                egon_era5_renewable_feedin.w_id.in_(weather_cell_ids),
+                egon_era5_renewable_feedin.carrier.in_(["pv", "wind_onshore"]),
+            )
+            .order_by(
+                egon_era5_renewable_feedin.w_id, egon_era5_renewable_feedin.carrier
+            )
+        )
+        return pd.read_sql(sql=query.statement, con=engine)
 
 
 def load_time_series_demandlib(edisgo_obj, timeindex=None):
@@ -368,6 +382,19 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
         edisgo_object, timeindex, default_year=2011, allow_leap_year=False
     )
 
+    cop = _query_cop_oedb(engine, weather_cell_ids)
+
+    # convert dataframe to have weather cell ID as column name and time index
+    cop = pd.DataFrame(
+        {w_id: ts.cop for w_id, ts in cop.iterrows()}, index=timeindex_full
+    )
+
+    return cop.loc[timeindex, :]
+
+
+def _query_cop_oedb(engine, weather_cell_ids):
+    """Query annual heat-pump COP arrays from the OEP."""
+
     config = Config()
     (egon_era5_renewable_feedin,) = config.import_tables_from_oep(
         engine, ["egon_era5_renewable_feedin"], "supply"
@@ -384,14 +411,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
             .filter(egon_era5_renewable_feedin.w_id.in_(weather_cell_ids))
         )
 
-        cop = pd.read_sql(query.statement, engine, index_col="w_id")
-
-    # convert dataframe to have weather cell ID as column name and time index
-    cop = pd.DataFrame(
-        {w_id: ts.cop for w_id, ts in cop.iterrows()}, index=timeindex_full
-    )
-
-    return cop.loc[timeindex, :]
+        return pd.read_sql(query.statement, engine, index_col="w_id")
 
 
 def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
@@ -684,9 +704,9 @@ def _get_zensus_cells_of_buildings(building_ids, engine):
     return df.drop_duplicates(subset=["building_id"])
 
 
-def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
+def _query_residential_heat_profile_data(building_ids, scenario, engine):
     """
-    Gets residential heat demand profiles per building.
+    Query and normalize the OEP inputs for residential heat profiles.
 
     Parameters
     ----------
@@ -700,10 +720,9 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
 
     Returns
     --------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with residential heat demand profiles per building for one year in an
-        hourly resolution in MW. Index contains hour of the year (from 0 to 8759) and
-        column names are building ID as integer.
+    tuple(:pandas:`pandas.DataFrame<DataFrame>`)
+        Annual heat demand, daily profile assignments, normalized daily profiles,
+        and daily demand shares.
 
     """
 
@@ -873,8 +892,12 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
     # get peta demand of each zensus cell
     df_peta_demand = _get_peta_demand(zensus_cells, scenario)
     if df_peta_demand.empty:
-        logger.info(f"No residential heat demand for buildings: {building_ids}")
-        return pd.DataFrame(columns=building_ids)
+        return (
+            df_peta_demand,
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+        )
 
     # get daily heat profile IDs per building
     df_profiles_ids = _get_residential_heat_profile_ids(zensus_cells)
@@ -882,6 +905,44 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
     df_profiles = _get_daily_profiles(df_profiles_ids["selected_idp_profiles"].unique())
     # get daily demand share of annual demand
     df_daily_demand_share = _get_daily_demand_share(zensus_cells)
+
+    return (
+        df_peta_demand,
+        df_profiles_ids,
+        df_profiles,
+        df_daily_demand_share,
+    )
+
+
+def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
+    """
+    Get residential heat-demand profiles per building.
+
+    Parameters
+    ----------
+    building_ids : list(int)
+        Building IDs to retrieve profiles for.
+    scenario : str
+        OEP scenario, either ``eGon2035`` or ``eGon100RE``.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Hourly profiles in MW with building IDs as columns.
+    """
+
+    (
+        df_peta_demand,
+        df_profiles_ids,
+        df_profiles,
+        df_daily_demand_share,
+    ) = _query_residential_heat_profile_data(building_ids, scenario, engine)
+
+    if df_peta_demand.empty:
+        logger.info(f"No residential heat demand for buildings: {building_ids}")
+        return pd.DataFrame(columns=building_ids)
 
     # merge profile IDs to peta demand by zensus ID
     df_profile_merge = pd.merge(
@@ -952,6 +1013,27 @@ def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, en
         and column names are district heating network ID as integer.
 
     """
+    df = _query_district_heating_heat_demand_profiles(
+        engine,
+        district_heating_ids,
+        scenario,
+    )
+
+    # unnest demand profile and make area_id column names
+    df = df.explode("dist_aggregated_mw")
+    df["hour_of_year"] = df.groupby("area_id").cumcount() + 1
+    df = df.pivot(index="hour_of_year", columns="area_id", values="dist_aggregated_mw")
+
+    return df.astype("float")
+
+
+def _query_district_heating_heat_demand_profiles(
+    engine,
+    district_heating_ids,
+    scenario,
+):
+    """Query annual district-heating demand arrays from the OEP."""
+
     config = Config()
     (egon_timeseries_district_heating,) = config.import_tables_from_oep(
         engine, ["egon_timeseries_district_heating"], "demand"
@@ -965,13 +1047,7 @@ def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, en
             egon_timeseries_district_heating.area_id.in_(district_heating_ids),
             egon_timeseries_district_heating.scenario == scenario,
         )
-        df = pd.read_sql(query.statement, engine, index_col=None)
-    # unnest demand profile and make area_id column names
-    df = df.explode("dist_aggregated_mw")
-    df["hour_of_year"] = df.groupby("area_id").cumcount() + 1
-    df = df.pivot(index="hour_of_year", columns="area_id", values="dist_aggregated_mw")
-
-    return df.astype("float")
+        return pd.read_sql(query.statement, engine, index_col=None)
 
 
 def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
@@ -1007,25 +1083,13 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
         column names are building ID as integer.
 
     """
-    config = Config()
-    (egon_map_zensus_mvgd_buildings,) = config.import_tables_from_oep(
-        engine, ["egon_map_zensus_mvgd_buildings"], "boundaries"
-    )
-
     # get MV grid IDs of CTS loads
     cts_loads = edisgo_obj.topology.loads_df[
         (edisgo_obj.topology.loads_df.type == "conventional_load")
         & (edisgo_obj.topology.loads_df.sector == "cts")
     ]
     cts_building_ids = cts_loads.building_id.dropna().unique()
-    with session_scope_egon_data(engine) as session:
-        query = session.query(
-            egon_map_zensus_mvgd_buildings.building_id,
-            egon_map_zensus_mvgd_buildings.bus_id,
-        ).filter(
-            egon_map_zensus_mvgd_buildings.building_id.in_(cts_building_ids),
-        )
-        df = pd.read_sql(query.statement, engine, index_col="building_id")
+    df = _query_cts_building_grid_map(engine, cts_building_ids)
 
     # iterate over grid IDs and concatenate the per-grid profiles once instead of
     # inside the loop (concatenating inside the loop is O(grids^2) as each concat
@@ -1045,6 +1109,23 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
 
     # filter CTS loads in grid
     return profiles_df.loc[:, cts_building_ids]
+
+
+def _query_cts_building_grid_map(engine, building_ids):
+    """Query the MV-grid assignment of CTS buildings from the OEP."""
+
+    config = Config()
+    (egon_map_zensus_mvgd_buildings,) = config.import_tables_from_oep(
+        engine, ["egon_map_zensus_mvgd_buildings"], "boundaries"
+    )
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_map_zensus_mvgd_buildings.building_id,
+            egon_map_zensus_mvgd_buildings.bus_id,
+        ).filter(
+            egon_map_zensus_mvgd_buildings.building_id.in_(building_ids),
+        )
+        return pd.read_sql(query.statement, engine, index_col="building_id")
 
 
 def get_cts_profiles_per_grid(
@@ -1078,146 +1159,23 @@ def get_cts_profiles_per_grid(
 
     """
 
-    def _get_demand_share():
-        """
-        Get CTS demand share per building.
+    (
+        raw_substation_profile,
+        df_demand_share,
+        total_heat_demand,
+    ) = _query_cts_profiles_per_grid_data(bus_id, scenario, sector, engine)
+    if raw_substation_profile.empty:
+        return
 
-        Returns
-        --------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            Index contains building ID and column 'profile_share' the corresponding
-            demand share.
-
-        """
-        if sector == "electricity":
-            db_table = egon_cts_electricity_demand_building_share
-        else:
-            db_table = egon_cts_heat_demand_building_share
-
-        with session_scope_egon_data(engine) as session:
-            query = session.query(
-                db_table.building_id,
-                db_table.profile_share,
-            ).filter(
-                db_table.scenario == scenario,
-                db_table.bus_id == bus_id,
-            )
-            df = pd.read_sql(query.statement, engine, index_col="building_id")
-        return df
-
-    def _get_substation_profile():
-        """
-        Get aggregated CTS demand profile used in eTraGo.
-
-        In case of heat the profile only contains zensus cells with individual heating.
-        In order to obtain a profile for the whole MV grid it needs to be scaled by the
-        grid's total CTS demand from peta.
-
-        Returns
-        --------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            Index contains bus ID and columns contain time steps, numbered from 0 to
-            8759.
-
-        """
-        if sector == "electricity":
-            db_table = egon_etrago_electricity_cts
-        else:
-            db_table = egon_etrago_heat_cts
-
-        with session_scope_egon_data(engine) as session:
-            query = session.query(
-                db_table.bus_id,
-                db_table.p_set,
-            ).filter(
-                db_table.scn_name == scenario,
-                db_table.bus_id == bus_id,
-            )
-            df = pd.read_sql(query.statement, engine, index_col=None)
-        df = pd.DataFrame.from_dict(
-            df.set_index("bus_id")["p_set"].to_dict(),
-            orient="index",
+    df_cts_substation_profiles = pd.DataFrame.from_dict(
+        raw_substation_profile.set_index("bus_id")["p_set"].to_dict(),
+        orient="index",
+    )
+    if sector == "heat":
+        scaling_factor = (
+            total_heat_demand / df_cts_substation_profiles.loc[bus_id, :].sum()
         )
-
-        if sector == "heat" and not df.empty:
-            total_heat_demand = _get_total_heat_demand_grid()
-            scaling_factor = total_heat_demand / df.loc[bus_id, :].sum()
-            df.loc[bus_id, :] *= scaling_factor
-
-        return df
-
-    def _get_total_heat_demand_grid():
-        """
-        Returns total annual CTS heat demand for all CTS buildings in the MV grid,
-        including the ones connected to a district heating system.
-
-        Returns
-        -------
-        float
-            Total CTS heat demand in MV grid.
-
-        """
-        with session_scope_egon_data(engine) as session:
-            query = session.query(
-                egon_map_zensus_grid_districts.zensus_population_id,
-                egon_peta_heat.demand,
-            ).filter(
-                egon_peta_heat.sector == "service",
-                egon_peta_heat.scenario == scenario,
-                egon_map_zensus_grid_districts.bus_id == int(bus_id),
-                egon_map_zensus_grid_districts.zensus_population_id
-                == egon_peta_heat.zensus_population_id,
-            )
-
-            df = pd.read_sql(query.statement, engine, index_col=None)
-        return df.demand.sum()
-
-    config = Config()
-
-    # saio.register_schema("demand", engine)
-
-    if sector == "electricity":
-        (
-            egon_cts_electricity_demand_building_share,
-            egon_etrago_electricity_cts,
-        ) = config.import_tables_from_oep(
-            engine,
-            [
-                "egon_cts_electricity_demand_building_share",
-                "egon_etrago_electricity_cts",
-            ],
-            "demand",
-        )
-
-        df_cts_substation_profiles = _get_substation_profile()
-        if df_cts_substation_profiles.empty:
-            return
-        df_demand_share = _get_demand_share()
-
-    elif sector == "heat":
-        (
-            egon_cts_heat_demand_building_share,
-            egon_etrago_heat_cts,
-            egon_peta_heat,
-        ) = config.import_tables_from_oep(
-            engine,
-            [
-                "egon_cts_heat_demand_building_share",
-                "egon_etrago_heat_cts",
-                "egon_peta_heat",
-            ],
-            "demand",
-        )
-        (egon_map_zensus_grid_districts,) = config.import_tables_from_oep(
-            engine, ["egon_map_zensus_grid_districts"], "boundaries"
-        )
-        df_cts_substation_profiles = _get_substation_profile()
-        if df_cts_substation_profiles.empty:
-            return
-        df_demand_share = _get_demand_share()
-
-    else:
-        raise KeyError("Sector needs to be either 'electricity' or 'heat'")
+        df_cts_substation_profiles.loc[bus_id, :] *= scaling_factor
 
     shares = df_demand_share["profile_share"]
     profile_ts = df_cts_substation_profiles.loc[bus_id]
@@ -1234,17 +1192,98 @@ def get_cts_profiles_per_grid(
             logger.warning("Total CTS electricity demand does not match.")
     if sector == "heat":
         check_sum_profile = building_profiles.sum().sum()
-        check_sum_db = _get_total_heat_demand_grid()
+        check_sum_db = total_heat_demand
         if not np.isclose(check_sum_profile, check_sum_db, atol=1e-1):
             logger.warning("Total CTS heat demand does not match.")
     return building_profiles
 
 
-def get_residential_electricity_profiles_per_building(
+def _query_cts_profiles_per_grid_data(bus_id, scenario, sector, engine):
+    """Query raw CTS shares, substation profile and optional heat demand."""
+
+    config = Config()
+    if sector == "electricity":
+        demand_share_table, substation_table = config.import_tables_from_oep(
+            engine,
+            [
+                "egon_cts_electricity_demand_building_share",
+                "egon_etrago_electricity_cts",
+            ],
+            "demand",
+        )
+        heat_demand_table = None
+        grid_map_table = None
+    elif sector == "heat":
+        (
+            demand_share_table,
+            substation_table,
+            heat_demand_table,
+        ) = config.import_tables_from_oep(
+            engine,
+            [
+                "egon_cts_heat_demand_building_share",
+                "egon_etrago_heat_cts",
+                "egon_peta_heat",
+            ],
+            "demand",
+        )
+        (grid_map_table,) = config.import_tables_from_oep(
+            engine, ["egon_map_zensus_grid_districts"], "boundaries"
+        )
+    else:
+        raise KeyError("Sector needs to be either 'electricity' or 'heat'")
+
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            substation_table.bus_id,
+            substation_table.p_set,
+        ).filter(
+            substation_table.scn_name == scenario,
+            substation_table.bus_id == bus_id,
+        )
+        raw_substation_profile = pd.read_sql(query.statement, engine, index_col=None)
+
+    if raw_substation_profile.empty:
+        return raw_substation_profile, pd.DataFrame(), None
+
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            demand_share_table.building_id,
+            demand_share_table.profile_share,
+        ).filter(
+            demand_share_table.scenario == scenario,
+            demand_share_table.bus_id == bus_id,
+        )
+        demand_share = pd.read_sql(
+            query.statement,
+            engine,
+            index_col="building_id",
+        )
+
+    total_heat_demand = None
+    if sector == "heat":
+        with session_scope_egon_data(engine) as session:
+            query = session.query(
+                grid_map_table.zensus_population_id,
+                heat_demand_table.demand,
+            ).filter(
+                heat_demand_table.sector == "service",
+                heat_demand_table.scenario == scenario,
+                grid_map_table.bus_id == int(bus_id),
+                grid_map_table.zensus_population_id
+                == heat_demand_table.zensus_population_id,
+            )
+            heat_demand = pd.read_sql(query.statement, engine, index_col=None)
+        total_heat_demand = heat_demand.demand.sum()
+
+    return raw_substation_profile, demand_share, total_heat_demand
+
+
+def _query_residential_electricity_profile_data(
     building_ids: list[int], scenario: str, engine: Engine
 ) -> pd.DataFrame:
     """
-    Gets residential electricity demand profiles per building.
+    Query and normalize the OEP inputs for residential electricity profiles.
 
     Parameters
     ----------
@@ -1258,10 +1297,9 @@ def get_residential_electricity_profiles_per_building(
 
     Returns
     --------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with residential electricity demand profiles per building for one year
-        in an hourly resolution in MW. Index contains hour of the year (from 0 to 8759)
-        and column names are building ID as integer.
+    tuple(:pandas:`pandas.DataFrame<DataFrame>`)
+        Scaling factors, building-to-profile assignments, and normalized hourly
+        profiles.
 
     """
 
@@ -1374,18 +1412,55 @@ def get_residential_electricity_profiles_per_building(
     # get profile scaling factors per zensus cell
     scaling_factors_zensus_cells = _get_scaling_factors_of_zensus_cells(zensus_ids)
 
-    # get profile IDs per building and merge scaling factors
+    # get profile IDs and hourly profiles
     profile_ids_buildings = _get_profile_ids_of_buildings(building_ids)
+    if profile_ids_buildings.empty:
+        return scaling_factors_zensus_cells, profile_ids_buildings, pd.DataFrame()
+
     profile_ids = profile_ids_buildings.profile_id.unique()
+    profiles_df = _get_profiles(profile_ids)
+
+    return scaling_factors_zensus_cells, profile_ids_buildings, profiles_df
+
+
+def get_residential_electricity_profiles_per_building(
+    building_ids: list[int], scenario: str, engine: Engine
+) -> pd.DataFrame:
+    """
+    Get residential electricity-demand profiles per building.
+
+    Parameters
+    ----------
+    building_ids : list(int)
+        Building IDs to retrieve profiles for.
+    scenario : str
+        OEP scenario: ``eGon2021``, ``eGon2035`` or ``eGon100RE``.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Hourly profiles in MW with building IDs as columns.
+    """
+
+    (
+        scaling_factors_zensus_cells,
+        profile_ids_buildings,
+        profiles_df,
+    ) = _query_residential_electricity_profile_data(
+        building_ids,
+        scenario,
+        engine,
+    )
+
+    # merge profile scaling factors into the building-to-profile mapping
     profile_ids_buildings = profile_ids_buildings.join(
         scaling_factors_zensus_cells, on="cell_id"
     )
     if profile_ids_buildings.empty:
         logger.info("No residential electricity demand.")
         return pd.DataFrame()
-
-    # get hourly profiles per profile ID
-    profiles_df = _get_profiles(profile_ids)
 
     # calculate demand profile per building
     #
@@ -1426,9 +1501,9 @@ def get_residential_electricity_profiles_per_building(
     return ts_df
 
 
-def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
+def _query_industrial_electricity_profile_data(site_ids, scenario, engine):
     """
-    Gets industrial electricity demand profiles per site and OSM area.
+    Query industrial electricity profiles for sites and OSM areas.
 
     Parameters
     ----------
@@ -1442,10 +1517,8 @@ def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
 
     Returns
     --------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with industrial electricity demand profiles per site and OSM area for
-        one year in an hourly resolution in MW. Index contains hour of the year (from 0
-        to 8759) and column names are site ID as integer.
+    tuple(:pandas:`pandas.DataFrame<DataFrame>`)
+        Raw annual profiles from the industrial-site and OSM-area tables.
 
     """
 
@@ -1518,10 +1591,40 @@ def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
     profiles_sites = _get_load_curves_sites(site_ids)
     profiles_areas = _get_load_curves_areas(site_ids)
 
+    return profiles_sites, profiles_areas
+
+
+def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
+    """
+    Get industrial electricity-demand profiles per site and OSM area.
+
+    Parameters
+    ----------
+    site_ids : list(int)
+        Industrial site and OSM IDs to retrieve profiles for.
+    scenario : str
+        OEP scenario: ``eGon2021``, ``eGon2035`` or ``eGon100RE``.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Hourly profiles in MW with site or OSM IDs as columns.
+    """
+
+    profiles_sites, profiles_areas = _query_industrial_electricity_profile_data(
+        site_ids,
+        scenario,
+        engine,
+    )
+
     # concat profiles
     profiles_df = pd.concat([profiles_sites, profiles_areas])
     # add time step column
-    profiles_df["time_step"] = len(profiles_df) * [np.arange(0, 8760)]
+    profiles_df["time_step"] = profiles_df.p_set.apply(
+        lambda profile: np.arange(len(profile))
+    )
     # un-nest p_set and pivot so that time_step becomes index and site_id the
     # name of the columns
     return (

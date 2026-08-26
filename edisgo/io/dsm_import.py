@@ -137,6 +137,12 @@ def get_profiles_per_industrial_load(
 
     """
 
+    if len(load_ids) == 0:
+        return {
+            dsm_profile: pd.DataFrame()
+            for dsm_profile in ["e_min", "e_max", "p_min", "p_max"]
+        }
+
     config = Config()
     (
         sites_ind_dsm_ts,
@@ -153,10 +159,6 @@ def get_profiles_per_industrial_load(
     )
 
     dsm_dict = {}
-    if len(load_ids) == 0:
-        for dsm_profile in ["e_min", "e_max", "p_min", "p_max"]:
-            dsm_dict[dsm_profile] = pd.DataFrame()
-        return dsm_dict
     with session_scope_egon_data(engine) as session:
         query = session.query(
             egon_sites_ind_load_curves_individual_dsm_timeseries.site_id,
@@ -282,20 +284,26 @@ def get_profile_cts(
         (edisgo_obj.topology.loads_df.type == "conventional_load")
         & (edisgo_obj.topology.loads_df.sector == "cts")
     ]
-    if not dsm_dict["p_min"].empty:
-        if len(cts_loads) == 0:
-            raise ValueError("There is CTS DSM potential but no CTS loads.")
-        for dsm_ts in ["p_min", "p_max", "e_min", "e_max"]:
-            dsm_dict[dsm_ts] = pd.DataFrame(
-                data=(
-                    np.matmul(
-                        dsm_dict[dsm_ts].values, np.matrix(cts_loads["p_set"].values)
-                    )
-                    / cts_loads["p_set"].sum()
-                ),
-                index=dsm_dict[dsm_ts].index,
-                columns=cts_loads["p_set"].index,
-            )
+    return _distribute_dsm_profiles_to_cts_loads(dsm_dict, cts_loads)
+
+
+def _distribute_dsm_profiles_to_cts_loads(dsm_dict, cts_loads):
+    """Distribute aggregated CTS DSM profiles according to nominal load power."""
+
+    if dsm_dict["p_min"].empty:
+        return dsm_dict
+    if len(cts_loads) == 0:
+        raise ValueError("There is CTS DSM potential but no CTS loads.")
+
+    for dsm_ts in ["p_min", "p_max", "e_min", "e_max"]:
+        dsm_dict[dsm_ts] = pd.DataFrame(
+            data=(
+                np.matmul(dsm_dict[dsm_ts].values, np.matrix(cts_loads["p_set"].values))
+                / cts_loads["p_set"].sum()
+            ),
+            index=dsm_dict[dsm_ts].index,
+            columns=cts_loads["p_set"].index,
+        )
 
     return dsm_dict
 
