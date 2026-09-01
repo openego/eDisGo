@@ -60,6 +60,23 @@ class OverlyingGrid:
         Other thermal feed-in into district heating per district heating area (in
         columns as string of integer, i.e. "130" instead of "130.0") and time step
         (in index) in MW.
+    dispatchable_generators_active_power : :pandas:`pandas.DataFrame<DataFrame>`
+        Dispatch of dispatchable generators per technology (in columns) and time step
+        (in index) in MW. Unlike the other attributes this is not a requirement the
+        optimisation has to meet -- it is applied directly as a generator time series
+        by the ``import_overlying_grid_data`` task.
+    dispatchable_generators_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`
+        Reactive power of dispatchable generators per technology (in columns) and time
+        step (in index) in Mvar. Currently not consumed anywhere in eDisGo; reactive
+        power is derived from the configured power factor instead.
+    renewables_potential : :pandas:`pandas.Series<Series>`
+        Potential feed-in of fluctuating generators per time step in p.u.. Like
+        ``dispatchable_generators_active_power`` this is applied directly as a
+        generator time series, before any curtailment from
+        ``renewables_curtailment``.
+
+    See :ref:`overlying-grid-mapping` for the full mapping of each attribute onto the
+    eDisGo variables it ends up in, and the constraints expected to hold between them.
 
     """
 

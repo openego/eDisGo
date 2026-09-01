@@ -13,3 +13,11 @@ Changes
   read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
   system ``PATH``; the reference now says so instead of claiming the file points to the
   binary in use
+* Documented the expected eTraGo-to-eDisGo data mapping of the overlying grid
+  (:ref:`overlying-grid-mapping`): for each of the thirteen
+  :class:`~.network.overlying_grid.OverlyingGrid` attributes, which eDisGo variable
+  carries it into the optimisation, where the corresponding result appears, and which
+  constraints between the two are expected to hold — intended as the reference for
+  automated validation tests. Two attributes are documented as currently having no
+  consumer in the production pipeline, and the class docstring, which listed only ten
+  of the thirteen attributes, is completed
