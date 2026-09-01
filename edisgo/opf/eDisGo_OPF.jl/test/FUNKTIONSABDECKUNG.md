@@ -34,7 +34,9 @@ dahinter notieren)
 ### `src/core/data.jl` → `test/core/test_data.jl`
 
 - [x] `set_ac_bf_start_values!` — Dict
-- [ ] `correct_bus_types!` — Dict
+- [~] `correct_bus_types!` — Dict (Weiterreichen an den Worker für Einzel- und
+  Multinetzwerk getestet; die mutierenden Pfade nur als `@test_broken`, weil der
+  Worker `_correct_bus_types!` defekt ist — siehe dort)
 - [ ] `_correct_bus_types!` — Dict
 
 ### `src/core/solution.jl` → `test/core/test_solution.jl`

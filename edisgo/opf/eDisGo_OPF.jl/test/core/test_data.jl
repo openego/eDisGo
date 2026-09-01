@@ -146,3 +146,57 @@ end
     @test !haskey(mn["nw"]["2"]["heat_storage"]["1"], "hse_start")
 end
 
+@testset "correct_bus_types!" begin
+    # Single network: the worker is applied to the data dict itself. The fixture
+    # is already consistent (bus 1 is the slack and carries `gen_slack` 1), so
+    # nothing changes.
+    net = TestUtils.small_network()
+    @test eDisGo_OPF.correct_bus_types!(net) === nothing
+    @test [net["bus"][i]["bus_type"] for i in ["1", "2", "3", "4"]] == [3, 1, 1, 1]
+
+    # It really dispatches into `_correct_bus_types!`: a probe that makes the
+    # worker fail (a missing generator group it indexes into) surfaces as the
+    # worker's own `KeyError`.
+    probe = TestUtils.small_network()
+    delete!(probe, "gen_nd")
+    exception = data_thrown(() -> eDisGo_OPF.correct_bus_types!(probe))
+    @test exception isa KeyError
+    @test exception.key == "gen_nd"
+
+    # Multi-network: `apply_pm!` descends into every sub-network …
+    mn = TestUtils.multinetwork(TestUtils.small_network())
+    @test eDisGo_OPF.correct_bus_types!(mn) === nothing
+    for n in ("1", "2")
+        @test [mn["nw"][n]["bus"][i]["bus_type"] for i in ["1", "2", "3", "4"]] ==
+              [3, 1, 1, 1]
+    end
+    # … each of them, not just the first: the probe fires wherever it is planted.
+    for n in ("1", "2")
+        probe_mn = TestUtils.multinetwork(TestUtils.small_network())
+        delete!(probe_mn["nw"][n], "gen_nd")
+        exception = data_thrown(() -> eDisGo_OPF.correct_bus_types!(probe_mn))
+        @test exception isa KeyError
+        @test exception.key == "gen_nd"
+    end
+    # … and *not* into the multi-network wrapper itself, which has no "bus" key
+    # of its own — otherwise the clean run above would have raised
+    # `KeyError("bus")`.
+    @test !haskey(mn, "bus")
+
+    # A correction inside a sub-network hits the same `_LOGGER` bug as the
+    # single-network case (see the `_correct_bus_types!` test set below): bus 2
+    # of sub-network 2 is marked PV but its generator is switched off.
+    broken_mn = TestUtils.multinetwork(TestUtils.small_network())
+    for n in ("1", "2")
+        broken_mn["nw"][n]["gen"]["1"]["gen_status"] = 0
+    end
+    broken_mn["nw"]["2"]["bus"]["2"]["bus_type"] = 2
+    exception = data_thrown(() -> eDisGo_OPF.correct_bus_types!(broken_mn))
+    @test exception isa UndefVarError
+    @test exception.var === :_LOGGER
+    @test broken_mn["nw"]["2"]["bus"]["2"]["bus_type"] == 2
+    # BUG: intended behaviour is the demotion to PQ in the affected sub-network.
+    @test_broken (eDisGo_OPF.correct_bus_types!(broken_mn);
+                  broken_mn["nw"]["2"]["bus"]["2"]["bus_type"] == 1)
+end
+
