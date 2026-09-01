@@ -22,8 +22,8 @@ dahinter notieren)
 - [x] `BFPowerModelEdisgo` — mutable struct
 - [x] `AbstractSOCBFModelEdisgo` — abstract type
 - [x] `SOCBFPowerModelEdisgo` — mutable struct
-- [ ] `AbstractNCBFModelEdisgo` — abstract type
-- [ ] `NCBFPowerModelEdisgo` — mutable struct
+- [x] `AbstractNCBFModelEdisgo` — abstract type
+- [x] `NCBFPowerModelEdisgo` — mutable struct
 
 ### `src/core/base.jl` → `test/core/test_base.jl`
 

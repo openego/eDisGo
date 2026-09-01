@@ -184,3 +184,62 @@ end
     @test all(occursin("w[", s) && occursin("ccm[", s) for s in quad)
     @test all(occursin("<=", s) || occursin("≤", s) for s in quad)
 end
+
+@testset "AbstractNCBFModelEdisgo" begin
+    T = eDisGo_OPF.AbstractNCBFModelEdisgo
+
+    @test isabstracttype(T)
+    @test supertype(T) === eDisGo_OPF.AbstractBFModelEdisgo
+    @test T <: PowerModels.AbstractBFQPModel
+    @test T <: PowerModels.AbstractPowerModel
+    @test !(T <: eDisGo_OPF.AbstractSOCBFModelEdisgo)
+    @test !(eDisGo_OPF.AbstractSOCBFModelEdisgo <: T)
+    @test eDisGo_OPF.NCBFPowerModelEdisgo <: T
+    @test !(eDisGo_OPF.SOCBFPowerModelEdisgo <: T)
+    @test !(eDisGo_OPF.BFPowerModelEdisgo <: T)
+
+    @test_throws MethodError T()
+
+    # This is the type the exact nonlinear coupling is written against.
+    m = which(eDisGo_OPF.constraint_model_current,
+              Tuple{eDisGo_OPF.NCBFPowerModelEdisgo,Int})
+    @test m.sig.parameters[2] === T
+    @test basename(string(m.file)) == "bf.jl"
+    # The two formulations are distinct methods of the same generic function.
+    @test m !== which(eDisGo_OPF.constraint_model_current,
+                      Tuple{eDisGo_OPF.SOCBFPowerModelEdisgo,Int})
+
+    @test isdefined(eDisGo_OPF, :AbstractNCBFModelEdisgo)
+    @test !(:AbstractNCBFModelEdisgo in names(eDisGo_OPF))
+end
+
+@testset "NCBFPowerModelEdisgo" begin
+    T = eDisGo_OPF.NCBFPowerModelEdisgo
+
+    @test supertype(T) === eDisGo_OPF.AbstractNCBFModelEdisgo
+    @test T <: eDisGo_OPF.AbstractBFModelEdisgo
+    @test !(T <: eDisGo_OPF.AbstractSOCBFModelEdisgo)
+
+    types_check_pm_fields(T)
+
+    @test :NCBFPowerModelEdisgo in names(eDisGo_OPF)
+    @test NCBFPowerModelEdisgo === T
+
+    types_check_instance(types_bare_model(T), T)
+
+    # Dispatch: an NC model picks the exact equality `p² + q² = (w/tm²)·ccm`,
+    # added as a JuMP `@NLconstraint` — one per *non-storage* branch and time step,
+    # so two of the three branches of the fixture.
+    pm = TestUtils.build_small_model(T)
+    @test JuMP.num_nonlinear_constraints(pm.model) == 2 * 2
+    # And none of the SOC model's quadratic inequalities.
+    @test JuMP.num_constraints(pm.model, JuMP.QuadExpr, MOI.LessThan{Float64}) == 0
+
+    # Both formulations describe the same physical model: same variables, same
+    # linear constraints; they differ only in how the coupling is enforced.
+    pm_soc = TestUtils.build_small_model(eDisGo_OPF.SOCBFPowerModelEdisgo)
+    @test JuMP.num_variables(pm.model) == JuMP.num_variables(pm_soc.model)
+    @test JuMP.num_constraints(pm.model, JuMP.AffExpr, MOI.EqualTo{Float64}) ==
+          JuMP.num_constraints(pm_soc.model, JuMP.AffExpr, MOI.EqualTo{Float64})
+    @test TestUtils.variable_keys(pm, 1) == TestUtils.variable_keys(pm_soc, 1)
+end
