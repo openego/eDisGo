@@ -21,3 +21,7 @@ Changes
   pump series is legitimately empty while the rest of the overlying grid is populated,
   is now filled with zeros rather than losing the high-voltage requirements for the
   whole grid
+* Switched ``spatial_reduction_opf`` to ``opf_version: 3``. The preset runs
+  ``import_overlying_grid_data`` but optimised with version 2, which does not build the
+  high-voltage requirement constraints, so the imported overlying-grid setpoints only
+  reached the OPF as generator time series and the flexibility setpoints were discarded
