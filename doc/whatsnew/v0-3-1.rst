@@ -13,3 +13,22 @@ Changes
   read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
   system ``PATH``; the reference now says so instead of claiming the file points to the
   binary in use
+* Wired district-heating handling into the runner pipeline. The overlying grid's
+  ``feedin_district_heating`` — thermal feed-in from other heat sources such as solar
+  or geothermal — had no consumer at all: its only consumer,
+  :func:`~.tools.tools.aggregate_district_heating_components`, was called by no
+  pipeline task, so the district-heating heat demand was overstated by that feed-in
+  and the power-to-heat units of an area were never merged. A new
+  ``aggregate_district_heating`` task does both and is part of the three
+  overlying-grid presets; it is a no-op on grids without district heating
+  (openego/eGo#202). Note that this changes results for existing configs that
+  ``extends`` one of those presets without defining their own ``pipeline:`` — a
+  config that does define one replaces the preset's step list wholesale and is
+  unaffected. The task declares ``requires={"overlying_grid"}``, which
+  ``import_overlying_grid_data`` now provides, so a pipeline that puts the two in
+  the wrong order is rejected instead of silently skipping the subtraction
+* Normalised the district-heating column labels of ``feedin_district_heating`` and
+  ``thermal_storage_units_central_soc`` to the string of an integer (``"130"``) in
+  ``import_overlying_grid_data``. Both consumers look the ID up in that form, so a float
+  label from eTraGo silently missed the feed-in and raised a ``KeyError`` on the
+  central thermal-storage state of charge

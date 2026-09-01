@@ -139,7 +139,7 @@ def task_save(
     return edisgo
 
 
-@register_task("import_overlying_grid_data")
+@register_task("import_overlying_grid_data", provides={"overlying_grid"})
 def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     """
     Import overlying grid data into the EDisGo instance.
@@ -241,6 +241,35 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
             attr,
             _to_edisgo_timeindex(ts, extra_step=attr in soc_attrs),
         )
+
+    # --- 2b) normalise the district-heating column labels ---
+    # Both district-heating-indexed frames are addressed downstream by the
+    # district heating ID as the string of an integer ("130", never "130.0"):
+    # _build_heat_storage looks up thermal_storage_units_central_soc as
+    # loads_df.district_heating_id.astype(int).astype(str), and
+    # aggregate_district_heating_components matches feedin_district_heating
+    # with str(int(district)). eTraGo/CSV data arrives with float or integer
+    # labels, which silently miss (feed-in) or raise a KeyError (SoC). The
+    # in-eGo pipeline this task replaced did the same rename right before its
+    # consumers; doing it here covers every consumer at once.
+    for attr in ("feedin_district_heating", "thermal_storage_units_central_soc"):
+        df = getattr(edisgo.overlying_grid, attr)
+        if df is None or df.empty:
+            continue
+        try:
+            renamed = [str(int(float(col))) for col in df.columns]
+        except (TypeError, ValueError):
+            ctx.logger.warning(
+                f"task 'import_overlying_grid_data': could not read the columns of "
+                f"'{attr}' as district heating IDs ({list(df.columns)}) — leaving "
+                f"them unchanged. Downstream lookups expect the ID as the string "
+                f"of an integer."
+            )
+            continue
+        if renamed != list(df.columns):
+            df = df.copy()
+            df.columns = renamed
+            setattr(edisgo.overlying_grid, attr, df)
 
     # --- 3) set dispatchable/fluctuating generator time series ---
     if source == "etrago":
