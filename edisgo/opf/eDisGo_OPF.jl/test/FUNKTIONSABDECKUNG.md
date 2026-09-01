@@ -33,7 +33,7 @@ dahinter notieren)
 
 ### `src/core/data.jl` → `test/core/test_data.jl`
 
-- [ ] `set_ac_bf_start_values!` — Dict
+- [x] `set_ac_bf_start_values!` — Dict
 - [ ] `correct_bus_types!` — Dict
 - [ ] `_correct_bus_types!` — Dict
 
@@ -124,7 +124,9 @@ dahinter notieren)
 
 ### `src/io/json.jl` → `test/io/test_json.jl`
 
-- [ ] `parse_json` — Union{IO
+- [x] `parse_json` — Union{IO — Bug: der `conductors`-Zweig referenziert das in
+  `eDisGo_OPF` nicht definierte `_LOGGER` und wirft statt zu warnen einen
+  `UndefVarError` (als `@test_broken` dokumentiert)
 
 ### `src/io/common.jl` → `test/io/test_common.jl`
 
