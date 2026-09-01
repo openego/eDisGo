@@ -128,7 +128,7 @@ dahinter notieren)
 
 ### `src/io/common.jl` → `test/io/test_common.jl`
 
-- [ ] `correct_network_data!` — Dict
+- [x] `correct_network_data!` — Dict
 
 ### `src/prob/opf_bf.jl` → `test/prob/test_opf_bf.jl`
 
