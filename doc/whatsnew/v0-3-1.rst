@@ -13,3 +13,11 @@ Changes
   read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
   system ``PATH``; the reference now says so instead of claiming the file points to the
   binary in use
+* Fixed the documented fall back from OPF versions 3 and 4 to version 2 never working:
+  the first overlying-grid read in :func:`~.io.powermodels_io.to_powermodels` sat
+  outside the ``try``/``except IndexError`` that implements it, so an empty
+  ``overlying_grid`` raised ``IndexError: single positional indexer is out-of-bounds``
+  instead of degrading gracefully. A grid without district heating, whose central heat
+  pump series is legitimately empty while the rest of the overlying grid is populated,
+  is now filled with zeros rather than losing the high-voltage requirements for the
+  whole grid

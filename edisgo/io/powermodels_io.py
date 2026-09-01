@@ -170,27 +170,52 @@ def to_powermodels(
     else:
         logger.warning("No loads found in network.")
     if (opf_version == 3) | (opf_version == 4):
-        if edisgo_object.overlying_grid.heat_pump_central_active_power.isna().iloc[0]:
-            edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
-        hv_flex_dict = {
-            "curt": edisgo_object.overlying_grid.renewables_curtailment.round(20)
-            / s_base,
-            "storage": edisgo_object.overlying_grid.storage_units_active_power.round(20)
-            / s_base,
-            "cp": edisgo_object.overlying_grid.electromobility_active_power.round(20)
-            / s_base,
-            "hp": (
-                edisgo_object.overlying_grid.heat_pump_decentral_active_power.round(20)
-                + edisgo_object.overlying_grid.heat_pump_central_active_power.round(20)
-            )
-            / s_base,
-            "dsm": edisgo_object.overlying_grid.dsm_active_power.round(20) / s_base,
-        }
         try:
             logger.info(
                 "Transforming overlying grid requirements into PowerModels dictionary "
                 "format."
             )
+            # Reading the overlying-grid series must happen inside the try: on an
+            # empty overlying_grid component the .iloc[0] calls here and in
+            # _build_hv_requirements raise IndexError, which is what triggers the
+            # documented fall back to opf_version 2. "curt" is always part of
+            # opf_flex, so a wholly empty overlying grid is caught reliably there.
+            hp_central = edisgo_object.overlying_grid.heat_pump_central_active_power
+            hp_decentral = edisgo_object.overlying_grid.heat_pump_decentral_active_power
+            if hp_central.empty and not hp_decentral.empty:
+                # A grid without district heating has no central heat pumps, so
+                # this one series is legitimately empty while the rest of the
+                # overlying grid is usable. Treat it as zero instead of letting
+                # the IndexError drop the HV requirements for the whole grid.
+                # Reusing the decentral index keeps the sum below aligned — an
+                # unaligned or empty operand would silently yield an all-NaN
+                # requirement rather than an error.
+                hp_central = pd.Series(0.0, index=hp_decentral.index)
+                edisgo_object.overlying_grid.heat_pump_central_active_power = hp_central
+            elif hp_central.isna().iloc[0]:
+                edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
+            hv_flex_dict = {
+                "curt": edisgo_object.overlying_grid.renewables_curtailment.round(20)
+                / s_base,
+                "storage": (
+                    edisgo_object.overlying_grid.storage_units_active_power.round(20)
+                    / s_base
+                ),
+                "cp": (
+                    edisgo_object.overlying_grid.electromobility_active_power.round(20)
+                    / s_base
+                ),
+                "hp": (
+                    edisgo_object.overlying_grid.heat_pump_decentral_active_power.round(
+                        20
+                    )
+                    + edisgo_object.overlying_grid.heat_pump_central_active_power.round(
+                        20
+                    )
+                )
+                / s_base,
+                "dsm": edisgo_object.overlying_grid.dsm_active_power.round(20) / s_base,
+            }
             _build_hv_requirements(
                 psa_net,
                 edisgo_object,

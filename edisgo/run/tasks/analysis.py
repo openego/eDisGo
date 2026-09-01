@@ -332,7 +332,12 @@ def task_optimize(
     flexible_storage_units : list of str, optional
         Explicit list of flexible storage-unit names.
     opf_version : int, optional
-        Powermodels OPF formulation version (1 or 2, default 2).
+        Powermodels OPF formulation version, one of 1, 2, 3 or 4 (default 2).
+        Versions 3 and 4 add the overlying-grid (high-voltage) requirements as
+        constraints and therefore require ``import_overlying_grid_data`` to have
+        run — without overlying-grid data they fall back to version 2 with a
+        warning. Versions 1 and 2 ignore any overlying-grid data. See
+        :func:`~.opf.powermodels_opf.pm_optimize` for the full description.
     method : str, optional
         OPF relaxation method, e.g. ``"soc"`` (second-order cone).
     warm_start : bool, optional

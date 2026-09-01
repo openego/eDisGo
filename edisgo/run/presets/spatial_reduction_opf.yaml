@@ -108,7 +108,14 @@ pipeline:
   - optimize:
       flexible: [heat_pumps, storage, charging_points, dsm]
       method: soc
-      opf_version: 2
+      # opf_version 3 = with high-voltage requirements. This preset runs
+      # import_overlying_grid_data, and only versions 3 and 4 turn the
+      # overlying-grid series into HV requirement constraints; under version 2
+      # they only reach the OPF as generator time series (see
+      # run/tasks/io.py), so the flexibility setpoints were ignored.
+      # Note that 3, like 1, lifts the grid restrictions (no current/voltage
+      # bounds); 2 and 4 keep them via slacks. Reinforcement runs afterwards.
+      opf_version: 3
   - spatial_restore                            # no-op unless spatial_reduction.enabled
   - reinforce:
       catch_convergence_problems: true

@@ -1,3 +1,7 @@
+import logging
+
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -303,6 +307,61 @@ class TestPowermodelsIO:
                 )
             )
         )
+
+    def test_to_powermodels_empty_overlying_grid_falls_back(self, caplog):
+        """
+        OPF versions 3 and 4 must fall back to version 2 when the overlying grid
+        holds no data, instead of raising. The first overlying-grid read used to
+        sit outside the try/except IndexError implementing that fall back.
+        """
+        # a local object: setup_class populates overlying_grid for the other
+        # tests in this class, and this one needs it empty
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        assert edisgo.overlying_grid.renewables_curtailment.empty
+
+        for version in (3, 4):
+            caplog.clear()
+            with caplog.at_level(
+                logging.WARNING, logger="edisgo.io.powermodels_io"
+            ):
+                pm, hv_flex_dict = powermodels_io.to_powermodels(
+                    edisgo, opf_version=version
+                )
+            assert pm["opf_version"] == 2
+            assert hv_flex_dict == {}
+            assert not pm["HV_requirements"]
+            assert pm["time_series"]["HV_requirements"] == {}
+            assert "Overlying grid component" in caplog.text
+
+    def test_to_powermodels_no_district_heating_keeps_hv_requirements(self):
+        """
+        A grid without district heating has an empty central heat pump series
+        while the rest of the overlying grid is populated. That must not demote
+        the run to version 2 -- the series is treated as zero instead.
+        """
+        edisgo_empty = deepcopy(self.edisgo)
+        edisgo_empty.overlying_grid.heat_pump_central_active_power = pd.Series(
+            dtype="float64"
+        )
+        # control: the same grid with the central series spelled out as zeros
+        edisgo_zero = deepcopy(self.edisgo)
+        edisgo_zero.overlying_grid.heat_pump_central_active_power = pd.Series(
+            0.0,
+            index=edisgo_zero.overlying_grid.heat_pump_decentral_active_power.index,
+        )
+
+        pm_empty, hv_empty = powermodels_io.to_powermodels(
+            edisgo_empty, opf_version=3
+        )
+        pm_zero, hv_zero = powermodels_io.to_powermodels(edisgo_zero, opf_version=3)
+
+        # not demoted to version 2, and the HV requirements are still built
+        assert pm_empty["opf_version"] == 3
+        assert pm_empty["HV_requirements"]
+        # an empty central series behaves exactly like an explicit zero series
+        assert np.allclose(hv_empty["hp"].values, hv_zero["hp"].values)
+        assert pm_empty["HV_requirements"] == pm_zero["HV_requirements"]
 
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)

@@ -153,7 +153,7 @@ much flexibility *could* help before deciding on reinforcement. Versions 2 and 4
 the limits as constraints and penalise the remaining unavoidable violations via
 *slack* variables. Versions 3 and 4 additionally honour requirements handed down from
 the overlying grid (:ref:`overlying-grid-flex`); if no overlying-grid data is present,
-they silently fall back to version 2.
+they fall back to version 2 and log a warning.
 
 The optimisation model in detail
 --------------------------------
