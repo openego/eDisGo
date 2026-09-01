@@ -44,7 +44,7 @@ dahinter notieren)
 
 ### `src/core/solution.jl` → `test/core/test_solution.jl`
 
-- [ ] `sol_component_value_radial` — AbstractPowerModel
+- [x] `sol_component_value_radial` — AbstractPowerModel
 - [ ] `check_SOC_equality`
 
 ### `src/core/variables.jl` → `test/core/test_variables.jl`
