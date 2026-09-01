@@ -37,7 +37,10 @@ dahinter notieren)
 - [~] `correct_bus_types!` — Dict (Weiterreichen an den Worker für Einzel- und
   Multinetzwerk getestet; die mutierenden Pfade nur als `@test_broken`, weil der
   Worker `_correct_bus_types!` defekt ist — siehe dort)
-- [ ] `_correct_bus_types!` — Dict
+- [~] `_correct_bus_types!` — Dict (alle Zweige abgedeckt, aber jeder
+  korrigierende Zweig bricht mit `UndefVarError` ab: `_LOGGER` und
+  `_biggest_generator` sind interne PowerModels-Namen und in `eDisGo_OPF`
+  nicht sichtbar. Soll-Verhalten als `@test_broken` festgehalten)
 
 ### `src/core/solution.jl` → `test/core/test_solution.jl`
 

@@ -200,3 +200,150 @@ end
                   broken_mn["nw"]["2"]["bus"]["2"]["bus_type"] == 1)
 end
 
+@testset "_correct_bus_types!" begin
+    # --- paths that work ---------------------------------------------------
+    # A consistent network is left alone: bus 1 is the slack and has an active
+    # `gen_slack`, the remaining buses are PQ.
+    net = TestUtils.small_network()
+    @test eDisGo_OPF._correct_bus_types!(net) === nothing
+    @test [net["bus"][i]["bus_type"] for i in ["1", "2", "3", "4"]] == [3, 1, 1, 1]
+    # Buses 2 and 3 carry active generators (`gen` and `gen_nd`) and stay PQ all
+    # the same: the promotion of generator buses to PV is commented out in the
+    # source.
+    @test net["gen"]["1"]["gen_bus"] == 2
+    @test net["gen_nd"]["1"]["gen_bus"] == 3
+
+    # Generators of all three groups count towards a bus. `gen_slack` is covered
+    # by the run above (bus 1 has no other generator); `gen` and `gen_nd` keep a
+    # PV bus a PV bus.
+    for (bus, group) in (("2", "gen"), ("3", "gen_nd"))
+        pv = TestUtils.small_network()
+        pv["bus"][bus]["bus_type"] = 2
+        @test pv[group]["1"]["gen_bus"] == parse(Int, bus)
+        @test eDisGo_OPF._correct_bus_types!(pv) === nothing
+        @test pv["bus"][bus]["bus_type"] == 2
+    end
+    # A `gen` at the slack bus is enough to validate it, without any `gen_slack`.
+    gen_slack_bus = TestUtils.small_network()
+    gen_slack_bus["gen_slack"] = Dict{String,Any}()
+    gen_slack_bus["gen"]["1"]["gen_bus"] = 1
+    @test eDisGo_OPF._correct_bus_types!(gen_slack_bus) === nothing
+    @test gen_slack_bus["bus"]["1"]["bus_type"] == 3
+
+    # Inactive buses (type 4) are never touched, with or without a generator.
+    for bus in ("2", "4")
+        inactive = TestUtils.small_network()
+        inactive["bus"][bus]["bus_type"] = 4
+        @test eDisGo_OPF._correct_bus_types!(inactive) === nothing
+        @test inactive["bus"][bus]["bus_type"] == 4
+    end
+
+    # The real eDisGo test grid (143 buses, one slack, one `gen`, 27 `gen_nd`)
+    # passes unchanged as well.
+    real = TestUtils.pm_network()
+    real_before = Dict(i => bus["bus_type"] for (i, bus) in real["bus"])
+    @test eDisGo_OPF._correct_bus_types!(real) === nothing
+    @test Dict(i => bus["bus_type"] for (i, bus) in real["bus"]) == real_before
+    @test count(bus["bus_type"] == 3 for bus in values(real["bus"])) == 1
+
+    # --- paths that are broken --------------------------------------------
+    # BUG: `_LOGGER` and `_biggest_generator` are internal names of PowerModels
+    # and are not imported into `eDisGo_OPF`, so every branch that logs a warning
+    # or looks for a replacement slack dies with an `UndefVarError` before it can
+    # apply its fix. Each case below asserts the actual behaviour and marks the
+    # documented behaviour `@test_broken`.
+
+    # PV bus (type 2) without an active generator should become PQ (type 1).
+    # `gen_status == 0` means the generator does not count.
+    pv_off = TestUtils.small_network()
+    pv_off["bus"]["2"]["bus_type"] = 2
+    pv_off["gen"]["1"]["gen_status"] = 0
+    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(pv_off))
+    @test exception isa UndefVarError
+    @test exception.var === :_LOGGER
+    # The warning precedes the assignment, so the bus keeps its wrong type.
+    @test pv_off["bus"]["2"]["bus_type"] == 2
+    @test_broken (eDisGo_OPF._correct_bus_types!(pv_off);
+                  pv_off["bus"]["2"]["bus_type"] == 1)
+
+    # Slack bus (type 3) without an active generator should become PQ, too —
+    # after which no slack is left and the fallback below would take over.
+    slack_off = TestUtils.small_network()
+    slack_off["gen_slack"]["1"]["gen_status"] = 0
+    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(slack_off))
+    @test exception isa UndefVarError
+    @test exception.var === :_LOGGER
+    @test slack_off["bus"]["1"]["bus_type"] == 3
+    @test_broken (eDisGo_OPF._correct_bus_types!(slack_off);
+                  slack_off["bus"]["1"]["bus_type"] != 3)
+
+    # Unrecognised bus types become PV when generators hang off the bus (bus 2)
+    # and PQ when none do (bus 4). Both negative and out-of-range codes are
+    # "unknown".
+    for (bus, code, intended) in (("2", 7, 2), ("4", 7, 1), ("2", 0, 2), ("4", -1, 1))
+        unknown = TestUtils.small_network()
+        unknown["bus"][bus]["bus_type"] = code
+        exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(unknown))
+        @test exception isa UndefVarError
+        @test exception.var === :_LOGGER
+        @test unknown["bus"][bus]["bus_type"] == code
+        @test_broken (eDisGo_OPF._correct_bus_types!(unknown);
+                      unknown["bus"][bus]["bus_type"] == intended)
+    end
+
+    # No slack bus at all: the bus of the biggest generator should be promoted.
+    # Note that only `gen` is searched — `gen_nd` and `gen_slack` do not take
+    # part in the fallback — so bus 2 would become the reference bus here.
+    no_slack = TestUtils.small_network()
+    no_slack["bus"]["1"]["bus_type"] = 1
+    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(no_slack))
+    @test exception isa UndefVarError
+    @test exception.var === :_biggest_generator
+    @test all(bus["bus_type"] == 1 for bus in values(no_slack["bus"]))
+    @test_broken (eDisGo_OPF._correct_bus_types!(no_slack);
+                  no_slack["bus"]["2"]["bus_type"] == 3)
+
+    # Same fallback, but with several dispatchable generators: the one with the
+    # largest `pmax` wins.
+    biggest = TestUtils.small_network()
+    biggest["bus"]["1"]["bus_type"] = 1
+    biggest["gen"]["2"] = merge(deepcopy(biggest["gen"]["1"]),
+                                Dict{String,Any}("index" => 2, "gen_bus" => 4,
+                                                 "pmax" => 5.0))
+    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(biggest))
+    @test exception isa UndefVarError
+    @test exception.var === :_biggest_generator
+    @test_broken (eDisGo_OPF._correct_bus_types!(biggest);
+                  biggest["bus"]["4"]["bus_type"] == 3)
+
+    # No generators at all: the documented behaviour is a `Memento.error` about
+    # the missing reference generator. Actually the `UndefVarError` above fires
+    # first, so that message is unreachable.
+    no_gens = TestUtils.small_network()
+    no_gens["bus"]["1"]["bus_type"] = 1
+    for group in ("gen", "gen_nd", "gen_slack")
+        no_gens[group] = Dict{String,Any}()
+    end
+    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(no_gens))
+    @test exception isa UndefVarError
+    @test exception.var === :_biggest_generator
+    @test_broken occursin("no generators found",
+                          sprint(showerror,
+                                 data_thrown(() -> eDisGo_OPF._correct_bus_types!(no_gens))))
+
+    # --- structural requirements -------------------------------------------
+    # All three generator groups and the bus table have to exist.
+    for group in ("bus", "gen", "gen_nd", "gen_slack")
+        incomplete = TestUtils.small_network()
+        delete!(incomplete, group)
+        exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(incomplete))
+        @test exception isa KeyError
+        @test exception.key == group
+    end
+    # A generator pointing at a bus that does not exist is not caught either.
+    dangling = TestUtils.small_network()
+    dangling["gen"]["1"]["gen_bus"] = 99
+    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(dangling))
+    @test exception isa KeyError
+    @test exception.key == 99
+end
