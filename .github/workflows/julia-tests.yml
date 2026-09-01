@@ -1,0 +1,70 @@
+# Runs the Julia test suite of the OPF package (edisgo/opf/eDisGo_OPF.jl).
+#
+# The suite is independent of the Python test suite in tests/ and is therefore run
+# by its own workflow. Gurobi is commercial and has no licence here, so tests that
+# need it skip themselves (see TestUtils.gurobi_available); everything else runs
+# against Ipopt.
+name: "Julia OPF Tests"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    paths:
+      - "edisgo/opf/eDisGo_OPF.jl/**"
+      - ".github/workflows/julia-tests.yml"
+  pull_request:
+    paths:
+      - "edisgo/opf/eDisGo_OPF.jl/**"
+      - ".github/workflows/julia-tests.yml"
+
+jobs:
+  test:
+    name: "Julia ${{ matrix.julia-version }} on ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # The checked-in Manifest.toml pins stdlibs that only exist from Julia
+        # 1.12 on, so 1.12 is the floor rather than a preference.
+        julia-version: ["1.12"]
+        os: [ubuntu-latest]
+
+    defaults:
+      run:
+        working-directory: edisgo/opf/eDisGo_OPF.jl
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ matrix.julia-version }}
+
+      - name: Cache Julia depot
+        uses: julia-actions/cache@v2
+
+      - name: Instantiate package environment
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run tests
+        run: julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
+
+      - name: Process coverage
+        uses: julia-actions/julia-processcoverage@v1
+        with:
+          directories: edisgo/opf/eDisGo_OPF.jl/src
+
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: lcov.info
+          flag-name: julia-opf
+          parallel: false
+        continue-on-error: true

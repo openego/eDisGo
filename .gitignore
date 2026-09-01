@@ -29,3 +29,9 @@ eDisGo.egg-info/
 .vscode/settings.json
 
 *OEP_TOKEN.*
+
+# exclude Julia test coverage artefacts
+*.jl.*.cov
+*.jl.cov
+*.jl.mem
+/edisgo/opf/eDisGo_OPF.jl/lcov.info
