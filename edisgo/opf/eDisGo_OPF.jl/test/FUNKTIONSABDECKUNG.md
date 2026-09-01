@@ -18,8 +18,8 @@ dahinter notieren)
 
 ### `src/core/types.jl` → `test/core/test_types.jl`
 
-- [ ] `AbstractBFModelEdisgo` — abstract type
-- [ ] `BFPowerModelEdisgo` — mutable struct
+- [x] `AbstractBFModelEdisgo` — abstract type
+- [x] `BFPowerModelEdisgo` — mutable struct
 - [ ] `AbstractSOCBFModelEdisgo` — abstract type
 - [ ] `SOCBFPowerModelEdisgo` — mutable struct
 - [ ] `AbstractNCBFModelEdisgo` — abstract type
