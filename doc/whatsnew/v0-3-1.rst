@@ -13,3 +13,16 @@ Changes
   read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
   system ``PATH``; the reference now says so instead of claiming the file points to the
   binary in use
+* Fixed every OPF interval after the first being solved against the *first*
+  interval's flexibility inputs. With a reduced, non-contiguous time index
+  :meth:`~.edisgo.EDisGo.pm_optimize` solves one OPF per contiguous interval and
+  called :meth:`~.edisgo.EDisGo.set_timeindex` for each, which only assigns
+  ``timeseries.timeindex`` and leaves the flexibility containers untouched.
+  ``to_powermodels`` therefore read the full-length overlying-grid series —
+  ``_build_hv_requirements`` taking ``.iloc[0]`` of it, i.e. interval 1's first hour
+  — and fed the heat-pump, DSM and electromobility data to PowerModels at full
+  length, of which ``make_multinetwork`` kept only the first ``num_steps`` entries,
+  again interval 1's. The inputs are now sliced to the interval before each solve and
+  restored afterwards. This affects every multi-interval run, in particular the
+  ``overlying_grid_opf``, ``overlying_grid_opf_spatial`` and ``spatial_reduction_opf``
+  presets, which combine ``select_critical_timesteps`` with ``opf_version: 3``

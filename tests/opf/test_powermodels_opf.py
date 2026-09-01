@@ -476,6 +476,94 @@ class TestPmOptimizeIntervalSplit:
         assert seen_types == ["Series", "Series"]
         assert isinstance(edisgo_obj.overlying_grid.storage_units_soc, pd.Series)
 
+    def test_overlying_grid_is_sliced_to_the_interval(self, edisgo_obj, monkeypatch):
+        """
+        Every interval must be solved against ITS OWN overlying-grid
+        requirements. ``set_timeindex`` only assigns
+        ``timeseries.timeindex``, so ``to_powermodels`` used to read the
+        full-length overlying-grid series for each interval and
+        ``_build_hv_requirements`` took ``.iloc[0]`` of it -- interval 1's
+        first hour, for every interval. On the Julia side ``num_steps`` is
+        this interval's length, so ``make_multinetwork`` additionally kept
+        only the first ``num_steps`` entries of the accompanying time
+        series, i.e. interval 1's values again.
+        """
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        # a distinct value per time step, so the interval is identifiable
+        marker = pd.Series(np.arange(len(full), dtype=float), index=full)
+        for attr in (
+            "renewables_curtailment",
+            "storage_units_active_power",
+            "electromobility_active_power",
+            "dsm_active_power",
+            "heat_pump_decentral_active_power",
+            "heat_pump_central_active_power",
+        ):
+            setattr(edisgo_obj.overlying_grid, attr, marker.copy())
+
+        seen = []
+
+        def fake_single(e, **kw):
+            curt = e.overlying_grid.renewables_curtailment
+            seen.append((len(curt), curt.iloc[0], curt.iloc[-1]))
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+
+        assert seen == [(24, 0.0, 23.0), (24, 24.0, 47.0)]
+        # and the full-length input is restored afterwards
+        assert len(edisgo_obj.overlying_grid.renewables_curtailment) == len(full)
+
+    def test_flexibility_inputs_are_sliced_to_the_interval(
+        self, edisgo_obj, monkeypatch
+    ):
+        """
+        The same applies to the heat-pump, DSM and electromobility inputs:
+        ``_build_timeseries`` feeds them to PowerModels as full-length lists
+        while ``num_steps`` is the interval length, so every interval got
+        interval 1's values.
+        """
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        marker = pd.DataFrame(
+            {"hp1": np.arange(len(full), dtype=float)}, index=full
+        )
+        edisgo_obj.heat_pump.cop_df = marker.copy()
+        edisgo_obj.heat_pump.heat_demand_df = marker.copy()
+        edisgo_obj.dsm.p_max = marker.rename(columns={"hp1": "dsm1"})
+        edisgo_obj.dsm.p_min = marker.rename(columns={"hp1": "dsm1"})
+
+        seen = []
+
+        def fake_single(e, **kw):
+            seen.append(
+                (
+                    len(e.heat_pump.cop_df),
+                    e.heat_pump.cop_df.iloc[0, 0],
+                    len(e.dsm.p_max),
+                    e.dsm.p_max.iloc[0, 0],
+                )
+            )
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+
+        assert seen == [(24, 0.0, 24, 0.0), (24, 24.0, 24, 24.0)]
+        # restored to full length for the caller
+        assert len(edisgo_obj.heat_pump.cop_df) == len(full)
+        assert len(edisgo_obj.dsm.p_max) == len(full)
+
     def test_reactive_power_restored(self, edisgo_obj, monkeypatch):
         import edisgo.opf.powermodels_opf as pmo
 
