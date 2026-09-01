@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -303,6 +305,50 @@ class TestPowermodelsIO:
                 )
             )
         )
+
+    def test_to_powermodels_thermal_soc_longer_than_the_timeindex(self):
+        """
+        _build_heat_storage passed the thermal-storage SoC series straight to a
+        DataFrame whose index is the time index plus the end-of-period boundary
+        step, so any series that is not exactly len(timeindex) + 1 long raised
+        "Shape of passed values is (n, k), indices imply (m, k)".
+
+        That is the normal case for a temporally reduced multi-interval run:
+        the OPF is solved per interval while the SoC data covers the whole
+        reduced index (too long), and a non-final interval's slice carries no
+        trailing step (too short). The battery-storage path next to it already
+        used align_series_to_timeindex; the thermal one now does too.
+        """
+        ti = self.edisgo.timeseries.timeindex
+        flexible_hps = self.edisgo.heat_pump.thermal_storage_units_df.index.values
+
+        for label, soc_index in (
+            ("too long", ti.union(pd.date_range(ti[-1], periods=8, freq="h"))),
+            ("too short", ti[:-1]),
+        ):
+            edisgo = deepcopy(self.edisgo)
+            # the class fixture uses the non-numeric id "grid1"; the central
+            # SoC lookup addresses the area as str(int(district_heating_id))
+            dh = edisgo.topology.loads_df.district_heating_id.dropna().index
+            edisgo.topology.loads_df.loc[dh, "district_heating_id"] = 1
+            edisgo.overlying_grid.thermal_storage_units_decentral_soc = pd.Series(
+                0.5, index=soc_index
+            )
+            edisgo.overlying_grid.thermal_storage_units_central_soc = pd.DataFrame(
+                {"1": [0.5] * len(soc_index)}, index=soc_index
+            )
+            pm, _ = powermodels_io.to_powermodels(
+                edisgo, opf_version=4, flexible_hps=flexible_hps
+            )
+            assert pm["heat_storage"], label
+            for comp in pm["heat_storage"].values():
+                # the SoC boundary conditions are read off the aligned series
+                assert comp["soc_initial"] is not None, label
+                assert comp["soc_end"] is not None, label
+            # the aligned SoC frame spans the time index plus the boundary step
+            assert len(edisgo.overlying_grid.heat_storage_units_soc) == len(ti) + 1, (
+                label
+            )
 
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)

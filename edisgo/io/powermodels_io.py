@@ -21,7 +21,10 @@ import pypsa
 
 from edisgo.flex_opt import exceptions
 from edisgo.flex_opt.costs import line_expansion_costs
-from edisgo.tools.tools import calculate_impedance_for_parallel_components
+from edisgo.tools.tools import (
+    align_series_to_timeindex,
+    calculate_impedance_for_parallel_components,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1049,8 +1052,6 @@ def _build_battery_storage(
         # Align the SOC series (which may use another year) onto the edisgo
         # time index plus one end-of-period step. Uses reindex, so a missing
         # step yields NaN instead of a KeyError.
-        from edisgo.tools.tools import align_series_to_timeindex
-
         soc_aligned = align_series_to_timeindex(
             edisgo_obj.overlying_grid.storage_units_soc,
             edisgo_obj.timeseries.timeindex,
@@ -1335,11 +1336,18 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         flexible_hps,
     )
     if not edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc.empty:
-        data = pd.concat(
-            [edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc]
-            * len(decentral_hps),
-            axis=1,
-        ).values
+        # Align onto the edisgo time index plus the end-of-period boundary step,
+        # the same way _build_battery_storage does. Without this the raw series
+        # is passed straight to a DataFrame whose index has len(timeindex) + 1
+        # rows: a full-length series (or, on a non-final interval of a
+        # temporally reduced run, an interval-length one) then raises
+        # "Shape of passed values is (n, k), indices imply (m, k)".
+        soc_decentral = align_series_to_timeindex(
+            edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc,
+            edisgo_obj.timeseries.timeindex,
+            extra_step=True,
+        ).ffill().bfill()
+        data = pd.concat([soc_decentral] * len(decentral_hps), axis=1).values
     else:
         data = 0.0
     df_decentral = (
@@ -1363,7 +1371,12 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         flexible_hps,
     )
     if not edisgo_obj.overlying_grid.thermal_storage_units_central_soc.empty:
-        data = edisgo_obj.overlying_grid.thermal_storage_units_central_soc[
+        soc_central = align_series_to_timeindex(
+            edisgo_obj.overlying_grid.thermal_storage_units_central_soc,
+            edisgo_obj.timeseries.timeindex,
+            extra_step=True,
+        ).ffill().bfill()
+        data = soc_central[
             edisgo_obj.topology.loads_df.loc[central_hps]
             .district_heating_id.astype(int)
             .astype(str)

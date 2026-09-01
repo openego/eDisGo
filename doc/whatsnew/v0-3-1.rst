@@ -26,3 +26,11 @@ Changes
   restored afterwards. This affects every multi-interval run, in particular the
   ``overlying_grid_opf``, ``overlying_grid_opf_spatial`` and ``spatial_reduction_opf``
   presets, which combine ``select_critical_timesteps`` with ``opf_version: 3``
+* Fixed :func:`~.io.powermodels_io._build_heat_storage` raising ``ValueError: Shape of
+  passed values is (n, k), indices imply (m, k)`` whenever the thermal-storage state of
+  charge from the overlying grid is not exactly one step longer than the time index.
+  The series was passed straight into a DataFrame indexed by the time index plus the
+  end-of-period boundary step; the battery-storage path next to it already aligned it
+  with :func:`~.tools.tools.align_series_to_timeindex`, the thermal one now does too.
+  This is the normal case for a temporally reduced multi-interval run, where the data
+  covers the whole reduced index while one interval is being solved
