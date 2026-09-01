@@ -126,3 +126,61 @@ end
         TestUtils.multinetwork(TestUtils.small_network()), T,
         eDisGo_OPF.build_mn_opf_bf_flex)
 end
+
+@testset "AbstractSOCBFModelEdisgo" begin
+    T = eDisGo_OPF.AbstractSOCBFModelEdisgo
+
+    @test isabstracttype(T)
+    @test supertype(T) === eDisGo_OPF.AbstractBFModelEdisgo
+    @test T <: PowerModels.AbstractBFQPModel
+    @test T <: PowerModels.AbstractPowerModel
+    # Sibling of the non-convex branch, not an ancestor or descendant of it.
+    @test !(T <: eDisGo_OPF.AbstractNCBFModelEdisgo)
+    @test !(eDisGo_OPF.AbstractNCBFModelEdisgo <: T)
+    @test eDisGo_OPF.SOCBFPowerModelEdisgo <: T
+    @test !(eDisGo_OPF.NCBFPowerModelEdisgo <: T)
+    @test !(eDisGo_OPF.BFPowerModelEdisgo <: T)
+
+    @test_throws MethodError T()
+
+    # This is the type the SOC relaxation of the current/voltage coupling is
+    # written against.
+    m = which(eDisGo_OPF.constraint_model_current,
+              Tuple{eDisGo_OPF.SOCBFPowerModelEdisgo,Int})
+    @test m.sig.parameters[2] === T
+    @test basename(string(m.file)) == "bf.jl"
+
+    @test isdefined(eDisGo_OPF, :AbstractSOCBFModelEdisgo)
+    @test !(:AbstractSOCBFModelEdisgo in names(eDisGo_OPF))
+end
+
+@testset "SOCBFPowerModelEdisgo" begin
+    T = eDisGo_OPF.SOCBFPowerModelEdisgo
+
+    @test supertype(T) === eDisGo_OPF.AbstractSOCBFModelEdisgo
+    @test T <: eDisGo_OPF.AbstractBFModelEdisgo
+    @test !(T <: eDisGo_OPF.AbstractNCBFModelEdisgo)
+
+    types_check_pm_fields(T)
+
+    @test :SOCBFPowerModelEdisgo in names(eDisGo_OPF)
+    @test SOCBFPowerModelEdisgo === T
+
+    types_check_instance(types_bare_model(T), T)
+
+    # Dispatch: a SOC model picks the convex relaxation `p² + q² ≤ (w/tm²)·ccm`,
+    # which lands in the JuMP model as a quadratic inequality — one per branch and
+    # time step, the virtual storage branch included (the NC method skips it).
+    pm = TestUtils.build_small_model(T)
+    @test JuMP.num_constraints(pm.model, JuMP.QuadExpr,
+                               MOI.LessThan{Float64}) == 3 * 2
+    # No nonlinear constraint is added: the whole model stays convex.
+    @test JuMP.num_nonlinear_constraints(pm.model) == 0
+
+    quad = [string(c) for c in JuMP.all_constraints(pm.model, JuMP.QuadExpr,
+                                                    MOI.LessThan{Float64})]
+    @test length(quad) == 6
+    # Every one of them couples branch power with `w` (V²) and `ccm` (I²).
+    @test all(occursin("w[", s) && occursin("ccm[", s) for s in quad)
+    @test all(occursin("<=", s) || occursin("≤", s) for s in quad)
+end

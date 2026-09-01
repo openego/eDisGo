@@ -20,8 +20,8 @@ dahinter notieren)
 
 - [x] `AbstractBFModelEdisgo` — abstract type
 - [x] `BFPowerModelEdisgo` — mutable struct
-- [ ] `AbstractSOCBFModelEdisgo` — abstract type
-- [ ] `SOCBFPowerModelEdisgo` — mutable struct
+- [x] `AbstractSOCBFModelEdisgo` — abstract type
+- [x] `SOCBFPowerModelEdisgo` — mutable struct
 - [ ] `AbstractNCBFModelEdisgo` — abstract type
 - [ ] `NCBFPowerModelEdisgo` — mutable struct
 
