@@ -139,6 +139,69 @@ def task_save(
     return edisgo
 
 
+def normalise_district_heating_labels(overlying_grid, logger):
+    """
+    Rewrite the district-heating column labels as the string of an integer.
+
+    Both district-heating-indexed frames are addressed downstream by the district
+    heating ID in that form ("130", never "130.0"): ``_build_heat_storage`` looks
+    up ``thermal_storage_units_central_soc`` as
+    ``loads_df.district_heating_id.astype(int).astype(str)``, and
+    ``aggregate_district_heating_components`` matches ``feedin_district_heating``
+    with ``str(int(district))``. eTraGo and CSV data arrive with float or integer
+    labels, which silently miss (feed-in) or raise a KeyError (SoC).
+
+    Shared by the two paths that can put overlying-grid data on an EDisGo object:
+    ``import_overlying_grid_data`` and ``load_from_base``.
+
+    Parameters
+    ----------
+    overlying_grid : edisgo.network.overlying_grid.OverlyingGrid
+        Component whose frames are normalised in place.
+    logger : logging.Logger
+        Logger to report unreadable or colliding labels on.
+
+    """
+    for attr in ("feedin_district_heating", "thermal_storage_units_central_soc"):
+        df = getattr(overlying_grid, attr)
+        if df is None or df.empty:
+            continue
+        # Per column, so that one unreadable label does not leave every other
+        # label of the frame unnormalised. The realistic producer of a single bad
+        # label is a geo-join in eGo that yields NaN for a heat bus without a
+        # matching district heating area.
+        renamed, unreadable = [], []
+        for col in df.columns:
+            try:
+                renamed.append(str(int(float(col))))
+            except (TypeError, ValueError, OverflowError):
+                # OverflowError is what inf raises, and it is not a subclass of
+                # the other two -- without it an inf label kills the whole run.
+                renamed.append(col)
+                unreadable.append(col)
+        if unreadable:
+            logger.warning(
+                f"Could not read {len(unreadable)} column label(s) of '{attr}' as "
+                f"district heating IDs ({unreadable}) — leaving those unchanged. "
+                f"Downstream lookups expect the ID as the string of an integer, so "
+                f"this data will not be found."
+            )
+        if len(set(map(str, renamed))) != len(renamed):
+            # Normalising can collapse distinct labels onto one another, e.g.
+            # 130.0 next to "130", or the "130.1" pandas produces for a duplicate
+            # CSV header. A duplicate label makes the downstream lookups return a
+            # DataFrame where a Series is expected, which fails far from here.
+            logger.warning(
+                f"Normalising the column labels of '{attr}' ({list(df.columns)}) "
+                f"would produce duplicates ({renamed}) — leaving them unchanged."
+            )
+            continue
+        if renamed != list(df.columns):
+            df = df.copy()
+            df.columns = renamed
+            setattr(overlying_grid, attr, df)
+
+
 @register_task("import_overlying_grid_data", provides={"overlying_grid"})
 def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     """
@@ -243,55 +306,7 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
         )
 
     # --- 2b) normalise the district-heating column labels ---
-    # Both district-heating-indexed frames are addressed downstream by the
-    # district heating ID as the string of an integer ("130", never "130.0"):
-    # _build_heat_storage looks up thermal_storage_units_central_soc as
-    # loads_df.district_heating_id.astype(int).astype(str), and
-    # aggregate_district_heating_components matches feedin_district_heating
-    # with str(int(district)). eTraGo/CSV data arrives with float or integer
-    # labels, which silently miss (feed-in) or raise a KeyError (SoC). The
-    # in-eGo pipeline this task replaced did the same rename right before its
-    # consumers; doing it here covers every consumer at once.
-    for attr in ("feedin_district_heating", "thermal_storage_units_central_soc"):
-        df = getattr(edisgo.overlying_grid, attr)
-        if df is None or df.empty:
-            continue
-        # Per column, so that one unreadable label does not leave every other
-        # label of the frame unnormalised. The realistic producer of a single bad
-        # label is a geo-join in eGo that yields NaN for a heat bus without a
-        # matching district heating area.
-        renamed, unreadable = [], []
-        for col in df.columns:
-            try:
-                renamed.append(str(int(float(col))))
-            except (TypeError, ValueError, OverflowError):
-                # OverflowError is what inf raises, and it is not a subclass of
-                # the other two -- without it an inf label kills the whole run.
-                renamed.append(col)
-                unreadable.append(col)
-        if unreadable:
-            ctx.logger.warning(
-                f"task 'import_overlying_grid_data': could not read "
-                f"{len(unreadable)} column label(s) of '{attr}' as district heating "
-                f"IDs ({unreadable}) — leaving those unchanged. Downstream lookups "
-                f"expect the ID as the string of an integer, so this data will not "
-                f"be found."
-            )
-        if len(set(map(str, renamed))) != len(renamed):
-            # Normalising can collapse distinct labels onto one another, e.g.
-            # 130.0 next to "130", or the "130.1" pandas produces for a duplicate
-            # CSV header. A duplicate label makes the downstream lookups return a
-            # DataFrame where a Series is expected, which fails far from here.
-            ctx.logger.warning(
-                f"task 'import_overlying_grid_data': normalising the column labels "
-                f"of '{attr}' ({list(df.columns)}) would produce duplicates "
-                f"({renamed}) — leaving them unchanged."
-            )
-            continue
-        if renamed != list(df.columns):
-            df = df.copy()
-            df.columns = renamed
-            setattr(edisgo.overlying_grid, attr, df)
+    normalise_district_heating_labels(edisgo.overlying_grid, ctx.logger)
 
     # --- 3) set dispatchable/fluctuating generator time series ---
     if source == "etrago":

@@ -342,6 +342,25 @@ class TestAggregateDistrictHeating:
             }
         )
 
+    def test_load_from_base_satisfies_the_overlying_grid_requirement(self):
+        """
+        ``load_from_base(import_overlying_grid=True)`` restores the overlying
+        grid from a saved directory, so a pipeline that continues with the
+        aggregation has the data. Declaring only ``provides={"grid"}`` made the
+        validator reject that pipeline.
+        """
+        from edisgo.run.validator import validate
+
+        validate(
+            {
+                "pipeline": [
+                    {"load_from_base": {"import_overlying_grid": True}},
+                    "aggregate_district_heating",
+                    "reactive_power",
+                ]
+            }
+        )
+
     def test_validator_enforces_the_order_against_reactive_power(self):
         """
         The task drops the resistive heater's power series and re-applies the
@@ -389,7 +408,7 @@ class TestAggregateDistrictHeating:
 
         cols = list(edisgo.overlying_grid.feedin_district_heating.columns)
         assert "130" in cols, cols
-        assert "could not read" in caplog.text
+        assert "Could not read" in caplog.text
 
     def test_labels_collapsing_to_duplicates_are_left_alone(self, caplog):
         """

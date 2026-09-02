@@ -71,3 +71,8 @@ Changes
   set of labels that would collapse onto duplicates is left unchanged with a
   warning, because a duplicate ID makes the lookups downstream return a DataFrame
   where a Series is expected
+* ``load_from_base`` now declares that it provides the overlying grid and applies the
+  district-heating label normalisation to what it restored. A pipeline continuing
+  from a saved grid with ``import_overlying_grid: true`` was rejected by the
+  validator although the data was there, and the labels of the restored frames were
+  left as written
