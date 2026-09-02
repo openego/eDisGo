@@ -27,7 +27,7 @@ dahinter notieren)
 
 ### `src/core/base.jl` → `test/core/test_base.jl`
 
-- [ ] `solve_model` — Dict
+- [x] `solve_model` — Dict
 - [ ] `instantiate_model` — Dict
 - [ ] `ref_add_core!` — Dict
 
