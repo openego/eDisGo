@@ -1077,9 +1077,25 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
             # reduce demand by feedin from other sources (e.g. solarthermal, geothermal)
             if not feedin_district_heating.empty:
                 if str(int(district)) in feedin_district_heating.columns:
-                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                    remaining_demand = (
                         edisgo_obj.heat_pump.heat_demand_df[district_hp]
                         - feedin_district_heating[str(int(district))]
+                    )
+                    # The remaining demand is bounded below by zero: in a time step
+                    # where the other heat sources deliver more than the network
+                    # needs, the power-to-heat unit is simply switched off. Without
+                    # the bound the negative heat demand is divided by the COP in
+                    # apply_heat_pump_operating_strategy and the unit turns into a
+                    # generator feeding the grid.
+                    if (remaining_demand < 0).any():
+                        logger.warning(
+                            f"Feed-in from other heat supply sources exceeds the heat "
+                            f"demand of district heating grid {district} in "
+                            f"{int((remaining_demand < 0).sum())} time step(s). The "
+                            f"remaining heat demand is set to zero in those steps."
+                        )
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                        remaining_demand.clip(lower=0)
                     )
                 else:
                     logger.info(

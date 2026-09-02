@@ -10,6 +10,73 @@ from edisgo import EDisGo
 from edisgo.tools import tools
 
 
+def _district_heating_grid(cop_rh=1.0):
+    """
+    Small grid with one district heating area (ID 130) holding a heat pump and a
+    resistive heater, plus the heat-pump data the aggregation needs.
+    """
+    edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+    edisgo.set_timeindex(pd.date_range("2011-01-01", periods=3, freq="h"))
+    for sector, p_set in (
+        ("district_heating", 2),
+        ("district_heating_resistive_heater", 5),
+    ):
+        edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector=sector,
+            district_heating_id=130,
+            ts_active_power=pd.Series(
+                index=edisgo.timeseries.timeindex, data=[1.0, 1.0, 1.0]
+            ),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[27],
+            p_set=p_set,
+        )
+    loads = edisgo.topology.loads_df
+    hp = loads.index[loads.sector == "district_heating"][0]
+    rh = loads.index[loads.sector == "district_heating_resistive_heater"][0]
+    ti = edisgo.timeseries.timeindex
+    edisgo.heat_pump.cop_df = pd.DataFrame(
+        {hp: [3.0] * 3, rh: [cop_rh] * 3}, index=ti
+    )
+    edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+        {hp: [9.0] * 3, rh: [9.0] * 3}, index=ti
+    )
+    return edisgo, hp, rh
+
+
+class TestAggregateDistrictHeatingComponents:
+    """
+    Unit tests for :func:`edisgo.tools.tools.aggregate_district_heating_components`.
+    """
+
+    def test_feedin_above_demand_does_not_produce_a_negative_demand(self, caplog):
+        """
+        Other heat sources delivering more than the network needs must switch the
+        power-to-heat unit off, not turn it into a generator.
+        """
+        import logging
+
+        edisgo, hp, _ = _district_heating_grid()
+        # 12 MW of solar thermal against a 9 MW demand in the middle time step
+        feedin = pd.DataFrame(
+            {"130": [1.0, 12.0, 1.0]}, index=edisgo.timeseries.timeindex
+        )
+        with caplog.at_level(logging.WARNING, logger="edisgo.tools.tools"):
+            tools.aggregate_district_heating_components(
+                edisgo, feedin_district_heating=feedin
+            )
+
+        demand = edisgo.heat_pump.heat_demand_df[hp]
+        assert (demand >= 0).all(), demand.tolist()
+        assert demand.iloc[1] == 0.0
+        assert "exceeds the heat demand" in caplog.text
+        # and the resulting load is not an injection
+        edisgo.apply_heat_pump_operating_strategy(heat_pump_names=[hp])
+        assert (edisgo.timeseries.loads_active_power[hp] >= 0).all()
+
+
 class TestTools:
     @classmethod
     def setup_class(self):
