@@ -108,7 +108,11 @@ dahinter notieren)
 
 ### `src/core/constraint_template.jl` → `test/core/test_constraint_template.jl`
 
-- [ ] `constraint_power_balance_bf` — AbstractBFModelEdisgo
+- [x] `constraint_power_balance_bf` — AbstractBFModelEdisgo (Anmerkung: der
+  Leistungsfaktor-Term `bus_storage_pf` wird berechnet und übergeben, von
+  `constraint_power_balance` aber nie verwendet — die Blindleistung der
+  Batterie kommt über `storage_pf` des virtuellen Branches; ein Speicher ohne
+  `pf` lässt das Template dennoch scheitern)
 - [ ] `constraint_voltage_magnitude_difference_radial` — AbstractBFModelEdisgo
 - [ ] `constraint_store_state` — AbstractBFModelEdisgo
 - [ ] `constraint_store_state` — AbstractBFModelEdisgo

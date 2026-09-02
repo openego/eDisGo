@@ -1,7 +1,308 @@
 # Tests for `src/core/constraint_template.jl`.
 #
-# TODO: not written yet. See test/FUNKTIONSABDECKUNG.md for the list of functions
-# in this source file that still need tests, and test/TESTKONVENTIONEN.md for how
-# to write them.
+# The templates in this file sit between the `ref` dict and the formulation
+# specific constraint methods of `src/core/constraint.jl` and `src/form/bf.jl`:
+# they look the per-bus/per-branch data up, derive the reactive-power factors
+# `tan(acos(pf))·sign` and forward everything to the low-level constraint. What
+# can be observed is therefore the constraint that ends up in the JuMP model.
+#
+# Calling a template in isolation needs a model whose *variables* already exist
+# but whose constraints do not. `ct_variables_only!` is exactly the variable
+# section of `build_mn_opf_bf_flex`, so a freshly built model contains no
+# constraint other than the variable bounds; every constraint seen afterwards is
+# the one the template under test produced.
 
 include(joinpath(@__DIR__, "..", "testsetup.jl"))
+
+"""
+Build method that creates every variable `build_mn_opf_bf_flex` creates — and
+nothing else: no constraint, no objective. Mirrors the variable section of
+`build_mn_opf_bf_flex` including its `opf_version` case distinction (versions 1
+and 3 have no grid restrictions and hence no slack variables, but a line-loading
+variable).
+"""
+function ct_variables_only!(pm)
+    if PowerModels.ref(pm, 1, :opf_version) in (1, 3)
+        eDisGo_OPF.variable_max_line_loading(pm, nw=1)
+    end
+    for (n, _) in PowerModels.nws(pm)
+        eDisGo_OPF.variable_branch_power_radial(pm, nw=n, bounded=false)
+        if PowerModels.ref(pm, 1, :opf_version) in (1, 3)
+            eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false)
+            eDisGo_OPF.variable_bus_voltage(pm, nw=n, bounded=false)
+        else
+            eDisGo_OPF.variable_branch_current(pm, nw=n)
+            eDisGo_OPF.variable_gen_power_curt(pm, nw=n)
+            eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n)
+            eDisGo_OPF.variable_bus_voltage(pm, nw=n)
+        end
+        eDisGo_OPF.variable_slack_heat_pump_storage(pm, nw=n)
+        eDisGo_OPF.variable_battery_storage(pm, nw=n)
+        eDisGo_OPF.variable_heat_storage(pm, nw=n)
+        eDisGo_OPF.variable_heat_pump_power(pm, nw=n)
+        eDisGo_OPF.variable_cp_power(pm, nw=n)
+        eDisGo_OPF.variable_dsm_storage_power(pm, nw=n)
+        eDisGo_OPF.variable_slack_gen(pm, nw=n)
+    end
+end
+
+"""
+Instantiate `data` (single-network form) as a multi-network model that holds all
+variables but no constraints — see [`ct_variables_only!`](@ref).
+"""
+function ct_model(data::Dict{String,<:Any};
+                  model_type::Type=eDisGo_OPF.SOCBFPowerModelEdisgo)
+    return eDisGo_OPF.instantiate_model(TestUtils.multinetwork(data), model_type,
+                                        ct_variables_only!)
+end
+
+"Convenience wrapper: `ct_model` on an unmodified [`TestUtils.small_network`](@ref)."
+ct_small_model(; model_type::Type=eDisGo_OPF.SOCBFPowerModelEdisgo, kwargs...) =
+    ct_model(TestUtils.small_network(; kwargs...); model_type=model_type)
+
+"""
+`small_network` with a distinct power factor per component type, so that a
+mixed-up `pf` cannot pass unnoticed. The DSM load additionally gets `sign = -1`
+(the fixture default is `+1`), which makes the tests sensitive to the `sign`
+factor of `tan(acos(pf))·sign` as well.
+"""
+function ct_pf_network(; kwargs...)
+    data = TestUtils.small_network(; kwargs...)
+    data["gen"]["1"]["pf"] = 0.90          # sign -1, bus 2
+    data["gen_nd"]["1"]["pf"] = 0.93       # sign -1, bus 3
+    data["load"]["1"]["pf"] = 0.95         # sign +1, bus 3
+    data["dsm"]["1"]["pf"] = 0.96
+    data["dsm"]["1"]["sign"] = -1
+    data["heatpumps"]["1"]["pf"] = 0.98    # sign +1, bus 3
+    data["electromobility"]["1"]["pf"] = 0.99  # sign +1, bus 3
+    data["storage"]["1"]["pf"] = 0.91      # sign -1, bus 4
+    return data
+end
+
+"All affine equality constraints of `model`, in the order they were created."
+ct_eq_constraints(model) = JuMP.all_constraints(model, JuMP.AffExpr,
+                                                MOI.EqualTo{Float64})
+
+"Coefficient of variable `v` in constraint `c` (0.0 if `v` does not appear)."
+ct_coef(c, v) = JuMP.coefficient(JuMP.constraint_object(c).func, v)
+
+"""
+The affine constraint `c` as `(Dict(variable name => coefficient), rhs)` — a
+representation that can be compared between two separately built models, where
+the `VariableRef`s differ but their names do not.
+"""
+function ct_terms(c)
+    func = JuMP.constraint_object(c).func
+    terms = Dict{String,Float64}(JuMP.name(v) => coef for (v, coef) in func.terms)
+    return terms, JuMP.normalized_rhs(c)
+end
+
+"Set of the given variables' names, to be compared with [`ct_varnames`](@ref)."
+ct_nameset(vars...) = Set(JuMP.name(v) for v in vars)
+
+"Names of the variables appearing in the affine constraint `c`."
+ct_varnames(c) = Set(JuMP.name(v) for v in keys(JuMP.constraint_object(c).func.terms))
+
+"Number of constraints `f()` adds to `model`."
+function ct_added(f, model)
+    before = TestUtils.num_constraints_total(model)
+    f()
+    return TestUtils.num_constraints_total(model) - before
+end
+
+@testset "constraint_power_balance_bf" begin
+    @testset "one balance equation per bus" begin
+        pm = ct_small_model()
+        # Nothing but variable bounds so far — the template is the only source of
+        # equality constraints in this model.
+        @test isempty(ct_eq_constraints(pm.model))
+        for i in PowerModels.ids(pm, 1, :bus)
+            @test ct_added(() -> eDisGo_OPF.constraint_power_balance_bf(pm, i, nw=1),
+                           pm.model) == 2
+        end
+        # Two equations (active and reactive power) for each of the four buses,
+        # the storage bus 4 — which has no voltage variable — included.
+        @test length(ct_eq_constraints(pm.model)) == 8
+        @test sort(collect(PowerModels.ids(pm, 1, :bus))) == [1, 2, 3, 4]
+    end
+
+    @testset "bus without connected components" begin
+        # Bus 5 is a dead end: one incoming line, no generator, load or
+        # flexibility. It still gets a balance equation, reduced to "what flows in
+        # equals the ohmic loss of the incoming line".
+        data = TestUtils.small_network()
+        data["bus"]["5"] = TestUtils._bus(5)
+        data["branch"]["4"] = TestUtils._branch(4, 3, 5)
+        pm = ct_model(data)
+        for key in (:bus_gens, :bus_gens_nd, :bus_gens_slack, :bus_loads,
+                    :bus_storage, :bus_dsm, :bus_hps, :bus_cps)
+            @test isempty(PowerModels.ref(pm, 1, key, 5))
+        end
+
+        @test ct_added(() -> eDisGo_OPF.constraint_power_balance_bf(pm, 5, nw=1),
+                       pm.model) == 2
+        cstr_p, cstr_q = ct_eq_constraints(pm.model)
+        p = PowerModels.var(pm, 1, :p, (4, 3, 5))
+        q = PowerModels.var(pm, 1, :q, (4, 3, 5))
+        ccm = PowerModels.var(pm, 1, :ccm, 4)
+        # p_to == ccm·r  and  q_to == ccm·x, with r = x = 0.01 of the fixture.
+        @test ct_terms(cstr_p) == (Dict(JuMP.name(p) => 1.0,
+                                        JuMP.name(ccm) => -0.01), 0.0)
+        @test ct_terms(cstr_q) == (Dict(JuMP.name(q) => 1.0,
+                                        JuMP.name(ccm) => -0.01), 0.0)
+    end
+
+    @testset "power factor terms" begin
+        pm = ct_model(ct_pf_network())
+        # Bus 3 carries the non-dispatchable generator, the load, the DSM load,
+        # the heat pump and the charging point.
+        eDisGo_OPF.constraint_power_balance_bf(pm, 3, nw=1)
+        _, cstr_q = ct_eq_constraints(pm.model)
+
+        # `tan(acos(pf))·sign` as the template derives it. The terms sit on the
+        # right-hand side of the equation, so JuMP's normalised coefficients carry
+        # the opposite sign (`+` for the loads that are *subtracted*).
+        pf_gen_nd = tan(acos(0.93)) * -1
+        pf_load = tan(acos(0.95)) * 1
+        pf_dsm = tan(acos(0.96)) * -1
+        pf_hp = tan(acos(0.98)) * 1
+        pf_cp = tan(acos(0.99)) * 1
+
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :pgc, 1)) ≈ -pf_gen_nd
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :pds, 1)) ≈ pf_load
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :pdsm, 1)) ≈ -pf_dsm
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :php, 1)) ≈ -pf_hp
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :phps, 1)) ≈ pf_hp
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :pcp, 1)) ≈ -pf_cp
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :pcps, 1)) ≈ pf_cp
+        # The five factors really are five different numbers …
+        @test length(unique(round.([pf_gen_nd, pf_load, pf_dsm, pf_hp, pf_cp],
+                                   digits=12))) == 5
+        # … and none of them leaks into the active-power equation, where all these
+        # variables enter with a plain ±1.
+        cstr_p, _ = ct_eq_constraints(pm.model)
+        for (sym, coef) in ((:pgc, -1.0), (:pds, 1.0), (:pdsm, -1.0), (:php, -1.0),
+                            (:phps, 1.0), (:pcp, -1.0), (:pcps, 1.0))
+            @test ct_coef(cstr_p, PowerModels.var(pm, 1, sym, 1)) == coef
+        end
+
+        @testset "dispatchable generator" begin
+            # The dispatchable generator sits at bus 2, alone.
+            pm2 = ct_model(ct_pf_network())
+            eDisGo_OPF.constraint_power_balance_bf(pm2, 2, nw=1)
+            cstr_p2, cstr_q2 = ct_eq_constraints(pm2.model)
+            pf_gen = tan(acos(0.90)) * -1
+            @test ct_coef(cstr_q2, PowerModels.var(pm2, 1, :pgens, 1)) ≈ -pf_gen
+            @test ct_coef(cstr_p2, PowerModels.var(pm2, 1, :pgens, 1)) == -1.0
+            # `pg`/`qg` of the generator are constants, they end up in the rhs:
+            # -pg = -0.3 and -qg = +0.145 plus nothing else at this bus.
+            @test JuMP.normalized_rhs(cstr_p2) ≈ -0.3
+            @test JuMP.normalized_rhs(cstr_q2) ≈ 0.145
+        end
+
+        @testset "battery storage" begin
+            # The battery hangs off bus 4 through the *virtual* branch 3. Its
+            # reactive power is taken from that branch's `storage_pf`, which the
+            # template forwards verbatim — no `tan(acos(...))` is applied to it.
+            data = ct_pf_network()
+            data["branch"]["3"]["storage_pf"] = 0.42
+            pm3 = ct_model(data)
+            eDisGo_OPF.constraint_power_balance_bf(pm3, 4, nw=1)
+            cstr_p3, cstr_q3 = ct_eq_constraints(pm3.model)
+            p34 = PowerModels.var(pm3, 1, :p, (3, 3, 4))
+            @test ct_coef(cstr_q3, p34) ≈ -0.42
+            @test ct_coef(cstr_p3, PowerModels.var(pm3, 1, :ps, 1)) == 1.0
+            # The storage's own `pf` is collected by the template (`bus_storage_pf`)
+            # but never used by `constraint_power_balance` — neither
+            # tan(acos(0.91))·(-1) nor 0.91 shows up anywhere.
+            for c in (cstr_p3, cstr_q3), coef in values(JuMP.constraint_object(c).func.terms)
+                @test !isapprox(abs(coef), abs(tan(acos(0.91))), atol=1e-12)
+                @test !isapprox(abs(coef), 0.91, atol=1e-12)
+            end
+            # It is collected all the same, so a storage unit without `pf` makes
+            # the template fail even though the value is dead.
+            pm4 = ct_model(ct_pf_network())
+            delete!(PowerModels.ref(pm4, 1, :storage, 1), "pf")
+            @test_throws KeyError eDisGo_OPF.constraint_power_balance_bf(pm4, 4, nw=1)
+        end
+    end
+
+    @testset "forwarded to constraint_power_balance" begin
+        # Two identically built models: the template on the one, the low-level
+        # method with hand-collected arguments on the other. Identical constraints
+        # prove that the template passes exactly these values on.
+        pm_a = ct_model(ct_pf_network())
+        pm_b = ct_model(ct_pf_network())
+        i = 3
+        eDisGo_OPF.constraint_power_balance_bf(pm_a, i, nw=1)
+
+        r = PowerModels.ref(pm_b, 1)
+        bus_lines_to = r[:bus_lines_to][i]
+        bus_gens, bus_gens_nd = r[:bus_gens][i], r[:bus_gens_nd][i]
+        bus_loads, bus_storage = r[:bus_loads][i], r[:bus_storage][i]
+        bus_dsm, bus_hps, bus_cps = r[:bus_dsm][i], r[:bus_hps][i], r[:bus_cps][i]
+        pf_of(sym, ks) = Dict(k => tan(acos(r[sym][k]["pf"])) * r[sym][k]["sign"]
+                              for k in ks)
+        eDisGo_OPF.constraint_power_balance(
+            pm_b, 1, i, bus_gens, bus_gens_nd, r[:bus_gens_slack][i], bus_loads,
+            r[:bus_arcs_to][i], r[:bus_arcs_from][i], bus_lines_to, bus_storage,
+            Dict(k => r[:gen][k]["pg"] for k in bus_gens),
+            Dict(k => r[:gen][k]["qg"] for k in bus_gens),
+            Dict(k => r[:gen_nd][k]["pg"] for k in bus_gens_nd),
+            Dict(k => r[:gen_nd][k]["qg"] for k in bus_gens_nd),
+            Dict(k => r[:load][k]["pd"] for k in bus_loads),
+            Dict(k => r[:load][k]["qd"] for k in bus_loads),
+            Dict(k => r[:branch][k]["br_r"] for k in bus_lines_to),
+            Dict(k => r[:branch][k]["br_x"] for k in bus_lines_to),
+            bus_dsm, bus_hps, bus_cps,
+            pf_of(:storage, bus_storage), pf_of(:dsm, bus_dsm),
+            pf_of(:heatpumps, bus_hps), pf_of(:electromobility, bus_cps),
+            pf_of(:gen_nd, bus_gens_nd), pf_of(:gen, bus_gens),
+            pf_of(:load, bus_loads),
+            Dict(k => r[:branch][k]["storage_pf"] for k in bus_lines_to))
+
+        cs_a, cs_b = ct_eq_constraints(pm_a.model), ct_eq_constraints(pm_b.model)
+        @test length(cs_a) == length(cs_b) == 2
+        @test ct_terms(cs_a[1]) == ct_terms(cs_b[1])
+        @test ct_terms(cs_a[2]) == ct_terms(cs_b[2])
+        # Not vacuously equal: both equations do carry terms.
+        @test length(first(ct_terms(cs_a[1]))) > 3
+        @test length(first(ct_terms(cs_a[2]))) > 3
+    end
+
+    @testset "opf_version without grid restrictions" begin
+        # Versions 1 and 3 know no curtailment/slack variables, so the balance
+        # reduces to the flexibilities themselves — the power factors of DSM, heat
+        # pump and charging point stay, those of generators and loads have no
+        # variable left to multiply.
+        pm = ct_model(ct_pf_network(opf_version=1))
+        @test ct_added(() -> eDisGo_OPF.constraint_power_balance_bf(pm, 3, nw=1),
+                       pm.model) == 2
+        cstr_p, cstr_q = ct_eq_constraints(pm.model)
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :pdsm, 1)) ≈ -tan(acos(0.96)) * -1
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :php, 1)) ≈ -tan(acos(0.98))
+        @test ct_coef(cstr_q, PowerModels.var(pm, 1, :pcp, 1)) ≈ -tan(acos(0.99))
+        # No slack variable of any kind — in this version they do not even exist.
+        for sym in (:pgc, :pgens, :pds, :phps, :pcps)
+            @test !haskey(PowerModels.var(pm, 1), sym)
+        end
+        @test ct_varnames(cstr_p) == ct_nameset(
+            PowerModels.var(pm, 1, :p, (2, 2, 3)), PowerModels.var(pm, 1, :p, (3, 3, 4)),
+            PowerModels.var(pm, 1, :ccm, 2), PowerModels.var(pm, 1, :php, 1),
+            PowerModels.var(pm, 1, :pcp, 1), PowerModels.var(pm, 1, :pdsm, 1))
+        @test ct_varnames(cstr_q) == ct_nameset(
+            PowerModels.var(pm, 1, :q, (2, 2, 3)), PowerModels.var(pm, 1, :q, (3, 3, 4)),
+            PowerModels.var(pm, 1, :ccm, 2), PowerModels.var(pm, 1, :php, 1),
+            PowerModels.var(pm, 1, :pcp, 1), PowerModels.var(pm, 1, :pdsm, 1))
+    end
+
+    @testset "network selection" begin
+        # `nw` picks both the data and the variables of that time step.
+        pm = ct_model(ct_pf_network())
+        eDisGo_OPF.constraint_power_balance_bf(pm, 3, nw=2)
+        cstr_p, _ = ct_eq_constraints(pm.model)
+        @test ct_coef(cstr_p, PowerModels.var(pm, 2, :pdsm, 1)) == -1.0
+        @test ct_coef(cstr_p, PowerModels.var(pm, 1, :pdsm, 1)) == 0.0
+        @test all(startswith(name, "2_") for name in ct_varnames(cstr_p))
+    end
+end
