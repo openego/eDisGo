@@ -25,3 +25,12 @@ Changes
   ``import_overlying_grid_data`` but optimised with version 2, which does not build the
   high-voltage requirement constraints, so the imported overlying-grid setpoints only
   reached the OPF as generator time series and the flexibility setpoints were discarded
+* Rewrote the header of the ``spatial_reduction_opf`` preset, which described a
+  preset of a different branch: it referred to itself as "UC6", explained a port from
+  ``edisgo_run_edisgo``'s ``uc6_spatial_reduction.yaml``, advised porting a "uc5
+  feature" for automatic timestep selection that this branch has had all along as
+  ``select_critical_timesteps``, named a branch this is not, and called
+  ``spatial_reduction.enabled`` false by default where the preset itself sets it
+  true. It now says what the preset is for — the standalone CSV and fixed-window
+  sibling of ``overlying_grid_opf_spatial`` — and both presets no longer claim that
+  eGo can inject the ``spatial_reduction`` block, which it cannot

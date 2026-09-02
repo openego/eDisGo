@@ -24,7 +24,9 @@ overlying_grid:
   # path: /path/to/overlying_grid_csvs   # required when source: csv
 
 # Top-level block read by the spatial_reduce / spatial_restore tasks via
-# ctx.raw_config. eGo can inject this the same way it injects overlying_grid.
+# ctx.raw_config. eGo cannot inject it — _build_run_edisgo_config emits only
+# extends, scenario, grid, results, database and overlying_grid — so naming
+# this preset is how an eGo run gets spatial reduction.
 spatial_reduction:
   enabled: true            # set false to no-op the spatial bracket
   mode: kmeansdijkstra     # clustering mode for spatial_complexity_reduction

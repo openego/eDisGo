@@ -363,6 +363,41 @@ class TestPowermodelsIO:
         assert np.allclose(hv_empty["hp"].values, hv_zero["hp"].values)
         assert pm_empty["HV_requirements"] == pm_zero["HV_requirements"]
 
+    def test_to_powermodels_opf_version_3(self):
+        """
+        Version 3 is what the two shipped overlying-grid presets select, and it
+        was covered by no test at all. It builds the same high-voltage
+        requirements as version 4 but lifts the grid restrictions, so the
+        formulation reaching Julia has to say 3, and the requirements have to be
+        there.
+        """
+        powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(
+            self.edisgo,
+            opf_version=3,
+            flexible_cps=["Charging_Point_LVGrid_6_1"],
+            flexible_hps=self.edisgo.heat_pump.thermal_storage_units_df.index.values,
+            flexible_loads=np.array(
+                ["Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"]
+            ),
+            flexible_storage_units=self.edisgo.topology.storage_units_df.index.values,
+        )
+        # not silently downgraded
+        assert powermodels_network["opf_version"] == 3
+        # one requirement per flexibility, curtailment always among them
+        assert set(hv_flex_dict) == {"curt", "storage", "cp", "hp", "dsm"}
+        assert len(powermodels_network["HV_requirements"]) == len(hv_flex_dict)
+        assert set(powermodels_network["time_series"]["HV_requirements"]) == {
+            str(i + 1) for i in range(len(hv_flex_dict))
+        }
+        # the combined heat pump requirement is decentral plus central
+        assert np.allclose(
+            hv_flex_dict["hp"].values,
+            (
+                self.edisgo.overlying_grid.heat_pump_decentral_active_power
+                + self.edisgo.overlying_grid.heat_pump_central_active_power
+            ).values,
+        )
+
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
