@@ -26,7 +26,9 @@ Changes
   config that does define one replaces the preset's step list wholesale and is
   unaffected. The task declares ``requires={"overlying_grid"}``, which
   ``import_overlying_grid_data`` now provides, so a pipeline that puts the two in
-  the wrong order is rejected instead of silently skipping the subtraction
+  the wrong order is rejected. Note that this catches a wrong *order* only —
+  with ``overlying_grid.enabled: false`` there is no feed-in to subtract and the
+  task still does the merge half silently
 * Normalised the district-heating column labels of ``feedin_district_heating`` and
   ``thermal_storage_units_central_soc`` to the string of an integer (``"130"``) in
   ``import_overlying_grid_data``. Both consumers look the ID up in that form, so a float
@@ -61,3 +63,11 @@ Changes
   heater that cannot be attached to a heat pump is integrated as a component of its
   own, so an area can legitimately hold resistive heaters only. Such an area is now
   left unmerged with a warning naming the sectors it contains
+* Hardened the district-heating label normalisation in
+  ``import_overlying_grid_data``: labels are read one at a time, so a single
+  unreadable one (a ``NaN`` from a geo-join miss, say) no longer leaves every other
+  label of the frame unnormalised; ``OverflowError``, which an ``inf`` label raises
+  and which is not a ``ValueError``, is caught rather than killing the run; and a
+  set of labels that would collapse onto duplicates is left unchanged with a
+  warning, because a duplicate ID makes the lookups downstream return a DataFrame
+  where a Series is expected

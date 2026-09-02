@@ -256,14 +256,36 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
         df = getattr(edisgo.overlying_grid, attr)
         if df is None or df.empty:
             continue
-        try:
-            renamed = [str(int(float(col))) for col in df.columns]
-        except (TypeError, ValueError):
+        # Per column, so that one unreadable label does not leave every other
+        # label of the frame unnormalised. The realistic producer of a single bad
+        # label is a geo-join in eGo that yields NaN for a heat bus without a
+        # matching district heating area.
+        renamed, unreadable = [], []
+        for col in df.columns:
+            try:
+                renamed.append(str(int(float(col))))
+            except (TypeError, ValueError, OverflowError):
+                # OverflowError is what inf raises, and it is not a subclass of
+                # the other two -- without it an inf label kills the whole run.
+                renamed.append(col)
+                unreadable.append(col)
+        if unreadable:
             ctx.logger.warning(
-                f"task 'import_overlying_grid_data': could not read the columns of "
-                f"'{attr}' as district heating IDs ({list(df.columns)}) — leaving "
-                f"them unchanged. Downstream lookups expect the ID as the string "
-                f"of an integer."
+                f"task 'import_overlying_grid_data': could not read "
+                f"{len(unreadable)} column label(s) of '{attr}' as district heating "
+                f"IDs ({unreadable}) — leaving those unchanged. Downstream lookups "
+                f"expect the ID as the string of an integer, so this data will not "
+                f"be found."
+            )
+        if len(set(map(str, renamed))) != len(renamed):
+            # Normalising can collapse distinct labels onto one another, e.g.
+            # 130.0 next to "130", or the "130.1" pandas produces for a duplicate
+            # CSV header. A duplicate label makes the downstream lookups return a
+            # DataFrame where a Series is expected, which fails far from here.
+            ctx.logger.warning(
+                f"task 'import_overlying_grid_data': normalising the column labels "
+                f"of '{attr}' ({list(df.columns)}) would produce duplicates "
+                f"({renamed}) — leaving them unchanged."
             )
             continue
         if renamed != list(df.columns):

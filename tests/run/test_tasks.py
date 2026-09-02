@@ -342,6 +342,98 @@ class TestAggregateDistrictHeating:
             }
         )
 
+    def test_validator_enforces_the_order_against_reactive_power(self):
+        """
+        The task drops the resistive heater's power series and re-applies the
+        heat-pump operating strategy, which writes active power and zeroes
+        reactive power. Running it after ``reactive_power`` would leave the
+        merged component's reactive power stale, so ``ts_altering=True``
+        makes the validator reject that order.
+        """
+        from edisgo.run.validator import validate
+
+        with pytest.raises(ValueError, match="reactive_power"):
+            validate(
+                {
+                    "pipeline": [
+                        "setup_grid",
+                        "worst_case_ts",
+                        "import_overlying_grid_data",
+                        "reactive_power",
+                        "aggregate_district_heating",
+                    ]
+                }
+            )
+
+    def test_one_unreadable_label_does_not_block_the_others(self, caplog):
+        """
+        A geo-join miss in eGo produces a single NaN column label. Normalising
+        per frame let that one label leave every other label a float, which
+        then silently missed downstream.
+        """
+        import logging
+
+        edisgo = _grid_with_district_heating()
+        edisgo.overlying_grid.feedin_district_heating = pd.DataFrame(
+            {130.0: [1.0, 1.0, 1.0], float("nan"): [0.0, 0.0, 0.0]},
+            index=edisgo.timeseries.timeindex,
+        )
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}}
+        )
+        ctx.overlying_grid_data = {
+            "feedin_district_heating": edisgo.overlying_grid.feedin_district_heating
+        }
+        with caplog.at_level(logging.WARNING, logger="edisgo.run"):
+            task_import_overlying_grid_data(edisgo, ctx)
+
+        cols = list(edisgo.overlying_grid.feedin_district_heating.columns)
+        assert "130" in cols, cols
+        assert "could not read" in caplog.text
+
+    def test_labels_collapsing_to_duplicates_are_left_alone(self, caplog):
+        """
+        130.0 next to "130" normalises to two identical labels, which makes the
+        downstream lookups return a DataFrame where a Series is expected.
+        """
+        import logging
+
+        edisgo = _grid_with_district_heating()
+        frame = pd.DataFrame(
+            {130.0: [1.0, 1.0, 1.0], "130": [2.0, 2.0, 2.0]},
+            index=edisgo.timeseries.timeindex,
+        )
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}}
+        )
+        ctx.overlying_grid_data = {"feedin_district_heating": frame}
+        with caplog.at_level(logging.WARNING, logger="edisgo.run"):
+            task_import_overlying_grid_data(edisgo, ctx)
+
+        assert list(edisgo.overlying_grid.feedin_district_heating.columns) == [
+            130.0,
+            "130",
+        ]
+        assert "would produce duplicates" in caplog.text
+
+    def test_infinite_label_does_not_kill_the_run(self, caplog):
+        """``inf`` raises OverflowError, which is not a TypeError or ValueError."""
+        import logging
+
+        edisgo = _grid_with_district_heating()
+        frame = pd.DataFrame(
+            {130.0: [1.0, 1.0, 1.0], float("inf"): [0.0, 0.0, 0.0]},
+            index=edisgo.timeseries.timeindex,
+        )
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}}
+        )
+        ctx.overlying_grid_data = {"feedin_district_heating": frame}
+        with caplog.at_level(logging.WARNING, logger="edisgo.run"):
+            task_import_overlying_grid_data(edisgo, ctx)
+
+        assert "130" in list(edisgo.overlying_grid.feedin_district_heating.columns)
+
     def test_non_numeric_columns_warn_and_are_kept(self, caplog):
         edisgo = _grid_with_district_heating()
         edisgo.overlying_grid.feedin_district_heating = pd.DataFrame(
