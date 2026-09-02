@@ -394,3 +394,377 @@ end
         @test pm_k isa eDisGo_OPF.NCBFPowerModelEdisgo
     end
 end
+
+@testset "ref_add_core!" begin
+    @testset "return value and scope" begin
+        ref = base_raw_ref(TestUtils.small_network())
+        # Mutates `ref` in place and returns nothing.
+        @test eDisGo_OPF.ref_add_core!(ref) === nothing
+        @test haskey(ref[:it][eDisGo_OPF.pm_it_sym][:nw][0], :bus_arcs)
+        # Only the `:pm` branch of the ref is touched; the top level is untouched.
+        @test base_sorted_keys(ref) == [:it]
+
+        # Every network of a multi-network ref is processed.
+        mn_ref = base_raw_ref(TestUtils.multinetwork(
+            TestUtils.small_network(num_steps=3)))
+        eDisGo_OPF.ref_add_core!(mn_ref)
+        for n in 1:3
+            nw_ref = mn_ref[:it][eDisGo_OPF.pm_it_sym][:nw][n]
+            @test nw_ref[:bus_cps][3] == [1]
+            @test length(nw_ref[:arcs]) == 6
+        end
+    end
+
+    @testset "conductor_ids" begin
+        nw_ref = base_nw_ref(TestUtils.small_network())
+        # No `conductors` entry — the single-conductor default.
+        @test nw_ref[:conductor_ids] == 1:1
+
+        # With a `conductors` entry the range follows it. `:buspairs` is pre-set
+        # here because `calc_buspair_parameters` expects per-conductor branch data,
+        # which the single-conductor fixture does not have.
+        data = TestUtils.small_network()
+        data["conductors"] = 3
+        ref = base_raw_ref(data)
+        ref[:it][eDisGo_OPF.pm_it_sym][:nw][0][:buspairs] = Dict{Any,Any}()
+        eDisGo_OPF.ref_add_core!(ref)
+        @test ref[:it][eDisGo_OPF.pm_it_sym][:nw][0][:conductor_ids] == 1:3
+
+        # An existing `:conductor_ids` is never overwritten (a single-element
+        # range, because `calc_buspair_parameters` insists on one conductor).
+        ref2 = base_raw_ref(TestUtils.small_network())
+        ref2[:it][eDisGo_OPF.pm_it_sym][:nw][0][:conductor_ids] = 5:5
+        eDisGo_OPF.ref_add_core!(ref2)
+        @test ref2[:it][eDisGo_OPF.pm_it_sym][:nw][0][:conductor_ids] == 5:5
+    end
+
+    @testset "filtering inactive components" begin
+        # Baseline: nothing is filtered out of the untouched fixture.
+        nw_ref = base_nw_ref(TestUtils.small_network())
+        @test base_sorted_keys(nw_ref[:bus]) == [1, 2, 3, 4]
+        @test base_sorted_keys(nw_ref[:branch]) == [1, 2, 3]
+        @test base_sorted_keys(nw_ref[:load]) == [1]
+        @test base_sorted_keys(nw_ref[:gen]) == [1]
+        @test base_sorted_keys(nw_ref[:storage]) == [1]
+
+        # The inactive values `ref_add_core!` compares against.
+        @test pm_component_status_inactive["bus"] == 4
+        @test pm_component_status_inactive["load"] == 0
+        @test pm_component_status_inactive["gen"] == 0
+        @test pm_component_status_inactive["branch"] == 0
+        @test pm_component_status_inactive["storage"] == 0
+
+        @testset "inactive bus" begin
+            # `bus_type == 4` removes the bus itself, both branches touching it and
+            # the dispatchable generator sitting on it.
+            data = TestUtils.small_network()
+            data["bus"]["2"]["bus_type"] = 4
+            r = base_nw_ref(data)
+            @test base_sorted_keys(r[:bus]) == [1, 3, 4]
+            @test base_sorted_keys(r[:branch]) == [3]
+            @test isempty(r[:gen])
+            # Components on the surviving buses stay.
+            @test base_sorted_keys(r[:load]) == [1]
+            @test base_sorted_keys(r[:storage]) == [1]
+            # And all lookups are keyed by the surviving buses only.
+            @test base_sorted_keys(r[:bus_gens]) == [1, 3, 4]
+            @test r[:bus_gens] == Dict(1 => Int[], 3 => Int[], 4 => Int[])
+            @test r[:arcs_from] == [(3, 3, 4)]
+            @test base_sorted_keys(r[:buspairs]) == [(3, 4)]
+        end
+
+        @testset "inactive storage bus" begin
+            # Bus 4 only carries the battery and the virtual storage branch.
+            data = TestUtils.small_network()
+            data["bus"]["4"]["bus_type"] = 4
+            r = base_nw_ref(data)
+            @test base_sorted_keys(r[:bus]) == [1, 2, 3]
+            @test base_sorted_keys(r[:branch]) == [1, 2]
+            @test isempty(r[:storage])
+            @test r[:bus_storage] == Dict(1 => Int[], 2 => Int[], 3 => Int[])
+        end
+
+        @testset "component status" begin
+            # Each component type is filtered by its own status field.
+            data = TestUtils.small_network()
+            data["load"]["1"]["status"] = 0
+            data["gen"]["1"]["gen_status"] = 0
+            data["storage"]["1"]["status"] = 0
+            data["branch"]["2"]["br_status"] = 0
+            r = base_nw_ref(data)
+            @test isempty(r[:load])
+            @test isempty(r[:gen])
+            @test isempty(r[:storage])
+            @test base_sorted_keys(r[:branch]) == [1, 3]
+            # Buses are untouched by component status …
+            @test base_sorted_keys(r[:bus]) == [1, 2, 3, 4]
+            # … but the lookups no longer list the removed components.
+            @test r[:bus_loads] == Dict(1 => Int[], 2 => Int[], 3 => Int[], 4 => Int[])
+            @test r[:bus_gens][2] == Int[]
+            @test r[:bus_storage][4] == Int[]
+            @test sort(r[:arcs_from]) == [(1, 1, 2), (3, 3, 4)]
+
+            # Positive counterpart: any non-inactive status keeps the component.
+            data2 = TestUtils.small_network()
+            data2["branch"]["2"]["br_status"] = 1.0
+            data2["load"]["1"]["status"] = true
+            r2 = base_nw_ref(data2)
+            @test base_sorted_keys(r2[:branch]) == [1, 2, 3]
+            @test base_sorted_keys(r2[:load]) == [1]
+        end
+
+        @testset "shunt, switch and dcline" begin
+            data = TestUtils.small_network()
+            data["shunt"]["1"] = Dict{String,Any}("index" => 1, "shunt_bus" => 3,
+                                                  "status" => 1, "gs" => 0.0,
+                                                  "bs" => 0.1)
+            data["shunt"]["2"] = Dict{String,Any}("index" => 2, "shunt_bus" => 2,
+                                                  "status" => 0, "gs" => 0.0,
+                                                  "bs" => 0.1)
+            data["switch"]["1"] = Dict{String,Any}("index" => 1, "f_bus" => 2,
+                                                   "t_bus" => 3, "status" => 1)
+            data["switch"]["2"] = Dict{String,Any}("index" => 2, "f_bus" => 1,
+                                                   "t_bus" => 2, "status" => 0)
+            data["dcline"]["1"] = Dict{String,Any}("index" => 1, "f_bus" => 1,
+                                                   "t_bus" => 3, "br_status" => 1)
+            data["dcline"]["2"] = Dict{String,Any}("index" => 2, "f_bus" => 1,
+                                                   "t_bus" => 3, "br_status" => 0)
+            r = base_nw_ref(data)
+            @test base_sorted_keys(r[:shunt]) == [1]
+            @test base_sorted_keys(r[:switch]) == [1]
+            @test base_sorted_keys(r[:dcline]) == [1]
+            @test r[:bus_shunts] == Dict(1 => Int[], 2 => Int[], 3 => [1], 4 => Int[])
+            @test r[:arcs_from_sw] == [(1, 2, 3)]
+            @test r[:arcs_to_sw] == [(1, 3, 2)]
+            @test r[:arcs_sw] == [(1, 2, 3), (1, 3, 2)]
+            @test r[:bus_arcs_sw] == Dict(1 => [], 2 => [(1, 2, 3)],
+                                          3 => [(1, 3, 2)], 4 => [])
+            @test r[:arcs_from_dc] == [(1, 1, 3)]
+            @test r[:arcs_to_dc] == [(1, 3, 1)]
+            @test r[:arcs_dc] == [(1, 1, 3), (1, 3, 1)]
+            @test r[:bus_arcs_dc] == Dict(1 => [(1, 1, 3)], 2 => [],
+                                          3 => [(1, 3, 1)], 4 => [])
+        end
+
+        @testset "eDisGo component types are not filtered" begin
+            # `gen_nd`, `gen_slack`, `heatpumps`, `electromobility` and `dsm` are
+            # eDisGo additions that `ref_add_core!` copies over unfiltered — a
+            # status field on them has no effect.
+            data = TestUtils.small_network()
+            data["gen_nd"]["1"]["gen_status"] = 0
+            data["gen_slack"]["1"]["gen_status"] = 0
+            data["heatpumps"]["1"]["status"] = 0
+            data["electromobility"]["1"]["status"] = 0
+            data["dsm"]["1"]["status"] = 0
+            r = base_nw_ref(data)
+            @test base_sorted_keys(r[:gen_nd]) == [1]
+            @test base_sorted_keys(r[:gen_slack]) == [1]
+            @test base_sorted_keys(r[:heatpumps]) == [1]
+            @test base_sorted_keys(r[:electromobility]) == [1]
+            @test base_sorted_keys(r[:dsm]) == [1]
+
+            # BUG: because they are not filtered, an eDisGo component whose bus was
+            # deactivated is not dropped either — building `bus_dsm` (and, further
+            # down, `bus_cps`, `bus_hps`, `bus_gens_nd`, `bus_gens_slack`) then
+            # indexes a bus that no longer exists and throws a `KeyError`.
+            # Bus 3 of the fixture carries one of each.
+            data_b = TestUtils.small_network()
+            data_b["bus"]["3"]["bus_type"] = 4
+            @test_throws KeyError base_nw_ref(data_b)
+            # What it should do instead — drop the components with their bus:
+            @test_broken (r_b = base_nw_ref(data_b); isempty(r_b[:dsm]))
+        end
+    end
+
+    @testset "arcs" begin
+        r = base_nw_ref(TestUtils.small_network())
+        # One arc per branch and direction; the virtual storage branch 3 included.
+        @test sort(r[:arcs_from]) == [(1, 1, 2), (2, 2, 3), (3, 3, 4)]
+        @test sort(r[:arcs_to]) == [(1, 2, 1), (2, 3, 2), (3, 4, 3)]
+        @test r[:arcs] == [r[:arcs_from]; r[:arcs_to]]
+        @test length(r[:arcs]) == 2 * length(r[:branch])
+        @test Set(r[:arcs]) == Set([r[:arcs_from]; r[:arcs_to]])
+        # `arcs_to` is `arcs_from` with the buses swapped.
+        @test sort([(l, j, i) for (l, i, j) in r[:arcs_to]]) == sort(r[:arcs_from])
+
+        # Without switches or DC lines the corresponding sets are empty.
+        @test isempty(r[:arcs_from_dc])
+        @test isempty(r[:arcs_to_dc])
+        @test isempty(r[:arcs_dc])
+        @test isempty(r[:arcs_from_sw])
+        @test isempty(r[:arcs_to_sw])
+        @test isempty(r[:arcs_sw])
+    end
+
+    @testset "bus component lookups" begin
+        r = base_nw_ref(TestUtils.small_network())
+        all_buses = [1, 2, 3, 4]
+
+        # Every lookup is keyed by *all* active buses, including those without a
+        # component of that type — the constraint templates rely on that.
+        for key in (:bus_loads, :bus_shunts, :bus_gens, :bus_dsm, :bus_cps,
+                    :bus_hps, :bus_gens_nd, :bus_gens_slack, :bus_storage,
+                    :bus_arcs, :bus_arcs_to, :bus_arcs_from, :bus_lines_to,
+                    :bus_arcs_dc, :bus_arcs_sw)
+            @test base_sorted_keys(r[key]) == all_buses
+        end
+
+        # Component lookups — bus 3 is the flexibility bus of the fixture.
+        @test r[:bus_loads] == Dict(1 => Int[], 2 => Int[], 3 => [1], 4 => Int[])
+        @test r[:bus_shunts] == Dict(1 => Int[], 2 => Int[], 3 => Int[], 4 => Int[])
+        @test r[:bus_gens] == Dict(1 => Int[], 2 => [1], 3 => Int[], 4 => Int[])
+        @test r[:bus_dsm] == Dict(1 => Int[], 2 => Int[], 3 => [1], 4 => Int[])
+        @test r[:bus_cps] == Dict(1 => Int[], 2 => Int[], 3 => [1], 4 => Int[])
+        @test r[:bus_hps] == Dict(1 => Int[], 2 => Int[], 3 => [1], 4 => Int[])
+        @test r[:bus_gens_nd] == Dict(1 => Int[], 2 => Int[], 3 => [1], 4 => Int[])
+        @test r[:bus_gens_slack] == Dict(1 => [1], 2 => Int[], 3 => Int[], 4 => Int[])
+        @test r[:bus_storage] == Dict(1 => Int[], 2 => Int[], 3 => Int[], 4 => [1])
+
+        # Arc lookups. `bus_arcs` collects both directions, so every inner bus of
+        # the radial feeder sees two arcs, the two end buses one each.
+        @test sort(r[:bus_arcs][1]) == [(1, 1, 2)]
+        @test sort(r[:bus_arcs][2]) == [(1, 2, 1), (2, 2, 3)]
+        @test sort(r[:bus_arcs][3]) == [(2, 3, 2), (3, 3, 4)]
+        @test sort(r[:bus_arcs][4]) == [(3, 4, 3)]
+        @test sum(length, values(r[:bus_arcs])) == length(r[:arcs])
+
+        # `bus_arcs_from` / `bus_arcs_to` split `arcs_from` by its two buses: the
+        # outgoing arcs of a bus and the single incoming one (radial grid).
+        @test r[:bus_arcs_from] == Dict(1 => [(1, 1, 2)], 2 => [(2, 2, 3)],
+                                        3 => [(3, 3, 4)], 4 => [])
+        @test r[:bus_arcs_to] == Dict(1 => [], 2 => [(1, 1, 2)],
+                                      3 => [(2, 2, 3)], 4 => [(3, 3, 4)])
+        # The slack bus has no upstream branch, every other bus has exactly one.
+        @test isempty(r[:bus_arcs_to][1])
+        @test all(length(r[:bus_arcs_to][i]) == 1 for i in (2, 3, 4))
+
+        # `bus_lines_to` is `bus_arcs_to` reduced to the branch index.
+        @test r[:bus_lines_to] == Dict(1 => Int[], 2 => [1], 3 => [2], 4 => [3])
+        for (i, arcs) in r[:bus_arcs_to]
+            @test r[:bus_lines_to][i] == [l for (l, _f, _t) in arcs]
+        end
+
+        @test r[:bus_arcs_dc] == Dict(i => [] for i in all_buses)
+        @test r[:bus_arcs_sw] == Dict(i => [] for i in all_buses)
+    end
+
+    @testset "ref_buses" begin
+        r = base_nw_ref(TestUtils.small_network())
+        # Bus 1 is the only slack (`bus_type == 3`) of the fixture …
+        @test base_sorted_keys(r[:ref_buses]) == [1]
+        @test r[:ref_buses][1] === r[:bus][1]
+        @test r[:ref_buses][1]["bus_type"] == 3
+        # … and the entry really is the bus dict, not just its index.
+        @test r[:ref_buses][1]["name"] == "Bus_1"
+
+        # No slack bus at all: an empty (but present) lookup, no error.
+        data = TestUtils.small_network()
+        data["bus"]["1"]["bus_type"] = 1
+        r0 = base_nw_ref(data)
+        @test r0[:ref_buses] isa Dict{Int,Any}
+        @test isempty(r0[:ref_buses])
+
+        # A deactivated slack bus should not end up in `:ref_buses` either — but
+        # the slack generator sitting on it is one of the unfiltered eDisGo
+        # component types, so the build dies in `bus_gens_slack` first (see the
+        # "eDisGo component types are not filtered" set above).
+        data_off = TestUtils.small_network()
+        data_off["bus"]["1"]["bus_type"] = 4
+        @test_throws KeyError base_nw_ref(data_off)
+        @test_broken (r_off = base_nw_ref(data_off); isempty(r_off[:ref_buses]))
+
+        # BUG: with more than one slack bus the code warns via `Memento.warn(_LOGGER,
+        # …)`, but `_LOGGER` is never defined in `eDisGo_OPF` (PowerModels keeps
+        # its own `_LOGGER` private), so the warning raises `UndefVarError` and
+        # takes the whole `ref` build down with it.
+        data_two = TestUtils.small_network()
+        data_two["bus"]["2"]["bus_type"] = 3
+        @test_throws UndefVarError base_nw_ref(data_two)
+        # What it should do instead — warn and collect both reference buses:
+        @test_broken (r2 = base_nw_ref(data_two);
+                      base_sorted_keys(r2[:ref_buses]) == [1, 2])
+    end
+
+    @testset "buspairs" begin
+        r = base_nw_ref(TestUtils.small_network())
+        # One entry per branch of the radial feeder, keyed by (f_bus, t_bus).
+        @test base_sorted_keys(r[:buspairs]) == [(1, 2), (2, 3), (3, 4)]
+        bp = r[:buspairs][(1, 2)]
+        @test bp["branch"] == 1
+        @test bp["rate_a"] == 5.0
+        @test bp["tap"] == 1.0
+        @test bp["vm_fr_min"] == 0.9
+        @test bp["vm_fr_max"] == 1.1
+        @test bp["angmin"] ≈ -pi / 6 atol = 1e-12
+        @test bp["angmax"] ≈ pi / 6 atol = 1e-12
+
+        # Only branches that survived the filter are considered.
+        data = TestUtils.small_network()
+        data["branch"]["2"]["br_status"] = 0
+        @test base_sorted_keys(base_nw_ref(data)[:buspairs]) == [(1, 2), (3, 4)]
+
+        # `:buspairs` is only computed when it is not there yet — a ref that
+        # already carries one (e.g. from a previous `ref_add_core!` run or a
+        # custom extension) keeps it untouched.
+        ref = base_raw_ref(TestUtils.small_network())
+        sentinel = Dict{Any,Any}("sentinel" => true)
+        ref[:it][eDisGo_OPF.pm_it_sym][:nw][0][:buspairs] = sentinel
+        eDisGo_OPF.ref_add_core!(ref)
+        @test ref[:it][eDisGo_OPF.pm_it_sym][:nw][0][:buspairs] === sentinel
+
+        # Running the function twice is therefore stable for `:buspairs` …
+        ref2 = base_raw_ref(TestUtils.small_network())
+        eDisGo_OPF.ref_add_core!(ref2)
+        first_pairs = ref2[:it][eDisGo_OPF.pm_it_sym][:nw][0][:buspairs]
+        eDisGo_OPF.ref_add_core!(ref2)
+        @test ref2[:it][eDisGo_OPF.pm_it_sym][:nw][0][:buspairs] === first_pairs
+        # … and for the lookups, which are rebuilt from the already filtered data.
+        @test ref2[:it][eDisGo_OPF.pm_it_sym][:nw][0][:bus_cps][3] == [1]
+        @test length(ref2[:it][eDisGo_OPF.pm_it_sym][:nw][0][:arcs]) == 6
+    end
+
+    @testset "real test grid" begin
+        # Reality check on the 143-bus eDisGo test grid: the invariants that hold
+        # for the hand-written fixture have to hold here too.
+        r = base_nw_ref(TestUtils.pm_network())
+        @test length(r[:bus]) == 143
+        @test length(r[:branch]) == 142
+        @test length(r[:load]) == 50
+        @test length(r[:gen_nd]) == 27
+        @test length(r[:gen_slack]) == 1
+        @test length(r[:storage]) == 1
+        @test length(r[:electromobility]) == 1
+        @test length(r[:heatpumps]) == 3
+        @test length(r[:dsm]) == 2
+
+        # Exactly one slack bus, and it is the bus of the slack generator.
+        @test length(r[:ref_buses]) == 1
+        slack_bus = only(keys(r[:ref_buses]))
+        @test r[:bus_gens_slack][slack_bus] == [1]
+        @test isempty(r[:bus_arcs_to][slack_bus])
+
+        # Radial grid: one branch fewer than buses, one incoming arc per non-slack
+        # bus, and one buspair per branch.
+        @test length(r[:branch]) == length(r[:bus]) - 1
+        @test length(r[:arcs]) == 2 * length(r[:branch])
+        @test length(r[:buspairs]) == length(r[:branch])
+        @test all(length(r[:bus_arcs_to][i]) == 1
+                  for i in keys(r[:bus]) if i != slack_bus)
+
+        # Every lookup covers every bus, and every component is listed exactly once.
+        for (key, comp) in ((:bus_loads, :load), (:bus_gens, :gen),
+                            (:bus_gens_nd, :gen_nd), (:bus_gens_slack, :gen_slack),
+                            (:bus_storage, :storage), (:bus_cps, :electromobility),
+                            (:bus_hps, :heatpumps), (:bus_dsm, :dsm),
+                            (:bus_shunts, :shunt))
+            @test base_sorted_keys(r[key]) == base_sorted_keys(r[:bus])
+            @test sort(reduce(vcat, values(r[key]); init=Int[])) ==
+                  base_sorted_keys(r[comp])
+        end
+
+        # And the buses referenced by the components are all active.
+        @test all(l["load_bus"] in keys(r[:bus]) for l in values(r[:load]))
+        @test all(b["f_bus"] in keys(r[:bus]) && b["t_bus"] in keys(r[:bus])
+                  for b in values(r[:branch]))
+    end
+end
