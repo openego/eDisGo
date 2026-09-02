@@ -472,3 +472,75 @@ end
                       length(cst_eq_constraints(pm.model)) == before + 1)
     end
 end
+
+@testset "constraint_hp_operation" begin
+    @testset "constraint" begin
+        pm = cst_model(num_steps=2)
+        hp = PowerModels.ref(pm, 1, :heatpumps, 1)
+        @test hp["cop"] == 5.0 && hp["pd"] == 1.0
+
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_hp_operation(pm, 1, 1)
+        end
+        @test length(cons) == 1
+        # Eq. (3.19): cop * (php + phps2) == pd + phss - phs
+        #        ⇔    5*php + 5*phps2 + phs - phss == 1.0
+        # Both the electrical power and the operation slack are multiplied by the
+        # COP; the heat-storage terms are not.
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 1, :php, 1) => 5.0,
+                       PowerModels.var(pm, 1, :phps2, 1) => 5.0,
+                       PowerModels.var(pm, 1, :phs, 1) => 1.0,
+                       PowerModels.var(pm, 1, :phss, 1) => -1.0),
+                  1.0)
+    end
+
+    @testset "cop and pd from the ref of nw" begin
+        pm = cst_model(num_steps=2)
+        # Network 2 gets different parameters; network 1 keeps the fixture's.
+        PowerModels.ref(pm, 2, :heatpumps, 1)["cop"] = 3.0
+        PowerModels.ref(pm, 2, :heatpumps, 1)["pd"] = 0.25
+
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_hp_operation(pm, 1, 2)
+        end
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 2, :php, 1) => 3.0,
+                       PowerModels.var(pm, 2, :phps2, 1) => 3.0,
+                       PowerModels.var(pm, 2, :phs, 1) => 1.0,
+                       PowerModels.var(pm, 2, :phss, 1) => -1.0),
+                  0.25)
+    end
+
+    @testset "zero heat demand" begin
+        # A vanishing `pd` leaves the balance homogeneous — the right-hand side is
+        # the demand and nothing else.
+        pm = cst_model(num_steps=2)
+        PowerModels.ref(pm, 1, :heatpumps, 1)["pd"] = 0.0
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_hp_operation(pm, 1, 1)
+        end
+        @test cst_rhs(cons[1]) == 0.0
+    end
+
+    @testset "one constraint per heat pump" begin
+        # The real grid has several heat pumps; each constraint must reference the
+        # variables of its own unit and no other.
+        pm = cst_big_model()
+        hp_ids = sort(collect(PowerModels.ids(pm, :heatpumps, nw=1)))
+        @test length(hp_ids) == 3
+        for i in hp_ids
+            hp = PowerModels.ref(pm, 1, :heatpumps, i)
+            cons = cst_new_constraints(pm.model) do
+                eDisGo_OPF.constraint_hp_operation(pm, i, 1)
+            end
+            @test length(cons) == 1
+            cst_check(cons[1],
+                      Dict(PowerModels.var(pm, 1, :php, i) => hp["cop"],
+                           PowerModels.var(pm, 1, :phps2, i) => hp["cop"],
+                           PowerModels.var(pm, 1, :phs, i) => 1.0,
+                           PowerModels.var(pm, 1, :phss, i) => -1.0),
+                      hp["pd"]; atol=1e-9)
+        end
+    end
+end

@@ -100,7 +100,7 @@ dahinter notieren)
   Nebenbedingung entsteht gar nicht — als `@test_broken` dokumentiert)
 - [x] `constraint_cp_state` — AbstractBFModelEdisgo (Bug: derselbe undefinierte
   `_LOGGER` im `time_elapsed`-Fallback wie oben — als `@test_broken` dokumentiert)
-- [ ] `constraint_hp_operation` — AbstractBFModelEdisgo
+- [x] `constraint_hp_operation` — AbstractBFModelEdisgo
 - [ ] `constraint_HV_requirements` — AbstractBFModelEdisgo
 
 ### `src/core/constraint_template.jl` → `test/core/test_constraint_template.jl`
