@@ -110,6 +110,45 @@ function ct_added(f, model)
     return TestUtils.num_constraints_total(model) - before
 end
 
+# The three predicates below describe what the fallback paths of
+# `constraint_store_state` are *meant* to do. They are used with `@test_broken`:
+# every one of these paths first logs through `Memento.warn(_LOGGER, …)`, and
+# `_LOGGER` is not defined in `eDisGo_OPF` (only `PowerModels._LOGGER` is), so
+# they all raise an `UndefVarError` instead of falling back.
+
+"Initial-state constraint built with the documented default `time_elapsed = 1.0`."
+function ct_initial_falls_back_to_unit_time_step()
+    pm = ct_small_model()
+    delete!(PowerModels.ref(pm, 1), :time_elapsed)
+    eDisGo_OPF.constraint_store_state(pm, 1, nw=1, kind="storage")
+    cs = ct_eq_constraints(pm.model)
+    return length(cs) == 2 &&
+           ct_coef(cs[1], PowerModels.var(pm, 1, :ps, 1)) == 1.0
+end
+
+"Coupling constraint built with the documented default `time_elapsed = 1.0`."
+function ct_coupled_falls_back_to_unit_time_step()
+    pm = ct_small_model()
+    delete!(PowerModels.ref(pm, 2), :time_elapsed)
+    eDisGo_OPF.constraint_store_state(pm, 1, 1, 2, "storage")
+    cs = ct_eq_constraints(pm.model)
+    return length(cs) == 1 &&
+           ct_coef(cs[1], PowerModels.var(pm, 2, :ps, 1)) == 1.0
+end
+
+"""
+Fallback to `constraint_store_state_initial` on `nw_2` for a unit that does not
+exist in `nw_1` — the two initial-state constraints instead of the coupling one.
+"""
+function ct_coupled_falls_back_to_initial()
+    pm = ct_small_model()
+    delete!(PowerModels.ref(pm, 1, :storage), 1)
+    eDisGo_OPF.constraint_store_state(pm, 1, 1, 2, "storage")
+    cs = ct_eq_constraints(pm.model)
+    return length(cs) == 2 &&
+           ct_coef(cs[1], PowerModels.var(pm, 1, :se, 1)) == 0.0
+end
+
 @testset "constraint_power_balance_bf" begin
     @testset "one balance equation per bus" begin
         pm = ct_small_model()
@@ -374,5 +413,225 @@ end
         eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, 2, nw=2)
         c = only(ct_eq_constraints(pm.model))
         @test all(startswith(name, "2_") for name in ct_varnames(c))
+    end
+end
+
+@testset "constraint_store_state" begin
+    @testset "initial time step" begin
+        @testset "storage" begin
+            data = TestUtils.small_network()
+            data["time_elapsed"] = 0.25
+            data["storage"]["1"]["soc_initial"] = 0.15
+            data["storage"]["1"]["soc_end"] = 0.2
+            pm = ct_model(data)
+
+            @test ct_added(
+                () -> eDisGo_OPF.constraint_store_state(pm, 1, nw=1, kind="storage"),
+                pm.model) == 2
+            c_state, c_end = ct_eq_constraints(pm.model)
+            # se₁ - soc_initial == -Δt·ps₁
+            @test ct_terms(c_state) == (
+                Dict(JuMP.name(PowerModels.var(pm, 1, :se, 1)) => 1.0,
+                     JuMP.name(PowerModels.var(pm, 1, :ps, 1)) => 0.25), 0.15)
+            # The end-of-horizon state is pinned in the *last* network.
+            @test ct_terms(c_end) == (
+                Dict(JuMP.name(PowerModels.var(pm, 2, :se, 1)) => 1.0), 0.2)
+        end
+
+        @testset "heat_storage" begin
+            data = TestUtils.small_network()
+            data["time_elapsed"] = 0.5
+            data["heat_storage"]["1"]["soc_initial"] = 0.6
+            data["heat_storage"]["1"]["soc_end"] = 0.7
+            pm = ct_model(data)
+
+            @test ct_added(
+                () -> eDisGo_OPF.constraint_store_state(pm, 1, nw=1, kind="heat_storage"),
+                pm.model) == 2
+            c_state, c_end = ct_eq_constraints(pm.model)
+            @test ct_terms(c_state) == (
+                Dict(JuMP.name(PowerModels.var(pm, 1, :hse, 1)) => 1.0,
+                     JuMP.name(PowerModels.var(pm, 1, :phs, 1)) => 0.5), 0.6)
+            @test ct_terms(c_end) == (
+                Dict(JuMP.name(PowerModels.var(pm, 2, :hse, 1)) => 1.0), 0.7)
+        end
+
+        @testset "dsm" begin
+            data = TestUtils.small_network()
+            data["time_elapsed"] = 0.25
+            data["dsm"]["1"]["energy"] = 0.1
+            pm = ct_model(data)
+
+            @test ct_added(
+                () -> eDisGo_OPF.constraint_store_state(pm, 1, nw=1, kind="dsm"),
+                pm.model) == 2
+            c_state, c_end = ct_eq_constraints(pm.model)
+            # dsme₁ - energy == +Δt·pdsm₁ — the DSM band is signed the other way
+            # round than the storage power.
+            @test ct_terms(c_state) == (
+                Dict(JuMP.name(PowerModels.var(pm, 1, :dsme, 1)) => 1.0,
+                     JuMP.name(PowerModels.var(pm, 1, :pdsm, 1)) => -0.25), 0.1)
+            # DSM has to return to a neutral state, hence a hard 0 rather than a
+            # `soc_end` from the data.
+            @test ct_terms(c_end) == (
+                Dict(JuMP.name(PowerModels.var(pm, 2, :dsme, 1)) => 1.0), 0.0)
+        end
+
+        @testset "p_loss" begin
+            # For "dsm" the standing loss is hard-coded to 0 — and it has to be:
+            # a DSM component carries no `p_loss` at all.
+            pm = ct_small_model()
+            @test !haskey(PowerModels.ref(pm, 1, :dsm, 1), "p_loss")
+            @test ct_added(
+                () -> eDisGo_OPF.constraint_store_state(pm, 1, nw=1, kind="dsm"),
+                pm.model) == 2
+
+            # For the two real storages it is read off the component …
+            for kind in ("storage", "heat_storage")
+                pm_k = ct_small_model()
+                @test haskey(PowerModels.ref(pm_k, 1, Symbol(kind), 1), "p_loss")
+                delete!(PowerModels.ref(pm_k, 1, Symbol(kind), 1), "p_loss")
+                @test_throws KeyError eDisGo_OPF.constraint_store_state(
+                    pm_k, 1, nw=1, kind=kind)
+            end
+
+            # … but `constraint_store_state_initial` ignores it: the first time
+            # step has no previous state that could have decayed.
+            data = TestUtils.small_network()
+            data["heat_storage"]["1"]["p_loss"] = 0.5
+            pm_loss = ct_model(data)
+            eDisGo_OPF.constraint_store_state(pm_loss, 1, nw=1, kind="heat_storage")
+            pm_ref = ct_small_model()
+            eDisGo_OPF.constraint_store_state(pm_ref, 1, nw=1, kind="heat_storage")
+            @test ct_terms.(ct_eq_constraints(pm_loss.model)) ==
+                  ct_terms.(ct_eq_constraints(pm_ref.model))
+        end
+
+        @testset "time_elapsed" begin
+            # Read from the `ref` of the requested network, not from network 1.
+            pm = ct_small_model()
+            PowerModels.ref(pm, 1)[:time_elapsed] = 0.25
+            PowerModels.ref(pm, 2)[:time_elapsed] = 4.0
+            eDisGo_OPF.constraint_store_state(pm, 1, nw=2, kind="storage")
+            c_state, _ = ct_eq_constraints(pm.model)
+            @test ct_coef(c_state, PowerModels.var(pm, 2, :ps, 1)) == 4.0
+        end
+
+        @testset "missing time_elapsed" begin
+            # Actual behaviour: the fallback path logs through `_LOGGER`, which is
+            # not defined in `eDisGo_OPF` — the model build dies instead.
+            pm = ct_small_model()
+            delete!(PowerModels.ref(pm, 1), :time_elapsed)
+            @test !haskey(PowerModels.ref(pm, 1), :time_elapsed)
+            @test_throws UndefVarError eDisGo_OPF.constraint_store_state(
+                pm, 1, nw=1, kind="storage")
+            @test isempty(ct_eq_constraints(pm.model))
+
+            # Intended behaviour: warn and fall back to `time_elapsed = 1.0`.
+            @test_broken ct_initial_falls_back_to_unit_time_step()
+        end
+    end
+
+    @testset "two time steps" begin
+        @testset "storage" begin
+            data = TestUtils.small_network()
+            data["time_elapsed"] = 0.25
+            pm = ct_model(data)
+            @test ct_added(
+                () -> eDisGo_OPF.constraint_store_state(pm, 1, 1, 2, "storage"),
+                pm.model) == 1
+            # se₂ - se₁ == -Δt·ps₂
+            @test ct_terms(only(ct_eq_constraints(pm.model))) == (
+                Dict(JuMP.name(PowerModels.var(pm, 2, :se, 1)) => 1.0,
+                     JuMP.name(PowerModels.var(pm, 1, :se, 1)) => -1.0,
+                     JuMP.name(PowerModels.var(pm, 2, :ps, 1)) => 0.25), 0.0)
+        end
+
+        @testset "heat_storage" begin
+            # The only place where `p_loss` actually enters a constraint: the
+            # previous state decays by (1 - p_loss)^(1/24) per time step.
+            data = TestUtils.small_network()
+            data["time_elapsed"] = 0.5
+            data["heat_storage"]["1"]["p_loss"] = 0.1
+            pm = ct_model(data)
+            @test ct_added(
+                () -> eDisGo_OPF.constraint_store_state(pm, 1, 1, 2, "heat_storage"),
+                pm.model) == 1
+            c = only(ct_eq_constraints(pm.model))
+            @test ct_coef(c, PowerModels.var(pm, 2, :hse, 1)) == 1.0
+            @test ct_coef(c, PowerModels.var(pm, 1, :hse, 1)) ≈ -(1 - 0.1)^(1 / 24)
+            @test ct_coef(c, PowerModels.var(pm, 2, :phs, 1)) == 0.5
+            @test JuMP.normalized_rhs(c) == 0.0
+            # The fixture's own p_loss = 0.04 gives a different decay factor, so
+            # the value really comes from the component.
+            pm_ref = ct_model(TestUtils.small_network())
+            eDisGo_OPF.constraint_store_state(pm_ref, 1, 1, 2, "heat_storage")
+            @test ct_coef(only(ct_eq_constraints(pm_ref.model)),
+                          PowerModels.var(pm_ref, 1, :hse, 1)) ≈ -(1 - 0.04)^(1 / 24)
+        end
+
+        @testset "dsm" begin
+            data = TestUtils.small_network()
+            data["time_elapsed"] = 0.25
+            pm = ct_model(data)
+            # `p_loss` is 0 for DSM, and the component has none to read.
+            @test !haskey(PowerModels.ref(pm, 2, :dsm, 1), "p_loss")
+            @test ct_added(() -> eDisGo_OPF.constraint_store_state(pm, 1, 1, 2, "dsm"),
+                           pm.model) == 1
+            # dsme₂ - dsme₁ == +Δt·pdsm₂
+            @test ct_terms(only(ct_eq_constraints(pm.model))) == (
+                Dict(JuMP.name(PowerModels.var(pm, 2, :dsme, 1)) => 1.0,
+                     JuMP.name(PowerModels.var(pm, 1, :dsme, 1)) => -1.0,
+                     JuMP.name(PowerModels.var(pm, 2, :pdsm, 1)) => -0.25), 0.0)
+        end
+
+        @testset "time_elapsed" begin
+            # Taken from `nw_2`, the network the new state belongs to.
+            pm = ct_small_model()
+            PowerModels.ref(pm, 1)[:time_elapsed] = 0.25
+            PowerModels.ref(pm, 2)[:time_elapsed] = 4.0
+            eDisGo_OPF.constraint_store_state(pm, 1, 1, 2, "storage")
+            @test ct_coef(only(ct_eq_constraints(pm.model)),
+                          PowerModels.var(pm, 2, :ps, 1)) == 4.0
+        end
+
+        @testset "missing time_elapsed" begin
+            pm = ct_small_model()
+            delete!(PowerModels.ref(pm, 2), :time_elapsed)
+            @test_throws UndefVarError eDisGo_OPF.constraint_store_state(
+                pm, 1, 1, 2, "storage")
+            @test isempty(ct_eq_constraints(pm.model))
+            # `nw_1` is not consulted for the elapsed time: removing it there
+            # changes nothing.
+            pm_ok = ct_small_model()
+            delete!(PowerModels.ref(pm_ok, 1), :time_elapsed)
+            eDisGo_OPF.constraint_store_state(pm_ok, 1, 1, 2, "storage")
+            @test length(ct_eq_constraints(pm_ok.model)) == 1
+
+            @test_broken ct_coupled_falls_back_to_unit_time_step()
+        end
+
+        @testset "component missing in the first network" begin
+            # A unit that is inactive in `nw_1` has no stored-energy variable
+            # there; the code means to fall back to the initial-state constraint
+            # built from `nw_2`'s data — but warns through the undefined `_LOGGER`
+            # before it gets there.
+            pm = ct_small_model()
+            delete!(PowerModels.ref(pm, 1, :storage), 1)
+            @test !haskey(PowerModels.ref(pm, 1, :storage), 1)
+            @test haskey(PowerModels.ref(pm, 2, :storage), 1)
+            @test_throws UndefVarError eDisGo_OPF.constraint_store_state(
+                pm, 1, 1, 2, "storage")
+            @test isempty(ct_eq_constraints(pm.model))
+
+            # Intended behaviour: the two initial-state constraints from `nw_2`.
+            @test_broken ct_coupled_falls_back_to_initial()
+
+            # Present in `nw_1`: the regular coupling constraint, no fallback.
+            pm_ok = ct_small_model()
+            @test ct_added(
+                () -> eDisGo_OPF.constraint_store_state(pm_ok, 1, 1, 2, "storage"),
+                pm_ok.model) == 1
+        end
     end
 end

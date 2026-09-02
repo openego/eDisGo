@@ -114,8 +114,16 @@ dahinter notieren)
   Batterie kommt über `storage_pf` des virtuellen Branches; ein Speicher ohne
   `pf` lässt das Template dennoch scheitern)
 - [x] `constraint_voltage_magnitude_difference_radial` — AbstractBFModelEdisgo
-- [ ] `constraint_store_state` — AbstractBFModelEdisgo
-- [ ] `constraint_store_state` — AbstractBFModelEdisgo
+- [x] `constraint_store_state` — AbstractBFModelEdisgo, `(pm, i; nw, kind)`
+  (Mangel: fehlt `time_elapsed` im `ref`, soll laut Code eine Warnung folgen
+  und auf 1.0 zurueckgefallen werden; die Warnung geht an `_LOGGER`, das im
+  Modul `eDisGo_OPF` nicht definiert ist — es fliegt ein `UndefVarError`.
+  Ist-Verhalten per `@test_throws`, Soll-Verhalten per `@test_broken`
+  festgehalten)
+- [x] `constraint_store_state` — AbstractBFModelEdisgo, `(pm, i, nw_1, nw_2, kind)`
+  (Mangel: derselbe `_LOGGER`-Fehler auf zwei Pfaden — fehlendes
+  `time_elapsed` in `nw_2` und Komponente in `nw_1` nicht vorhanden, wo auf
+  `constraint_store_state_initial` zurueckgefallen werden soll)
 - [ ] `constraint_model_current` — AbstractPowerModel
 
 ### `src/core/objective.jl` → `test/core/test_objective.jl`
