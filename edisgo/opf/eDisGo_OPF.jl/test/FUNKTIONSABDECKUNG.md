@@ -119,7 +119,7 @@ dahinter notieren)
   `heat_storage` angelegt wird — bei abweichender Nummerierung ein `KeyError`;
   in den Fixtures stimmen die Indizes überein, daher nur als Kommentar notiert)
 - [x] `objective_min_line_loading_max` — AbstractBFModelEdisgo
-- [ ] `objective_min_losses_slacks_OG` — AbstractBFModelEdisgo
+- [x] `objective_min_losses_slacks_OG` — AbstractBFModelEdisgo
 - [ ] `objective_min_line_loading_max_OG` — AbstractBFModelEdisgo
 
 ### `src/form/bf.jl` → `test/form/test_bf.jl`

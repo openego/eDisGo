@@ -376,3 +376,124 @@ end
         end
     end
 end
+
+@testset "objective_min_losses_slacks_OG" begin
+    # `opf_version` 4 — version 2 plus the overlying-grid (HV) slacks.
+    pm = TestUtils.build_small_model(opf_version=4, num_steps=2, overlying_grid=true)
+    factor_slacks = 0.6
+    hv = objective_hv_ids(pm)
+    # `factor_hv_slacks` is derived from the branch resistances of the fixture:
+    # one order of magnitude above the largest resistance.
+    resistances = [b["br_r"] for b in values(PowerModels.ref(pm, 1, :branch))]
+    factor_hv_slacks = exp10(floor(log10(maximum(resistances))) + 1)
+    @test factor_hv_slacks == 0.1
+
+    @testset "sense, type and return value" begin
+        @test JuMP.objective_sense(pm.model) == MOI.MIN_SENSE
+        # The squared HV slacks make the objective quadratic.
+        @test JuMP.objective_function_type(pm.model) == JuMP.QuadExpr
+        @test objective_constant(pm.model) == 0.0
+        obj = eDisGo_OPF.objective_min_losses_slacks_OG(pm)
+        @test obj == JuMP.objective_function(pm.model)
+    end
+
+    @testset "linear part equals objective_min_losses_slacks" begin
+        # Everything but the HV terms is the version 2 objective, term for term.
+        pm2 = TestUtils.build_small_model(opf_version=2, num_steps=2)
+        @test objective_num_linear(pm.model) == objective_num_linear(pm2.model)
+        for n in 1:2
+            for b in 1:3
+                @test objective_coeff(pm.model, PowerModels.var(pm, n, :ccm)[b]) ≈
+                      (1 - factor_slacks) * 0.01 atol = 1e-12
+            end
+            for key in (:pgc, :pgens, :pds, :pcps, :phps)
+                @test objective_coeff(pm.model, PowerModels.var(pm, n, key)[1]) ==
+                      factor_slacks
+            end
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 1e4
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 1e4
+        end
+    end
+
+    @testset "HV slack terms" begin
+        # `count` of every requirement of the fixture is the number of time steps.
+        count = PowerModels.ref(pm, 1, :HV_requirements, hv["cp"])["count"]
+        @test count == 2
+        for n in 1:2
+            phvs = PowerModels.var(pm, n, :phvs)
+            for name in ("curt", "cp", "hp", "storage")
+                @test objective_quad_coeff(pm.model, phvs[hv[name]]) ≈
+                      factor_hv_slacks * count atol = 1e-12
+            end
+            # DSM requirements are weighted down by a factor of 1e-1.
+            @test objective_quad_coeff(pm.model, phvs[hv["dsm"]]) ≈
+                  factor_hv_slacks * 1e-1 * count atol = 1e-12
+            # The slacks enter squared only, never linearly.
+            for i in PowerModels.ids(pm, n, :HV_requirements)
+                @test objective_coeff(pm.model, phvs[i]) == 0.0
+            end
+        end
+        # Five requirements per time step, and no cross terms.
+        @test objective_num_quadratic(pm.model) == 5 * 2
+    end
+
+    @testset "count enters per requirement" begin
+        d = TestUtils.small_network(opf_version=4, num_steps=2, overlying_grid=true)
+        for req in values(d["HV_requirements"])
+            req["count"] = req["name"] == "cp" ? 7 : 3
+        end
+        pm_c = objective_flex_model(d)
+        hv_c = objective_hv_ids(pm_c)
+        phvs = PowerModels.var(pm_c, 1, :phvs)
+        @test objective_quad_coeff(pm_c.model, phvs[hv_c["cp"]]) ≈ 0.1 * 7 atol = 1e-12
+        @test objective_quad_coeff(pm_c.model, phvs[hv_c["hp"]]) ≈ 0.1 * 3 atol = 1e-12
+        @test objective_quad_coeff(pm_c.model, phvs[hv_c["dsm"]]) ≈
+              0.1 * 1e-1 * 3 atol = 1e-12
+    end
+
+    @testset "factor_hv_slacks scales with the resistances" begin
+        # `exp10(floor(log10(max r)) + 1)`: only the order of magnitude of the
+        # largest branch resistance matters, and the storage branch counts too.
+        for (r1, r2, r3, expected) in ((0.02, 0.3, 0.01, 1.0),
+                                       (0.02, 0.01, 0.3, 1.0),
+                                       (0.001, 0.002, 0.003, 0.01))
+            d = TestUtils.small_network(opf_version=4, num_steps=1, overlying_grid=true)
+            d["branch"]["1"]["br_r"] = r1
+            d["branch"]["2"]["br_r"] = r2
+            d["branch"]["3"]["br_r"] = r3
+            pm_f = objective_flex_model(d)
+            hv_f = objective_hv_ids(pm_f)
+            phvs = PowerModels.var(pm_f, 1, :phvs)
+            @test exp10(floor(log10(max(r1, r2, r3))) + 1) ≈ expected atol = 1e-12
+            @test objective_quad_coeff(pm_f.model, phvs[hv_f["cp"]]) ≈
+                  expected * 1 atol = 1e-12
+            @test objective_quad_coeff(pm_f.model, phvs[hv_f["dsm"]]) ≈
+                  expected * 1e-1 * 1 atol = 1e-12
+        end
+    end
+
+    @testset "sum over all time steps" begin
+        for steps in (1, 3)
+            pm_s = TestUtils.build_small_model(opf_version=4, num_steps=steps,
+                                               overlying_grid=true)
+            @test objective_num_quadratic(pm_s.model) == 5 * steps
+            @test objective_num_linear(pm_s.model) == steps * (3 + 7)
+            hv_s = objective_hv_ids(pm_s)
+            for n in 1:steps
+                @test objective_quad_coeff(pm_s.model,
+                                           PowerModels.var(pm_s, n, :phvs)[hv_s["hp"]]) ≈
+                      0.1 * steps atol = 1e-12
+            end
+        end
+    end
+
+    @testset "no line loading term" begin
+        # Version 4 has no `ll` variable — the maximum line loading is only part
+        # of versions 1 and 3.
+        @test !haskey(PowerModels.var(pm, 1), :ll)
+        for n in 1:2
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgs)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pdsm)[1]) == 0.0
+        end
+    end
+end
