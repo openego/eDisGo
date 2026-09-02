@@ -101,7 +101,10 @@ dahinter notieren)
 - [x] `constraint_cp_state` — AbstractBFModelEdisgo (Bug: derselbe undefinierte
   `_LOGGER` im `time_elapsed`-Fallback wie oben — als `@test_broken` dokumentiert)
 - [x] `constraint_hp_operation` — AbstractBFModelEdisgo
-- [ ] `constraint_HV_requirements` — AbstractBFModelEdisgo
+- [x] `constraint_HV_requirements` — AbstractBFModelEdisgo (Bug: für einen
+  unbekannten `hv_req["name"]` gibt es keinen `else`-Zweig; `pflex` bleibt
+  undefiniert und die Funktion wirft `UndefVarError(:pflex)` statt einer
+  aussagekräftigen Fehlermeldung — als `@test_broken` dokumentiert)
 
 ### `src/core/constraint_template.jl` → `test/core/test_constraint_template.jl`
 

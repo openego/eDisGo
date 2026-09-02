@@ -544,3 +544,117 @@ end
         end
     end
 end
+
+"""
+All variables of type `sym` in network `nw` — the set a HV requirement sums over.
+Iterating the `JuMP` container yields its values, in no particular order; every
+comparison below is order independent.
+"""
+function cst_flex_vars(pm, nw, sym)
+    vars = JuMP.VariableRef[]
+    for v in PowerModels.var(pm, nw, sym)
+        push!(vars, v)
+    end
+    return vars
+end
+
+@testset "constraint_HV_requirements" begin
+    # `small_network(overlying_grid=true)` carries one requirement per flexibility,
+    # in this order: 1 curt, 2 cp, 3 hp, 4 dsm, 5 storage.
+    "Requirement id, `hv_req[\"name\"]`, variable summed over and requested power."
+    cst_hv_cases = ((1, "curt", :pgc, 0.0), (2, "cp", :pcp, 0.4),
+                    (3, "hp", :php, 1.0), (4, "dsm", :pdsm, 0.1),
+                    (5, "storage", :ps, -0.35))
+
+    @testset "$name" for (idx, name, sym, p) in cst_hv_cases
+        pm = cst_model(num_steps=2, overlying_grid=true)
+        @test PowerModels.ref(pm, 1, :HV_requirements, idx)["name"] == name
+        @test PowerModels.ref(pm, 1, :HV_requirements, idx)["P"] == p
+
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_HV_requirements(pm, idx, 1)
+        end
+        @test length(cons) == 1
+        # sum(pflex) + phvs == P — every flexibility variable of the addressed type
+        # enters with coefficient 1, and so does the requirement's own slack.
+        expected = Dict{JuMP.VariableRef,Float64}(
+            v => 1.0 for v in cst_flex_vars(pm, 1, sym))
+        expected[PowerModels.var(pm, 1, :phvs, idx)] = 1.0
+        cst_check(cons[1], expected, p)
+
+        # Negative case: the variables of the *other* flexibilities stay out.
+        coeffs = cst_coeffs(cons[1])
+        for other_sym in (:pgc, :pcp, :php, :pdsm, :ps)
+            other_sym === sym && continue
+            @test all(!haskey(coeffs, v) for v in cst_flex_vars(pm, 1, other_sym))
+        end
+        # … as do the slacks of the other requirements.
+        for j in 1:5
+            j == idx && continue
+            @test !haskey(coeffs, PowerModels.var(pm, 1, :phvs, j))
+        end
+    end
+
+    @testset "sums over all components" begin
+        # The real grid has more than one unit of most flexibility types, so the
+        # `sum` is actually exercised.
+        pm = cst_big_model(overlying_grid=true)
+        counts = Dict(1 => length(PowerModels.var(pm, 1, :pgc)),
+                      2 => length(PowerModels.var(pm, 1, :pcp)),
+                      3 => length(PowerModels.var(pm, 1, :php)),
+                      4 => length(PowerModels.var(pm, 1, :pdsm)),
+                      5 => length(PowerModels.var(pm, 1, :ps)))
+        @test counts[3] == 3   # heat pumps
+        @test counts[4] == 2   # DSM loads
+        @test counts[1] > 1    # curtailable generators
+
+        for (idx, _, sym, _) in cst_hv_cases
+            cons = cst_new_constraints(pm.model) do
+                eDisGo_OPF.constraint_HV_requirements(pm, idx, 1)
+            end
+            coeffs = cst_coeffs(cons[1])
+            # One term per component plus the slack, all with coefficient 1.
+            @test length(coeffs) == counts[idx] + 1
+            @test all(isapprox(c, 1.0; atol=1e-12) for c in values(coeffs))
+            @test Set(keys(coeffs)) ==
+                  Set(vcat(cst_flex_vars(pm, 1, sym),
+                           PowerModels.var(pm, 1, :phvs, idx)))
+            @test cst_rhs(cons[1]) ==
+                  PowerModels.ref(pm, 1, :HV_requirements, idx)["P"]
+        end
+    end
+
+    @testset "nw argument" begin
+        # The whole constraint — requirement, flexibility variables and slack — is
+        # taken from the network passed in.
+        pm = cst_model(num_steps=3, overlying_grid=true)
+        PowerModels.ref(pm, 3, :HV_requirements, 4)["P"] = 0.75
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_HV_requirements(pm, 4, 3)
+        end
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 3, :pdsm, 1) => 1.0,
+                       PowerModels.var(pm, 3, :phvs, 4) => 1.0),
+                  0.75)
+    end
+
+    @testset "unknown requirement name" begin
+        pm = cst_model(num_steps=2, overlying_grid=true)
+        PowerModels.ref(pm, 1, :HV_requirements, 1)["name"] = "wind"
+        before = length(cst_eq_constraints(pm.model))
+
+        # BUG: no `else` branch — `pflex` is never assigned for an unrecognised
+        # name, so the `sum(pflex)` below dies with an `UndefVarError` instead of
+        # rejecting the input with a meaningful message.
+        @test_throws UndefVarError eDisGo_OPF.constraint_HV_requirements(pm, 1, 1)
+        exception = cst_thrown(() -> eDisGo_OPF.constraint_HV_requirements(pm, 1, 1))
+        @test exception isa UndefVarError
+        @test exception.var === :pflex
+        @test length(cst_eq_constraints(pm.model)) == before
+
+        # Intended behaviour: a self-explanatory error (or a documented fallback)
+        # rather than an internal name leaking out of the function.
+        @test_broken cst_thrown(
+            () -> eDisGo_OPF.constraint_HV_requirements(pm, 1, 1)) isa ArgumentError
+    end
+end
