@@ -255,3 +255,142 @@ end
         @test res_k["termination_status"] == MOI.LOCALLY_SOLVED
     end
 end
+
+@testset "instantiate_model" begin
+    data = TestUtils.multinetwork(TestUtils.small_network())
+    pm = eDisGo_OPF.instantiate_model(data, eDisGo_OPF.SOCBFPowerModelEdisgo,
+                                      eDisGo_OPF.build_mn_opf_bf_flex)
+
+    @testset "builds but does not solve" begin
+        @test pm isa eDisGo_OPF.SOCBFPowerModelEdisgo
+        @test pm.model isa JuMP.Model
+        # The model is fully assembled …
+        @test JuMP.num_variables(pm.model) > 0
+        @test TestUtils.num_constraints_total(pm.model) > 0
+        @test JuMP.objective_sense(pm.model) == MOI.MIN_SENSE
+        # … but never handed to a solver.
+        @test JuMP.termination_status(pm.model) == MOI.OPTIMIZE_NOT_CALLED
+        @test JuMP.primal_status(pm.model) == MOI.NO_SOLUTION
+        @test JuMP.result_count(pm.model) == 0
+        @test isempty(pm.solution)
+
+        # The build method is what fills the model: with one that adds nothing the
+        # model stays empty, everything else is identical.
+        pm_empty = eDisGo_OPF.instantiate_model(data, eDisGo_OPF.SOCBFPowerModelEdisgo,
+                                                _pm -> nothing)
+        @test JuMP.num_variables(pm_empty.model) == 0
+        @test TestUtils.num_constraints_total(pm_empty.model) == 0
+        @test base_sorted_keys(PowerModels.nws(pm_empty)) == [1, 2]
+    end
+
+    @testset "ref_add_core! is registered" begin
+        # The eDisGo-specific lookup tables only exist because `instantiate_model`
+        # hardwires `eDisGo_OPF.ref_add_core!` as the reference extension.
+        for n in 1:2
+            nw_ref = PowerModels.ref(pm, n)
+            for key in (:bus_gens_nd, :bus_gens_slack, :bus_cps, :bus_hps, :bus_dsm,
+                        :bus_storage, :bus_loads, :bus_shunts, :bus_gens,
+                        :bus_arcs, :bus_arcs_to, :bus_arcs_from, :bus_lines_to,
+                        :bus_arcs_dc, :bus_arcs_sw, :arcs, :arcs_from, :arcs_to,
+                        :ref_buses, :buspairs, :conductor_ids)
+                @test haskey(nw_ref, key)
+            end
+        end
+        # Concrete content, not just presence: bus 3 carries the non-dispatchable
+        # generator, the charging point, the heat pump and the DSM load.
+        @test PowerModels.ref(pm, 1, :bus_gens_nd)[3] == [1]
+        @test PowerModels.ref(pm, 1, :bus_cps)[3] == [1]
+        @test PowerModels.ref(pm, 1, :bus_hps)[3] == [1]
+        @test PowerModels.ref(pm, 1, :bus_dsm)[3] == [1]
+        @test PowerModels.ref(pm, 1, :bus_gens_slack)[1] == [1]
+        @test PowerModels.ref(pm, 1, :bus_storage)[4] == [1]
+
+        # None of them is present before the extension runs.
+        raw = base_raw_ref(data)[:it][eDisGo_OPF.pm_it_sym][:nw][1]
+        for key in (:bus_gens_nd, :bus_cps, :bus_hps, :bus_dsm, :arcs, :ref_buses,
+                    :buspairs, :conductor_ids)
+            @test !haskey(raw, key)
+        end
+        # …while the raw component dicts are already keyed by Int.
+        @test base_sorted_keys(raw[:bus]) == [1, 2, 3, 4]
+    end
+
+    @testset "number of networks" begin
+        for steps in (1, 2, 4)
+            pm_n = eDisGo_OPF.instantiate_model(
+                TestUtils.multinetwork(TestUtils.small_network(num_steps=steps)),
+                eDisGo_OPF.SOCBFPowerModelEdisgo, _pm -> nothing)
+            @test base_sorted_keys(PowerModels.nws(pm_n)) == collect(1:steps)
+            @test base_sorted_keys(pm_n.data["nw"]) == [string(i) for i in 1:steps]
+            @test InfrastructureModels.ismultinetwork(pm_n, eDisGo_OPF.pm_it_sym)
+            # Every network gets its own, complete reference dict.
+            for n in 1:steps
+                @test length(PowerModels.ref(pm_n, n, :bus)) == 4
+                @test length(PowerModels.ref(pm_n, n, :branch)) == 3
+            end
+        end
+
+        # Single-network data is kept as one network under the default id 0.
+        pm_s = eDisGo_OPF.instantiate_model(TestUtils.small_network(),
+                                            eDisGo_OPF.SOCBFPowerModelEdisgo,
+                                            _pm -> nothing)
+        @test base_sorted_keys(PowerModels.nws(pm_s)) == [0]
+        @test !InfrastructureModels.ismultinetwork(pm_s, eDisGo_OPF.pm_it_sym)
+    end
+
+    @testset "infrastructure type and global keys" begin
+        # Everything lives below the single infrastructure type `:pm`.
+        @test eDisGo_OPF.pm_it_sym === :pm
+        @test eDisGo_OPF.pm_it_name == "pm"
+        @test collect(keys(pm.ref[:it])) == [:pm]
+
+        # `_pm_global_keys` are hoisted out of the per-network refs.
+        @test eDisGo_OPF._pm_global_keys == Set(["time_series", "per_unit"])
+        pm_s = eDisGo_OPF.instantiate_model(TestUtils.small_network(),
+                                            eDisGo_OPF.SOCBFPowerModelEdisgo,
+                                            _pm -> nothing)
+        it_ref = pm_s.ref[:it][eDisGo_OPF.pm_it_sym]
+        @test it_ref[:per_unit] == true
+        @test haskey(it_ref, :time_series)
+        @test !haskey(it_ref[:nw][0], :per_unit)
+        @test !haskey(it_ref[:nw][0], :time_series)
+        # Non-global scalars stay per-network.
+        @test it_ref[:nw][0][:opf_version] == 2
+        @test it_ref[:nw][0][:baseMVA] == 1
+    end
+
+    @testset "ref_extensions" begin
+        empty!(BASE_REF_EXT_CALLS)
+        pm_x = eDisGo_OPF.instantiate_model(data, eDisGo_OPF.SOCBFPowerModelEdisgo,
+                                            _pm -> nothing;
+                                            ref_extensions=[base_record_ref_ext!])
+        @test length(BASE_REF_EXT_CALLS) == 1
+        @test BASE_REF_EXT_CALLS[1] == (nws=2, data_is_mn=true, core_ran=true)
+        @test PowerModels.ref(pm_x, 1, :test_marker) == 10
+        @test PowerModels.ref(pm_x, 2, :test_marker) == 20
+
+        # Several extensions run in the given order, all of them after the core.
+        order = Symbol[]
+        first! = (ref, _d) -> push!(order, :first)
+        second! = (ref, _d) -> push!(order, :second)
+        eDisGo_OPF.instantiate_model(data, eDisGo_OPF.SOCBFPowerModelEdisgo,
+                                     _pm -> nothing;
+                                     ref_extensions=[first!, second!])
+        @test order == [:first, :second]
+
+        # Negative case: no extension, no marker.
+        @test !haskey(PowerModels.ref(pm, 1), :test_marker)
+    end
+
+    @testset "kwargs pass-through" begin
+        model = JuMP.Model()
+        pm_k = eDisGo_OPF.instantiate_model(
+            data, eDisGo_OPF.NCBFPowerModelEdisgo, _pm -> nothing;
+            jump_model=model, setting=Dict{String,Any}("foo" => "bar"),
+            ext=Dict{Symbol,Any}(:answer => 42))
+        @test pm_k.model === model
+        @test pm_k.setting["foo"] == "bar"
+        @test pm_k.ext[:answer] == 42
+        @test pm_k isa eDisGo_OPF.NCBFPowerModelEdisgo
+    end
+end
