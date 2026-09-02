@@ -191,6 +191,10 @@ Vorgehen pro Funktion:
    Bei mehreren Methoden einer Funktion, die zusammen getestet werden, reicht ein
    Commit für alle Methoden derselben Funktion.
 
+   **Keine Attribution-Trailer.** Commits tragen ausschließlich den Autor aus der
+   git-Konfiguration — keine `Co-Authored-By:`- oder `Claude-Session:`-Zeile, kein
+   Hinweis auf ein KI-Werkzeug, weder im Betreff noch im Body.
+
 Wird beim Testschreiben ein **Fehler im Produktivcode** gefunden: den Test so
 schreiben, dass er das tatsächliche Verhalten dokumentiert, ihn mit
 `@test_broken` markieren und den Fund im Commit-Text sowie in

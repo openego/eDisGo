@@ -14,6 +14,13 @@ Kurzfassung: Testdateien spiegeln `src/`, ein `@testset` pro Funktion, Kommentar
 im Code auf Englisch, Markdown-Dokumentation auf Deutsch. Tests laufen mit
 `julia --project=. -e 'using Pkg; Pkg.test()'` aus `edisgo/opf/eDisGo_OPF.jl`.
 
+## Commits
+
+Commits und Pull-Request-Beschreibungen tragen ausschließlich den Autor aus der
+git-Konfiguration. **Keine** `Co-Authored-By:`- oder `Claude-Session:`-Trailer,
+kein "Generated with"-Hinweis, keine Erwähnung eines KI-Werkzeugs — weder im
+Betreff noch im Body.
+
 ## Sprache
 
 - Code, Docstrings und Code-Kommentare: **Englisch**.
