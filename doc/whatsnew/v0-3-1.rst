@@ -54,3 +54,10 @@ Changes
   heater had to step in, so it depressed the grid load in the cold hours that
   determine the reinforcement need. The aggregated COP also feeds the OPF through
   ``heat_pump.cop_df``
+* Stopped :func:`~.tools.tools.aggregate_district_heating_components` raising
+  ``IndexError: index 0 is out of bounds`` on a district heating area that holds
+  several power-to-heat units but not one of each type. Central heat pumps and
+  central resistive heaters are imported by independent queries, and a resistive
+  heater that cannot be attached to a heat pump is integrated as a component of its
+  own, so an area can legitimately hold resistive heaters only. Such an area is now
+  left unmerged with a warning naming the sectors it contains

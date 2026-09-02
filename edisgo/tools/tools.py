@@ -1066,12 +1066,21 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
             ]
             # in case there is more than 1 PtH unit, get name of heat pump, otherwise
             # get name of single PtH unit
-            if len(district_hps) > 1:
+            central_hps = district_hps[district_hps.sector == "district_heating"]
+            central_rhs = district_hps[
+                district_hps.sector == "district_heating_resistive_heater"
+            ]
+            if len(district_hps) > 1 and not central_hps.empty:
                 # district heat pump component
-                district_hp = district_hps[
-                    district_hps.sector == "district_heating"
-                ].index[0]
+                district_hp = central_hps.index[0]
             else:
+                # Either a single unit, or several units none of which is a heat
+                # pump -- central heat pumps and central resistive heaters are
+                # imported by independent queries, and a resistive heater that
+                # cannot be attached to a heat pump is integrated on its own
+                # (see io.heat_pump_import), so an area can hold resistive
+                # heaters only. Fall back to the first unit, which is what the
+                # single-unit case does as well.
                 district_hp = district_hps.index[0]
 
             # reduce demand by feedin from other sources (e.g. solarthermal, geothermal)
@@ -1103,11 +1112,18 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                         f"grid {district}."
                     )
 
-            if len(district_hps) > 1:
+            if len(district_hps) > 1 and (central_hps.empty or central_rhs.empty):
+                logger.warning(
+                    f"District heating grid {district} holds "
+                    f"{len(district_hps)} power-to-heat units but not one of each "
+                    f"type (heat pump / resistive heater), so they cannot be "
+                    f"merged into a single component. Sectors present: "
+                    f"{sorted(district_hps.sector.unique())}."
+                )
+
+            if len(district_hps) > 1 and not (central_hps.empty or central_rhs.empty):
                 # get name of resistive heater component
-                district_rh = district_hps[
-                    district_hps.sector == "district_heating_resistive_heater"
-                ].index[0]
+                district_rh = central_rhs.index[0]
                 # calculate rated power of aggregated component
                 new_p_set = edisgo_obj.topology.loads_df.loc[
                     district_hps.index

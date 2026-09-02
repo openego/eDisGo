@@ -51,6 +51,40 @@ class TestAggregateDistrictHeatingComponents:
     Unit tests for :func:`edisgo.tools.tools.aggregate_district_heating_components`.
     """
 
+    def test_area_without_a_central_heat_pump_warns_instead_of_raising(self, caplog):
+        """
+        An area can hold several resistive heaters and no heat pump: central
+        heat pumps and central resistive heaters are imported by independent
+        queries, and a resistive heater that cannot be attached to a heat pump
+        is integrated on its own (io.heat_pump_import). Picking the heat pump
+        used to index [0] into an empty selection and raise IndexError.
+        """
+        import logging
+
+        edisgo, hp, rh = _district_heating_grid()
+        # turn the heat pump into a second resistive heater
+        edisgo.topology.loads_df.at[hp, "sector"] = (
+            "district_heating_resistive_heater"
+        )
+
+        with caplog.at_level(logging.WARNING, logger="edisgo.tools.tools"):
+            tools.aggregate_district_heating_components(edisgo)
+
+        # no crash, both units survive, and the reason is stated
+        assert hp in edisgo.topology.loads_df.index
+        assert rh in edisgo.topology.loads_df.index
+        assert "cannot be merged" in caplog.text
+
+    def test_area_without_a_resistive_heater_is_left_alone(self):
+        """The mirror case: several units, none of them a resistive heater."""
+        edisgo, hp, rh = _district_heating_grid()
+        edisgo.topology.loads_df.at[rh, "sector"] = "district_heating"
+
+        tools.aggregate_district_heating_components(edisgo)
+
+        assert hp in edisgo.topology.loads_df.index
+        assert rh in edisgo.topology.loads_df.index
+
     def test_aggregated_cop_reproduces_the_electricity_demand(self):
         """
         The aggregated COP must reproduce the electricity the two components
