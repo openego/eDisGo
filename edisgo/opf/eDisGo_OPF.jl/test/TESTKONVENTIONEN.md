@@ -45,6 +45,13 @@ test/
 **Neue Quelldatei ⇒ neue Testdatei**: Testdatei anlegen, in `TEST_FILES` in
 `runtests.jl` eintragen und die Funktionen in `FUNKTIONSABDECKUNG.md` ergänzen.
 
+**Aufteilung sehr großer Testdateien**: Wird eine Testdatei unhandlich (Richtwert:
+mehr als rund 20 getestete Funktionen), darf sie in einen gleichnamigen
+Unterordner aufgeteilt werden, wobei die Hauptdatei die Teile nur noch einbindet.
+So ist es für `src/core/variables.jl` (40 Funktionen) gemacht:
+`test/core/test_variables.jl` bindet `test/core/variables/test_*.jl` ein. Die
+Gruppierung folgt der Reihenfolge der Quelldatei, nicht einer eigenen Systematik.
+
 ## 2. Aufbau einer Testdatei
 
 Jede Testdatei ist eigenständig lauffähig **und** über `runtests.jl` einbindbar.
@@ -195,6 +202,9 @@ Vorgehen pro Funktion:
    **Keine Attribution-Trailer.** Commits tragen ausschließlich den Autor aus der
    git-Konfiguration — keine `Co-Authored-By:`- oder `Claude-Session:`-Zeile, kein
    Hinweis auf ein KI-Werkzeug, weder im Betreff noch im Body.
+
+   **Commit-Nachrichten auf Englisch**, wie die übrige Historie des Repositories.
+   Nur die Markdown-Dokumentation ist deutsch.
 
 Wird beim Testschreiben ein **Fehler im Produktivcode** gefunden: den Test so
 schreiben, dass er das tatsächliche Verhalten dokumentiert, ihn mit
