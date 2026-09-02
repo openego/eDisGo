@@ -83,8 +83,15 @@ end
 ct_eq_constraints(model) = JuMP.all_constraints(model, JuMP.AffExpr,
                                                 MOI.EqualTo{Float64})
 
+"All quadratic inequality constraints of `model`, in the order they were created."
+ct_quad_constraints(model) = JuMP.all_constraints(model, JuMP.QuadExpr,
+                                                  MOI.LessThan{Float64})
+
 "Coefficient of variable `v` in constraint `c` (0.0 if `v` does not appear)."
 ct_coef(c, v) = JuMP.coefficient(JuMP.constraint_object(c).func, v)
+
+"Coefficient of the bilinear term `v1·v2` in the quadratic constraint `c`."
+ct_coef2(c, v1, v2) = JuMP.coefficient(JuMP.constraint_object(c).func, v1, v2)
 
 """
 The affine constraint `c` as `(Dict(variable name => coefficient), rhs)` — a
@@ -108,6 +115,13 @@ function ct_added(f, model)
     before = TestUtils.num_constraints_total(model)
     f()
     return TestUtils.num_constraints_total(model) - before
+end
+
+"[`TestUtils.small_network`](@ref) with a tap ratio ≠ 1 on branch 1."
+function ct_tap_network()
+    data = TestUtils.small_network()
+    data["branch"]["1"]["tap"] = 2.0
+    return data
 end
 
 # The three predicates below describe what the fallback paths of
@@ -633,5 +647,80 @@ end
                 () -> eDisGo_OPF.constraint_store_state(pm_ok, 1, 1, 2, "storage"),
                 pm_ok.model) == 1
         end
+    end
+end
+
+@testset "constraint_model_current" begin
+    # `ct_tap_network` gives branch 1 a tap ratio ≠ 1, so that the `1/tm²` factor
+    # is visible in the constraint.
+    @testset "AbstractSOCBFModelEdisgo" begin
+        pm = ct_model(ct_tap_network(); model_type=eDisGo_OPF.SOCBFPowerModelEdisgo)
+        # The convex relaxation covers *every* branch, the virtual storage branch
+        # included, and produces no nonlinear constraint.
+        @test ct_added(() -> eDisGo_OPF.constraint_model_current(pm, nw=1),
+                       pm.model) == 3
+        cs = ct_quad_constraints(pm.model)
+        @test length(cs) == 3
+        @test JuMP.num_nonlinear_constraints(pm.model) == 0
+
+        for (idx, arc, f_bus, tm) in ((1, (1, 1, 2), 1, 2.0), (2, (2, 2, 3), 2, 1.0),
+                                      (3, (3, 3, 4), 3, 1.0))
+            c = only(filter(x -> occursin("ccm[$idx]", string(x)), cs))
+            p = PowerModels.var(pm, 1, :p, arc)
+            q = PowerModels.var(pm, 1, :q, arc)
+            w = PowerModels.var(pm, 1, :w, f_bus)
+            ccm = PowerModels.var(pm, 1, :ccm, idx)
+            # p² + q² ≤ (w/tm²)·ccm
+            @test ct_coef2(c, p, p) == 1.0
+            @test ct_coef2(c, q, q) == 1.0
+            @test ct_coef2(c, w, ccm) ≈ -1 / tm^2
+            @test JuMP.constraint_object(c).set == MOI.LessThan(0.0)
+        end
+    end
+
+    @testset "AbstractNCBFModelEdisgo" begin
+        pm = ct_model(ct_tap_network(); model_type=eDisGo_OPF.NCBFPowerModelEdisgo)
+        # `@NLconstraint` lands in JuMP's legacy nonlinear model, which
+        # `num_constraints` does not see.
+        @test ct_added(() -> eDisGo_OPF.constraint_model_current(pm, nw=1),
+                       pm.model) == 0
+        @test isempty(ct_quad_constraints(pm.model))
+        # The exact equality is written for the two physical branches only …
+        @test JuMP.num_nonlinear_constraints(pm.model) == 2
+        strs = string.(JuMP.all_nonlinear_constraints(pm.model))
+        @test length(strs) == 2
+        @test count(s -> occursin("1_ccm[1]", s), strs) == 1
+        @test count(s -> occursin("1_ccm[2]", s), strs) == 1
+        # … the virtual storage branch 3 is skipped.
+        @test !any(s -> occursin("1_ccm[3]", s), strs)
+        # Equality, tap ratio and the squared flows are all in there.
+        c1 = only(filter(s -> occursin("1_ccm[1]", s), strs))
+        @test occursin("= 0", c1)
+        @test occursin("2.0 ^ 2.0", c1)
+        @test occursin("1_p[(1, 1, 2)] ^ 2.0", c1)
+        @test occursin("1_q[(1, 1, 2)] ^ 2.0", c1)
+    end
+
+    @testset "BFPowerModelEdisgo" begin
+        # The base type implements neither formulation; there is nothing to
+        # forward to.
+        pm = ct_model(ct_tap_network(); model_type=eDisGo_OPF.BFPowerModelEdisgo)
+        @test pm isa eDisGo_OPF.AbstractBFModelEdisgo
+        @test !(pm isa eDisGo_OPF.AbstractSOCBFModelEdisgo)
+        @test !(pm isa eDisGo_OPF.AbstractNCBFModelEdisgo)
+        before = TestUtils.num_constraints_total(pm.model)
+        @test_throws MethodError eDisGo_OPF.constraint_model_current(pm, nw=1)
+        @test TestUtils.num_constraints_total(pm.model) == before
+        @test isempty(ct_quad_constraints(pm.model))
+        @test JuMP.num_nonlinear_constraints(pm.model) == 0
+    end
+
+    @testset "network selection" begin
+        pm = ct_model(TestUtils.small_network();
+                      model_type=eDisGo_OPF.SOCBFPowerModelEdisgo)
+        eDisGo_OPF.constraint_model_current(pm, nw=2)
+        cs = ct_quad_constraints(pm.model)
+        @test length(cs) == 3
+        @test all(occursin("2_", string(c)) && !occursin("1_", string(c)) for c in cs)
     end
 end

@@ -124,7 +124,7 @@ dahinter notieren)
   (Mangel: derselbe `_LOGGER`-Fehler auf zwei Pfaden — fehlendes
   `time_elapsed` in `nw_2` und Komponente in `nw_1` nicht vorhanden, wo auf
   `constraint_store_state_initial` zurueckgefallen werden soll)
-- [ ] `constraint_model_current` — AbstractPowerModel
+- [x] `constraint_model_current` — AbstractPowerModel
 
 ### `src/core/objective.jl` → `test/core/test_objective.jl`
 
