@@ -497,3 +497,143 @@ end
         end
     end
 end
+
+@testset "objective_min_line_loading_max_OG" begin
+    # `opf_version` 3 — version 1 plus the overlying-grid (HV) slacks. Building
+    # the model already calls the objective, and that prints (see below), so the
+    # build is wrapped in the stdout capture.
+    pm, _build_output = objective_capture_stdout(
+        () -> TestUtils.build_small_model(opf_version=3, num_steps=2,
+                                          overlying_grid=true))
+    factor_ll = 0.01
+    hv = objective_hv_ids(pm)
+    # `factor_hv_slacks` is derived from `0.01 * cost * length` over *all*
+    # branches (the storage branch included), scaled by 7.5.
+    weights = [b["cost"] * b["length"] for b in values(PowerModels.ref(pm, 1, :branch))]
+    factor_hv_slacks = 7.5 * exp10(floor(log10(maximum(0.01 .* weights))) + 1)
+    @test factor_hv_slacks == 7.5
+
+    @testset "debug output" begin
+        # BUG (production code): `objective_min_line_loading_max_OG` contains two
+        # leftover `println` calls that write `factor_ll` and `factor_hv_slacks`
+        # to stdout on every invocation. Documented here rather than fixed —
+        # production code is not touched in this work stream.
+        _obj, out = objective_capture_stdout(
+            () -> eDisGo_OPF.objective_min_line_loading_max_OG(pm))
+        @test out == "0.01\n7.5\n"
+        # Instantiating the model printed the same two lines.
+        @test _build_output == "0.01\n7.5\n"
+        # None of the other four objectives prints anything.
+        @test last(objective_capture_stdout(
+            () -> eDisGo_OPF.objective_min_line_loading_max(pm))) == ""
+        @test last(objective_capture_stdout(
+            () -> eDisGo_OPF.objective_min_losses(pm))) == ""
+        # Restore the objective for the remaining test sets.
+        objective_capture_stdout(
+            () -> eDisGo_OPF.objective_min_line_loading_max_OG(pm))
+    end
+
+    @testset "sense, type and return value" begin
+        @test JuMP.objective_sense(pm.model) == MOI.MIN_SENSE
+        @test JuMP.objective_function_type(pm.model) == JuMP.QuadExpr
+        # The function hands back exactly the expression it installed.
+        obj, _out = objective_capture_stdout(
+            () -> eDisGo_OPF.objective_min_line_loading_max_OG(pm))
+        @test obj isa JuMP.QuadExpr
+        @test obj == JuMP.objective_function(pm.model)
+    end
+
+    @testset "loss and line loading terms" begin
+        # Same shape as version 1, but with `factor_ll` 0.01 instead of 0.1.
+        for n in 1:2, b in 1:3
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :ccm)[b]) ≈
+                  (1 - factor_ll) * 0.01 atol = 1e-12
+        end
+        ll = PowerModels.var(pm, 1, :ll)
+        for arc in ((1, 1, 2), (2, 2, 3))
+            @test objective_coeff(pm.model, ll[arc]) ≈ factor_ll * 10.0 atol = 1e-12
+        end
+        @test objective_constant(pm.model) ≈ -factor_ll * 2 * 10.0 atol = 1e-12
+        @test Set(ll.axes[1]) == Set([(1, 1, 2), (2, 2, 3)])
+        @test !haskey(PowerModels.var(pm, 2), :ll)
+        @test objective_num_linear(pm.model) == 2 * 3 + 2
+    end
+
+    @testset "HV slack terms" begin
+        for n in 1:2
+            phvs = PowerModels.var(pm, n, :phvs)
+            for name in ("curt", "cp", "hp", "storage")
+                @test objective_quad_coeff(pm.model, phvs[hv[name]]) ≈
+                      factor_hv_slacks atol = 1e-12
+            end
+            @test objective_quad_coeff(pm.model, phvs[hv["dsm"]]) ≈
+                  factor_hv_slacks * 1e-1 atol = 1e-12
+            for i in PowerModels.ids(pm, n, :HV_requirements)
+                @test objective_coeff(pm.model, phvs[i]) == 0.0
+            end
+        end
+        @test objective_num_quadratic(pm.model) == 5 * 2
+
+        # Unlike `objective_min_losses_slacks_OG` this objective ignores the
+        # `count` of a requirement.
+        d = TestUtils.small_network(opf_version=3, num_steps=2, overlying_grid=true)
+        for req in values(d["HV_requirements"])
+            req["count"] = 9
+        end
+        pm_c, _ = objective_capture_stdout(() -> objective_flex_model(d))
+        hv_c = objective_hv_ids(pm_c)
+        @test objective_quad_coeff(pm_c.model,
+                                   PowerModels.var(pm_c, 1, :phvs)[hv_c["cp"]]) ≈
+              7.5 atol = 1e-12
+    end
+
+    @testset "factor_hv_slacks scales with cost × length" begin
+        # `7.5 * exp10(floor(log10(max 0.01·cost·length)) + 1)`, over all
+        # branches — the storage branch included.
+        for (costs, expected) in (((500.0, 10.0, 10.0), 75.0),
+                                  # the virtual storage branch counts as well
+                                  ((10.0, 10.0, 500.0), 75.0),
+                                  ((0.5, 0.5, 0.5), 7.5 * 0.01))
+            d = TestUtils.small_network(opf_version=3, num_steps=1, overlying_grid=true)
+            for (b, cost) in zip(("1", "2", "3"), costs)
+                d["branch"][b]["cost"] = cost
+            end
+            pm_f, _ = objective_capture_stdout(() -> objective_flex_model(d))
+            hv_f = objective_hv_ids(pm_f)
+            phvs = PowerModels.var(pm_f, 1, :phvs)
+            @test 7.5 * exp10(floor(log10(0.01 * maximum(costs))) + 1) ≈
+                  expected atol = 1e-12
+            @test objective_quad_coeff(pm_f.model, phvs[hv_f["cp"]]) ≈
+                  expected atol = 1e-12
+            @test objective_quad_coeff(pm_f.model, phvs[hv_f["dsm"]]) ≈
+                  expected * 1e-1 atol = 1e-12
+        end
+    end
+
+    @testset "sum over all time steps" begin
+        for steps in (1, 3)
+            pm_s, _ = objective_capture_stdout(
+                () -> TestUtils.build_small_model(opf_version=3, num_steps=steps,
+                                                  overlying_grid=true))
+            @test objective_num_quadratic(pm_s.model) == 5 * steps
+            # Losses per time step plus the two time-step independent `ll` terms.
+            @test objective_num_linear(pm_s.model) == 3 * steps + 2
+            @test objective_constant(pm_s.model) ≈ -0.2 atol = 1e-12
+        end
+    end
+
+    @testset "variables outside the objective" begin
+        # Version 3 creates the curtailment variable `pgc` (for the HV
+        # requirement constraint) but does not price it.
+        @test haskey(PowerModels.var(pm, 1), :pgc)
+        for n in 1:2
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgc)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgs)[1]) == 0.0
+        end
+        # No grid-restriction slacks in version 3.
+        @test !haskey(PowerModels.var(pm, 1), :pds)
+        @test !haskey(PowerModels.var(pm, 1), :pcps)
+    end
+end

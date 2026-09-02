@@ -123,7 +123,9 @@ dahinter notieren)
   in den Fixtures stimmen die Indizes überein, daher nur als Kommentar notiert)
 - [x] `objective_min_line_loading_max` — AbstractBFModelEdisgo
 - [x] `objective_min_losses_slacks_OG` — AbstractBFModelEdisgo
-- [ ] `objective_min_line_loading_max_OG` — AbstractBFModelEdisgo
+- [x] `objective_min_line_loading_max_OG` — AbstractBFModelEdisgo (Mangel: zwei
+  übrig gebliebene `println`-Aufrufe schreiben bei jedem Aufruf `factor_ll` und
+  `factor_hv_slacks` auf stdout; per stdout-Abfang im Test festgehalten)
 
 ### `src/form/bf.jl` → `test/form/test_bf.jl`
 
