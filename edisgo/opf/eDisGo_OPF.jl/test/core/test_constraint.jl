@@ -202,3 +202,104 @@ end
         @test TestUtils.num_constraints_total(pm.model) == before
     end
 end
+
+@testset "constraint_store_state" begin
+    # Four time steps, coupling 2 → 3: neither network is the first or the last
+    # one, so a constraint that silently used `1` or `end` would stand out.
+    @testset "storage" begin
+        pm = cst_model(num_steps=4)
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_store_state(pm, 2, 3, 1, 0.9, 0.8, 0.25, "storage",
+                                              0.04)
+        end
+        @test length(cons) == 1
+        # Eq. (3.10): se_2 - se_1 == -time_elapsed * ps_2
+        #        ⇔    se[nw3] - se[nw2] + 0.25 * ps[nw3] == 0
+        # The efficiencies and the standing loss are not part of the battery
+        # recursion.
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 3, :se, 1) => 1.0,
+                       PowerModels.var(pm, 2, :se, 1) => -1.0,
+                       PowerModels.var(pm, 3, :ps, 1) => 0.25),
+                  0.0)
+    end
+
+    @testset "heat_storage" begin
+        pm = cst_model(num_steps=4)
+        p_loss = 0.04
+        # Standing loss over one hour of a daily loss rate: (1 - p_loss)^(1/24).
+        loss_factor = (1 - p_loss)^(1 / 24)
+        @test loss_factor ≈ 0.9983005 atol = 1e-7
+
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_store_state(pm, 2, 3, 1, 1.0, 1.0, 0.5,
+                                              "heat_storage", p_loss)
+        end
+        @test length(cons) == 1
+        # Eq. (3.23): hse_2 - hse_1 * (1 - p_loss)^(1/24) == -time_elapsed * phs_2
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 3, :hse, 1) => 1.0,
+                       PowerModels.var(pm, 2, :hse, 1) => -loss_factor,
+                       PowerModels.var(pm, 3, :phs, 1) => 0.5),
+                  0.0)
+        # Nailing the number down independently of the expression above.
+        @test cst_coeffs(cons[1])[PowerModels.var(pm, 2, :hse, 1)] ≈ -0.9983005 atol = 1e-7
+    end
+
+    @testset "heat_storage without standing loss" begin
+        # p_loss = 0 collapses the loss factor to exactly 1, i.e. the same shape as
+        # the battery recursion.
+        pm = cst_model(num_steps=2)
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_store_state(pm, 1, 2, 1, 1.0, 1.0, 1.0,
+                                              "heat_storage", 0)
+        end
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 2, :hse, 1) => 1.0,
+                       PowerModels.var(pm, 1, :hse, 1) => -1.0,
+                       PowerModels.var(pm, 2, :phs, 1) => 1.0),
+                  0.0)
+    end
+
+    @testset "dsm" begin
+        pm = cst_model(num_steps=4)
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_store_state(pm, 2, 3, 1, 1.0, 1.0, 0.25, "dsm", 0)
+        end
+        @test length(cons) == 1
+        # Eq. (3.33): dsme_2 - dsme_1 == time_elapsed * pdsm_2 — again the sign of
+        # the power term is opposite to the two storage branches.
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 3, :dsme, 1) => 1.0,
+                       PowerModels.var(pm, 2, :dsme, 1) => -1.0,
+                       PowerModels.var(pm, 3, :pdsm, 1) => -0.25),
+                  0.0)
+    end
+
+    @testset "efficiencies are ignored" begin
+        # None of the three branches uses `charge_eff`/`discharge_eff`; extreme
+        # values must leave the coefficients untouched.
+        pm = cst_model(num_steps=2)
+        for (kind, e, p) in (("storage", :se, :ps), ("dsm", :dsme, :pdsm))
+            cons = cst_new_constraints(pm.model) do
+                eDisGo_OPF.constraint_store_state(pm, 1, 2, 1, 0.1, 0.2, 1.0, kind, 0)
+            end
+            sign_p = kind == "dsm" ? -1.0 : 1.0
+            cst_check(cons[1],
+                      Dict(PowerModels.var(pm, 2, e, 1) => 1.0,
+                           PowerModels.var(pm, 1, e, 1) => -1.0,
+                           PowerModels.var(pm, 2, p, 1) => sign_p),
+                      0.0)
+        end
+    end
+
+    @testset "unknown kind" begin
+        pm = cst_model(num_steps=2)
+        before = TestUtils.num_constraints_total(pm.model)
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_store_state(pm, 1, 2, 1, 1.0, 1.0, 1.0, "battery", 0)
+        end
+        @test isempty(cons)
+        @test TestUtils.num_constraints_total(pm.model) == before
+    end
+end

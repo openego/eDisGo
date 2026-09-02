@@ -93,7 +93,7 @@ dahinter notieren)
 ### `src/core/constraint.jl` → `test/core/test_constraint.jl`
 
 - [x] `constraint_store_state_initial` — AbstractBFModelEdisgo
-- [ ] `constraint_store_state` — AbstractBFModelEdisgo
+- [x] `constraint_store_state` — AbstractBFModelEdisgo
 - [ ] `constraint_cp_state_initial` — AbstractBFModelEdisgo
 - [ ] `constraint_cp_state` — AbstractBFModelEdisgo
 - [ ] `constraint_hp_operation` — AbstractBFModelEdisgo
