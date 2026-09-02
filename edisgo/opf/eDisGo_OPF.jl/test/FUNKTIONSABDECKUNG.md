@@ -12,6 +12,73 @@ und `constraint_store_state`).
 Legende: `[ ]` offen · `[x]` getestet · `[~]` teilweise getestet (Begründung
 dahinter notieren)
 
+## Arbeitsstand (Stand 2026-09-02)
+
+**32 von 84 Einträgen erledigt**, Suite grün: 1602 bestandene Assertions,
+21 `@test_broken`, 0 Fehlschläge, Laufzeit rund 1:20 min.
+
+| Quelldatei | Status |
+| --- | --- |
+| `src/core/types.jl` | fertig (6/6) |
+| `src/core/base.jl` | fertig (3/3) |
+| `src/core/data.jl` | fertig (3/3) |
+| `src/core/solution.jl` | fertig (2/2) |
+| `src/core/constraint.jl` | fertig (6/6) |
+| `src/core/constraint_template.jl` | fertig (5/5) |
+| `src/core/objective.jl` | fertig (5/5) |
+| `src/io/json.jl` | fertig (1/1) |
+| `src/io/common.jl` | fertig (1/1) |
+| `src/core/variables.jl` | **offen (0/40)** — aufgeteilt in `test/core/variables/test_flow_and_curtailment.jl` (16), `test_flexibilities.jl` (10), `test_slacks.jl` (14); alle drei Dateien liegen als Stub bereit |
+| `src/form/bf.jl` | **offen (0/9)** |
+| `src/prob/opf_bf.jl` | **offen (0/2)** |
+| `Main.jl` | **offen (0/1)** |
+
+Nächste Schritte in dieser Reihenfolge: `src/form/bf.jl`, dann die drei Blöcke von
+`src/core/variables.jl` (voneinander unabhängig, parallelisierbar), danach
+`src/prob/opf_bf.jl` und zuletzt `Main.jl` (Ende-zu-Ende, braucht einen
+Julia-Subprozess mit JSON über stdin/stdout).
+
+## Im Produktivcode gefundene Mängel
+
+Beim Testschreiben gefunden, **bewusst nicht behoben** (gehört in einen eigenen
+Fix-Branch); die Tests halten jeweils das Ist-Verhalten fest und markieren das
+Soll mit `@test_broken`:
+
+1. **`_LOGGER` ist im Modul `eDisGo_OPF` nicht definiert** (`isdefined(...) ==
+   false`). An 13 Stellen wird `Memento.warn(_LOGGER, ...)` bzw.
+   `Memento.error(_LOGGER, ...)` mit dem blanken Namen aufgerufen — in
+   `io/json.jl`, `core/constraint.jl`, `core/constraint_template.jl`,
+   `core/base.jl:221` und `core/data.jl`. Jeder dieser Pfade wirft
+   `UndefVarError(:_LOGGER)` statt zu warnen. Betrifft unter anderem alle
+   `time_elapsed`-Fallbacks: die Nebenbedingung wird dann gar nicht erst angelegt.
+   Fix wäre ein `const _LOGGER = PowerModels._LOGGER` im Modul.
+2. **`_biggest_generator` ebenfalls nicht sichtbar** — `_correct_bus_types!`
+   bricht in jedem korrigierenden Zweig ab. Fällt produktiv nicht auf, weil
+   `correct_network_data!` den Aufruf auskommentiert hat.
+3. **`ref_add_core!` wirft `KeyError`, sobald ein Bus deaktiviert wird**
+   (`bus_type == 4`): die eDisGo-eigenen Komponenten (`dsm`, `heatpumps`,
+   `electromobility`, `gen_nd`, `gen_slack`) werden nicht mitgefiltert.
+4. **`solve_model` ignoriert `multinetwork`/`multiconductor` stillschweigend.**
+   PowerModels wirft bei widersprüchlicher Flagge einen Fehler; hier fällt eine
+   falsch geformte Datenstruktur nicht mehr auf.
+5. **`constraint_model_current` behandelt virtuelle Speicher-Branches
+   uneinheitlich**: die NC-Variante überspringt sie (`form/bf.jl:128`), die
+   SOC-Variante nicht (`form/bf.jl:101`).
+6. **`constraint_HV_requirements` hat keinen `else`-Zweig** — bei unbekanntem
+   `hv_req["name"]` bleibt `pflex` undefiniert und `sum(pflex)` wirft
+   `UndefVarError(:pflex)`.
+7. **Debug-`println`s in `objective_min_line_loading_max_OG`**
+   (`core/objective.jl:138,140`) schreiben bei jedem Modellbau mit `opf_version`
+   3 auf stdout.
+8. **`phss`-Term in `objective_min_losses_slacks`/`_OG`** summiert über die
+   Wärmepumpen-Indizes, obwohl `phss` je Wärmespeicher angelegt wird. In beiden
+   Fixtures sind die Indizes identisch, bei abweichender Nummerierung gäbe es
+   einen `KeyError`.
+9. **`correct_network_data!` lässt `check_reference_bus` und `correct_bus_types!`
+   auskommentiert** — ein Netz ohne Slack-Bus läuft ohne Warnung durch.
+   `check_connectivity` prüft die eDisGo-eigenen Komponenten gar nicht auf
+   gültige Bus-Referenzen.
+
 ### `Main.jl` → `test/test_main.jl`
 
 - [ ] `optimize_edisgo`
