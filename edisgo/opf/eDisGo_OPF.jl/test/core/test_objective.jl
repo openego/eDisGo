@@ -202,3 +202,97 @@ objective_hv_ids(pm, nw::Int=1) =
         @test objective_num_linear(pm_d2.model) == 1
     end
 end
+
+@testset "objective_min_losses_slacks" begin
+    # `opf_version` 2 — the objective `build_mn_opf_bf_flex` installs.
+    pm = TestUtils.build_small_model(opf_version=2, num_steps=2)
+    factor_slacks = 0.6
+
+    @testset "sense, type and return value" begin
+        @test JuMP.objective_sense(pm.model) == MOI.MIN_SENSE
+        # Losses and slacks are all linear.
+        @test JuMP.objective_function_type(pm.model) == JuMP.AffExpr
+        @test objective_constant(pm.model) == 0.0
+        @test objective_num_quadratic(pm.model) == 0
+        # Re-running the objective returns exactly the expression it sets.
+        obj = eDisGo_OPF.objective_min_losses_slacks(pm)
+        @test obj == JuMP.objective_function(pm.model)
+    end
+
+    @testset "loss term" begin
+        # Unlike `objective_min_losses` this one sums over *all* branches — the
+        # virtual storage branch 3 included ("incl. storage losses").
+        for n in 1:2, b in 1:3
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :ccm)[b]) ≈
+                  (1 - factor_slacks) * 0.01 atol = 1e-12
+        end
+    end
+
+    @testset "slack terms" begin
+        for n in 1:2
+            # One component of each type in the fixture, all weighted with
+            # `factor_slacks`.
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgc)[1]) == factor_slacks
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgens)[1]) == factor_slacks
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pds)[1]) == factor_slacks
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pcps)[1]) == factor_slacks
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps)[1]) == factor_slacks
+            # The heat-pump / heat-storage operation slacks get the big penalty.
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 1e4
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 1e4
+        end
+        # 3 branches + 7 slacks, per time step.
+        @test objective_num_linear(pm.model) == 2 * (3 + 7)
+    end
+
+    @testset "variables outside the objective" begin
+        # Everything the model carries but the objective must not price.
+        for n in 1:2
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgs)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :qgs)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :php)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pcp)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pdsm)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :ps)[1]) == 0.0
+            # `w` exists for every non-storage bus.
+            w = PowerModels.var(pm, n, :w)
+            @test Set(w.axes[1]) == Set([1, 2, 3])
+            for i in w.axes[1]
+                @test objective_coeff(pm.model, w[i]) == 0.0
+            end
+        end
+        # `ll` only exists for versions 1 and 3.
+        @test !haskey(PowerModels.var(pm, 1), :ll)
+        @test !haskey(PowerModels.var(pm, 1), :phvs)
+    end
+
+    @testset "sum over all time steps" begin
+        for steps in (1, 3)
+            pm_s = TestUtils.build_small_model(opf_version=2, num_steps=steps)
+            @test objective_num_linear(pm_s.model) == steps * (3 + 7)
+            for n in 1:steps
+                @test objective_coeff(pm_s.model, PowerModels.var(pm_s, n, :pds)[1]) ==
+                      factor_slacks
+                @test objective_coeff(pm_s.model, PowerModels.var(pm_s, n, :phss)[1]) == 1e4
+            end
+        end
+    end
+
+    @testset "per-branch resistances" begin
+        d = TestUtils.small_network(opf_version=2, num_steps=1)
+        d["branch"]["1"]["br_r"] = 0.02
+        d["branch"]["2"]["br_r"] = 0.05
+        d["branch"]["3"]["br_r"] = 0.07
+        pm_r = objective_flex_model(d)
+        for (b, r) in ((1, 0.02), (2, 0.05), (3, 0.07))
+            @test objective_coeff(pm_r.model, PowerModels.var(pm_r, 1, :ccm)[b]) ≈
+                  (1 - factor_slacks) * r atol = 1e-12
+        end
+    end
+
+    # NOTE (production code): the `phss` term is indexed by the *heat pump* ids
+    # (`for i in keys(ref(pm, 1, :heatpumps))`) although `phss` is created per
+    # `heat_storage`. Both fixtures happen to use identical ids, so the mismatch
+    # is invisible here — a grid whose heat storages are numbered differently
+    # from its heat pumps would raise a `KeyError` in the objective.
+end

@@ -114,7 +114,10 @@ dahinter notieren)
 ### `src/core/objective.jl` → `test/core/test_objective.jl`
 
 - [x] `objective_min_losses` — AbstractBFModelEdisgo
-- [ ] `objective_min_losses_slacks` — AbstractBFModelEdisgo
+- [x] `objective_min_losses_slacks` — AbstractBFModelEdisgo (Anmerkung: der
+  `phss`-Term wird über die `heatpumps`-Indizes summiert, obwohl `phss` je
+  `heat_storage` angelegt wird — bei abweichender Nummerierung ein `KeyError`;
+  in den Fixtures stimmen die Indizes überein, daher nur als Kommentar notiert)
 - [ ] `objective_min_line_loading_max` — AbstractBFModelEdisgo
 - [ ] `objective_min_losses_slacks_OG` — AbstractBFModelEdisgo
 - [ ] `objective_min_line_loading_max_OG` — AbstractBFModelEdisgo
