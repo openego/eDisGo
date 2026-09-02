@@ -98,7 +98,8 @@ dahinter notieren)
   `time_elapsed`-Fallback ruft `Memento.warn(_LOGGER, …)` auf; `_LOGGER` ist in
   `eDisGo_OPF` nicht definiert, deshalb `UndefVarError` statt Warnung und die
   Nebenbedingung entsteht gar nicht — als `@test_broken` dokumentiert)
-- [ ] `constraint_cp_state` — AbstractBFModelEdisgo
+- [x] `constraint_cp_state` — AbstractBFModelEdisgo (Bug: derselbe undefinierte
+  `_LOGGER` im `time_elapsed`-Fallback wie oben — als `@test_broken` dokumentiert)
 - [ ] `constraint_hp_operation` — AbstractBFModelEdisgo
 - [ ] `constraint_HV_requirements` — AbstractBFModelEdisgo
 

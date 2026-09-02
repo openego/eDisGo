@@ -386,3 +386,89 @@ end
                       length(cst_eq_constraints(pm.model)) == before + 1)
     end
 end
+
+@testset "constraint_cp_state" begin
+    @testset "intermediate time step" begin
+        pm = cst_model(num_steps=4)
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_cp_state(pm, 2, 3, 1, 0.9)
+        end
+        # 3 is not the last network, so only the recursion is added.
+        @test length(cons) == 1
+        # Eq. (3.26): cpe_2 - cpe_1 == time_elapsed * eta * pcp_2
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 3, :cpe, 1) => 1.0,
+                       PowerModels.var(pm, 2, :cpe, 1) => -1.0,
+                       PowerModels.var(pm, 3, :pcp, 1) => -0.9),  # -1.0 * 0.9
+                  0.0)
+    end
+
+    @testset "last time step" begin
+        pm = cst_model(num_steps=4)
+        # Band of the last network, used by the additional fixing constraint …
+        PowerModels.ref(pm, 4, :electromobility)[1]["e_min"] = 0.4
+        PowerModels.ref(pm, 4, :electromobility)[1]["e_max"] = 1.0
+        # … and a different one earlier on, which must not be picked up.
+        PowerModels.ref(pm, 3, :electromobility)[1]["e_min"] = -9.0
+        PowerModels.ref(pm, 3, :electromobility)[1]["e_max"] = -7.0
+
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_cp_state(pm, 3, 4, 1, 0.5)
+        end
+        @test length(cons) == 2
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 4, :cpe, 1) => 1.0,
+                       PowerModels.var(pm, 3, :cpe, 1) => -1.0,
+                       PowerModels.var(pm, 4, :pcp, 1) => -0.5),
+                  0.0)
+        # Eq. (3.25) for t = tau: the charged energy returns to the midpoint of the
+        # flexibility band, 0.5*(0.4+1.0) = 0.7.
+        cst_check(cons[2], Dict(PowerModels.var(pm, 4, :cpe, 1) => 1.0), 0.7)
+    end
+
+    @testset "two time steps" begin
+        # With only two networks the second one is already the last, so a single
+        # call produces both constraints.
+        pm = cst_model(num_steps=2)
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_cp_state(pm, 1, 2, 1, 1.0)
+        end
+        @test length(cons) == 2
+        cst_check(cons[2], Dict(PowerModels.var(pm, 2, :cpe, 1) => 1.0), 0.5)
+    end
+
+    @testset "time_elapsed is taken from n_1" begin
+        pm = cst_model(num_steps=3)
+        PowerModels.ref(pm, 1)[:time_elapsed] = 0.25
+        PowerModels.ref(pm, 2)[:time_elapsed] = 4.0
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_cp_state(pm, 1, 2, 1, 0.8)
+        end
+        # 0.25 * 0.8, not 4.0 * 0.8 — the first network's value wins.
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 2, :cpe, 1) => 1.0,
+                       PowerModels.var(pm, 1, :cpe, 1) => -1.0,
+                       PowerModels.var(pm, 2, :pcp, 1) => -0.2),
+                  0.0)
+    end
+
+    @testset "missing time_elapsed" begin
+        pm = cst_model(num_steps=3)
+        # Only network 1 loses the entry; network 2 keeps it. The lookup is done on
+        # `n_1`, so the fallback is still taken.
+        delete!(PowerModels.ref(pm, 1), :time_elapsed)
+        @test haskey(PowerModels.ref(pm, 2), :time_elapsed)
+        before = length(cst_eq_constraints(pm.model))
+
+        # BUG: same undefined `_LOGGER` as in `constraint_cp_state_initial`.
+        @test_throws UndefVarError eDisGo_OPF.constraint_cp_state(pm, 1, 2, 1, 0.9)
+        exception = cst_thrown(() -> eDisGo_OPF.constraint_cp_state(pm, 1, 2, 1, 0.9))
+        @test exception isa UndefVarError
+        @test exception.var === :_LOGGER
+        @test length(cst_eq_constraints(pm.model)) == before
+
+        # Intended behaviour: warn and continue with time_elapsed = 1.0.
+        @test_broken (eDisGo_OPF.constraint_cp_state(pm, 1, 2, 1, 0.9);
+                      length(cst_eq_constraints(pm.model)) == before + 1)
+    end
+end
