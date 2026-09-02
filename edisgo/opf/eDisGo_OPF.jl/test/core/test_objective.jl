@@ -296,3 +296,83 @@ end
     # is invisible here — a grid whose heat storages are numbered differently
     # from its heat pumps would raise a `KeyError` in the objective.
 end
+
+@testset "objective_min_line_loading_max" begin
+    # `opf_version` 1 — losses plus the maximum line loading `ll`.
+    pm = TestUtils.build_small_model(opf_version=1, num_steps=2)
+    factor_ll = 0.1
+
+    @testset "sense, type and return value" begin
+        @test JuMP.objective_sense(pm.model) == MOI.MIN_SENSE
+        @test JuMP.objective_function_type(pm.model) == JuMP.AffExpr
+        @test objective_num_quadratic(pm.model) == 0
+        obj = eDisGo_OPF.objective_min_line_loading_max(pm)
+        @test obj == JuMP.objective_function(pm.model)
+    end
+
+    @testset "loss term" begin
+        # As in version 2 the loss sum runs over all branches, storage included.
+        for n in 1:2, b in 1:3
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :ccm)[b]) ≈
+                  (1 - factor_ll) * 0.01 atol = 1e-12
+        end
+    end
+
+    @testset "line loading term" begin
+        ll = PowerModels.var(pm, 1, :ll)
+        # `cost * length` of the fixture is 10 * 1 for every branch.
+        for arc in ((1, 1, 2), (2, 2, 3))
+            @test objective_coeff(pm.model, ll[arc]) ≈ factor_ll * 10.0 * 1.0 atol = 1e-12
+        end
+        # The `-1` of `(ll - 1)` lands in the constant term.
+        @test objective_constant(pm.model) ≈ -factor_ll * 2 * 10.0 * 1.0 atol = 1e-12
+
+        # `ll` exists only for the storage-free branches and only in network 1 —
+        # the maximum line loading is shared across all time steps.
+        @test Set(ll.axes[1]) == Set([(1, 1, 2), (2, 2, 3)])
+        @test !haskey(PowerModels.var(pm, 2), :ll)
+
+        # 3 branches × 2 networks plus the two `ll` terms.
+        @test objective_num_linear(pm.model) == 2 * 3 + 2
+    end
+
+    @testset "cost and length per branch" begin
+        # The weight of a branch is its own `cost * length` …
+        d = TestUtils.small_network(opf_version=1, num_steps=1)
+        d["branch"]["1"]["cost"] = 20.0
+        d["branch"]["2"]["length"] = 3.0
+        d["branch"]["3"]["cost"] = 1000.0  # storage branch, must not show up
+        pm_c = objective_flex_model(d)
+        ll = PowerModels.var(pm_c, 1, :ll)
+        @test objective_coeff(pm_c.model, ll[(1, 1, 2)]) ≈ factor_ll * 20.0 atol = 1e-12
+        @test objective_coeff(pm_c.model, ll[(2, 2, 3)]) ≈ factor_ll * 3 * 10.0 atol = 1e-12
+        @test objective_constant(pm_c.model) ≈ -factor_ll * (20.0 + 30.0) atol = 1e-12
+        # … and the storage branch has no `ll` variable at all.
+        @test Set(ll.axes[1]) == Set([(1, 1, 2), (2, 2, 3)])
+    end
+
+    @testset "sum over all time steps" begin
+        for steps in (1, 3)
+            pm_s = TestUtils.build_small_model(opf_version=1, num_steps=steps)
+            # Losses accumulate over the time steps, the two `ll` terms do not.
+            @test objective_num_linear(pm_s.model) == 3 * steps + 2
+            @test objective_constant(pm_s.model) ≈ -2.0 atol = 1e-12
+            for n in 1:steps
+                @test objective_coeff(pm_s.model, PowerModels.var(pm_s, n, :ccm)[1]) ≈
+                      0.009 atol = 1e-12
+            end
+        end
+    end
+
+    @testset "variables outside the objective" begin
+        # Version 1 knows no grid-restriction slacks; the heat-pump storage
+        # slacks do exist but are not priced by this objective.
+        @test !haskey(PowerModels.var(pm, 1), :pgc)
+        @test !haskey(PowerModels.var(pm, 1), :pds)
+        for n in 1:2
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 0.0
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgs)[1]) == 0.0
+        end
+    end
+end
