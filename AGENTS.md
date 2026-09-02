@@ -1,5 +1,7 @@
 # Hinweise für Coding-Agents
 
+Diese Datei wird von KI-Coding-Werkzeugen automatisch gelesen (Konvention `AGENTS.md`).
+
 ## Julia-OPF-Paket (`edisgo/opf/eDisGo_OPF.jl`)
 
 Für **alle** Arbeiten an der Testsuite des Julia-Pakets gelten verbindlich:

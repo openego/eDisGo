@@ -1,7 +1,8 @@
 # Testkonventionen für `eDisGo_OPF.jl`
 
 Diese Datei ist die verbindliche Vorgabe für alle, die Tests für das Julia-Paket
-`eDisGo_OPF` schreiben — Menschen wie KI-Agents. Wer hier etwas ändert, ändert die
+`eDisGo_OPF` schreiben — Menschen wie KI-Agents (verlinkt aus `AGENTS.md` im
+Repository-Wurzelverzeichnis). Wer hier etwas ändert, ändert die
 Vorgabe für alle folgenden Beiträge.
 
 Ziel ist eine vollständige Testabdeckung: **jede** Funktion und jeder Typ des
