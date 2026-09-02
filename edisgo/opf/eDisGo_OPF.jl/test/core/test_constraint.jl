@@ -303,3 +303,86 @@ end
         @test TestUtils.num_constraints_total(pm.model) == before
     end
 end
+
+"Return the exception `f()` raises, or `nothing` if it returns normally."
+function cst_thrown(f)
+    try
+        f()
+        return nothing
+    catch err
+        return err
+    end
+end
+
+@testset "constraint_cp_state_initial" begin
+    @testset "constraint" begin
+        pm = cst_model(num_steps=3)
+        # Asymmetric flexibility band so the midpoint is neither 0 nor an endpoint,
+        # and a different band in the last network to show that the parameters are
+        # read from network `n`.
+        PowerModels.ref(pm, 1, :electromobility)[1]["e_min"] = -0.2
+        PowerModels.ref(pm, 1, :electromobility)[1]["e_max"] = 0.8
+        PowerModels.ref(pm, 3, :electromobility)[1]["e_min"] = 5.0
+        PowerModels.ref(pm, 3, :electromobility)[1]["e_max"] = 7.0
+
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.9)
+        end
+        @test length(cons) == 1
+        # Eq. (3.25): cpe == 0.5*(e_min+e_max) + time_elapsed * eta * pcp
+        #        ⇔    cpe - 1.0 * 0.9 * pcp == 0.3
+        # `time_elapsed` comes from the `ref` (1 in the fixture), `eta` from the
+        # argument.
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 1, :cpe, 1) => 1.0,
+                       PowerModels.var(pm, 1, :pcp, 1) => -0.9),
+                  0.3)
+    end
+
+    @testset "time_elapsed from ref" begin
+        pm = cst_model(num_steps=2)
+        # 15-minute time steps: the power term is scaled down accordingly.
+        PowerModels.ref(pm, 1)[:time_elapsed] = 0.25
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.8)
+        end
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 1, :cpe, 1) => 1.0,
+                       PowerModels.var(pm, 1, :pcp, 1) => -0.2),  # -0.25 * 0.8
+                  0.5)                                            # 0.5*(0.0+1.0)
+    end
+
+    @testset "eta" begin
+        # `eta` only scales the power term; the midpoint stays untouched.
+        pm = cst_model(num_steps=2)
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 1.0)
+        end
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 1, :cpe, 1) => 1.0,
+                       PowerModels.var(pm, 1, :pcp, 1) => -1.0),
+                  0.5)
+    end
+
+    @testset "missing time_elapsed" begin
+        pm = cst_model(num_steps=2)
+        delete!(PowerModels.ref(pm, 1), :time_elapsed)
+        @test !haskey(PowerModels.ref(pm, 1), :time_elapsed)
+        before = length(cst_eq_constraints(pm.model))
+
+        # BUG: the fallback branch warns via `Memento.warn(_LOGGER, …)`, but
+        # `_LOGGER` is not defined in `eDisGo_OPF` — the warning is not the only
+        # thing that fails, the whole constraint is never created.
+        @test !isdefined(eDisGo_OPF, :_LOGGER)
+        @test_throws UndefVarError eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.9)
+        exception = cst_thrown(() -> eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.9))
+        @test exception isa UndefVarError
+        @test exception.var === :_LOGGER
+        @test length(cst_eq_constraints(pm.model)) == before
+
+        # Intended behaviour: warn once and continue with time_elapsed = 1.0, i.e.
+        # produce the very same constraint as the fixture's `time_elapsed == 1`.
+        @test_broken (eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.9);
+                      length(cst_eq_constraints(pm.model)) == before + 1)
+    end
+end

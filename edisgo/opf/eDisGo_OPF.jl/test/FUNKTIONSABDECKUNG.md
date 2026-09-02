@@ -94,7 +94,10 @@ dahinter notieren)
 
 - [x] `constraint_store_state_initial` — AbstractBFModelEdisgo
 - [x] `constraint_store_state` — AbstractBFModelEdisgo
-- [ ] `constraint_cp_state_initial` — AbstractBFModelEdisgo
+- [x] `constraint_cp_state_initial` — AbstractBFModelEdisgo (Bug: der
+  `time_elapsed`-Fallback ruft `Memento.warn(_LOGGER, …)` auf; `_LOGGER` ist in
+  `eDisGo_OPF` nicht definiert, deshalb `UndefVarError` statt Warnung und die
+  Nebenbedingung entsteht gar nicht — als `@test_broken` dokumentiert)
 - [ ] `constraint_cp_state` — AbstractBFModelEdisgo
 - [ ] `constraint_hp_operation` — AbstractBFModelEdisgo
 - [ ] `constraint_HV_requirements` — AbstractBFModelEdisgo
