@@ -113,7 +113,7 @@ dahinter notieren)
   `constraint_power_balance` aber nie verwendet — die Blindleistung der
   Batterie kommt über `storage_pf` des virtuellen Branches; ein Speicher ohne
   `pf` lässt das Template dennoch scheitern)
-- [ ] `constraint_voltage_magnitude_difference_radial` — AbstractBFModelEdisgo
+- [x] `constraint_voltage_magnitude_difference_radial` — AbstractBFModelEdisgo
 - [ ] `constraint_store_state` — AbstractBFModelEdisgo
 - [ ] `constraint_store_state` — AbstractBFModelEdisgo
 - [ ] `constraint_model_current` — AbstractPowerModel

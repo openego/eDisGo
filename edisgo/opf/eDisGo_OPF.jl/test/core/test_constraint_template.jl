@@ -306,3 +306,73 @@ end
         @test all(startswith(name, "2_") for name in ct_varnames(cstr_p))
     end
 end
+
+@testset "constraint_voltage_magnitude_difference_radial" begin
+    @testset "physical branch" begin
+        # Branch 2 runs from bus 2 to bus 3, neither of which is the slack bus, so
+        # it contributes the voltage-drop equation and nothing else. `br_r`/`br_x`
+        # and `tap` are the parameters that must be read — note that the fixture
+        # also carries a differing `"r"` entry, which must *not* be used.
+        data = TestUtils.small_network()
+        data["branch"]["2"]["br_r"] = 0.03
+        data["branch"]["2"]["br_x"] = 0.04
+        data["branch"]["2"]["r"] = 99.0
+        data["branch"]["2"]["tap"] = 2.0
+        pm = ct_model(data)
+
+        @test ct_added(
+            () -> eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, 2, nw=1),
+            pm.model) == 1
+        c = only(ct_eq_constraints(pm.model))
+        # w_fr/tm² - w_to == 2(r·p + x·q) - (r² + x²)·ccm
+        @test ct_coef(c, PowerModels.var(pm, 1, :w, 2)) ≈ 1 / 2.0^2
+        @test ct_coef(c, PowerModels.var(pm, 1, :w, 3)) == -1.0
+        @test ct_coef(c, PowerModels.var(pm, 1, :p, (2, 2, 3))) ≈ -2 * 0.03
+        @test ct_coef(c, PowerModels.var(pm, 1, :q, (2, 2, 3))) ≈ -2 * 0.04
+        @test ct_coef(c, PowerModels.var(pm, 1, :ccm, 2)) ≈ 0.03^2 + 0.04^2
+        @test JuMP.normalized_rhs(c) == 0.0
+        @test length(ct_varnames(c)) == 5
+    end
+
+    @testset "branch at the slack bus" begin
+        # Branch 1 starts at bus 1 (`bus_type == 3`), which pins its squared
+        # voltage to 1 p.u. — a second equation.
+        pm = ct_small_model()
+        @test PowerModels.ref(pm, 1, :bus, 1)["bus_type"] == 3
+        @test ct_added(
+            () -> eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, 1, nw=1),
+            pm.model) == 2
+        cs = ct_eq_constraints(pm.model)
+        c_slack = cs[2]
+        @test ct_terms(c_slack) == (Dict(JuMP.name(PowerModels.var(pm, 1, :w, 1)) => 1.0),
+                                    1.0)
+    end
+
+    @testset "virtual storage branch" begin
+        # Branch 3 is the virtual branch of the battery: no line, no equation.
+        # (It could not even be written down — bus 4 has no `w` variable.)
+        pm = ct_small_model()
+        @test PowerModels.ref(pm, 1, :branch, 3)["storage"] == true
+        @test ct_added(
+            () -> eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, 3, nw=1),
+            pm.model) == 0
+        @test isempty(ct_eq_constraints(pm.model))
+        @test !(4 in axes(PowerModels.var(pm, 1, :w), 1))
+
+        # Flipping the flag on a physical branch skips it just the same, so it is
+        # really the flag and not the topology that decides.
+        data = TestUtils.small_network()
+        data["branch"]["2"]["storage"] = true
+        pm2 = ct_model(data)
+        @test ct_added(
+            () -> eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm2, 2, nw=1),
+            pm2.model) == 0
+    end
+
+    @testset "network selection" begin
+        pm = ct_small_model()
+        eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, 2, nw=2)
+        c = only(ct_eq_constraints(pm.model))
+        @test all(startswith(name, "2_") for name in ct_varnames(c))
+    end
+end
