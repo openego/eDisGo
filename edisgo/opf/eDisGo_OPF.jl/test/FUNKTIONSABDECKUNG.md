@@ -113,7 +113,7 @@ dahinter notieren)
 
 ### `src/core/objective.jl` → `test/core/test_objective.jl`
 
-- [ ] `objective_min_losses` — AbstractBFModelEdisgo
+- [x] `objective_min_losses` — AbstractBFModelEdisgo
 - [ ] `objective_min_losses_slacks` — AbstractBFModelEdisgo
 - [ ] `objective_min_line_loading_max` — AbstractBFModelEdisgo
 - [ ] `objective_min_losses_slacks_OG` — AbstractBFModelEdisgo
