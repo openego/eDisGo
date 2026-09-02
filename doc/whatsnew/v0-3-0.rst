@@ -174,3 +174,12 @@ Changes
   read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
   system ``PATH``; the reference now says so instead of claiming the file points to the
   binary in use
+* Fixed ``ValueError: cannot reindex on an axis with duplicate labels`` during
+  :func:`~.io.generators_import.oedb` for grids in which one bus carries the
+  conventional loads of two different buildings (e.g. MV grids 33084 and 33695).
+  :func:`~.io.generators_import._integrate_pv_rooftop` derived a bus-to-building-ID
+  map from the conventional loads to supply the key for a building-ID based match of
+  existing PV rooftop plants. That match was replaced by a match on ``source_id``,
+  but the map was left behind and its result has been discarded ever since, so the
+  only remaining effect of the code was the crash above. It has been removed; the
+  function no longer reads the loads at all
