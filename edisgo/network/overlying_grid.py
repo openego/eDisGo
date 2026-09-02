@@ -24,6 +24,17 @@ from edisgo.tools.tools import resample
 
 logger = logging.getLogger(__name__)
 
+#: Attribute names that other tools use for the same overlying-grid data, mapped to
+#: the attribute name used here. eGo's interface emits the two state-of-charge frames
+#: without the ``units`` infix, so they never matched an attribute of this class and
+#: were dropped without a trace — the thermal storages then silently started and ended
+#: every optimisation horizon empty. Accepting the alias keeps data and exports written
+#: by those versions usable; every use is logged so the producing side gets renamed.
+ATTRIBUTE_ALIASES = {
+    "thermal_storage_central_soc": "thermal_storage_units_central_soc",
+    "thermal_storage_decentral_soc": "thermal_storage_units_decentral_soc",
+}
+
 
 class OverlyingGrid:
     """
@@ -236,6 +247,19 @@ class OverlyingGrid:
             attrs = {v: f"{v}.csv" for v in attrs}
 
         attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+
+        # Accept the file names other tools write for the same data, so exports
+        # made with those names stay readable (see ATTRIBUTE_ALIASES).
+        prefix = "overlying_grid/" if from_zip_archive else ""
+        for alias, attr in ATTRIBUTE_ALIASES.items():
+            alias_file = f"{prefix}{alias}.csv"
+            if attr not in attrs_to_read and alias_file in files:
+                logger.warning(
+                    f"Reading '{alias_file}' as '{attr}'. '{alias}' is a deprecated "
+                    f"name for this data - rename the file, or the tool writing it, "
+                    f"to '{attr}.csv'."
+                )
+                attrs_to_read[attr] = alias_file
 
         for attr, file in attrs_to_read.items():
             if from_zip_archive:

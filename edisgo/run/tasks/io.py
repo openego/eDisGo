@@ -217,9 +217,52 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
                 "overlying_grid_data passed to run_edisgo — skipping."
             )
             return edisgo
-        for attr in edisgo.overlying_grid._attributes:
-            if attr in overlying_grid_data:
-                setattr(edisgo.overlying_grid, attr, overlying_grid_data[attr])
+        from edisgo.network.overlying_grid import ATTRIBUTE_ALIASES
+
+        attributes = edisgo.overlying_grid._attributes
+        set_attrs, missing = [], []
+        for attr in attributes:
+            key = attr if attr in overlying_grid_data else None
+            if key is None:
+                # accept the name another tool uses for the same data
+                key = next(
+                    (
+                        alias
+                        for alias, canonical in ATTRIBUTE_ALIASES.items()
+                        if canonical == attr and alias in overlying_grid_data
+                    ),
+                    None,
+                )
+                if key is not None:
+                    ctx.logger.warning(
+                        f"task 'import_overlying_grid_data': reading key '{key}' as "
+                        f"'{attr}'. '{key}' is a deprecated name for this data - "
+                        f"rename it in the tool producing the overlying-grid data."
+                    )
+            if key is None:
+                missing.append(attr)
+                continue
+            setattr(edisgo.overlying_grid, attr, overlying_grid_data[key])
+            set_attrs.append(attr)
+
+        # Report what did not arrive. A key that matches no attribute used to be
+        # dropped without a trace, which is how two state-of-charge frames went
+        # missing unnoticed for a long time.
+        ctx.logger.info(
+            f"task 'import_overlying_grid_data': set {len(set_attrs)} of "
+            f"{len(attributes)} overlying-grid attributes."
+            + (f" Not provided: {', '.join(missing)}." if missing else "")
+        )
+        ignored = [
+            key
+            for key in overlying_grid_data
+            if key not in attributes and key not in ATTRIBUTE_ALIASES
+        ]
+        if ignored:
+            ctx.logger.debug(
+                f"task 'import_overlying_grid_data': ignored {len(ignored)} key(s) "
+                f"with no matching attribute: {', '.join(sorted(map(str, ignored)))}."
+            )
     else:  # source == "csv"
         overlying_grid_path = overlying_grid_path or og_cfg.get("path")
         if overlying_grid_path is None:

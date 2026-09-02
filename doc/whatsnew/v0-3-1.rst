@@ -13,3 +13,19 @@ Changes
   read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
   system ``PATH``; the reference now says so instead of claiming the file points to the
   binary in use
+* Fixed the overlying grid's two state-of-charge frames never reaching eDisGo from
+  eGo. ``import_overlying_grid_data`` matched the keys of the passed data against the
+  attribute names of :class:`~.network.overlying_grid.OverlyingGrid` and dropped
+  everything else without a trace, while eGo emits
+  ``thermal_storage_central_soc`` / ``thermal_storage_decentral_soc`` — the same data
+  without the ``units`` infix. Both were therefore always absent, and
+  ``_build_heat_storage`` fell back to a state of charge of zero, which fixes
+  ``soc_initial`` and ``soc_end`` of every thermal storage at empty: the storages
+  could not carry heat across an optimisation horizon, which matters most under
+  temporal complexity reduction, where the horizons are short. The two names are now
+  accepted as deprecated aliases, in the runner task and in
+  :meth:`~.network.overlying_grid.OverlyingGrid.from_csv`, each use logged with a
+  warning naming the attribute to rename to
+* ``import_overlying_grid_data`` now logs how many overlying-grid attributes it set
+  and names those that were not provided, and lists ignored keys at debug level. The
+  silent drop above went unnoticed for a long time because nothing reported it

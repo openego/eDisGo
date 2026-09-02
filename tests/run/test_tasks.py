@@ -348,3 +348,63 @@ def test_all_bundled_presets_validate():
     assert presets, "no bundled presets found"
     for path in presets:
         validate(load_config(path))
+
+
+class TestOverlyingGridKeyAliases:
+    """
+    The two state-of-charge frames arrive from eGo under a name without the
+    ``units`` infix. They used to match no attribute and were dropped without a
+    trace, which left every thermal storage starting and ending the optimisation
+    horizon empty.
+    """
+
+    def _grid(self):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_timeindex(pd.date_range("2011-01-01", periods=3, freq="h"))
+        return edisgo
+
+    def _ctx(self, edisgo):
+        ctx = RunContext()
+        ctx.raw_config = {"overlying_grid": {"enabled": True, "source": "etrago"}}
+        ctx.overlying_grid_data = {}
+        return ctx
+
+    def test_deprecated_key_is_read_and_reported(self, caplog):
+        import logging
+
+        edisgo = self._grid()
+        ctx = self._ctx(edisgo)
+        soc = pd.DataFrame({"130": [0.4, 0.5, 0.6]}, index=edisgo.timeseries.timeindex)
+        ctx.overlying_grid_data = {"thermal_storage_central_soc": soc}
+
+        with caplog.at_level(logging.WARNING, logger="edisgo.run"):
+            task_import_overlying_grid_data(edisgo, ctx)
+
+        # the data arrived under the canonical attribute name
+        assert not edisgo.overlying_grid.thermal_storage_units_central_soc.empty
+        assert "deprecated name" in caplog.text
+
+    def test_attributes_that_did_not_arrive_are_named(self, caplog):
+        import logging
+
+        edisgo = self._grid()
+        ctx = self._ctx(edisgo)
+        ctx.overlying_grid_data = {}
+
+        with caplog.at_level(logging.INFO, logger="edisgo.run"):
+            task_import_overlying_grid_data(edisgo, ctx)
+
+        assert "set 0 of 13 overlying-grid attributes" in caplog.text
+        assert "thermal_storage_units_central_soc" in caplog.text
+
+    def test_csv_export_written_under_the_deprecated_name_is_read(self, tmp_path):
+        from edisgo.network.overlying_grid import OverlyingGrid
+
+        ti = pd.date_range("2011-01-01", periods=3, freq="h")
+        pd.DataFrame({"130": [0.4, 0.5, 0.6]}, index=ti).to_csv(
+            tmp_path / "thermal_storage_central_soc.csv"
+        )
+        og = OverlyingGrid()
+        og.from_csv(str(tmp_path))
+        assert not og.thermal_storage_units_central_soc.empty
+        assert list(og.thermal_storage_units_central_soc.columns) == ["130"]
