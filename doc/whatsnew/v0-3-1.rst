@@ -41,3 +41,16 @@ Changes
   into a negative load — the power-to-heat unit fed the grid instead of being
   switched off. The power flow used that injection unchecked. A warning now names
   the district heating area and the number of affected time steps
+* Corrected the aggregated COP of a district heating area in
+  :func:`~.tools.tools.aggregate_district_heating_components`. When the heat pump
+  and the resistive heater of an area are merged, the COP of the combined component
+  has to reproduce the electricity both units draw, which makes it the heat-share
+  weighted mean of the *reciprocal* COPs. The code took the arithmetic mean of the
+  COPs instead, which is never smaller, so the electricity demand of district
+  heating was systematically understated — by
+  ``(COP_hp - COP_rh)**2 / (COP_hp + COP_rh)**2`` in the worst case, i.e. 25 % for a
+  heat pump at COP 3 against a resistive heater at COP 1. The error was zero while
+  the heat pump alone covered the demand and largest exactly when the resistive
+  heater had to step in, so it depressed the grid load in the cold hours that
+  determine the reinforcement need. The aggregated COP also feeds the OPF through
+  ``heat_pump.cop_df``

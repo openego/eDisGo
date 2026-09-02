@@ -51,6 +51,39 @@ class TestAggregateDistrictHeatingComponents:
     Unit tests for :func:`edisgo.tools.tools.aggregate_district_heating_components`.
     """
 
+    def test_aggregated_cop_reproduces_the_electricity_demand(self):
+        """
+        The aggregated COP must reproduce the electricity the two components
+        actually draw, i.e. it is the harmonic mean of their COPs weighted by
+        heat share, not the arithmetic one.
+
+        Heat pump COP 3 with 2 MW rated power covers 6 MW of the 9 MW demand
+        drawing 2 MW; the resistive heater at COP 1 covers the remaining 3 MW
+        drawing 3 MW. So 5 MW in total and COP_agg = 9 / 5 = 1.8. The
+        arithmetic mean gives 2/3 * 3 + 1/3 * 1 = 2.333, i.e. 3.857 MW -- 23 %
+        of the electricity demand missing.
+        """
+        edisgo, hp, _ = _district_heating_grid(cop_rh=1.0)
+        tools.aggregate_district_heating_components(edisgo)
+
+        cop = edisgo.heat_pump.cop_df[hp]
+        demand = edisgo.heat_pump.heat_demand_df[hp]
+        assert_allclose(cop.values, 1.8)
+        # the definition that matters: heat demand over aggregated COP is the
+        # electricity the two components really draw
+        assert_allclose((demand / cop).values, 5.0)
+
+    def test_aggregated_cop_is_unchanged_while_the_heat_pump_suffices(self):
+        """
+        As long as the heat pump alone can cover the demand the resistive
+        heater never runs, so the aggregated COP stays the heat pump's.
+        """
+        edisgo, hp, _ = _district_heating_grid(cop_rh=1.0)
+        # 3 MW demand needs 1 MW electricity, below the 2 MW rated power
+        edisgo.heat_pump.heat_demand_df.loc[:, :] = 3.0
+        tools.aggregate_district_heating_components(edisgo)
+        assert_allclose(edisgo.heat_pump.cop_df[hp].values, 3.0)
+
     def test_feedin_above_demand_does_not_produce_a_negative_demand(self, caplog):
         """
         Other heat sources delivering more than the network needs must switch the

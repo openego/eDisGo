@@ -1118,9 +1118,10 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                 ).clip(lower=0)
                 hp_p_set = edisgo_obj.topology.loads_df.at[district_hp, "p_set"]
                 if (el_demand > hp_p_set).any():
-                    # calculate COP by weighted COP of single components
-                    # (weighted by their contribution to cover heat demand)
-                    # determine percentage of contribution per component
+                    # Share of the heat demand each component covers. The heat pump
+                    # runs up to its rated power, the resistive heater covers the
+                    # rest; dividing both by el_demand gives shares of the heat,
+                    # because el_demand is heat demand over a single COP.
                     df = pd.concat(
                         [
                             (el_demand.clip(upper=hp_p_set) / el_demand)
@@ -1132,8 +1133,15 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                         ],
                         axis=1,
                     )
-                    new_cop = (
-                        edisgo_obj.heat_pump.cop_df[district_hps.index] * df
+                    # The aggregated COP has to reproduce the electricity demand of
+                    # the two components for the combined heat demand Q:
+                    #     Q / COP_agg = Q_hp / COP_hp + Q_rh / COP_rh
+                    # Dividing by Q makes 1 / COP_agg the heat-share-weighted mean of
+                    # the reciprocals, i.e. the harmonic mean -- not the arithmetic
+                    # mean of the COPs, which is always the larger of the two and
+                    # therefore always understates the electricity demand.
+                    new_cop = 1 / (
+                        df / edisgo_obj.heat_pump.cop_df[district_hps.index]
                     ).sum(axis=1)
                 else:
                     new_cop = edisgo_obj.heat_pump.cop_df[district_hp]
