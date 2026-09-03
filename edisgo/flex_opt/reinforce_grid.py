@@ -21,8 +21,13 @@ import pandas as pd
 
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import exceptions, reinforce_measures
-from edisgo.flex_opt.costs import grid_expansion_costs
+from edisgo.flex_opt.costs import (
+    grid_expansion_costs,
+    line_expansion_costs,
+    transformer_expansion_costs,
+)
 from edisgo.flex_opt.reinforce_measures import separate_lv_grid
+from edisgo.network.grids import LVGrid
 from edisgo.tools import tools
 from edisgo.tools.temporal_complexity_reduction import get_most_critical_time_steps
 
@@ -42,6 +47,7 @@ def reinforce_grid(
     mode: str | None = None,
     without_generator_import: bool = False,
     n_minus_one: bool = False,
+    log_reinforcement: bool = True,
     **kwargs,
 ) -> Results:
     """
@@ -82,6 +88,12 @@ def reinforce_grid(
         Determines whether n-1 security should be checked. Currently, n-1 security
         cannot be handled correctly, wherefore the case where this parameter is set to
         True will lead to an error being raised. Default: False.
+    log_reinforcement : bool
+        If True, every reinforcement measure is appended as a row to
+        :attr:`~.network.results.Results.reinforce_log`, logged via an INFO
+        message, and a cost summary grouped by trigger, issue case and
+        voltage level is logged at the end of the run. If False, none of this
+        happens and `reinforce_log` is left untouched. Default: True.
 
     Other Parameters
     -----------------
@@ -180,6 +192,12 @@ def reinforce_grid(
                 )
 
     iteration_step = 1
+    existing_reinforce_log = edisgo.results.reinforce_log
+    run_id = (
+        0
+        if existing_reinforce_log.empty
+        else int(existing_reinforce_log["run_id"].max()) + 1
+    )
     lv_grid_id = kwargs.get("lv_grid_id", None)
     scale_timeseries = kwargs.get("scale_timeseries", None)
     if mode == "lv" and lv_grid_id:
@@ -260,6 +278,21 @@ def reinforce_grid(
             _add_transformer_changes_to_equipment_changes(
                 edisgo, transformer_changes, iteration_step, "removed"
             )
+            # removed transformers are not logged here: they carry no cost of
+            # their own (grid_expansion_costs() never costs "removed" rows
+            # either, see costs.py) and, for the "replace with standard
+            # transformers" case, are already gone from the topology by this
+            # point, so a cost lookup for them would raise a KeyError
+            _add_reinforcement_log_entries(
+                edisgo,
+                iteration_step,
+                "hv_mv_station_overload",
+                "overloading",
+                overloaded_mv_station,
+                transformer_changes["added"],
+                run_id=run_id,
+                log_reinforcement=log_reinforcement,
+            )
 
         if not overloaded_lv_stations.empty:
             # reinforce distribution substations
@@ -275,6 +308,18 @@ def reinforce_grid(
             _add_transformer_changes_to_equipment_changes(
                 edisgo, transformer_changes, iteration_step, "removed"
             )
+            # removed transformers are not logged here, see comment on the
+            # hv_mv_station_overload case above
+            _add_reinforcement_log_entries(
+                edisgo,
+                iteration_step,
+                "mv_lv_station_overload",
+                "overloading",
+                overloaded_lv_stations,
+                transformer_changes["added"],
+                run_id=run_id,
+                log_reinforcement=log_reinforcement,
+            )
 
         if not crit_lines.empty:
             # reinforce lines
@@ -285,6 +330,28 @@ def reinforce_grid(
             _add_lines_changes_to_equipment_changes(
                 edisgo, lines_changes, iteration_step
             )
+            for overload_voltage_level, overload_stage in (
+                ("mv", "mv_line_overload"),
+                ("lv", "lv_line_overload"),
+            ):
+                level_lines = crit_lines[
+                    crit_lines.voltage_level == overload_voltage_level
+                ].index
+                level_changes = {
+                    name: lines_changes[name]
+                    for name in level_lines
+                    if name in lines_changes
+                }
+                _add_reinforcement_log_entries(
+                    edisgo,
+                    iteration_step,
+                    overload_stage,
+                    "overloading",
+                    crit_lines,
+                    level_changes,
+                    run_id=run_id,
+                    log_reinforcement=log_reinforcement,
+                )
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
@@ -363,13 +430,25 @@ def reinforce_grid(
     while_counter = 0
     while not crit_nodes.empty and while_counter < max_while_iterations:
         # reinforce lines
-        lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
+        lines_changes, node_mapping = reinforce_measures.reinforce_lines_voltage_issues(
             edisgo,
             edisgo.topology.mv_grid,
             crit_nodes,
+            return_node_mapping=True,
         )
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes(edisgo, lines_changes, iteration_step)
+        _add_reinforcement_log_entries(
+            edisgo,
+            iteration_step,
+            "mv_voltage",
+            "voltage",
+            crit_nodes,
+            lines_changes,
+            run_id=run_id,
+            mapping=node_mapping,
+            log_reinforcement=log_reinforcement,
+        )
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-voltage problems were solved
@@ -424,14 +503,25 @@ def reinforce_grid(
         while_counter = 0
         while not crit_stations.empty and while_counter < max_while_iterations:
             # reinforce distribution substations
-            transformer_changes = (
+            transformer_changes, node_mapping = (
                 reinforce_measures.reinforce_mv_lv_station_voltage_issues(
-                    edisgo, crit_stations
+                    edisgo, crit_stations, return_node_mapping=True
                 )
             )
             # write added transformers to results.equipment_changes
             _add_transformer_changes_to_equipment_changes(
                 edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_reinforcement_log_entries(
+                edisgo,
+                iteration_step,
+                "mv_lv_voltage",
+                "voltage",
+                crit_stations,
+                transformer_changes["added"],
+                run_id=run_id,
+                mapping=node_mapping,
+                log_reinforcement=log_reinforcement,
             )
 
             # run power flow analysis again (after updating pypsa object) and
@@ -488,14 +578,29 @@ def reinforce_grid(
             # for every topology in crit_nodes do reinforcement
             for grid_id in crit_nodes.lv_grid_id.unique():
                 # reinforce lines
-                lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
-                    edisgo,
-                    edisgo.topology.get_lv_grid(int(grid_id)),
-                    crit_nodes[crit_nodes.lv_grid_id == grid_id],
+                grid_crit_nodes = crit_nodes[crit_nodes.lv_grid_id == grid_id]
+                lines_changes, node_mapping = (
+                    reinforce_measures.reinforce_lines_voltage_issues(
+                        edisgo,
+                        edisgo.topology.get_lv_grid(int(grid_id)),
+                        grid_crit_nodes,
+                        return_node_mapping=True,
+                    )
                 )
                 # write changed lines to results.equipment_changes
                 _add_lines_changes_to_equipment_changes(
                     edisgo, lines_changes, iteration_step
+                )
+                _add_reinforcement_log_entries(
+                    edisgo,
+                    iteration_step,
+                    "lv_voltage",
+                    "voltage",
+                    grid_crit_nodes,
+                    lines_changes,
+                    run_id=run_id,
+                    mapping=node_mapping,
+                    log_reinforcement=log_reinforcement,
                 )
 
             # run power flow analysis again (after updating pypsa object)
@@ -584,6 +689,21 @@ def reinforce_grid(
             _add_transformer_changes_to_equipment_changes(
                 edisgo, transformer_changes, iteration_step, "removed"
             )
+            # removed transformers are not logged here: they carry no cost of
+            # their own (grid_expansion_costs() never costs "removed" rows
+            # either, see costs.py) and, for the "replace with standard
+            # transformers" case, are already gone from the topology by this
+            # point, so a cost lookup for them would raise a KeyError
+            _add_reinforcement_log_entries(
+                edisgo,
+                iteration_step,
+                "hv_mv_station_overload",
+                "overloading",
+                overloaded_mv_station,
+                transformer_changes["added"],
+                run_id=run_id,
+                log_reinforcement=log_reinforcement,
+            )
 
         if not overloaded_lv_stations.empty:
             # reinforce substations
@@ -599,6 +719,18 @@ def reinforce_grid(
             _add_transformer_changes_to_equipment_changes(
                 edisgo, transformer_changes, iteration_step, "removed"
             )
+            # removed transformers are not logged here, see comment on the
+            # hv_mv_station_overload case above
+            _add_reinforcement_log_entries(
+                edisgo,
+                iteration_step,
+                "mv_lv_station_overload",
+                "overloading",
+                overloaded_lv_stations,
+                transformer_changes["added"],
+                run_id=run_id,
+                log_reinforcement=log_reinforcement,
+            )
 
         if not crit_lines.empty:
             # reinforce lines
@@ -609,6 +741,28 @@ def reinforce_grid(
             _add_lines_changes_to_equipment_changes(
                 edisgo, lines_changes, iteration_step
             )
+            for overload_voltage_level, overload_stage in (
+                ("mv", "mv_line_overload"),
+                ("lv", "lv_line_overload"),
+            ):
+                level_lines = crit_lines[
+                    crit_lines.voltage_level == overload_voltage_level
+                ].index
+                level_changes = {
+                    name: lines_changes[name]
+                    for name in level_lines
+                    if name in lines_changes
+                }
+                _add_reinforcement_log_entries(
+                    edisgo,
+                    iteration_step,
+                    overload_stage,
+                    "overloading",
+                    crit_lines,
+                    level_changes,
+                    run_id=run_id,
+                    log_reinforcement=log_reinforcement,
+                )
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
@@ -684,6 +838,18 @@ def reinforce_grid(
     edisgo.results.grid_expansion_costs = grid_expansion_costs(
         edisgo, without_generator_import=without_generator_import
     )
+
+    if log_reinforcement:
+        run_log = edisgo.results.reinforce_log
+        run_log = run_log[run_log["run_id"] == run_id] if not run_log.empty else run_log
+        if not run_log.empty:
+            cost_summary = run_log.groupby(["trigger", "issue_case", "voltage_level"])[
+                "costs"
+            ].sum()
+            logger.info(
+                f"==> Reinforcement cost summary for run {run_id} (kEUR):\n"
+                f"{cost_summary}"
+            )
 
     return edisgo.results
 
@@ -1240,3 +1406,265 @@ def _add_transformer_changes_to_equipment_changes(
     )
 
     edisgo.results.equipment_changes = pd.concat(df_list)
+
+
+def _add_reinforcement_log_entries(
+    edisgo: EDisGo,
+    iteration_step: int,
+    stage: str,
+    trigger: str,
+    issues: pd.DataFrame,
+    changes: dict,
+    *,
+    run_id: int,
+    mapping: dict | None = None,
+    log_reinforcement: bool = True,
+) -> None:
+    """
+    Appends one row per (violation, changed component) to
+    :attr:`~.network.results.Results.reinforce_log`.
+
+    `issues` is the critical-component dataframe as returned by
+    :func:`~.flex_opt.check_tech_constraints.voltage_issues` (indexed by bus,
+    trigger "voltage") or by the overloading checks in
+    :mod:`~.flex_opt.check_tech_constraints` (indexed by line or station,
+    trigger "overloading"). `changes` is either the flat
+    {changed_line: quantity} dict returned by
+    :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` /
+    `reinforce_lines_overloading`, or one of the per-station
+    {station: [transformer_names]} sub-dicts ("added"/"removed") returned by
+    the station reinforcement functions. `mapping` is a {changed_component:
+    critical_component} dict, optionally returned by
+    `reinforce_lines_voltage_issues` / `reinforce_mv_lv_station_voltage_issues`
+    (`return_node_mapping=True`), needed whenever `changes` is not already
+    keyed (directly, or - for station changes - via one of its list values)
+    by the critical component itself; for overloading, `mapping` is None.
+
+    'value'/'limit' are the actual measured quantity and the allowed
+    threshold it exceeded, in the physical unit of the trigger: p.u. voltage
+    for trigger "voltage" (both derived from the already-known signed
+    deviation, i.e. no extra power-flow lookup beyond `edisgo.results.v_res`),
+    MVA apparent power for trigger "overloading" on lines (both derived from
+    the already-known relative overload, via `edisgo.results.s_res`). For
+    station overloading (trigger "overloading", `issues` indexed by station
+    and carrying 's_missing' instead of 'max_rel_overload'), 'value' is the
+    missing apparent power in MVA, and 'limit' is NaN, since by the time this
+    function runs the station's transformer set has already been changed by
+    the reinforcement measure, so there is no reliable pre-reinforcement
+    apparent power/allowed-capacity pair left to derive a limit from.
+
+    `run_id` distinguishes separate calls to
+    :func:`~.flex_opt.reinforce_grid.reinforce_grid` (e.g. from
+    `enhanced_reinforce_grid` or `catch_convergence_reinforce_grid` calling it
+    repeatedly), since `iteration_step` only counts within one such call.
+
+    If `log_reinforcement` is False, this function is a no-op: no row is
+    appended and no logging happens.
+    """
+    if not log_reinforcement or not changes:
+        return
+
+    # only used to look up s_nom_after for added transformers, which - unlike
+    # removed ones - are still present in the topology at this point
+    all_transformers = pd.concat(
+        [edisgo.topology.transformers_hvmv_df, edisgo.topology.transformers_df]
+    )
+
+    # a line reinforced across several iterations (e.g. one more parallel
+    # standard line added per iteration until a voltage issue is resolved)
+    # is logged once per iteration, but earthworks are only incurred once
+    # per line - grid_expansion_costs() reflects this by summing quantity
+    # per line across the whole run before costing; replicate that here by
+    # only charging earthworks on a line's first appearance in this run_id
+    existing_log = edisgo.results.reinforce_log
+    lines_already_costed = (
+        set()
+        if existing_log.empty
+        else set(existing_log.loc[existing_log["run_id"] == run_id, "changed_component"])
+    )
+
+    rows = []
+    for key, value in changes.items():
+        if isinstance(value, (list, tuple, np.ndarray)):
+            # station reinforcement: value is the list of transformers
+            # added/removed for the critical station. Usually key is the
+            # critical station itself, but for some producers (e.g.
+            # reinforce_mv_lv_station_voltage_issues()) key is an internal
+            # grouping label (str(grid)) that does not match `issues`'
+            # index directly; mapping then resolves the actual triggering
+            # station from one of the changed transformers.
+            changed_components_quantities = [(name, 1) for name in value]
+            criterion_component = (
+                mapping[changed_components_quantities[0][0]]
+                if mapping is not None
+                else key
+            )
+        elif mapping is not None:
+            # voltage-triggered line reinforcement: key is the changed line,
+            # mapping resolves it to the critical node that triggered it
+            criterion_component = mapping[key]
+            changed_components_quantities = [(key, value)]
+        elif isinstance(value, (int, float, np.integer, np.floating)):
+            # overloading-triggered line reinforcement: key is both the
+            # changed line and the critical component (1:1). Quantity is
+            # a float here, not an int, when it comes from
+            # reinforce_lines_overloading() -> _add_parallel_standard_lines(),
+            # which derives it from a pandas Series subtraction.
+            criterion_component = key
+            changed_components_quantities = [(key, value)]
+        else:
+            raise ValueError(
+                f"Unexpected shape of 'changes' entry for key '{key}': "
+                f"{value!r}."
+            )
+
+        issue = issues.loc[criterion_component]
+        time_index = issue["time_index"]
+        if "lv_grid_id" in issues.columns:
+            # voltage issues already carry it (None for MV-level issues)
+            lv_grid_id = issue["lv_grid_id"]
+        elif "grid" in issues.columns and isinstance(issue["grid"], LVGrid):
+            # LV/MV-LV station overloading: the LVGrid object is right there;
+            # None for HV/MV station overloading (issue["grid"] is an MVGrid)
+            lv_grid_id = issue["grid"].id
+        elif criterion_component in edisgo.topology.lines_df.index:
+            # line overloading: derive from the violated line's first bus;
+            # NaN for MV lines (their buses have no lv_grid_id), normalized
+            # to None to match the other cases
+            bus0 = edisgo.topology.lines_df.at[criterion_component, "bus0"]
+            grid_id = edisgo.topology.buses_df.at[bus0, "lv_grid_id"]
+            lv_grid_id = None if pd.isna(grid_id) else grid_id
+        else:
+            lv_grid_id = None
+        issue_case = edisgo.timeseries.timesteps_load_feedin_case[time_index]
+
+        if trigger == "voltage":
+            # max_voltage_dev = actual voltage - allowed limit (see
+            # voltage_deviation_from_allowed_voltage_limits()), so the
+            # allowed limit can be recovered from the two without a new
+            # lookup function; overvoltage/undervoltage is decided by the
+            # deviation's sign, not by the (always positive) voltage itself
+            voltage_dev = issue["max_voltage_dev"]
+            issue_value = edisgo.results.v_res.at[time_index, criterion_component]
+            limit = issue_value - voltage_dev
+            issue_type = "overvoltage" if voltage_dev > 0 else "undervoltage"
+        elif trigger == "overloading":
+            if "max_rel_overload" in issues.columns:
+                # max_rel_overload = actual apparent power / allowed
+                # apparent power (see lines_relative_load()), so the
+                # allowed capacity can likewise be recovered arithmetically
+                relative_load = issue["max_rel_overload"]
+                issue_value = edisgo.results.s_res.at[time_index, criterion_component]
+                limit = issue_value / relative_load
+            else:
+                # station overloading: no s_res entry to fall back on, since
+                # by this point the station's transformer set has already
+                # been changed by the reinforcement measure
+                issue_value = issue["s_missing"]
+                limit = np.nan
+            issue_type = "overloading"
+        else:
+            raise ValueError(f"Trigger '{trigger}' is not a valid option.")
+
+        is_line = changed_components_quantities[0][0] in edisgo.topology.lines_df.index
+        group_equipment = set()
+        group_length = 0.0
+        group_quantity = 0.0
+        group_costs = 0.0
+
+        for changed_component, quantity in changed_components_quantities:
+            if is_line:
+                line_costs = line_expansion_costs(edisgo, [changed_component])
+                equipment = edisgo.topology.lines_df.at[
+                    changed_component, "type_info"
+                ]
+                voltage_level = line_costs.at[changed_component, "voltage_level"]
+                costs_earthworks = (
+                    0.0
+                    if changed_component in lines_already_costed
+                    else line_costs.at[changed_component, "costs_earthworks"]
+                )
+                lines_already_costed.add(changed_component)
+                costs = (
+                    costs_earthworks
+                    + line_costs.at[changed_component, "costs_cable"] * quantity
+                )
+                length_km = (
+                    quantity
+                    * edisgo.topology.lines_df.at[changed_component, "length"]
+                )
+                num_parallel_after = edisgo.topology.lines_df.at[
+                    changed_component, "num_parallel"
+                ]
+                s_nom_after = edisgo.topology.lines_df.at[changed_component, "s_nom"]
+                group_length += length_km
+            else:
+                transformer_costs = transformer_expansion_costs(
+                    edisgo, [changed_component]
+                )
+                equipment = changed_component
+                voltage_level = transformer_costs.at[
+                    changed_component, "voltage_level"
+                ]
+                costs = transformer_costs.at[changed_component, "costs"]
+                # length/num_parallel are line-only concepts
+                length_km = np.nan
+                num_parallel_after = np.nan
+                s_nom_after = all_transformers.at[changed_component, "s_nom"]
+
+            group_equipment.add(equipment)
+            group_quantity += quantity
+            group_costs += costs
+
+            rows.append(
+                {
+                    "run_id": run_id,
+                    "iteration_step": iteration_step,
+                    "reinforcement_stage": stage,
+                    "trigger": trigger,
+                    "criterion_component": criterion_component,
+                    "voltage_level": voltage_level,
+                    "lv_grid_id": lv_grid_id,
+                    "time_index": time_index,
+                    "value": issue_value,
+                    "limit": limit,
+                    "issue_type": issue_type,
+                    "issue_case": issue_case,
+                    "changed_component": changed_component,
+                    "equipment": equipment,
+                    "quantity": quantity,
+                    "length_km": length_km,
+                    "num_parallel_after": num_parallel_after,
+                    "s_nom_after": s_nom_after,
+                    "costs": costs,
+                }
+            )
+
+        # one human-readable line per violation, aggregating all components
+        # changed to resolve it (e.g. several new parallel lines/transformers).
+        # Shown as deviation/ratio rather than the absolute value/limit now
+        # stored in the DataFrame, since that reads more naturally (e.g.
+        # "overvoltage 0.031 p.u." rather than "overvoltage 1.081 p.u.")
+        if trigger == "voltage":
+            headline = f"{issue_type} {abs(voltage_dev):.3f} p.u."
+        elif "max_rel_overload" in issues.columns:
+            headline = f"overloading {relative_load:.3f} p.u. > 1.000 p.u."
+        else:
+            headline = f"overloading {issue_value:.3f} MVA missing"
+
+        noun = "line(s)" if is_line else "transformer(s)"
+        equipment_str = "/".join(sorted(group_equipment))
+        length_str = f", {group_length:.2f} km" if is_line else ""
+
+        logger.info(
+            f"Iteration {iteration_step} | {stage} | {criterion_component}: "
+            f"{headline}\n"
+            f"  at {time_index:%Y-%m-%d %H:%M} "
+            f"({issue_case.replace('_', ' ')}) -> "
+            f"{group_quantity:g} {noun}, {equipment_str}{length_str}, "
+            f"{group_costs:.1f} kEUR"
+        )
+
+    edisgo.results.reinforce_log = pd.concat(
+        [edisgo.results.reinforce_log, pd.DataFrame(rows)]
+    )
