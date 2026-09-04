@@ -31,32 +31,14 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 
-def oedb(edisgo_object, scenario, engine, import_types=None):
-    """
-    Gets heat pumps for specified scenario from oedb and integrates them into the grid.
-
-    See :attr:`~.edisgo.EDisGo.import_heat_pumps` for more information.
-
-    Parameters
-    ----------
-    edisgo_object : :class:`~.EDisGo`
-    scenario : str
-        Scenario for which to retrieve heat pump data. Possible options
-        are "eGon2035" and "eGon100RE".
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
-    import_types : list(str) or None
-        Specifies which technologies to import. Possible options are
-        "individual_heat_pumps", "central_heat_pumps" and "central_resistive_heaters".
-        If None, all are imported.
-
-    Returns
-    --------
-    list(str)
-        List with names (as in index of :attr:`~.network.topology.Topology.loads_df`)
-        of integrated heat pumps.
-
-    """
+def _query_heat_pump_data_oedb(
+    edisgo_object,
+    scenario,
+    engine,
+    import_types=None,
+    query_limit=None,
+):
+    """Query and prepare heat-pump component data from the OEP."""
 
     def _get_individual_heat_pumps():
         """
@@ -98,6 +80,8 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 == egon_map_zensus_weather_cell.zensus_population_id,
             )
         )
+        if query_limit is not None:
+            query = query.limit(query_limit)
 
         df = pd.read_sql(query.statement, engine, index_col=None)
 
@@ -159,6 +143,8 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             egon_etrago_link.p_nom
             <= edisgo_object.config["grid_connection"]["upper_limit_voltage_level_4"],
         )
+        if query_limit is not None:
+            query = query.limit(query_limit)
         df = pd.read_sql(query.statement, engine, index_col=None)
         if not df.empty:
             # Query for egon_etrago_bus
@@ -378,9 +364,50 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         else:
             resistive_heaters_central = pd.DataFrame(columns=["p_set"])
 
-    # sanity check
+    # get capacity used by the caller for a sanity check
     with db.session_scope_egon_data(engine) as session:
         hp_individual_cap = _get_individual_heat_pump_capacity()
+
+    return hp_individual, hp_central, resistive_heaters_central, hp_individual_cap
+
+
+def oedb(edisgo_object, scenario, engine, import_types=None):
+    """
+    Get heat pumps for a specified OEP scenario and integrate them into the grid.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    scenario : str
+        Scenario for which to retrieve heat-pump data. Possible options are
+        "eGon2035" and "eGon100RE".
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+    import_types : list(str) or None
+        Technologies to import. Possible options are "individual_heat_pumps",
+        "central_heat_pumps" and "central_resistive_heaters". If None, all are
+        imported.
+
+    Returns
+    -------
+    list(str)
+        Names of the integrated heat pumps in
+        :attr:`~.network.topology.Topology.loads_df`.
+    """
+
+    (
+        hp_individual,
+        hp_central,
+        resistive_heaters_central,
+        hp_individual_cap,
+    ) = _query_heat_pump_data_oedb(
+        edisgo_object=edisgo_object,
+        scenario=scenario,
+        engine=engine,
+        import_types=import_types,
+    )
+
+    # sanity check
     if not np.isclose(hp_individual_cap, hp_individual.p_set.sum(), atol=1e-3):
         logger.warning(
             f"Capacity of individual heat pumps ({hp_individual.p_set.sum()} MW) "
@@ -674,16 +701,25 @@ def efficiency_resistive_heaters_oedb(scenario, engine):
         given in p.u.
 
     """
+    heat_parameters = _query_resistive_heater_efficiency_oedb(
+        scenario=scenario,
+        engine=engine,
+    )
+
+    return heat_parameters["efficiency"]
+
+
+def _query_resistive_heater_efficiency_oedb(scenario, engine):
+    """Query heat parameters containing resistive-heater efficiencies."""
+
     config = Config()
     (egon_scenario_parameters,) = config.import_tables_from_oep(
         engine, ["egon_scenario_parameters"], "scenario"
     )
 
-    # get cop from database
     with db.session_scope_egon_data(engine) as session:
         query = session.query(
             egon_scenario_parameters.heat_parameters,
         ).filter(egon_scenario_parameters.name == scenario)
-        eta_dict = query.first()[0]["efficiency"]
 
-    return eta_dict
+        return query.first()[0]

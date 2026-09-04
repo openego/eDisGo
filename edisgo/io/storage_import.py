@@ -60,6 +60,27 @@ def home_batteries_oedb(
         units.
 
     """
+    batteries_df = _query_home_batteries_oedb(
+        engine=engine,
+        scenario=scenario,
+        building_ids=edisgo_obj.topology.loads_df.building_id.dropna().unique(),
+        upper_power_limit=edisgo_obj.config["grid_connection"][
+            "upper_limit_voltage_level_4"
+        ],
+    )
+
+    return _home_batteries_grid_integration(edisgo_obj, batteries_df)
+
+
+def _query_home_batteries_oedb(
+    engine: Engine,
+    scenario: str,
+    building_ids,
+    upper_power_limit: float,
+    limit: int | None = None,
+):
+    """Query home batteries for selected buildings from the OEP."""
+
     config = Config()
     (egon_home_batteries,) = config.import_tables_from_oep(
         engine, ["egon_home_batteries"], "supply"
@@ -74,17 +95,15 @@ def home_batteries_oedb(
             )
             .filter(
                 egon_home_batteries.scenario == scenario,
-                egon_home_batteries.building_id.in_(
-                    edisgo_obj.topology.loads_df.building_id.unique()
-                ),
-                egon_home_batteries.p_nom
-                <= edisgo_obj.config["grid_connection"]["upper_limit_voltage_level_4"],
+                egon_home_batteries.building_id.in_(building_ids),
+                egon_home_batteries.p_nom <= upper_power_limit,
             )
             .order_by(egon_home_batteries.index)
         )
-        batteries_df = pd.read_sql(sql=query.statement, con=engine, index_col=None)
+        if limit is not None:
+            query = query.limit(limit)
 
-    return _home_batteries_grid_integration(edisgo_obj, batteries_df)
+        return pd.read_sql(sql=query.statement, con=engine, index_col=None)
 
 
 def _home_batteries_grid_integration(edisgo_obj, batteries_df):

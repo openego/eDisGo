@@ -4,6 +4,7 @@ import os
 import shutil
 
 from math import acos, tan
+from unittest.mock import Mock
 
 import numpy as np
 import pandas as pd
@@ -12,8 +13,21 @@ import pytest
 from pandas.testing import assert_frame_equal, assert_index_equal, assert_series_equal
 
 from edisgo import EDisGo
+from edisgo.io import timeseries_import
 from edisgo.network import timeseries
 from edisgo.tools.tools import assign_voltage_level_to_component
+
+
+@pytest.fixture
+def mock_oep_feedin(monkeypatch):
+    """Replace one OEP feed-in importer with a synthetic profile DataFrame."""
+
+    def install_mock(function_name, profiles):
+        feedin_mock = Mock(return_value=profiles)
+        monkeypatch.setattr(timeseries_import, function_name, feedin_mock)
+        return feedin_mock
+
+    return install_mock
 
 
 class TestTimeSeries:
@@ -1234,11 +1248,28 @@ class TestTimeSeries:
                 cases=["load_case"], df=df, configs=self.edisgo.config
             )
 
-    @pytest.mark.slow
-    @pytest.mark.oep
-    def test_predefined_fluctuating_generators_by_technology(self):
+    def test_predefined_fluctuating_generators_by_technology(
+        self,
+        mock_oep_feedin,
+    ):
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
+
+        profile_columns = pd.MultiIndex.from_product(
+            [
+                ["solar", "wind"],
+                [1122074, 1122075, 1122076, 1123075],
+            ],
+            names=["type", "weather_cell_id"],
+        )
+        oedb_profiles = pd.DataFrame(
+            0.0,
+            index=timeindex,
+            columns=profile_columns,
+        )
+        oedb_profiles.loc[:, ("wind", 1122075)] = [0.0029929, 0.009521]
+        oedb_profiles.loc[:, ("solar", 1122075)] = [0.07824, 0.11216]
+        feedin_mock = mock_oep_feedin("feedin_oedb_legacy", oedb_profiles)
 
         # ############# oedb, all generators (default)
         self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
@@ -1268,6 +1299,12 @@ class TestTimeSeries:
             index=timeindex,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+
+        feedin_mock.assert_called_once_with(
+            self.edisgo,
+            timeindex=None,
+            engine=None,
+        )
         comp = "GeneratorFluctuating_8"  # wind, w_id = 1122075
         p_nom = 3.0
         exp = pd.Series(
@@ -1404,17 +1441,37 @@ class TestTimeSeries:
         )
         # fmt: on
 
-    @pytest.mark.oep
-    def test_predefined_fluctuating_generators_by_technology_oedb(self, oep_engine):
+    def test_predefined_fluctuating_generators_by_technology_oedb(
+        self,
+        mock_oep_feedin,
+    ):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         edisgo_object.timeseries.timeindex = timeindex
 
+        profile_columns = pd.MultiIndex.from_product(
+            [
+                ["solar", "wind"],
+                [11051, 11052],
+            ],
+            names=["type", "weather_cell_id"],
+        )
+        oedb_profiles = pd.DataFrame(
+            0.0,
+            index=timeindex,
+            columns=profile_columns,
+        )
+        oedb_profiles.loc[:, ("solar", 11052)] = [0.548044, 0.568356]
+        oedb_profiles.loc[:, ("solar", 11051)] = [0.505049, 0.555396]
+        feedin_mock = mock_oep_feedin("feedin_oedb", oedb_profiles)
+
         # ############# oedb, all generators (default)
         edisgo_object.timeseries.predefined_fluctuating_generators_by_technology(
-            edisgo_object, "oedb", engine=oep_engine
+            edisgo_object,
+            "oedb",
+            engine=None,
         )
 
         # check shape
@@ -1441,6 +1498,12 @@ class TestTimeSeries:
             index=timeindex,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+
+        feedin_mock.assert_called_once_with(
+            edisgo_object,
+            engine=None,
+            timeindex=None,
+        )
         # solar, w_id = 11051
         comp = "Generator_mvgd_33535_lvgd_1164120002_pv_rooftop_324"
         p_nom = 0.0033
@@ -2341,7 +2404,7 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
                 assert (
-                    f"{attr} has duplicated columns:"
+                    f"{attr} has duplicated columns: "
                     f"{ts_tmp.iloc[:, 0:2].columns.values}" in caplog.text
                 )
                 caplog.clear()

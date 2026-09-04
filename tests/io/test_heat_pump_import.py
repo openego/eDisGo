@@ -1,5 +1,7 @@
 import logging
 
+from unittest.mock import Mock
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,6 +11,20 @@ from shapely.geometry import Point
 from edisgo import EDisGo
 from edisgo.io import heat_pump_import
 from edisgo.tools.tools import determine_bus_voltage_level
+
+
+@pytest.fixture
+def mock_oep_heat_pump_query(monkeypatch):
+    """Replace one heat-pump OEP query with synthetic return data."""
+
+    def install_mock(function_name, result):
+        query_mock = (
+            Mock(side_effect=result) if callable(result) else Mock(return_value=result)
+        )
+        monkeypatch.setattr(heat_pump_import, function_name, query_mock)
+        return query_mock
+
+    return install_mock
 
 
 class TestHeatPumpImport:
@@ -57,27 +73,63 @@ class TestHeatPumpImport:
         )
         return hp_df
 
-    @pytest.mark.oep
-    def test_oedb(self, caplog, oep_engine):
+    def test_oedb_offline(self, caplog, mock_oep_heat_pump_query):
+        first_edisgo = self.edisgo
+        hp_individual = self.setup_heat_pump_data_individual_heating()
+        hp_central = self.setup_heat_pump_data_dh()
+        resistive_heaters_central = self.setup_resistive_heater_data_dh()
+        resistive_heaters_central.at[1, "p_set"] = 0.1
+        hp_individual_cap = hp_individual.p_set.sum()
+
+        def query_data(*args, **kwargs):
+            import_types = kwargs["import_types"]
+            if import_types is None:
+                return (
+                    hp_individual.copy(deep=True),
+                    hp_central.copy(deep=True),
+                    resistive_heaters_central.copy(deep=True),
+                    hp_individual_cap,
+                )
+            if import_types == ["central_heat_pumps"]:
+                return (
+                    pd.DataFrame(columns=["p_set"]),
+                    hp_central.iloc[[0]].copy(deep=True),
+                    pd.DataFrame(columns=["p_set"]),
+                    hp_individual_cap,
+                )
+            raise ValueError(f"Unexpected import types: {import_types}")
+
+        query_mock = mock_oep_heat_pump_query(
+            "_query_heat_pump_data_oedb",
+            query_data,
+        )
+
         with caplog.at_level(logging.DEBUG):
-            heat_pump_import.oedb(self.edisgo, scenario="eGon2035", engine=oep_engine)
+            heat_pump_import.oedb(
+                self.edisgo,
+                scenario="eGon2035",
+                engine=None,
+            )
         loads_df = self.edisgo.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
         assert "Capacity of individual heat pumps" not in caplog.text
-        assert len(hp_df) == 152
-        assert len(hp_df[hp_df.sector == "individual_heating"]) == 150
+        assert len(hp_df) == 8
+        assert len(hp_df[hp_df.sector == "individual_heating"]) == 3
         assert np.isclose(
-            hp_df[hp_df.sector == "individual_heating"].p_set.sum(), 2.97316
+            hp_df[hp_df.sector == "individual_heating"].p_set.sum(),
+            hp_individual.p_set.sum(),
         )
         dh_hp = hp_df[hp_df.sector == "district_heating"]
-        assert len(dh_hp) == 1
-        assert np.isclose(dh_hp.p_set.sum(), 0.095202)
+        assert len(dh_hp) == 3
+        assert np.isclose(dh_hp.p_set.sum(), hp_central.p_set.sum())
         dh_rh = hp_df[hp_df.sector == "district_heating_resistive_heater"]
-        assert len(dh_rh) == 1
-        assert np.isclose(dh_rh.p_set.sum(), 0.042807)
-        # assert central heat pump and resistive heater at same bus in voltage level 6
-        assert determine_bus_voltage_level(self.edisgo, dh_hp.bus[0]) == 6
-        assert dh_hp.bus[0] == dh_rh.bus[0]
+        assert len(dh_rh) == 2
+        assert np.isclose(dh_rh.p_set.sum(), resistive_heaters_central.p_set.sum())
+        # central heat pumps and the resistive heater in the same district-heating
+        # network are integrated at the same bus
+        dh_hp_id_5 = dh_hp[dh_hp.district_heating_id == 5]
+        dh_rh_id_5 = dh_rh[dh_rh.district_heating_id == 5]
+        assert dh_rh_id_5.bus.iat[0] in dh_hp_id_5.bus.values
 
         # test without resistive heaters and individual heat pumps
         self.edisgo = EDisGo(
@@ -86,7 +138,7 @@ class TestHeatPumpImport:
         heat_pump_import.oedb(
             self.edisgo,
             scenario="eGon2035",
-            engine=oep_engine,
+            engine=None,
             import_types=["central_heat_pumps"],
         )
         loads_df = self.edisgo.topology.loads_df
@@ -94,7 +146,52 @@ class TestHeatPumpImport:
         assert len(hp_df) == 1
         assert len(hp_df[hp_df.sector == "district_heating"]) == 1
         # assert central heat pump in voltage level 7
-        assert determine_bus_voltage_level(self.edisgo, hp_df.bus[0]) == 7
+        assert determine_bus_voltage_level(self.edisgo, hp_df.bus.iat[0]) == 7
+
+        assert query_mock.call_count == 2
+        assert query_mock.call_args_list[0].kwargs == {
+            "edisgo_object": first_edisgo,
+            "scenario": "eGon2035",
+            "engine": None,
+            "import_types": None,
+        }
+        assert query_mock.call_args_list[1].kwargs == {
+            "edisgo_object": self.edisgo,
+            "scenario": "eGon2035",
+            "engine": None,
+            "import_types": ["central_heat_pumps"],
+        }
+
+    @pytest.mark.oep
+    def test_query_heat_pump_data_oedb_live(self, oep_engine):
+        (
+            hp_individual,
+            hp_central,
+            resistive_heaters_central,
+            hp_individual_cap,
+        ) = heat_pump_import._query_heat_pump_data_oedb(
+            edisgo_object=self.edisgo,
+            scenario="eGon2035",
+            engine=oep_engine,
+            query_limit=2,
+        )
+
+        assert 0 < len(hp_individual) <= 2
+        assert len(hp_central) <= 2
+        assert len(resistive_heaters_central) <= 2
+        assert {"building_id", "p_set", "weather_cell_id"}.issubset(
+            hp_individual.columns
+        )
+        for central_data in [hp_central, resistive_heaters_central]:
+            if not central_data.empty:
+                assert {
+                    "p_set",
+                    "weather_cell_id",
+                    "district_heating_id",
+                    "geom",
+                    "area_id",
+                }.issubset(central_data.columns)
+        assert hp_individual_cap > 0
 
     def test__grid_integration(self, caplog):
         # ############# test integration of central heat pumps ####################
@@ -194,10 +291,42 @@ class TestHeatPumpImport:
         bus_rh = hp_df[hp_df.p_set == 0.17].bus[0]
         assert determine_bus_voltage_level(self.edisgo, bus_rh) == 6
 
-    @pytest.mark.oep
-    def test_efficiency_resistive_heaters_oedb(self, oep_engine):
-        eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
-            scenario="eGon2035", engine=oep_engine
+    def test_efficiency_resistive_heaters_oedb_offline(
+        self,
+        mock_oep_heat_pump_query,
+    ):
+        query_mock = mock_oep_heat_pump_query(
+            "_query_resistive_heater_efficiency_oedb",
+            {
+                "efficiency": {
+                    "central_resistive_heater": 0.99,
+                    "rural_resistive_heater": 0.9,
+                }
+            },
         )
+
+        eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
+            scenario="eGon2035",
+            engine=None,
+        )
+
         assert eta_dict["central_resistive_heater"] == 0.99
         assert eta_dict["rural_resistive_heater"] == 0.9
+        query_mock.assert_called_once_with(scenario="eGon2035", engine=None)
+
+    @pytest.mark.oep
+    def test_query_resistive_heater_efficiency_oedb_live(self, oep_engine):
+        heat_parameters = heat_pump_import._query_resistive_heater_efficiency_oedb(
+            scenario="eGon2035",
+            engine=oep_engine,
+        )
+
+        assert "efficiency" in heat_parameters
+        assert {
+            "central_resistive_heater",
+            "rural_resistive_heater",
+        }.issubset(heat_parameters["efficiency"])
+        assert all(
+            0 < heat_parameters["efficiency"][key] <= 1
+            for key in ["central_resistive_heater", "rural_resistive_heater"]
+        )

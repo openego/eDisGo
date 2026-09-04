@@ -158,20 +158,25 @@ class TestTimeseriesImport:
         assert_index_equal(ind_full, timeindex)
 
     @pytest.mark.oep
-    def test_feedin_oedb_legacy_live(self, oep_engine):
-        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        timeindex = pd.date_range("1/1/2011", periods=2, freq="H")
+    def test_query_feedin_oedb_legacy_live(self, oep_engine):
+        """Test the legacy OEP query contract for one weather cell."""
 
-        feedin = timeseries_import.feedin_oedb_legacy(
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+
+        database_data = timeseries_import._query_feedin_oedb_legacy(
             edisgo,
-            timeindex=timeindex,
+            weather_cell_ids={1122074},
             engine=oep_engine,
         )
 
-        assert feedin.shape == (2, 4)
-        assert_index_equal(feedin.index, timeindex)
-        assert set(feedin.columns.get_level_values(0)) == {"solar", "wind"}
-        assert set(feedin.columns.get_level_values(1)) == {1122074, 1122075}
+        assert set(database_data.columns) == {
+            "weather_cell_id",
+            "carrier",
+            "feedin",
+        }
+        assert set(database_data.weather_cell_id) == {1122074}
+        assert set(database_data.carrier) == {"solar", "wind_onshore"}
+        assert database_data.feedin.map(len).eq(8760).all()
 
     def test_feedin_oedb_legacy_offline(self, monkeypatch):
         """Test legacy feed-in transformation with synthetic query data."""

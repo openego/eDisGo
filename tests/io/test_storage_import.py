@@ -1,11 +1,31 @@
 import logging
 
+from unittest.mock import Mock
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from edisgo import EDisGo
 from edisgo.io import storage_import
+
+
+@pytest.fixture
+def mock_home_battery_query(monkeypatch):
+    """Replace the OEP battery query and return fresh synthetic data per call."""
+
+    def install_mock(batteries_df):
+        query_mock = Mock(
+            side_effect=lambda *args, **kwargs: batteries_df.copy(deep=True)
+        )
+        monkeypatch.setattr(
+            storage_import,
+            "_query_home_batteries_oedb",
+            query_mock,
+        )
+        return query_mock
+
+    return install_mock
 
 
 class TestStorageImport:
@@ -20,26 +40,30 @@ class TestStorageImport:
             data={
                 "p_nom": [0.005, 0.15, 2.0],
                 "capacity": [1.0, 1.0, 1.0],
-                "building_id": [446651, 445710, 446933],
+                "building_id": [444312, 445710, 446933],
             },
             index=[1, 2, 3],
         )
         return df
 
-    @pytest.mark.oep
-    def test_oedb(self, caplog, oep_engine):
+    def test_home_batteries_oedb_offline(self, caplog, mock_home_battery_query):
+        batteries_df = self.setup_home_batteries_data()
+        query_mock = mock_home_battery_query(batteries_df)
+
         # test without new PV rooftop plants
         with caplog.at_level(logging.DEBUG):
             integrated_storages = storage_import.home_batteries_oedb(
-                self.edisgo, scenario="eGon2035", engine=oep_engine
+                self.edisgo,
+                scenario="eGon2035",
+                engine=None,
             )
         storage_df = self.edisgo.topology.storage_units_df
-        assert len(integrated_storages) == 666
-        assert len(storage_df) == 666
-        assert np.isclose(storage_df.p_nom.sum(), 2.02723, atol=1e-3)
-        assert "2.03 MW of home batteries integrated." in caplog.text
+        assert len(integrated_storages) == 3
+        assert len(storage_df) == 3
+        assert np.isclose(storage_df.p_nom.sum(), 2.155)
+        assert "2.15 MW of home batteries integrated." in caplog.text
         assert (
-            "Of this 2.03 MW do not have a generator with the same building ID."
+            "Of this 2.15 MW do not have a generator with the same building ID."
             in caplog.text
         )
         caplog.clear()
@@ -48,17 +72,72 @@ class TestStorageImport:
         self.edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        self.edisgo.import_generators(generator_scenario="eGon2035", engine=oep_engine)
+        loads_by_building = self.edisgo.topology.loads_df.drop_duplicates(
+            subset=["building_id"]
+        ).set_index("building_id")
+        pv_df = pd.DataFrame(
+            {
+                "bus": [
+                    loads_by_building.at[building_id, "bus"]
+                    for building_id in batteries_df.building_id
+                ],
+                "p_nom": [0.01, 0.02, 0.03],
+                "type": "solar",
+                "building_id": batteries_df.building_id.to_list(),
+            },
+            index=[
+                f"Generator_PV_{building_id}"
+                for building_id in batteries_df.building_id
+            ],
+        )
+        self.edisgo.topology.generators_df = pd.concat(
+            [self.edisgo.topology.generators_df, pv_df]
+        )
+
         with caplog.at_level(logging.DEBUG):
             integrated_storages = storage_import.home_batteries_oedb(
-                self.edisgo, scenario="eGon2035", engine=oep_engine
+                self.edisgo,
+                scenario="eGon2035",
+                engine=None,
             )
         storage_df = self.edisgo.topology.storage_units_df
-        assert len(integrated_storages) == 666
-        assert len(storage_df) == 666
-        assert np.isclose(storage_df.p_nom.sum(), 2.02723, atol=1e-3)
-        assert "2.03 MW of home batteries integrated." in caplog.text
+        assert len(integrated_storages) == 3
+        assert len(storage_df) == 3
+        assert np.isclose(storage_df.p_nom.sum(), 2.155)
+        assert "2.15 MW of home batteries integrated." in caplog.text
         assert "do not have a generator with the same building ID." not in caplog.text
+
+        assert query_mock.call_count == 2
+        for call in query_mock.call_args_list:
+            assert call.kwargs["engine"] is None
+            assert call.kwargs["scenario"] == "eGon2035"
+            assert set(call.kwargs["building_ids"]) == set(
+                self.edisgo.topology.loads_df.building_id.dropna().unique()
+            )
+            assert (
+                call.kwargs["upper_power_limit"]
+                == self.edisgo.config["grid_connection"]["upper_limit_voltage_level_4"]
+            )
+
+    @pytest.mark.oep
+    def test_query_home_batteries_oedb_live(self, oep_engine):
+        building_ids = self.edisgo.topology.loads_df.building_id.dropna().unique()
+        upper_power_limit = self.edisgo.config["grid_connection"][
+            "upper_limit_voltage_level_4"
+        ]
+
+        batteries_df = storage_import._query_home_batteries_oedb(
+            engine=oep_engine,
+            scenario="eGon2035",
+            building_ids=building_ids,
+            upper_power_limit=upper_power_limit,
+            limit=2,
+        )
+
+        assert 0 < len(batteries_df) <= 2
+        assert {"building_id", "p_nom", "capacity"}.issubset(batteries_df.columns)
+        assert set(batteries_df.building_id).issubset(set(building_ids))
+        assert (batteries_df.p_nom <= upper_power_limit).all()
 
     def test__grid_integration(self, caplog):
         # ############### test without PV rooftop ###############
@@ -82,7 +161,7 @@ class TestStorageImport:
         # check that smallest storage is integrated at same bus as building
         bus_bat_voltage_level_7 = storage_df[storage_df.p_nom == 0.005].bus[0]
         assert (
-            loads_df[loads_df.building_id == 446651].bus.values
+            loads_df[loads_df.building_id == 444312].bus.values
             == bus_bat_voltage_level_7
         ).all()
         # check that medium storage cannot be integrated at same bus as building
@@ -148,7 +227,7 @@ class TestStorageImport:
         # check that smallest storage is integrated at same bus as PV system
         bus_bat_voltage_level_7 = storage_df[storage_df.p_nom == 0.005].bus[0]
         assert (
-            loads_df[loads_df.building_id == 446651].bus.values
+            loads_df[loads_df.building_id == 444312].bus.values
             == bus_bat_voltage_level_7
         ).all()
         # check that medium storage is integrated at same bus as PV system

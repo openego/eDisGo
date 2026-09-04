@@ -1,5 +1,7 @@
 import logging
 
+from unittest.mock import Mock
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -11,6 +13,135 @@ from edisgo.io import generators_import
 from edisgo.tools.tools import determine_bus_voltage_level
 
 
+@pytest.fixture
+def mock_oep_generator_query(monkeypatch):
+    """Replace the combined OEP generator query with synthetic return data."""
+
+    def install_mock(pv_rooftop_df, power_plants_gdf, chp_gdf):
+        query_mock = Mock(
+            side_effect=lambda *args, **kwargs: (
+                pv_rooftop_df.copy(deep=True),
+                power_plants_gdf.copy(deep=True),
+                chp_gdf.copy(deep=True),
+            )
+        )
+        monkeypatch.setattr(
+            generators_import,
+            "_query_generator_data_oedb",
+            query_mock,
+        )
+        return query_mock
+
+    return install_mock
+
+
+@pytest.fixture
+def mock_oep_legacy_generator_query(monkeypatch):
+    """Replace the legacy OEP generator query with synthetic return data."""
+
+    def install_mock(conv_mv, renewable_mv, renewable_lv):
+        query_mock = Mock(
+            side_effect=lambda *args, **kwargs: (
+                conv_mv.copy(deep=True),
+                renewable_mv.copy(deep=True),
+                renewable_lv.copy(deep=True),
+            )
+        )
+        monkeypatch.setattr(
+            generators_import,
+            "_query_generator_data_oedb_legacy",
+            query_mock,
+        )
+        return query_mock
+
+    return install_mock
+
+
+def _setup_minimal_legacy_generator_data(
+    edisgo,
+    existing_types=("solar",),
+    new_types=("solar",),
+):
+    """Reduce a legacy grid and build matching OEP-shaped renewable records."""
+    generators_df = edisgo.topology.generators_df
+    lv_generator_names = [
+        name
+        for name, generator in generators_df.iterrows()
+        if determine_bus_voltage_level(edisgo, generator.bus) == 7
+    ][: len(existing_types)]
+    generators_df = generators_df.loc[lv_generator_names].copy()
+
+    subtype_by_type = {
+        "solar": "solar_roof_mounted",
+        "wind": "wind_onshore",
+        "biomass": "biomass",
+        "run_of_river": "run_of_river",
+    }
+    generators_df.loc[:, "type"] = list(existing_types)
+    generators_df.loc[:, "subtype"] = [
+        subtype_by_type[generator_type] for generator_type in existing_types
+    ]
+    edisgo.topology.generators_df = generators_df
+
+    records = []
+    for name, generator in generators_df.iterrows():
+        generator_id = int(name.rsplit("_", 1)[1])
+        lv_grid_id = int(name.split("_lvgd_", 1)[1].split("_", 1)[0])
+        bus = generator.bus
+        geom = Point(
+            (
+                edisgo.topology.buses_df.at[bus, "x"],
+                edisgo.topology.buses_df.at[bus, "y"],
+            )
+        ).wkt
+        records.append(
+            {
+                "id": generator_id,
+                "generator_id": generator_id,
+                "subst_id": edisgo.topology.mv_grid.id,
+                "la_id": None,
+                "mvlv_subst_id": lv_grid_id,
+                "p_nom": generator.p_nom,
+                "generator_type": generator.type,
+                "subtype": generator.subtype,
+                "voltage_level": 7,
+                "weather_cell_id": generator.weather_cell_id,
+                "geom": geom,
+                "geom_em": geom,
+            }
+        )
+
+    template = records[0]
+    for offset, generator_type in enumerate(new_types, start=1):
+        record = template.copy()
+        record.update(
+            {
+                "id": 2_000_000 + offset,
+                "generator_id": 2_000_000 + offset,
+                "p_nom": 0.005,
+                "generator_type": generator_type,
+                "subtype": subtype_by_type[generator_type],
+            }
+        )
+        records.append(record)
+
+    renewable_columns = [key for key in records[0] if key != "id"]
+    renewable_lv = pd.DataFrame.from_records(records).set_index("id")
+    renewable_mv = pd.DataFrame(columns=renewable_columns)
+    conventional_mv = pd.DataFrame(
+        columns=[
+            "generator_id",
+            "subst_id",
+            "la_id",
+            "p_nom",
+            "voltage_level",
+            "generator_type",
+            "geom",
+        ]
+    )
+    return conventional_mv, renewable_mv, renewable_lv
+
+
 class TestGeneratorsImport:
     """
     Tests all functions in generators_import.py except where test grid
@@ -19,7 +150,7 @@ class TestGeneratorsImport:
 
     """
 
-    @pytest.yield_fixture(autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
@@ -477,43 +608,55 @@ class TestGeneratorsImport:
 
 
 class TestGeneratorsImportOEDB:
-    """
-    Tests in here are marked as slow, as the used test grid is quite large
-    and should at some point be changed.
-
-    """
+    """Test generator imports that require realistic legacy or eGon grids."""
 
     @pytest.mark.slow
-    @pytest.mark.oep
-    def test_oedb_legacy_without_timeseries(self):
-        edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_2_path,
+    def test_oedb_legacy_without_timeseries_offline(
+        self, mock_oep_legacy_generator_query
+    ):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        generator_data = _setup_minimal_legacy_generator_data(edisgo)
+        query_mock = mock_oep_legacy_generator_query(*generator_data)
+
+        edisgo.import_generators(
             generator_scenario="nep2035",
+            engine=None,
         )
         edisgo.set_time_series_worst_case_analysis()
 
         # check number of generators
-        assert len(edisgo.topology.generators_df) == 524
+        assert len(edisgo.topology.generators_df) == 2
         # check total installed capacity
-        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 20.18783)
+        expected_capacity = generator_data[2].p_nom.sum()
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), expected_capacity)
+        query_mock.assert_called_once_with(
+            edisgo_object=edisgo,
+            generator_scenario="nep2035",
+            engine=None,
+        )
 
     @pytest.mark.slow
-    @pytest.mark.oep
-    def test_oedb_legacy_with_worst_case_timeseries(self):
+    def test_oedb_legacy_with_worst_case_timeseries_offline(
+        self, mock_oep_legacy_generator_query
+    ):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        generator_data = _setup_minimal_legacy_generator_data(edisgo)
+        query_mock = mock_oep_legacy_generator_query(*generator_data)
         edisgo.set_time_series_worst_case_analysis()
 
         gens_before = edisgo.topology.generators_df.copy()
         gens_ts_active_before = edisgo.timeseries.generators_active_power.copy()
         gens_ts_reactive_before = edisgo.timeseries.generators_reactive_power.copy()
 
-        edisgo.import_generators("nep2035")
+        edisgo.import_generators("nep2035", engine=None)
         edisgo.set_time_series_worst_case_analysis()
 
         # check number of generators
-        assert len(edisgo.topology.generators_df) == 524
+        assert len(edisgo.topology.generators_df) == 2
         # check total installed capacity
-        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 20.18783)
+        assert np.isclose(
+            edisgo.topology.generators_df.p_nom.sum(), generator_data[2].p_nom.sum()
+        )
 
         gens_new = edisgo.topology.generators_df[
             ~edisgo.topology.generators_df.index.isin(gens_before.index)
@@ -569,9 +712,16 @@ class TestGeneratorsImportOEDB:
         #     edisgo.timeseries.generators_reactive_power.loc[
         #     :, new_solar_gen.name] / new_solar_gen.p_nom).all()
 
+        query_mock.assert_called_once_with(
+            edisgo_object=edisgo,
+            generator_scenario="nep2035",
+            engine=None,
+        )
+
     @pytest.mark.slow
-    @pytest.mark.oep
-    def test_oedb_legacy_with_timeseries_by_technology(self):
+    def test_oedb_legacy_with_timeseries_by_technology_offline(
+        self, mock_oep_legacy_generator_query
+    ):
         timeindex = pd.date_range("1/1/2012", periods=3, freq="H")
         ts_gen_dispatchable = pd.DataFrame(
             {"other": [0.775] * 3, "gas": [0.9] * 3}, index=timeindex
@@ -584,6 +734,8 @@ class TestGeneratorsImportOEDB:
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_2_path, timeindex=timeindex
         )
+        generator_data = _setup_minimal_legacy_generator_data(edisgo)
+        query_mock = mock_oep_legacy_generator_query(*generator_data)
         edisgo.set_time_series_active_power_predefined(
             fluctuating_generators_ts=ts_gen_fluctuating,
             dispatchable_generators_ts=ts_gen_dispatchable,
@@ -595,7 +747,7 @@ class TestGeneratorsImportOEDB:
         gens_ts_active_before = edisgo.timeseries.generators_active_power.copy()
         gens_ts_reactive_before = edisgo.timeseries.generators_reactive_power.copy()
 
-        edisgo.import_generators("nep2035")
+        edisgo.import_generators("nep2035", engine=None)
         edisgo.set_time_series_active_power_predefined(
             fluctuating_generators_ts=ts_gen_fluctuating,
             dispatchable_generators_ts=ts_gen_dispatchable,
@@ -604,9 +756,11 @@ class TestGeneratorsImportOEDB:
         edisgo.set_time_series_reactive_power_control()
 
         # check number of generators
-        assert len(edisgo.topology.generators_df) == 524
+        assert len(edisgo.topology.generators_df) == 2
         # check total installed capacity
-        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 20.18783)
+        assert np.isclose(
+            edisgo.topology.generators_df.p_nom.sum(), generator_data[2].p_nom.sum()
+        )
 
         gens_new = edisgo.topology.generators_df[
             ~edisgo.topology.generators_df.index.isin(gens_before.index)
@@ -649,13 +803,22 @@ class TestGeneratorsImportOEDB:
         #     edisgo.timeseries.generators_reactive_power.loc[
         #     :, new_solar_gen.name] / new_solar_gen.p_nom).all()
 
-    @pytest.mark.slow
-    @pytest.mark.oep
-    def test_target_capacity(self):
-        edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_2_path,
-            worst_case_analysis="worst-case",
+        query_mock.assert_called_once_with(
+            edisgo_object=edisgo,
+            generator_scenario="nep2035",
+            engine=None,
         )
+
+    @pytest.mark.slow
+    def test_target_capacity_offline(self, mock_oep_legacy_generator_query):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        generator_data = _setup_minimal_legacy_generator_data(
+            edisgo,
+            existing_types=("wind", "biomass", "solar", "run_of_river"),
+            new_types=("wind", "biomass", "solar"),
+        )
+        query_mock = mock_oep_legacy_generator_query(*generator_data)
+        edisgo.set_time_series_worst_case_analysis()
 
         gens_before = edisgo.topology.generators_df.copy()
         p_wind_before = edisgo.topology.generators_df[
@@ -675,6 +838,7 @@ class TestGeneratorsImportOEDB:
             p_target=p_target,
             remove_decommissioned=False,
             update_existing=False,
+            engine=None,
         )
 
         # check that all old generators still exist
@@ -709,11 +873,164 @@ class TestGeneratorsImportOEDB:
             ].p_nom.sum(),
             p_biomass_before * 1.0,
         )
+        query_mock.assert_called_once_with(
+            edisgo_object=edisgo,
+            generator_scenario="nep2035",
+            engine=None,
+        )
 
     @pytest.mark.oep
-    def test_oedb(self, oep_engine):
+    def test_query_generator_data_oedb_legacy_live(self, oep_engine):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+
+        conventional_mv, renewable_mv, renewable_lv = (
+            generators_import._query_generator_data_oedb_legacy(
+                edisgo_object=edisgo,
+                generator_scenario="nep2035",
+                engine=oep_engine,
+                query_limit=2,
+            )
+        )
+
+        assert sum(map(len, (conventional_mv, renewable_mv, renewable_lv))) > 0
+        assert all(
+            len(data) <= 2 for data in (conventional_mv, renewable_mv, renewable_lv)
+        )
+        assert {
+            "generator_id",
+            "p_nom",
+            "voltage_level",
+            "generator_type",
+            "geom",
+        }.issubset(conventional_mv.columns)
+        renewable_columns = {
+            "generator_id",
+            "mvlv_subst_id",
+            "p_nom",
+            "generator_type",
+            "subtype",
+            "voltage_level",
+            "weather_cell_id",
+            "geom",
+            "geom_em",
+        }
+        assert renewable_columns.issubset(renewable_mv.columns)
+        assert renewable_columns.issubset(renewable_lv.columns)
+
+    def test_oedb_offline(self, mock_oep_generator_query):
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        edisgo.import_generators(generator_scenario="eGon2035", engine=oep_engine)
-        assert len(edisgo.topology.generators_df) == 677
+        # Keep the high-level import focused on integrating one representative record
+        # from each of the three source tables. Detailed update and removal behaviour
+        # is covered by the lower-level integration tests above.
+        edisgo.topology.generators_df = edisgo.topology.generators_df.iloc[0:0].copy()
+        building_id = 430903
+        load_bus = edisgo.topology.loads_df[
+            edisgo.topology.loads_df.building_id == building_id
+        ].bus.iat[0]
+        geom = Point(
+            (
+                edisgo.topology.buses_df.at[load_bus, "x"],
+                edisgo.topology.buses_df.at[load_bus, "y"],
+            )
+        )
+
+        pv_rooftop_df = pd.DataFrame(
+            {
+                "generator_id": [1],
+                "building_id": [building_id],
+                "source_id": ["SEE_TEST_PV"],
+                "p_nom": [0.005],
+                "weather_cell_id": [11051],
+                "type": ["solar"],
+                "subtype": ["pv_rooftop"],
+            }
+        )
+        power_plants_gdf = pd.DataFrame(
+            {
+                "generator_id": [2],
+                "source_id": [None],
+                "type": ["biomass"],
+                "subtype": [None],
+                "p_nom": [0.05],
+                "weather_cell_id": [None],
+                "geom": [geom],
+            }
+        )
+        chp_gdf = pd.DataFrame(
+            {
+                "generator_id": [3],
+                "type": ["gas"],
+                "district_heating_id": [5],
+                "p_nom": [0.06],
+                "p_nom_th": [0.12],
+                "geom": [geom],
+            }
+        )
+        query_mock = mock_oep_generator_query(
+            pv_rooftop_df,
+            power_plants_gdf,
+            chp_gdf,
+        )
+
+        edisgo.import_generators(generator_scenario="eGon2035", engine=None)
+
+        generators_df = edisgo.topology.generators_df
+        assert len(generators_df) == 3
+        assert np.isclose(generators_df.p_nom.sum(), 0.115)
+        assert set(generators_df.type) == {"solar", "biomass", "gas"}
+        assert len(generators_df[generators_df.subtype == "pv_rooftop"]) == 1
+        query_mock.assert_called_once_with(
+            edisgo_object=edisgo,
+            scenario="eGon2035",
+            engine=None,
+            max_capacity=20,
+        )
+
+    @pytest.mark.oep
+    def test_query_generator_data_oedb_live(self, oep_engine):
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        pv_rooftop_df, power_plants_gdf, chp_gdf = (
+            generators_import._query_generator_data_oedb(
+                edisgo_object=edisgo,
+                scenario="eGon2035",
+                engine=oep_engine,
+                max_capacity=20,
+                query_limit=2,
+            )
+        )
+
+        assert sum(map(len, (pv_rooftop_df, power_plants_gdf, chp_gdf))) > 0
+        assert all(
+            len(data) <= 2 for data in (pv_rooftop_df, power_plants_gdf, chp_gdf)
+        )
+        assert {
+            "generator_id",
+            "building_id",
+            "source_id",
+            "p_nom",
+            "weather_cell_id",
+            "type",
+            "subtype",
+        }.issubset(pv_rooftop_df.columns)
+        assert {
+            "generator_id",
+            "source_id",
+            "type",
+            "subtype",
+            "p_nom",
+            "weather_cell_id",
+            "geom",
+        }.issubset(power_plants_gdf.columns)
+        assert {
+            "generator_id",
+            "type",
+            "district_heating_id",
+            "p_nom",
+            "p_nom_th",
+            "geom",
+        }.issubset(chp_gdf.columns)

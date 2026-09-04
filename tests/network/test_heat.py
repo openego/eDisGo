@@ -2,11 +2,26 @@ import logging
 import os
 import shutil
 
+from unittest.mock import Mock
+
 import pandas as pd
 import pytest
 
 from edisgo import EDisGo
+from edisgo.io import heat_pump_import, timeseries_import
 from edisgo.network.heat import HeatPump
+
+
+@pytest.fixture
+def mock_oep_heat_import(monkeypatch):
+    """Replace one OEP heat importer with synthetic return data."""
+
+    def install_mock(module, function_name, return_value):
+        import_mock = Mock(return_value=return_value)
+        monkeypatch.setattr(module, function_name, import_mock)
+        return import_mock
+
+    return install_mock
 
 
 class TestHeatPump:
@@ -101,8 +116,7 @@ class TestHeatPump:
             check_freq=False,
         )
 
-    @pytest.mark.oep
-    def test_set_cop_oedb(self, caplog, oep_engine):
+    def test_set_cop_oedb(self, caplog, mock_oep_heat_import):
         # ################### test with oedb ###################
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -115,7 +129,7 @@ class TestHeatPump:
             edisgo_object.heat_pump.set_cop(
                 edisgo_object,
                 "oedb",
-                engine=oep_engine,
+                engine=None,
                 heat_pump_names=edisgo_object.topology.loads_df.index[0:4],
             )
 
@@ -126,7 +140,7 @@ class TestHeatPump:
             edisgo_object.heat_pump.set_cop(
                 edisgo_object,
                 "oedb",
-                engine=oep_engine,
+                engine=None,
                 heat_pump_names=edisgo_object.topology.loads_df.index[0:4],
             )
 
@@ -134,7 +148,7 @@ class TestHeatPump:
         edisgo_object.heat_pump.set_cop(
             edisgo_object,
             "oedb",
-            engine=oep_engine,
+            engine=None,
             heat_pump_names=[],
         )
         assert edisgo_object.heat_pump.cop_df.empty
@@ -148,11 +162,34 @@ class TestHeatPump:
         heat_pump_names = hp_data_egon.index.append(
             edisgo_object.topology.loads_df.index[0:1]
         )
+
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+        cop_profiles = pd.DataFrame(
+            {
+                11051: 3.0,
+                11052: 4.0,
+            },
+            index=timeindex,
+        )
+        cop_mock = mock_oep_heat_import(
+            timeseries_import,
+            "cop_oedb",
+            cop_profiles,
+        )
+        efficiency_mock = mock_oep_heat_import(
+            heat_pump_import,
+            "efficiency_resistive_heaters_oedb",
+            {
+                "central_resistive_heater": 0.99,
+                "rural_resistive_heater": 0.9,
+            },
+        )
+
         with caplog.at_level(logging.WARNING):
             edisgo_object.heat_pump.set_cop(
                 edisgo_object,
                 "oedb",
-                engine=oep_engine,
+                engine=None,
                 heat_pump_names=heat_pump_names,
             )
         assert "There are heat pumps with no weather cell ID." in caplog.text
@@ -175,6 +212,15 @@ class TestHeatPump:
                 :, "Heat_Pump_LVGrid_1163850014_district_heating_6"
             ]
         ).all()
+        cop_mock.assert_called_once()
+        assert cop_mock.call_args.kwargs["edisgo_object"] is edisgo_object
+        assert cop_mock.call_args.kwargs["engine"] is None
+        assert set(cop_mock.call_args.kwargs["weather_cell_ids"]) == {11051, 11052}
+        assert cop_mock.call_args.kwargs["timeindex"] is None
+        efficiency_mock.assert_called_once_with(
+            scenario="eGon2035",
+            engine=None,
+        )
 
     def test_set_heat_demand(self):
         # test with dataframe
@@ -209,8 +255,7 @@ class TestHeatPump:
             check_freq=False,
         )
 
-    @pytest.mark.oep
-    def test_set_heat_demand_oedb(self, oep_engine):
+    def test_set_heat_demand_oedb(self, mock_oep_heat_import):
         # test with oedb
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -220,11 +265,23 @@ class TestHeatPump:
             [edisgo_object.topology.loads_df, hp_data_egon]
         )
 
+        annual_timeindex = pd.date_range("1/1/2035", periods=8760, freq="H")
+        annual_heat_demand = pd.DataFrame(
+            1.0,
+            index=annual_timeindex,
+            columns=hp_data_egon.index,
+        )
+        heat_demand_mock = mock_oep_heat_import(
+            timeseries_import,
+            "heat_demand_oedb",
+            annual_heat_demand,
+        )
+
         # ################# test with no timeindex to get year from #############
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,
             "oedb",
-            engine=oep_engine,
+            engine=None,
             scenario="eGon2035",
         )
         assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 5)
@@ -236,10 +293,15 @@ class TestHeatPump:
         edisgo_object.set_timeindex(
             pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         )
+        heat_demand_mock.return_value = pd.DataFrame(
+            2.0,
+            index=edisgo_object.timeseries.timeindex,
+            columns=hp_data_egon.index,
+        )
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,
             "oedb",
-            engine=oep_engine,
+            engine=None,
             scenario="eGon2035",
             heat_pump_names=["HP_442081", "HP_dummy"],
         )
@@ -250,12 +312,20 @@ class TestHeatPump:
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,
             "oedb",
-            engine=oep_engine,
+            engine=None,
             scenario="eGon2035",
             heat_pump_names=[],
         )
         assert edisgo_object.heat_pump.heat_demand_df.shape == (2, 1)
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
+        assert heat_demand_mock.call_count == 2
+        for call in heat_demand_mock.call_args_list:
+            assert call.args == (edisgo_object,)
+            assert call.kwargs == {
+                "scenario": "eGon2035",
+                "engine": None,
+                "timeindex": None,
+            }
 
     def test_reduce_memory(self):
         heatpump = HeatPump()
