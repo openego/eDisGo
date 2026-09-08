@@ -167,10 +167,8 @@ jobs:
         if: runner.os == 'Linux' && matrix.name-suffix != 'coverage'
         run: |
           python -m pip install "pytest<9.2.0" "nbclient<0.12.0" "pytest-rerunfailures<17.0.0"
-          python -m pytest --runslow --runonlinux --disable-warnings --color=yes -v \
+          python -m pytest --runslow --runonlinux -m "not oep" --disable-warnings --color=yes -v \
             --reruns 2 --reruns-delay 15 --only-rerun "Connection(Error|Exception)|Timeout"
-        env:
-          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
 
       # Run standard tests on Windows
       - name: Run tests (Windows)
@@ -179,19 +177,47 @@ jobs:
           python -m pip install "pytest<9.2.0" "nbclient<0.12.0"
           # Keep the pytest call on one line: this step runs in PowerShell, where "\"
           # is not a line continuation, so a wrapped command fails to parse.
-          python -m pytest --runslow --disable-warnings --color=yes -v --reruns 2 --reruns-delay 15 --only-rerun "Connection(Error|Exception)|Timeout"
-        env:
-          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
+          python -m pytest --runslow -m "not oep" --disable-warnings --color=yes -v --reruns 2 --reruns-delay 15 --only-rerun "Connection(Error|Exception)|Timeout"
 
       # Run coverage job and upload to Coveralls (only on Linux, Python 3.9)
       - name: Run tests with coverage and submit to Coveralls
         if: runner.os == 'Linux' && matrix.python-version == 3.12 && matrix.name-suffix == 'coverage'
         run: |
           pip install "pytest<9.2.0" "nbclient<0.12.0" "pytest-rerunfailures<17.0.0" coveralls
-          coverage run --source=edisgo -m pytest --runslow --runonlinux --disable-warnings --color=yes -v \
+          coverage run --source=edisgo -m pytest --runslow --runonlinux -m "not oep" --disable-warnings --color=yes -v \
             --reruns 2 --reruns-delay 15 --only-rerun "Connection(Error|Exception)|Timeout"
           coveralls
         env:
-          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
+
+  oep:
+    name: "Live OEP contracts"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    concurrency:
+      group: live-oep-tests
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install -e "."
+          python -m pip install "pytest<9.2.0" "nbclient<0.12.0"
+
+      - name: Run live OEP tests
+        run: |
+          python -m pytest --runslow -m "oep" \
+            --disable-warnings --color=yes -v
+        env:
+          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}

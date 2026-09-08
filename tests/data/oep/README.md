@@ -192,71 +192,23 @@ against the live OEP.
 
 ## Remaining work
 
-#### 1. Vollständige Offline-Suite ohne OEP_TOKEN ausführen:
-**Testsammlung prüfen:**
-```
-  python -m pytest --collect-only -q -m "not oep"
-  python -m pytest --collect-only -q -m oep
-```
-**Schneller Offline-Testlauf**: Ohne OEP-Token und ohne Slow-Tests:
-```
-  env -u OEP_TOKEN python -m pytest -m "not oep" -x
-```
+1. Push the branch after committing the changes:
 
-**Vollständiger Offline-Testlauf:**
-```
-  env -u OEP_TOKEN python -m pytest \
-  --runslow \
-  -m "not oep" \
-  --durations=20
-```
+   ```bash
+   git push
+   ```
 
-#### 2. Alle Live-Contracts einmal mit Token ausführen
+   This automatically starts the regular test matrix, the offline coverage run and
+   the serialized live OEP job. The coverage result is uploaded to Coveralls.
 
-**Kleiner Live Contract:**
-```
-python -m pytest \
-  -m "oep and not slow" \
-  -x \
-  --durations=20
-```
+2. Check the GitHub Actions result:
 
-**Langsamer OEP-Test:**
-```
-python -m pytest \
-  --runslow \
-  -m "oep and slow" \
-  -x \
-  --durations=20
-```
+   - all Linux and Windows jobs pass without an OEP token;
+   - the coverage job passes with `pytest -m "not oep"`;
+   - the dedicated OEP job passes with `pytest -m "oep"`.
 
-Danach:
-```unset OEP_TOKEN```
+3. Compare the new branch result in Coveralls with the `dev` baseline. Investigate
+   unexplained coverage losses in transformation, calculation and integration code;
+   uncovered lines limited to live query helpers are expected.
 
-#### 3. Reguläre CI-Matrix auf -m "not oep" umstellen
-- reguläre Matrix: -m "not oep", kein OEP-Token;
-- Coverage-Job: ebenfalls -m "not oep";
-- eigener OEP-Job: Linux, eine Python-Version, --runslow -m oep;
-
-#### 4. Einen dedizierten, serialisierten OEP-Job anlegen
-#### 5. Job- und Datenbank-Timeouts ergänzen
-#### 6. Coverage prüfen und mit dem bisherigen Stand vergleichen
-```
-env -u OEP_TOKEN python -m coverage run \
-  --source=edisgo \
-  -m pytest \
-  --runslow \
-  -m "not oep"
-
-python -m coverage report -m
-```
-- Configure separate regular and live OEP jobs in CI, including serialization and
-  finite timeouts.
-- Run and verify the retained live contracts with an OEP token supplied through the
-  approved secret mechanism.
-- Update the inventory status as each group is completed.
-
-No OEP-derived datasets are currently committed here; the implemented offline tests
-generate synthetic data in code. If local extracted data is added later, document its
-source query, extraction date, scenario, licence, reduction steps and consuming tests
-in this file.
+4. Perform the final code review and open the pull request.
