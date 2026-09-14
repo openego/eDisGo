@@ -1066,20 +1066,45 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
             ]
             # in case there is more than 1 PtH unit, get name of heat pump, otherwise
             # get name of single PtH unit
-            if len(district_hps) > 1:
+            central_hps = district_hps[district_hps.sector == "district_heating"]
+            central_rhs = district_hps[
+                district_hps.sector == "district_heating_resistive_heater"
+            ]
+            if len(district_hps) > 1 and not central_hps.empty:
                 # district heat pump component
-                district_hp = district_hps[
-                    district_hps.sector == "district_heating"
-                ].index[0]
+                district_hp = central_hps.index[0]
             else:
+                # Either a single unit, or several units none of which is a heat
+                # pump -- central heat pumps and central resistive heaters are
+                # imported by independent queries, and a resistive heater that
+                # cannot be attached to a heat pump is integrated on its own
+                # (see io.heat_pump_import), so an area can hold resistive
+                # heaters only. Fall back to the first unit, which is what the
+                # single-unit case does as well.
                 district_hp = district_hps.index[0]
 
             # reduce demand by feedin from other sources (e.g. solarthermal, geothermal)
             if not feedin_district_heating.empty:
                 if str(int(district)) in feedin_district_heating.columns:
-                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                    remaining_demand = (
                         edisgo_obj.heat_pump.heat_demand_df[district_hp]
                         - feedin_district_heating[str(int(district))]
+                    )
+                    # The remaining demand is bounded below by zero: in a time step
+                    # where the other heat sources deliver more than the network
+                    # needs, the power-to-heat unit is simply switched off. Without
+                    # the bound the negative heat demand is divided by the COP in
+                    # apply_heat_pump_operating_strategy and the unit turns into a
+                    # generator feeding the grid.
+                    if (remaining_demand < 0).any():
+                        logger.warning(
+                            f"Feed-in from other heat supply sources exceeds the heat "
+                            f"demand of district heating grid {district} in "
+                            f"{int((remaining_demand < 0).sum())} time step(s). The "
+                            f"remaining heat demand is set to zero in those steps."
+                        )
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                        remaining_demand.clip(lower=0)
                     )
                 else:
                     logger.info(
@@ -1087,11 +1112,18 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                         f"grid {district}."
                     )
 
-            if len(district_hps) > 1:
+            if len(district_hps) > 1 and (central_hps.empty or central_rhs.empty):
+                logger.warning(
+                    f"District heating grid {district} holds "
+                    f"{len(district_hps)} power-to-heat units but not one of each "
+                    f"type (heat pump / resistive heater), so they cannot be "
+                    f"merged into a single component. Sectors present: "
+                    f"{sorted(district_hps.sector.unique())}."
+                )
+
+            if len(district_hps) > 1 and not (central_hps.empty or central_rhs.empty):
                 # get name of resistive heater component
-                district_rh = district_hps[
-                    district_hps.sector == "district_heating_resistive_heater"
-                ].index[0]
+                district_rh = central_rhs.index[0]
                 # calculate rated power of aggregated component
                 new_p_set = edisgo_obj.topology.loads_df.loc[
                     district_hps.index
@@ -1102,9 +1134,10 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                 ).clip(lower=0)
                 hp_p_set = edisgo_obj.topology.loads_df.at[district_hp, "p_set"]
                 if (el_demand > hp_p_set).any():
-                    # calculate COP by weighted COP of single components
-                    # (weighted by their contribution to cover heat demand)
-                    # determine percentage of contribution per component
+                    # Share of the heat demand each component covers. The heat pump
+                    # runs up to its rated power, the resistive heater covers the
+                    # rest; dividing both by el_demand gives shares of the heat,
+                    # because el_demand is heat demand over a single COP.
                     df = pd.concat(
                         [
                             (el_demand.clip(upper=hp_p_set) / el_demand)
@@ -1116,8 +1149,15 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                         ],
                         axis=1,
                     )
-                    new_cop = (
-                        edisgo_obj.heat_pump.cop_df[district_hps.index] * df
+                    # The aggregated COP has to reproduce the electricity demand of
+                    # the two components for the combined heat demand Q:
+                    #     Q / COP_agg = Q_hp / COP_hp + Q_rh / COP_rh
+                    # Dividing by Q makes 1 / COP_agg the heat-share-weighted mean of
+                    # the reciprocals, i.e. the harmonic mean -- not the arithmetic
+                    # mean of the COPs, which is always the larger of the two and
+                    # therefore always understates the electricity demand.
+                    new_cop = 1 / (
+                        df / edisgo_obj.heat_pump.cop_df[district_hps.index]
                     ).sum(axis=1)
                 else:
                     new_cop = edisgo_obj.heat_pump.cop_df[district_hp]
