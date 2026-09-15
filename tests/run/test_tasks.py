@@ -7,6 +7,7 @@ of ``import_overlying_grid_data`` are exercised directly.
 """
 
 import glob
+import logging
 import os
 
 import pandas as pd
@@ -20,7 +21,11 @@ from edisgo.run.config import load_config
 from edisgo.run.context import RunContext
 from edisgo.run.tasks import flex as flex_tasks
 from edisgo.run.tasks.analysis import task_optimize
-from edisgo.run.tasks.flex import task_build_flexibility_bands, task_import_flex
+from edisgo.run.tasks.flex import (
+    task_aggregate_district_heating,
+    task_build_flexibility_bands,
+    task_import_flex,
+)
 from edisgo.run.tasks.io import task_import_overlying_grid_data
 from edisgo.run.tasks.timeseries import (
     task_manual_ts,
@@ -180,6 +185,286 @@ class TestImportOverlyingGridData:
         result = task_import_overlying_grid_data(edisgo_obj, ctx)
         assert result is edisgo_obj
         assert "path" in caplog.text.lower()
+
+
+def _grid_with_district_heating():
+    """
+    Small grid with one district heating area holding a heat pump and a
+    resistive heater, plus the heat-pump data the aggregation needs.
+    """
+    edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+    edisgo.set_timeindex(pd.date_range("2011-01-01", periods=3, freq="h"))
+    for sector, p_set, bus_i in (
+        ("district_heating", 3, 27),
+        ("district_heating_resistive_heater", 2, 27),
+    ):
+        edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector=sector,
+            district_heating_id=130,
+            ts_active_power=pd.Series(
+                index=edisgo.timeseries.timeindex, data=[1.0, 1.0, 1.0]
+            ),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[bus_i],
+            p_set=p_set,
+        )
+    hps = edisgo.topology.loads_df.index[
+        edisgo.topology.loads_df.type == "heat_pump"
+    ]
+    ti = edisgo.timeseries.timeindex
+    edisgo.heat_pump.cop_df = pd.DataFrame(
+        {hp: [3.0, 3.0, 3.0] for hp in hps}, index=ti
+    )
+    edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+        {hp: [6.0, 6.0, 6.0] for hp in hps}, index=ti
+    )
+    return edisgo
+
+
+class TestAggregateDistrictHeating:
+    """
+    openego/eGo#202: ``overlying_grid.feedin_district_heating`` had no consumer
+    in the runner path, so other heat sources were never subtracted from the
+    district heating demand and the PtH units were never merged.
+    """
+
+    def test_no_district_heating_is_a_noop(self, edisgo_obj, caplog):
+        ctx = RunContext()
+        n_before = len(edisgo_obj.topology.loads_df)
+        with caplog.at_level(logging.INFO, logger="edisgo.run"):
+            assert task_aggregate_district_heating(edisgo_obj, ctx) is edisgo_obj
+        assert len(edisgo_obj.topology.loads_df) == n_before
+        assert "no district heating" in caplog.text
+
+    def test_units_are_merged(self):
+        edisgo = _grid_with_district_heating()
+        rh = edisgo.topology.loads_df.index[
+            edisgo.topology.loads_df.sector == "district_heating_resistive_heater"
+        ][0]
+        task_aggregate_district_heating(edisgo, RunContext())
+        # the resistive heater is merged into the heat pump and removed
+        assert rh not in edisgo.topology.loads_df.index
+        assert rh not in edisgo.heat_pump.heat_demand_df.columns
+        hp = edisgo.topology.loads_df.index[
+            edisgo.topology.loads_df.sector == "district_heating"
+        ][0]
+        assert edisgo.topology.loads_df.at[hp, "p_set"] == 5
+
+    def test_feedin_is_subtracted_from_the_heat_demand(self):
+        edisgo = _grid_with_district_heating()
+        hp = edisgo.topology.loads_df.index[
+            edisgo.topology.loads_df.sector == "district_heating"
+        ][0]
+        demand_before = edisgo.heat_pump.heat_demand_df[hp].copy()
+        edisgo.overlying_grid.feedin_district_heating = pd.DataFrame(
+            {"130": [1.5, 1.5, 1.5]}, index=edisgo.timeseries.timeindex
+        )
+        task_aggregate_district_heating(edisgo, RunContext())
+        pd.testing.assert_series_equal(
+            edisgo.heat_pump.heat_demand_df[hp],
+            demand_before - 1.5,
+            check_names=False,
+        )
+
+    def test_float_district_heating_ids_are_normalised_on_import(self):
+        """
+        eTraGo delivers the district heating ID as a float, but both consumers
+        look it up as the string of an integer. The import task normalises the
+        column labels so the feed-in is not silently missed.
+        """
+        edisgo = _grid_with_district_heating()
+        edisgo.overlying_grid.feedin_district_heating = pd.DataFrame(
+            {130.0: [1.5, 1.5, 1.5]}, index=edisgo.timeseries.timeindex
+        )
+        edisgo.overlying_grid.thermal_storage_units_central_soc = pd.DataFrame(
+            {"130.0": [0.5, 0.5, 0.5]}, index=edisgo.timeseries.timeindex
+        )
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}},
+            overlying_grid_data={},
+        )
+        task_import_overlying_grid_data(edisgo, ctx)
+        assert list(edisgo.overlying_grid.feedin_district_heating.columns) == ["130"]
+        assert list(
+            edisgo.overlying_grid.thermal_storage_units_central_soc.columns
+        ) == ["130"]
+
+        # and with the labels normalised the feed-in actually lands
+        hp = edisgo.topology.loads_df.index[
+            edisgo.topology.loads_df.sector == "district_heating"
+        ][0]
+        demand_before = edisgo.heat_pump.heat_demand_df[hp].copy()
+        task_aggregate_district_heating(edisgo, RunContext())
+        assert (edisgo.heat_pump.heat_demand_df[hp] < demand_before).all()
+
+    def test_validator_enforces_the_order_against_the_overlying_grid_import(self):
+        """
+        Putting the task before ``import_overlying_grid_data`` used to pass
+        validation and then silently take the "no feed-in" branch -- i.e.
+        reintroduce openego/eGo#202 without any error. The task declares
+        ``requires={"overlying_grid"}`` so the validator catches it.
+        """
+        from edisgo.run.validator import validate
+
+        bad_orders = [
+            # aggregation before the import
+            [
+                "setup_grid",
+                "worst_case_ts",
+                "aggregate_district_heating",
+                "import_overlying_grid_data",
+                "reactive_power",
+            ],
+            # no import at all
+            [
+                "setup_grid",
+                "worst_case_ts",
+                "aggregate_district_heating",
+                "reactive_power",
+            ],
+        ]
+        for pipeline in bad_orders:
+            with pytest.raises(ValueError, match="requires 'overlying_grid'"):
+                validate({"pipeline": pipeline})
+
+        # the correct order validates
+        validate(
+            {
+                "pipeline": [
+                    "setup_grid",
+                    "worst_case_ts",
+                    "import_overlying_grid_data",
+                    "aggregate_district_heating",
+                    "reactive_power",
+                ]
+            }
+        )
+
+    def test_load_from_base_satisfies_the_overlying_grid_requirement(self):
+        """
+        ``load_from_base(import_overlying_grid=True)`` restores the overlying
+        grid from a saved directory, so a pipeline that continues with the
+        aggregation has the data. Declaring only ``provides={"grid"}`` made the
+        validator reject that pipeline.
+        """
+        from edisgo.run.validator import validate
+
+        validate(
+            {
+                "pipeline": [
+                    {"load_from_base": {"import_overlying_grid": True}},
+                    "aggregate_district_heating",
+                    "reactive_power",
+                ]
+            }
+        )
+
+    def test_validator_enforces_the_order_against_reactive_power(self):
+        """
+        The task drops the resistive heater's power series and re-applies the
+        heat-pump operating strategy, which writes active power and zeroes
+        reactive power. Running it after ``reactive_power`` would leave the
+        merged component's reactive power stale, so ``ts_altering=True``
+        makes the validator reject that order.
+        """
+        from edisgo.run.validator import validate
+
+        with pytest.raises(ValueError, match="reactive_power"):
+            validate(
+                {
+                    "pipeline": [
+                        "setup_grid",
+                        "worst_case_ts",
+                        "import_overlying_grid_data",
+                        "reactive_power",
+                        "aggregate_district_heating",
+                    ]
+                }
+            )
+
+    def test_one_unreadable_label_does_not_block_the_others(self, caplog):
+        """
+        A geo-join miss in eGo produces a single NaN column label. Normalising
+        per frame let that one label leave every other label a float, which
+        then silently missed downstream.
+        """
+        import logging
+
+        edisgo = _grid_with_district_heating()
+        edisgo.overlying_grid.feedin_district_heating = pd.DataFrame(
+            {130.0: [1.0, 1.0, 1.0], float("nan"): [0.0, 0.0, 0.0]},
+            index=edisgo.timeseries.timeindex,
+        )
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}}
+        )
+        ctx.overlying_grid_data = {
+            "feedin_district_heating": edisgo.overlying_grid.feedin_district_heating
+        }
+        with caplog.at_level(logging.WARNING, logger="edisgo.run"):
+            task_import_overlying_grid_data(edisgo, ctx)
+
+        cols = list(edisgo.overlying_grid.feedin_district_heating.columns)
+        assert "130" in cols, cols
+        assert "Could not read" in caplog.text
+
+    def test_labels_collapsing_to_duplicates_are_left_alone(self, caplog):
+        """
+        130.0 next to "130" normalises to two identical labels, which makes the
+        downstream lookups return a DataFrame where a Series is expected.
+        """
+        import logging
+
+        edisgo = _grid_with_district_heating()
+        frame = pd.DataFrame(
+            {130.0: [1.0, 1.0, 1.0], "130": [2.0, 2.0, 2.0]},
+            index=edisgo.timeseries.timeindex,
+        )
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}}
+        )
+        ctx.overlying_grid_data = {"feedin_district_heating": frame}
+        with caplog.at_level(logging.WARNING, logger="edisgo.run"):
+            task_import_overlying_grid_data(edisgo, ctx)
+
+        assert list(edisgo.overlying_grid.feedin_district_heating.columns) == [
+            130.0,
+            "130",
+        ]
+        assert "would produce duplicates" in caplog.text
+
+    def test_infinite_label_does_not_kill_the_run(self, caplog):
+        """``inf`` raises OverflowError, which is not a TypeError or ValueError."""
+        import logging
+
+        edisgo = _grid_with_district_heating()
+        frame = pd.DataFrame(
+            {130.0: [1.0, 1.0, 1.0], float("inf"): [0.0, 0.0, 0.0]},
+            index=edisgo.timeseries.timeindex,
+        )
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}}
+        )
+        ctx.overlying_grid_data = {"feedin_district_heating": frame}
+        with caplog.at_level(logging.WARNING, logger="edisgo.run"):
+            task_import_overlying_grid_data(edisgo, ctx)
+
+        assert "130" in list(edisgo.overlying_grid.feedin_district_heating.columns)
+
+    def test_non_numeric_columns_warn_and_are_kept(self, caplog):
+        edisgo = _grid_with_district_heating()
+        edisgo.overlying_grid.feedin_district_heating = pd.DataFrame(
+            {"grid1": [1.5, 1.5, 1.5]}, index=edisgo.timeseries.timeindex
+        )
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}},
+            overlying_grid_data={},
+        )
+        task_import_overlying_grid_data(edisgo, ctx)
+        assert list(edisgo.overlying_grid.feedin_district_heating.columns) == ["grid1"]
+        assert "district heating IDs" in caplog.text
 
 
 class TestIntervalSelectionHelpers:

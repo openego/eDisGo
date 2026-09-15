@@ -167,10 +167,3 @@ Changes
   ``Packaging`` workflow now builds both artifacts, asserts that all runtime data files
   ship and that the OPF entry point resolves in an installed layout, so this cannot
   regress unnoticed again
-* Corrected the Julia version documented in ``config_opf_julia.cfg``, which still
-  pointed at ``julia-1.1.0/bin`` while the bundled ``eDisGo_OPF.jl`` package targets
-  Julia 1.12. The file is included verbatim in the configuration reference, so the
-  stale path was published in the documentation. Its ``julia_bin`` value has not been
-  read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
-  system ``PATH``; the reference now says so instead of claiming the file points to the
-  binary in use
