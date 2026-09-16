@@ -76,3 +76,89 @@ Changes
   from a saved grid with ``import_overlying_grid: true`` was rejected by the
   validator although the data was there, and the labels of the restored frames were
   left as written
+* Brought the dependencies up to date. NumPy moves from the pinned 1.26.4 to 2.x,
+  pandas from 2.1 to 3.0, SQLAlchemy from 1.3 to 2.0, PyPSA from 0.26.2 to 1.3,
+  scikit-learn from 1.2 to 1.9 and plotly from 5 to 7; matplotlib, dash, geopandas,
+  demandlib, geopy and jupyterlab move to their current releases. The supported
+  Python versions become 3.11 to 3.13 (PyPSA 1.3 requires at least 3.11). The
+  upgrades hang together: NumPy 2 needs pandas 2.2 or newer, which only talks to
+  SQLAlchemy 2.0, and PyPSA 1.3 requires pandas 3. What that needed in eDisGo is
+  described in the entries below
+* Replaced the ``oedialect`` package by a reduced fork of it in
+  :mod:`edisgo.io.oedialect`, which reads from the Open Energy Platform (OEP) with
+  SQLAlchemy 2.0. The released oedialect 0.1.1 only works with SQLAlchemy 1.3 — with
+  2.0 it cannot even be imported — and its SQLAlchemy 2.0 branch is unfinished, so
+  it blocked the whole upgrade chain down to NumPy. The fork compiles SELECT
+  statements into the same API documents as its origin (``tests/io/test_oedialect.py``
+  compares them), reflects the schema through the API's ``advanced/get_*``
+  endpoints, and is read-only: eDisGo never writes to the OEP, so compiling an
+  INSERT, UPDATE, DELETE or DDL statement raises instead. It can be dropped again
+  once oedialect releases a SQLAlchemy 2.0 compatible version
+* Replaced the ``saio`` package, unmaintained since 2020 and likewise incompatible
+  with SQLAlchemy 2.0, by ``_ReflectedSchema`` in :mod:`edisgo.tools.config`, which
+  reflects the ORM classes eDisGo reads and caches them per engine and schema. The
+  OEP and egon-data paths of ``import_tables_from_oep`` now share that reflection
+  instead of having one implementation each. Tables without a primary key (views)
+  are mapped by their columns as before, but columns of a type whose values are
+  unhashable — arrays and JSON — are left out of the assumed key, as the ORM would
+  raise a ``TypeError`` on them
+* :mod:`edisgo.tools` no longer builds its session for the legacy open_eGo tables at
+  import time through ``egoio.tools.db``, which imported oedialect. The engine is
+  eDisGo's own now (:func:`~.io.db.engine`) and is created on the first query, so
+  importing eDisGo no longer opens a database connection
+* Followed the PyPSA 1.0 API in :mod:`edisgo.io.pypsa_io`:
+  ``import_components_from_dataframe()`` and ``import_series_from_dataframe()`` were
+  removed there, and are replaced by functions of the same name in that module,
+  built on :meth:`pypsa.Network.add` and the network's ``static``/``dynamic``
+  accessors. ``pypsa.pf.calculate_dependent_values()`` became a method of the
+  network, and ``pypsa.descriptors.Dict`` is gone — the aggregated generator time
+  series are written back into the container PyPSA hands out
+* Restored the missing coordinates of a ding0 grid after the PyPSA import. PyPSA
+  fills missing values with the component's default since version 1.0, so buses
+  without georeference came out at (0, 0) instead of NaN. eDisGo tells the two apart:
+  it is what makes it give the buses of an LV grid pseudo coordinates, and what
+  :attr:`~.network.components.Component.geom` returns ``None`` for
+* Followed the pandas 3 API: the deprecated frequency aliases ``"H"`` and ``"T"``
+  become ``"h"`` and ``"min"``, ``pd.to_numeric(..., errors="ignore")`` becomes an
+  explicit cast that falls back to the unchanged series, ``groupby(axis=...)`` is
+  replaced by grouping the transposed frame, the grouping columns are selected back
+  into the frames a ``groupby().apply()`` is given, and the places that indexed a
+  Series by position with ``[0]`` use ``.iloc`` instead. The busmap of the spatial
+  complexity reduction is renamed in one vectorised step rather than row by row,
+  which pandas 3 refuses because it would change the column's data type
+* Followed plotly 6, which removed the Mapbox traces: the interactive grid plot uses
+  ``Scattermap`` and ``layout.map`` instead of ``Scattermapbox`` and
+  ``layout.mapbox``, and the colorbar title is given as
+  ``title=dict(text=..., side=...)`` in place of the removed ``titleside``
+* Build the standard load profiles with demandlib's ``get_scaled_power_profiles()``
+  instead of the deprecated ``get_profile()`` — the two return the same values. The
+  call is wrapped in ``warnings.catch_warnings()`` because demandlib 0.2.2 leaves a
+  global ``warnings.simplefilter("error")`` behind, which would turn every later
+  warning of the process into an exception
+* ``paramiko`` stays pinned below 4: ``sshtunnel`` 0.4.0, its latest release, reads
+  ``paramiko.DSSKey``, which paramiko removed in version 4. The tunnel is only used
+  to reach an egon-data database
+* Fixed two places where a value was written through a chained indexing step, which
+  pandas 3 applies to a temporary copy rather than to the frame. In the ``"residual"``
+  charging strategy the whole EV charging demand was silently dropped — the charging
+  time series came out as zeros — and in
+  :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_intervals` the
+  share of components reaching their maximum overloading or voltage deviation stayed
+  ``NaN``, which left the reported time intervals unsorted
+* Note that results of the spatial complexity reduction change: scikit-learn does not
+  guarantee that k-means returns the same clustering across versions, and it does not.
+  Aggregation itself is unaffected — installed capacity and the summed time series of
+  a reduced grid still match the unreduced one exactly — but which buses end up in a
+  cluster differs, so the reduced grid has a slightly different number of components.
+  The expected values in the tests are adjusted accordingly; the root-mean-square
+  errors of ``compare_voltage`` and ``compare_apparent_power`` stay in the same order
+  of magnitude
+* Importing a ding0 grid from a directory that does not exist now raises a
+  ``FileNotFoundError`` rather than an ``AssertionError``, following PyPSA
+* Note also that
+  :func:`~.tools.temporal_complexity_reduction._scored_most_critical_voltage_issues_time_interval`
+  groups the voltage deviations by bus although the variable it assigns to, and the
+  cost weighting applied to it, say feeder — the feeder labels it computes are
+  discarded again on the next line. That is a pre-existing bug, unrelated to the
+  dependency update; fixing it changes which time intervals are selected, so it is
+  only marked in the code here and left for its own change

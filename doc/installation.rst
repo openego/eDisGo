@@ -3,8 +3,8 @@
 Installation
 ============
 
-eDisGo is tested with **Python 3.10–3.12** (the conda environment files pin
-``>=3.9, <=3.11``). The documentation is built with Python 3.11, which is a good
+eDisGo is tested with **Python 3.11–3.13** (the conda environment files pin the
+same range). The documentation is built with Python 3.11, which is a good
 default choice.
 
 User installation

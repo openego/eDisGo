@@ -35,34 +35,37 @@ def read(fname):
 
 requirements = [
     "contextily < 1.8.0",
-    "dash < 4.4.0",
-    "demandlib < 0.3.0",
+    "dash < 4.5.0",
+    # eDisGo builds the standard load profiles with get_scaled_power_profiles(),
+    # which demandlib added in 0.2.2
+    "demandlib >= 0.2.2, < 0.3.0",
     "descartes < 1.2.0",
     "egoio >= 0.4.7, < 0.5.0",
-    "geoalchemy2 < 0.7.0",
+    "geoalchemy2 >= 0.17.0, < 0.21.0",
     "geopandas >= 0.12.0, < 1.2.0",
-    "geopy >= 2.0.0, < 2.5.0",
-    "jupyterlab < 4.6.0",
+    "geopy >= 2.0.0, < 2.6.0",
+    "jupyterlab < 4.7.0",
     "jupyter_dash < 0.5.0",
-    "matplotlib >= 3.3.0, < 3.11.0",
+    "matplotlib >= 3.3.0, < 3.12.0",
     "multiprocess < 0.71.0",
     "networkx >= 2.5.0, < 3.7.0",
-    # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
-    # sqlalchemy leads to new errors.. should be fixed at some point
-    "numpy ==1.26.4",
-    "pandas >= 1.4.0, < 2.2.0",
+    "numpy >= 2.0.0, < 2.5.0",
+    "pandas >= 3.0.0, < 3.1.0",
+    # sshtunnel 0.4.0 - the latest release - reads paramiko.DSSKey, which
+    # paramiko removed in version 4
     "paramiko < 4.0",
-    "plotly < 6.0",
+    "plotly >= 6.0, < 8.0",
     "pydot < 4.1.0",
     "pypower < 5.2.0",
     "pyproj >= 3.0.0, < 3.8.0",
-    "pypsa == 0.26.2",
+    # eDisGo uses PyPSA internals (Network.static/dynamic and the component
+    # defaults) to export its grids, so the range is kept narrow
+    "pypsa >= 1.3.0, < 1.4.0",
     "pyyaml < 6.1.0",
-    "saio < 0.3.0",
-    "scikit-learn < 1.3.0",
+    "scikit-learn < 1.10.0",
     "scipy < 1.18.0",
     "shapely >= 1.7.0, < 2.2.0",
-    "sqlalchemy < 1.4.0",
+    "sqlalchemy >= 2.0.0, < 2.1.0",
     "sshtunnel < 0.5.0",
     "urllib3 < 2.8.0",
     "workalendar < 17.1.0",
@@ -80,7 +83,7 @@ dev_requirements = [
     "pytest-html < 5.0.0",
     "pytest-metadata < 4.0.0",
     "anyio < 5.0.0",
-    "dash < 4.4.0",
+    "dash < 4.5.0",
     "pluggy < 2.0.0",
     "pyupgrade < 3.22.0",
     "sphinx < 9.2.0",
@@ -116,9 +119,8 @@ setup(
     description="A python package for distribution network analysis and optimization",
     long_description=read("README.md"),
     long_description_content_type="text/markdown",
-    # numpy is pinned to 1.26.4, which has no wheels for 3.13; the test matrix covers
-    # 3.10 to 3.12.
-    python_requires=">=3.10,<3.13",
+    # PyPSA 1.3 requires Python 3.11; the test matrix covers 3.11 to 3.13.
+    python_requires=">=3.11,<3.14",
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
@@ -126,14 +128,15 @@ setup(
         "(AGPLv3+)",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Topic :: Scientific/Engineering",
     ],
     install_requires=requirements,
     extras_require=extras,
     package_data={
+        "edisgo.io.oedialect": ["LICENSE"],
         "edisgo": [
             os.path.join("config", "*.cfg"),
             os.path.join("equipment", "*.csv"),

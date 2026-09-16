@@ -121,11 +121,11 @@ jobs:
 
           - name-suffix: "basic"
             os: ubuntu-latest
-            python-version: "3.10"
+            python-version: "3.13"
 
           - name-suffix: "basic"
             os: windows-latest
-            python-version: "3.10"
+            python-version: "3.11"
 
     steps:
       - name: Checkout repo
