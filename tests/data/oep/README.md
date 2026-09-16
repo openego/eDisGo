@@ -19,6 +19,9 @@ regular and live tests are in [`tests/README.md`](../../README.md).
 - Functions containing both a query and transformation are split into a small live
   contract test and a detailed offline transformation test.
 - Test names use `_live` and `_offline` where both variants exist.
+- Three regular CI matrix entries run only tests without the `oep` marker and have
+  no OEP token. A fourth coverage entry runs the complete suite, including the
+  retained live contracts, and uploads the combined result to Coveralls.
 
 The usual offline call chain is:
 
@@ -55,6 +58,12 @@ function afterwards.
 - Registered the `oep` marker.
 - Replaced the global OEP engine with a lazy `oep_engine` fixture.
 - Added a runtime guard that reports unmarked tests attempting live OEP access.
+- Configured the three basic Linux and Windows matrix entries to run without live
+  OEP access.
+- Kept one Python 3.12 coverage entry in the matrix that runs all tests, has the OEP
+  token and a 140-minute timeout, and uploads the result to Coveralls.
+- Removed the former workflow queue and the redundant dedicated OEP job; only the
+  coverage matrix entry executes live OEP tests in each workflow.
 
 ### `test_edisgo.py`
 
@@ -181,14 +190,13 @@ function afterwards.
 
 - Retained the simple and electromobility notebooks as slow live end-to-end smoke
   tests so the documented OEP workflows remain covered.
-- Exclude both notebooks from the regular matrix and run them only in the dedicated,
-  serialized OEP job with finite notebook and job timeouts.
+- Excluded both notebooks from the three basic matrix entries and retained them in
+  the full coverage entry with finite notebook and job timeouts.
 - Notebook completion without a cell exception is the assertion; the electromobility
   input is local, while its renewable feed-in setup still uses the live OEP.
 
-Focused runs of the implemented offline tests pass. Renamed live contracts are
-discoverable with `pytest -m oep --collect-only`, but have not yet been executed
-against the live OEP.
+Focused runs of the implemented offline tests pass. The slow and non-slow groups of
+the retained live contracts have also been executed successfully against the OEP.
 
 ## Remaining work
 
@@ -198,17 +206,18 @@ against the live OEP.
    git push
    ```
 
-   This automatically starts the regular test matrix, the offline coverage run and
-   the serialized live OEP job. The coverage result is uploaded to Coveralls.
+   This automatically starts all four matrix entries in parallel. The three basic
+   entries run offline; the coverage entry runs all tests, including the live OEP
+   contracts, and uploads the result to Coveralls.
 
 2. Check the GitHub Actions result:
 
    - all Linux and Windows jobs pass without an OEP token;
-   - the coverage job passes with `pytest -m "not oep"`;
-   - the dedicated OEP job passes with `pytest -m "oep"`.
+   - the Python 3.12 coverage entry passes without a pytest marker filter;
+   - only the coverage entry receives the OEP token and accesses the live OEP;
+   - the coverage result is successfully uploaded to Coveralls.
 
 3. Compare the new branch result in Coveralls with the `dev` baseline. Investigate
-   unexplained coverage losses in transformation, calculation and integration code;
-   uncovered lines limited to live query helpers are expected.
+   unexplained coverage losses in transformation, calculation and integration code.
 
 4. Perform the final code review and open the pull request.
