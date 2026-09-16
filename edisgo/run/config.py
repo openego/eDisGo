@@ -46,6 +46,27 @@ import yaml
 
 logger = logging.getLogger("edisgo.run.config")
 
+# Top-level sections the runner and its tasks actually read. Anything else is
+# almost certainly a typo or a block no task consumes — silently dropping such
+# a key is how a caller's settings can appear to be ignored (openego/eGo#222,
+# where eGo injected a 'timeseries_selection' block nothing read).
+_KNOWN_TOP_LEVEL = frozenset(
+    {
+        "pipeline",
+        "scenario",
+        "grid",
+        "database",
+        "flexibilities",
+        "overlying_grid",
+        "results",
+        "spatial_reduction",
+        # consumed by the loader itself / documentation-only
+        "extends",
+        "_comment",
+        "_workflow",
+    }
+)
+
 
 def load_config(cfg_or_path) -> dict[str, Any]:
     """
@@ -93,8 +114,33 @@ def load_config(cfg_or_path) -> dict[str, Any]:
         base_dir = path.parent
 
     cfg = _resolve_extends(cfg, base_dir)
+    _warn_unknown_keys(cfg)
     _check_schema(cfg)
     return cfg
+
+
+def _warn_unknown_keys(cfg: dict) -> None:
+    """
+    Warn about top-level config keys no task reads.
+
+    Such a key has no effect at all, which makes a caller's settings look
+    silently ignored. Warned about rather than rejected, so configs carrying
+    extra annotations keep working.
+
+    Parameters
+    ----------
+    cfg : dict
+        Fully merged config.
+
+    """
+    unknown = sorted(set(cfg) - _KNOWN_TOP_LEVEL)
+    if unknown:
+        logger.warning(
+            "Ignoring unknown top-level config key(s): %s. These are read by no "
+            "task and have no effect. Known sections: %s.",
+            ", ".join(unknown),
+            ", ".join(sorted(_KNOWN_TOP_LEVEL)),
+        )
 
 
 def _read_file(path: Path) -> dict[str, Any]:

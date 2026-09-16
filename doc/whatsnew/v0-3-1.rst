@@ -76,3 +76,10 @@ Changes
   from a saved grid with ``import_overlying_grid: true`` was rejected by the
   validator although the data was there, and the labels of the restored frames were
   left as written
+* The pipeline config loader now warns about top-level config keys that no task
+  reads, instead of silently dropping them. A caller that writes a block the runner
+  does not know — a typo, or a section from an older config surface — got no
+  feedback at all, and its settings simply had no effect. This is how the eGo
+  workflow came to inject a ``timeseries_selection`` block that nothing consumed,
+  making the preset's timestep selection look unoverridable (openego/eGo#222). The
+  keys are kept, only flagged, so configs carrying extra annotations keep working

@@ -177,3 +177,68 @@ def test_ego_legacy_rejected(tmp_path):
     p = _write(tmp_path, "legacy.json", ego_cfg)
     with pytest.raises(ValueError, match="no longer supported"):
         load_config(str(p))
+
+
+def test_unknown_top_level_key_warns(tmp_path, caplog):
+    """An unread top-level key must be warned about, not silently dropped."""
+    p = _write(
+        tmp_path,
+        "cfg.yaml",
+        {
+            "pipeline": ["setup_grid"],
+            "timeseries_selection": {"mode": "auto"},
+        },
+    )
+    with caplog.at_level("WARNING", logger="edisgo.run.config"):
+        cfg = load_config(str(p))
+    # the key is kept (the loader does not strip it) but flagged
+    assert "timeseries_selection" in cfg
+    assert "timeseries_selection" in caplog.text
+
+
+def test_known_top_level_keys_do_not_warn(tmp_path, caplog):
+    """Recognised sections must not produce a warning."""
+    p = _write(
+        tmp_path,
+        "cfg.yaml",
+        {
+            "pipeline": ["setup_grid"],
+            "scenario": "eGon2035",
+            "grid": {"ding0_path": "/tmp/xyz"},
+            "database": {"source": "oep"},
+            "spatial_reduction": {"enabled": False},
+            "_comment": "documentation only",
+        },
+    )
+    with caplog.at_level("WARNING", logger="edisgo.run.config"):
+        load_config(str(p))
+    assert "unknown top-level" not in caplog.text.lower()
+
+
+def test_caller_overrides_preset_database_and_timeindex():
+    """
+    A caller must be able to override a preset's ``database.source`` and the
+    params of its ``set_timeindex`` step (regression for openego/eGo#207/#222).
+    """
+    preset = load_config({"extends": "spatial_reduction_opf"})
+    # the preset's own defaults, which the caller overrides below
+    assert preset["database"]["source"] == "egon-data"
+    pipeline = [
+        {"set_timeindex": {"start": "2035-06-01 00:00", "periods": 48}}
+        if isinstance(step, dict) and "set_timeindex" in step
+        else step
+        for step in preset["pipeline"]
+    ]
+
+    cfg = load_config(
+        {
+            "extends": "spatial_reduction_opf",
+            "database": {"source": "oep"},
+            "pipeline": pipeline,
+        }
+    )
+    assert cfg["database"]["source"] == "oep"
+    step = next(
+        s for s in cfg["pipeline"] if isinstance(s, dict) and "set_timeindex" in s
+    )
+    assert step["set_timeindex"] == {"start": "2035-06-01 00:00", "periods": 48}
