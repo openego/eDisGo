@@ -73,6 +73,17 @@ results:
 # the pipeline's set_timeindex step below, not via a top-level config block
 # — unlike edisgo_run_edisgo's uc5/uc6, this branch's set_timeindex /
 # select_critical_timesteps tasks take their parameters as step params.
+#
+# The start/periods/freq below are DEFAULTS, not fixed values: a caller
+# overrides them by merging its own params onto the set_timeindex step (eGo
+# does this per grid). See openego/eGo#222, where the window below was taken
+# for an unoverridable setting.
+#
+# Note this preset selects timesteps MANUALLY (set_timeindex). Automatic
+# selection is a different task (select_critical_timesteps) that runs late,
+# after the time series are set — see overlying_grid_opf_spatial for a
+# preset built around it. There is no mode switch: the pipeline below
+# decides which selection a preset performs.
 
 # Top-level block read by the spatial_reduce/spatial_restore tasks via
 # ctx.raw_config. eGo can inject this block the same way it injects
