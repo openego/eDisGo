@@ -635,7 +635,7 @@ class TimeSeries:
             worst_cases = [
                 "_".join(case) for case in itertools.product(cases, ["mv", "lv"])
             ]
-            time_stamps = pd.date_range("1/1/1970", periods=len(worst_cases), freq="H")
+            time_stamps = pd.date_range("1/1/1970", periods=len(worst_cases), freq="h")
             self.timeindex_worst_cases = pd.Series(time_stamps, index=worst_cases)
             self.timeindex = time_stamps
         else:
@@ -665,7 +665,7 @@ class TimeSeries:
                 time_stamps = pd.date_range(
                     self.timeindex.max() + pd.Timedelta(1, unit="hours"),
                     periods=len(worst_cases),
-                    freq="H",
+                    freq="h",
                 )
 
                 self.timeindex_worst_cases = pd.concat(
@@ -2139,13 +2139,13 @@ class TimeSeries:
                     logger.warning(f"There are null values in {attr}")
 
                 if any(df.index.duplicated()):
-                    duplicated_labels = df.index[df.index.duplicated()].values
+                    duplicated_labels = df.index[df.index.duplicated()].tolist()
                     logger.warning(
                         f"{attr} has duplicated indices: {duplicated_labels}"
                     )
 
                 if any(df.columns.duplicated()):
-                    duplicated_labels = df.columns[df.columns.duplicated()].values
+                    duplicated_labels = df.columns[df.columns.duplicated()].tolist()
                     logger.warning(
                         f"{attr} has duplicated columns: {duplicated_labels}"
                     )

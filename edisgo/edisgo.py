@@ -585,7 +585,7 @@ class EDisGo:
             else:
                 default_year = 2011
             self.timeseries.timeindex = pd.date_range(
-                f"1/1/{default_year}", periods=8760, freq="H"
+                f"1/1/{default_year}", periods=8760, freq="h"
             )
             logger.warning(
                 "No timeindex was set. TimeSeries.timeindex is automatically "
@@ -1041,8 +1041,8 @@ class EDisGo:
         Conducts a static, non-linear power flow analysis.
 
         Conducts a static, non-linear power flow analysis using
-        `PyPSA <https://docs.pypsa.org/v0.35.1/user-guide/power-flow.html#\
-        non-linear-power-flow>`_
+        `PyPSA <https://docs.pypsa.org/stable/user-guide/power-flow/#\
+        full-non-linear-power-flow>`_
         and writes results (active, reactive and apparent power as well as
         current on lines and voltages at buses) to :class:`~.network.results.Results`
         (e.g. :attr:`~.network.results.Results.v_res` for voltages).
@@ -1146,7 +1146,7 @@ class EDisGo:
 
         References
         --------
-        [1] https://docs.pypsa.org/v0.35.1/troubleshooting.html
+        [1] https://docs.pypsa.org/stable/user-guide/troubleshooting/
 
         """
 
@@ -2263,7 +2263,7 @@ class EDisGo:
                         "Invalid input for parameter 'scenario'. Possible options are "
                         "'eGon2035' and 'eGon100RE'."
                     )
-                timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+                timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="h")
         # if year is leap year set year according to scenario
         if pd.Timestamp(timeindex.year[0], 1, 1).is_leap_year:
             logger.warning(
@@ -2275,7 +2275,7 @@ class EDisGo:
             return self.import_heat_pumps(
                 scenario,
                 engine,
-                timeindex=pd.date_range(f"1/1/{year}", periods=8760, freq="H"),
+                timeindex=pd.date_range(f"1/1/{year}", periods=8760, freq="h"),
                 import_types=import_types,
             )
 

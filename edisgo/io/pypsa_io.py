@@ -24,9 +24,86 @@ import numpy as np
 import pandas as pd
 
 from pypsa import Network as PyPSANetwork
-from pypsa.io import import_series_from_dataframe
 
 logger = logging.getLogger(__name__)
+
+
+def import_components_from_dataframe(pypsa_network, dataframe, cls_name):
+    """
+    Add components of one type given as a :pandas:`pandas.DataFrame<DataFrame>`.
+
+    This is a drop-in replacement for PyPSA's
+    ``Network.import_components_from_dataframe()``, which was removed in PyPSA 1.0
+    in favour of :pypsa:`Network.add<network>`.
+
+    Parameters
+    ----------
+    pypsa_network : :pypsa:`pypsa.Network<network>`
+        Network to add the components to.
+    dataframe : :pandas:`pandas.DataFrame<DataFrame>`
+        Component data. The index holds the component names, the columns the
+        static component attributes.
+    cls_name : str
+        Name of the PyPSA component class, e.g. "Bus" or "Generator".
+
+    """
+    if dataframe.empty:
+        return
+    # Pass the values instead of the columns themselves: `add` aligns array-like
+    # attributes with `names` by position, so an attribute given as a Series
+    # would be re-indexed by its own index.
+    pypsa_network.add(
+        cls_name,
+        dataframe.index,
+        **{col: dataframe.loc[:, col].values for col in dataframe.columns},
+    )
+
+
+def import_series_from_dataframe(pypsa_network, dataframe, cls_name, attr):
+    """
+    Set a time-varying attribute of already added components.
+
+    This is a drop-in replacement for PyPSA's
+    ``pypsa.io.import_series_from_dataframe()``, which was removed in PyPSA 1.0.
+    Unlike :pypsa:`Network.add<network>` it only writes the given attribute and
+    leaves the components' other attributes - and the columns of `attr` that are
+    not in `dataframe` - untouched, which is what the component-wise export in
+    :func:`to_pypsa` relies on.
+
+    Parameters
+    ----------
+    pypsa_network : :pypsa:`pypsa.Network<network>`
+        Network to set the time series in.
+    dataframe : :pandas:`pandas.DataFrame<DataFrame>`
+        Time series data, indexed by snapshot with one column per component.
+    cls_name : str
+        Name of the PyPSA component class, e.g. "Bus" or "Generator".
+    attr : str
+        Name of the time-varying attribute, e.g. "p_set".
+
+    """
+    static = pypsa_network.static(cls_name)
+    dynamic = pypsa_network.dynamic(cls_name)
+
+    unknown = dataframe.columns.difference(static.index)
+    if len(unknown) > 0:
+        logger.warning(
+            f"Time series for {cls_name} components {list(unknown)} are not added to "
+            f"the PyPSA network, as the components are not part of it."
+        )
+
+    columns = dataframe.columns.intersection(static.index)
+    defaults = pypsa_network.components[cls_name].defaults.loc[attr]
+    if defaults.static:
+        # attributes that also exist as a static attribute default to its value
+        dynamic[attr] = dynamic[attr].reindex(
+            columns=static.index.union(columns), fill_value=defaults.default
+        )
+    else:
+        dynamic[attr] = dynamic[attr].reindex(columns=static.index.union(columns))
+    dynamic[attr].loc[pypsa_network.snapshots, columns] = dataframe.loc[
+        pypsa_network.snapshots, columns
+    ]
 
 
 def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
@@ -220,10 +297,10 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
 
     # import network topology to PyPSA network
     # buses are created first to avoid warnings
-    pypsa_network.import_components_from_dataframe(buses_df, "Bus")
-    pypsa_network.import_components_from_dataframe(slack_df, "Generator")
+    import_components_from_dataframe(pypsa_network, buses_df, "Bus")
+    import_components_from_dataframe(pypsa_network, slack_df, "Generator")
     for k, comps in components.items():
-        pypsa_network.import_components_from_dataframe(comps, k)
+        import_components_from_dataframe(pypsa_network, comps, k)
 
     # import time series to PyPSA network
 
@@ -373,7 +450,7 @@ def set_seed(edisgo_obj, pypsa_network):
     """
     Set initial guess for the Newton-Raphson algorithm.
 
-    In `PyPSA <https://docs.pypsa.org/v0.35.1/>`_ an
+    In `PyPSA <https://docs.pypsa.org/stable/>`_ an
     initial guess for the Newton-Raphson algorithm used in the power flow
     analysis can be provided to speed up calculations.
     For PQ buses, which besides the slack bus, is the only bus type in

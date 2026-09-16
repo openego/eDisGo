@@ -313,7 +313,12 @@ def charging_strategy(
             RELEVANT_CHARGING_STRATEGIES_COLUMNS["residual_dumb"]
         ].itertuples():
             try:
-                dummy_ts.loc[:, cp_id].iloc[start : start + stop] += cap
+                # one indexing step, not a chained one: pandas 3 writes the
+                # latter into a temporary copy, which silently drops the
+                # charging demand
+                dummy_ts.iloc[
+                    start : start + stop, dummy_ts.columns.get_loc(cp_id)
+                ] += cap
 
             except Exception:
                 maximum_ts = len(dummy_ts)
@@ -336,7 +341,7 @@ def charging_strategy(
             idx = np.argpartition(flex_band, k)[:k] + start
 
             try:
-                dummy_ts[cp_id].iloc[idx] += cap
+                dummy_ts.iloc[idx, dummy_ts.columns.get_loc(cp_id)] += cap
 
                 residual_load[idx] += cap
 

@@ -100,7 +100,7 @@ class TestTemporalComplexityReduction:
         assert len(ts_crit) == 10
         assert (
             ts_crit.loc[0, "time_steps"]
-            == pd.date_range("1/8/2018", periods=24, freq="H")
+            == pd.date_range("1/8/2018", periods=24, freq="h")
         ).all()
         assert np.isclose(
             ts_crit.loc[0, "percentage_max_overloaded_components"], 0.96479
@@ -116,7 +116,7 @@ class TestTemporalComplexityReduction:
         assert len(ts_crit) == 9
         assert (
             ts_crit.loc[0, "time_steps"]
-            == pd.date_range("1/5/2018 4:00", periods=24, freq="H")
+            == pd.date_range("1/5/2018 4:00", periods=24, freq="h")
         ).all()
         assert ts_crit.loc[0, "percentage_max_overloaded_components"] == 1
 
@@ -129,7 +129,7 @@ class TestTemporalComplexityReduction:
         assert len(ts_crit) == 9
         assert (
             ts_crit.loc[0, "time_steps"]
-            == pd.date_range("1/5/2018 0:00", periods=48, freq="H")
+            == pd.date_range("1/5/2018 0:00", periods=48, freq="h")
         ).all()
 
     def test__scored_most_critical_voltage_issues_time_interval(self):
@@ -140,7 +140,7 @@ class TestTemporalComplexityReduction:
         assert len(ts_crit) == 5
         assert (
             ts_crit.loc[0, "time_steps"]
-            == pd.date_range("1/1/2018", periods=24, freq="H")
+            == pd.date_range("1/1/2018", periods=24, freq="h")
         ).all()
         assert (
             ts_crit.loc[:, "percentage_buses_max_voltage_deviation"].values == 1.0
@@ -153,7 +153,7 @@ class TestTemporalComplexityReduction:
         assert len(ts_crit) == 5
         assert (
             ts_crit.loc[0, "time_steps"]
-            == pd.date_range("1/1/2018 4:00", periods=72, freq="H")
+            == pd.date_range("1/1/2018 4:00", periods=72, freq="h")
         ).all()
 
     def test__costs_per_line_and_transformer(self):
@@ -177,11 +177,11 @@ class TestTemporalComplexityReduction:
         assert len(steps) == 5
         assert (
             steps.loc[0, "time_steps_overloading"]
-            == pd.date_range("1/8/2018", periods=24, freq="H")
+            == pd.date_range("1/8/2018", periods=24, freq="h")
         ).all()
         assert (
             steps.loc[0, "time_steps_voltage_issues"]
-            == pd.date_range("1/1/2018", periods=24, freq="H")
+            == pd.date_range("1/1/2018", periods=24, freq="h")
         ).all()
 
 

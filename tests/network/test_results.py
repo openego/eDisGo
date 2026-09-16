@@ -21,7 +21,7 @@ class TestResults:
     def test_to_csv(self):
         # create dummy results
         timeindex = pd.date_range(
-            "2011-04-16 00:00:00", "2011-04-16 02:00:00", freq="1H"
+            "2011-04-16 00:00:00", "2011-04-16 02:00:00", freq="1h"
         )
         self.results.pfa_v_mag_pu_seed = pd.DataFrame(
             data=1.1094890328530983,
@@ -90,7 +90,7 @@ class TestResults:
     def test_from_csv(self):
         # create dummy results and save to csv
         timeindex = pd.date_range(
-            "2011-04-16 00:00:00", "2011-04-16 02:00:00", freq="1H"
+            "2011-04-16 00:00:00", "2011-04-16 02:00:00", freq="1h"
         )
         pfa_v_mag_pu_seed = pd.DataFrame(
             data=1.1094890328530983,

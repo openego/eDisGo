@@ -339,13 +339,13 @@ class TestGeneratorsImport:
         gens_df = edisgo.topology.generators_df.loc[integrated_pv, :]
         assert len(gens_df) == 3
         # check that smallest PV plant is connected to LV
-        bus_gen_voltage_level_7 = gens_df[gens_df.p_nom == 0.005].bus[0]
+        bus_gen_voltage_level_7 = gens_df[gens_df.p_nom == 0.005].bus.iloc[0]
         assert edisgo.topology.buses_df.at[bus_gen_voltage_level_7, "v_nom"] == 0.4
         # check that medium PV plant is connected same bus as building
-        bus_gen_voltage_level_6 = gens_df[gens_df.p_nom == 0.15].bus[0]
+        bus_gen_voltage_level_6 = gens_df[gens_df.p_nom == 0.15].bus.iloc[0]
         assert bus_gen_voltage_level_6 == busbar_bus
         # check that largest heat pump is connected to MV
-        bus_gen_voltage_level_5 = gens_df[gens_df.p_nom == 2.0].bus[0]
+        bus_gen_voltage_level_5 = gens_df[gens_df.p_nom == 2.0].bus.iloc[0]
         assert edisgo.topology.buses_df.at[bus_gen_voltage_level_5, "v_nom"] == 20.0
 
         assert edisgo.topology.generators_df.loc[integrated_pv, "p_nom"].sum() == 2.155
@@ -569,7 +569,7 @@ class TestGeneratorsImportOEDB:
 
     @pytest.mark.slow
     def test_oedb_legacy_with_timeseries_by_technology(self):
-        timeindex = pd.date_range("1/1/2012", periods=3, freq="H")
+        timeindex = pd.date_range("1/1/2012", periods=3, freq="h")
         ts_gen_dispatchable = pd.DataFrame(
             {"other": [0.775] * 3, "gas": [0.9] * 3}, index=timeindex
         )

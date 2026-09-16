@@ -37,7 +37,7 @@ def to_powermodels(pypsa_net):
     """
 
     # calculate per unit values
-    pypsa.pf.calculate_dependent_values(pypsa_net)
+    pypsa_net.calculate_dependent_values()
 
     # convert pypsa network to pypower datastructure
     ppc, loads_t, gens_t = pypsa2ppc(pypsa_net)

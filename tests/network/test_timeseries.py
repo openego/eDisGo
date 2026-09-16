@@ -22,8 +22,8 @@ class TestTimeSeries:
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
     def test_timeseries_getters(self, caplog):
-        index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
-        index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
+        index_2 = pd.date_range("1/1/2018", periods=2, freq="h")
+        index_3 = pd.date_range("1/1/2018", periods=3, freq="h")
         timeseries = pd.DataFrame(index=index_2, columns=["Comp_1"], data=[1.3, 2])
         self.edisgo.timeseries.timeindex = index_3
         for attribute in self.edisgo.timeseries._attributes:
@@ -43,8 +43,8 @@ class TestTimeSeries:
 
     def test_set_active_power_manual(self):
         # create dummy time series
-        index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
-        index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
+        index_2 = pd.date_range("1/1/2018", periods=2, freq="h")
+        index_3 = pd.date_range("1/1/2018", periods=3, freq="h")
         dummy_ts_1 = pd.Series([1.4, 2.3], index=index_2)
         dummy_ts_2 = pd.Series([1.4, 2.3, 1.5], index=index_3)
         # set TimeSeries timeindex
@@ -194,8 +194,8 @@ class TestTimeSeries:
 
     def test_set_reactive_power_manual(self):
         # create dummy time series
-        index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
-        index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
+        index_2 = pd.date_range("1/1/2018", periods=2, freq="h")
+        index_3 = pd.date_range("1/1/2018", periods=3, freq="h")
         dummy_ts_1 = pd.Series([1.4, 2.3], index=index_2)
         dummy_ts_2 = pd.Series([1.4, 2.3, 1.5], index=index_3)
         # set TimeSeries timeindex
@@ -361,7 +361,7 @@ class TestTimeSeries:
             self.edisgo, cases=["feed-in_case", "load_case"]
         )
 
-        timeindex = pd.date_range("1/1/1970", periods=4, freq="H")
+        timeindex = pd.date_range("1/1/1970", periods=4, freq="h")
         # check generator
         comp = "Generator_1"  # gas, mv
         p_nom = 0.775
@@ -557,7 +557,7 @@ class TestTimeSeries:
         # #############################################################################
         # test reset of time series - set other time series before and only set
         # worst case time series for other components
-        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2018", periods=2, freq="h")
         self.edisgo.timeseries.timeindex = timeindex
         self.edisgo.timeseries._generators_active_power = pd.DataFrame(
             {"Generator_1": [1.4, 2.3]}, index=timeindex
@@ -584,7 +584,7 @@ class TestTimeSeries:
         assert self.edisgo.timeseries.generators_active_power.shape == (4, 1)
         assert self.edisgo.timeseries.generators_reactive_power.shape == (4, 1)
         exp = pd.Series(
-            data=pd.date_range("1/1/1970", periods=4, freq="H"),
+            data=pd.date_range("1/1/1970", periods=4, freq="h"),
             index=[
                 "load_case_mv",
                 "load_case_lv",
@@ -1236,7 +1236,7 @@ class TestTimeSeries:
 
     @pytest.mark.slow
     def test_predefined_fluctuating_generators_by_technology(self):
-        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         self.edisgo.timeseries.timeindex = timeindex
 
         # ############# oedb, all generators (default)
@@ -1407,7 +1407,7 @@ class TestTimeSeries:
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         edisgo_object.timeseries.timeindex = timeindex
 
         # ############# oedb, all generators (default)
@@ -1450,7 +1450,7 @@ class TestTimeSeries:
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
 
     def test_predefined_dispatchable_generators_by_technology(self):
-        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         self.edisgo.timeseries.timeindex = timeindex
 
         # ############# all generators (default), with "other"
@@ -1549,7 +1549,7 @@ class TestTimeSeries:
         # fmt: on
 
     def test_predefined_conventional_loads_by_sector(self, caplog):
-        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        index = pd.date_range("1/1/2018", periods=3, freq="h")
         self.edisgo.timeseries.timeindex = index
 
         # test assertion error
@@ -1813,7 +1813,7 @@ class TestTimeSeries:
         )
 
     def test_predefined_charging_points_by_use_case(self, caplog):
-        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        index = pd.date_range("1/1/2018", periods=3, freq="h")
         self.edisgo.timeseries.timeindex = index
 
         # test assertion error
@@ -1921,7 +1921,7 @@ class TestTimeSeries:
 
     def test_fixed_cosphi(self):
         # set active power time series for fixed cosphi
-        timeindex = pd.date_range("1/1/1970", periods=3, freq="H")
+        timeindex = pd.date_range("1/1/1970", periods=3, freq="h")
         self.edisgo.set_timeindex(timeindex)
         ts_solar = np.array([0.1, 0.2, 0.3])
         ts_wind = [0.4, 0.5, 0.6]
@@ -2131,7 +2131,7 @@ class TestTimeSeries:
         # fmt: on
 
     def test_to_csv(self):
-        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2018", periods=2, freq="h")
         self.edisgo.set_timeindex(timeindex)
 
         # create dummy time series
@@ -2199,7 +2199,7 @@ class TestTimeSeries:
         shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2018", periods=2, freq="h")
         self.edisgo.set_timeindex(timeindex)
 
         # create dummy time series
@@ -2290,7 +2290,7 @@ class TestTimeSeries:
         assert "No time index set. Empty time series will be returned." in caplog.text
         caplog.clear()
         # add timeseries
-        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        index = pd.date_range("1/1/2018", periods=3, freq="h")
         self.edisgo.timeseries.timeindex = index
         for attr in attrs:
             tmp = attr.split("_")
@@ -2313,7 +2313,7 @@ class TestTimeSeries:
         for attr in attrs:
             ts_tmp = getattr(self.edisgo.timeseries, attr)
             if not ts_tmp.empty:
-                ts_tmp.iloc[0, 0] = np.NaN
+                ts_tmp.iloc[0, 0] = np.nan
                 setattr(self.edisgo.timeseries, attr, ts_tmp)
                 self.edisgo.timeseries.check_integrity()
                 assert f"There are null values in {attr}" in caplog.text
@@ -2329,7 +2329,7 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
                 assert (
-                    f"{attr} has duplicated indices: {ts_tmp.iloc[0:2].index.values}"
+                    f"{attr} has duplicated indices: {ts_tmp.iloc[0:2].index.tolist()}"
                     in caplog.text
                 )
                 caplog.clear()
@@ -2338,8 +2338,9 @@ class TestTimeSeries:
                 ts_tmp_duplicated = pd.concat([ts_tmp, ts_tmp.iloc[:, 0:2]], axis=1)
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
+                duplicated_columns = ts_tmp.iloc[:, 0:2].columns.tolist()
                 assert (
-                    f"{attr} has duplicated columns: {ts_tmp.iloc[:, 0:2].columns.values}"
+                    f"{attr} has duplicated columns: {duplicated_columns}"
                     in caplog.text
                 )
                 caplog.clear()
@@ -2352,7 +2353,7 @@ class TestTimeSeries:
         time_series_obj.drop_component_time_series("loads_active_power", "Load1")
 
         # add dummy time series
-        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
+        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="h")
         df = pd.DataFrame(
             data={
                 "load_1": [1.23, 2.0, 5.0, 6.0],
@@ -2375,7 +2376,7 @@ class TestTimeSeries:
 
     def test_add_component_time_series(self):
         time_series_obj = timeseries.TimeSeries()
-        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
+        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="h")
 
         df = pd.DataFrame(
             data={
@@ -2535,7 +2536,7 @@ class TestTimeSeriesRaw:
     def setup_class(self):
         # add dummy time series
         self.time_series_raw = timeseries.TimeSeriesRaw()
-        timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
+        timeindex = pd.date_range("1/1/2018", periods=4, freq="h")
         self.df = pd.DataFrame(
             data={
                 "residential": [1.23, 2.0, 5.0, 6.0],

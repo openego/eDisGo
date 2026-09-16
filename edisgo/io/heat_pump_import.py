@@ -285,7 +285,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 # if geom is still None, use geolocation of HV/MV station
                 if geom is None:
                     hvmv_station = edisgo_object.topology.mv_grid.station
-                    geom = Point(hvmv_station.x[0], hvmv_station.y[0])
+                    geom = Point(hvmv_station.x.iloc[0], hvmv_station.y.iloc[0])
                 df_merge.at[idx, "geom"] = geom
             return df_merge.loc[
                 :,

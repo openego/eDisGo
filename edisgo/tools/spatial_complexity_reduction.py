@@ -421,7 +421,7 @@ def make_busmap_grid(
     References
     ----------
     In parts based on `PyPSA spatial complexity reduction <https://docs.pypsa.org
-    /v0.35.1/examples/spatial-clustering.html>`_.
+    /stable/user-guide/clustering/>`_.
 
     """
 
@@ -457,27 +457,21 @@ def make_busmap_grid(
         series["new_y"] = y
         return series
 
-    def rename_new_buses(series):
+    def rename_new_buses(partial_busmap_df):
+        """Replace the cluster numbers in `new_bus` by bus names."""
         if str(grid).split("_")[0] == "LVGrid":
-            series["new_bus"] = (
-                "Bus_mvgd_"
-                + str(edisgo_obj.topology.mv_grid.id)
-                + "_lvgd_"
-                + str(grid.id)
-                + "_"
-                + str(int(series["new_bus"]))
-            )
-
+            prefix = f"Bus_mvgd_{edisgo_obj.topology.mv_grid.id}_lvgd_{grid.id}_"
         elif str(grid).split("_")[0] == "MVGrid":
-            series["new_bus"] = (
-                "Bus_mvgd_"
-                + str(edisgo_obj.topology.mv_grid.id)
-                + "_"
-                + str(int(series["new_bus"]))
-            )
-        elif grid is None:
-            logger.error("Grid is None")
-        return series
+            prefix = f"Bus_mvgd_{edisgo_obj.topology.mv_grid.id}_"
+        else:
+            if grid is None:
+                logger.error("Grid is None")
+            return partial_busmap_df
+
+        partial_busmap_df["new_bus"] = prefix + partial_busmap_df.new_bus.astype(
+            int
+        ).astype(str)
+        return partial_busmap_df
 
     logger.debug("Start making busmap for grids.")
 
@@ -555,7 +549,7 @@ def make_busmap_grid(
                     buses_df.loc[index, "medoid"], ["x", "y"]
                 ].values
 
-        partial_busmap_df = partial_busmap_df.apply(rename_new_buses, axis="columns")
+        partial_busmap_df = rename_new_buses(partial_busmap_df)
 
         partial_busmap_df.loc[
             partial_busmap_df.new_bus.isin(
@@ -634,7 +628,7 @@ def make_busmap_feeders(
     References
     ----------
     In parts based on `PyPSA spatial complexity reduction <https://docs.pypsa.org
-    /v0.35.1/examples/spatial-clustering.html>`_.
+    /stable/user-guide/clustering/>`_.
 
     """
 
@@ -895,7 +889,7 @@ def make_busmap_main_feeders(
     References
     ----------
     In parts based on `PyPSA spatial complexity reduction <https://docs.pypsa.org
-    /v0.35.1/examples/spatial-clustering.html>`_.
+    /stable/user-guide/clustering/>`_.
 
     """
 
@@ -1320,7 +1314,7 @@ def make_busmap(
     References
     ----------
     In parts based on `PyPSA spatial complexity reduction <https://docs.pypsa.org/
-    v0.35.1/examples/spatial-clustering.html>`_.
+    stable/user-guide/clustering/>`_.
 
     """
 
@@ -1436,7 +1430,7 @@ def apply_busmap(
     References
     ----------
     In parts based on `PyPSA spatial complexity reduction <https://docs.pypsa.org
-    /v0.35.1/examples/spatial-clustering.html>`_.
+    /stable/user-guide/clustering/>`_.
 
     """
 
@@ -1513,7 +1507,7 @@ def apply_busmap(
             )
 
         # Get type of the line to get the according standard line for the voltage_level
-        if np.isnan(buses_df.loc[df.bus0, "lv_grid_id"])[0]:
+        if np.isnan(buses_df.loc[df.bus0, "lv_grid_id"].iloc[0]):
             type_line = f"mv_line_{int(v_nom)}kv"
         else:
             type_line = "lv_line"
@@ -1687,7 +1681,9 @@ def apply_busmap(
             remove_lines_with_the_same_bus, axis="columns", result_type="broadcast"
         ).dropna()
         lines_df = get_ordered_lines_df(lines_df)
-        lines_df = lines_df.groupby(by=["bus0", "bus1"]).apply(aggregate_lines_df)
+        lines_df = lines_df.groupby(by=["bus0", "bus1"])[
+            lines_df.columns.tolist()
+        ].apply(aggregate_lines_df)
         lines_df.index = (
             "Line_" + lines_df.loc[:, "bus0"] + "_to_" + lines_df.loc[:, "bus1"]
         )
@@ -1698,9 +1694,9 @@ def apply_busmap(
 
         if aggregation_mode:
             if load_aggregation_mode == "sector":
-                loads_df = loads_df.groupby(by=["bus", "type", "sector"]).apply(
-                    aggregate_loads_df
-                )
+                loads_df = loads_df.groupby(by=["bus", "type", "sector"])[
+                    loads_df.columns.tolist()
+                ].apply(aggregate_loads_df)
                 loads_df.index = (
                     "Load_"
                     + loads_df.loc[:, "bus"]
@@ -1710,7 +1706,9 @@ def apply_busmap(
                     + loads_df.loc[:, "sector"]
                 )
             elif load_aggregation_mode == "bus":
-                loads_df = loads_df.groupby(by=["bus"]).apply(aggregate_loads_df)
+                loads_df = loads_df.groupby(by=["bus"])[
+                    loads_df.columns.tolist()
+                ].apply(aggregate_loads_df)
                 loads_df.index = "Load_" + loads_df.loc[:, "bus"]
 
             loads_df.index.name = "name"
@@ -1728,14 +1726,14 @@ def apply_busmap(
 
         if aggregation_mode:
             if generator_aggregation_mode == "bus":
-                generators_df = generators_df.groupby("bus").apply(
-                    aggregate_generators_df
-                )
+                generators_df = generators_df.groupby("bus")[
+                    generators_df.columns.tolist()
+                ].apply(aggregate_generators_df)
                 generators_df.index = "Generator_" + generators_df.loc[:, "bus"]
             elif generator_aggregation_mode == "type":
                 generators_df = generators_df.groupby(
                     by=["bus", "type", "weather_cell_id"], dropna=False
-                ).apply(aggregate_generators_df)
+                )[generators_df.columns.tolist()].apply(aggregate_generators_df)
                 generators_df.index = (
                     "Generator_"
                     + generators_df.loc[:, "bus"].values
@@ -2289,7 +2287,7 @@ def compare_apparent_power(
     s_df = s_root.to_frame()
 
     for index, row in s_df.iterrows():
-        s_df.loc[index, "s_reduced"] = s_reduced.loc[linemap_df.loc[index][0]]
+        s_df.loc[index, "s_reduced"] = s_reduced.loc[linemap_df.loc[index].iloc[0]]
     s_df.loc[:, "s_diff"] = s_df.loc[:, "s_unreduced"] - s_df.loc[:, "s_reduced"]
     rms = np.sqrt(
         mean_squared_error(s_df.loc[:, "s_unreduced"], s_df.loc[:, "s_reduced"])

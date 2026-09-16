@@ -726,7 +726,12 @@ def _update_grids(
         edisgo_object.topology.transformers_df.bus1.unique()
     ]
 
-    new_gens_lv.geom = new_gens_lv.geom.apply(wkt_loads)
+    # A generator without georeference is placed by its LV grid, so a missing
+    # geometry is passed on as None. pandas represents it as NaN in a string
+    # column since version 3, which shapely rejects.
+    new_gens_lv.geom = new_gens_lv.geom.apply(
+        lambda geom: wkt_loads(geom) if isinstance(geom, str) else None
+    )
 
     new_gens_lv = gpd.GeoDataFrame(
         new_gens_lv,

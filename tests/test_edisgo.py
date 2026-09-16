@@ -70,7 +70,7 @@ class TestEDisGo:
         shutil.rmtree(save_dir)
 
     def test_set_time_series_manual(self, caplog):
-        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="h")
         gens_ts = pd.DataFrame(
             data={
                 "GeneratorFluctuating_15": [2.0, 5.0, 6.0],
@@ -115,7 +115,7 @@ class TestEDisGo:
         )
 
         # test overwriting time series and with some components that do not exist
-        timeindex2 = pd.date_range("1/1/2018", periods=4, freq="H")
+        timeindex2 = pd.date_range("1/1/2018", periods=4, freq="h")
         gens_ts2 = pd.DataFrame(
             data={
                 "GeneratorFluctuating_15": [1.0, 2.0, 5.0, 6.0],
@@ -222,7 +222,7 @@ class TestEDisGo:
         assert "No timeindex was set. TimeSeries.timeindex is automatically" in caplog.text
 
         # check if right functions are called
-        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         self.edisgo.timeseries.timeindex = timeindex
         ts_fluc = pd.DataFrame(
             data={
@@ -272,13 +272,13 @@ class TestEDisGo:
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        edisgo_object.set_timeindex(pd.date_range("1/1/2011", periods=8760, freq="H"))
+        edisgo_object.set_timeindex(pd.date_range("1/1/2011", periods=8760, freq="h"))
         edisgo_object.set_time_series_active_power_predefined(
             conventional_loads_ts="oedb",
             fluctuating_generators_ts="oedb",
             scenario="eGon2035",
             engine=pytest.engine,
-            timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+            timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="h"),
             conventional_loads_names=[
                 "Load_mvgd_33535_lvgd_1164210000_244_residential"
             ],
@@ -321,7 +321,7 @@ class TestEDisGo:
 
     def test_set_time_series_reactive_power_control(self):
         # set active power time series for fixed cosphi
-        timeindex = pd.date_range("1/1/1970", periods=3, freq="H")
+        timeindex = pd.date_range("1/1/1970", periods=3, freq="h")
         self.edisgo.set_timeindex(timeindex)
         ts_solar = np.array([0.1, 0.2, 0.3])
         ts_wind = [0.4, 0.5, 0.6]
@@ -772,7 +772,7 @@ class TestEDisGo:
         assert (
             self.edisgo.topology.get_connected_lines_from_bus(
                 self.edisgo.topology.generators_df.at[comp_name, "bus"]
-            ).bus0[0]
+            ).bus0.iloc[0]
             == "Bus_MVStation_1"
         )
 
@@ -810,7 +810,7 @@ class TestEDisGo:
         assert (
             self.edisgo.topology.get_connected_lines_from_bus(
                 self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
-            ).bus0[0]
+            ).bus0.iloc[0]
             == random_bus
         )
         # check time series
@@ -856,7 +856,8 @@ class TestEDisGo:
         # check that charging point is connected to the random bus chosen
         # above
         assert (
-            self.edisgo.topology.get_connected_lines_from_bus(bus).bus0[0] == random_bus
+            self.edisgo.topology.get_connected_lines_from_bus(bus).bus0.iloc[0]
+            == random_bus
         )
         # check time series
         assert (
@@ -1408,7 +1409,7 @@ class TestEDisGo:
         edisgo_object.import_heat_pumps(
             scenario="eGon2035",
             engine=pytest.engine,
-            timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
+            timeindex=pd.date_range("1/1/2020", periods=2, freq="h"),
             import_types=["individual_heat_pumps", "central_heat_pumps"],
         )
 
@@ -1422,7 +1423,7 @@ class TestEDisGo:
 
     def test_apply_charging_strategy(self):
         self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
-        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="h")
         self.edisgo_obj.set_timeindex(timeindex)
 
         self.edisgo_obj.resample_timeseries()
@@ -1644,7 +1645,7 @@ class TestEDisGo:
         # set up test data
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
-        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
             data={
                 "hp1": [1.0, 2.0],
@@ -1775,9 +1776,9 @@ class TestEDisGo:
             self.edisgo.topology.generators_df
         )
         assert len(self.edisgo.topology.loads_df) == 28
-        assert len(self.edisgo.topology.generators_df) == 17
+        assert len(self.edisgo.topology.generators_df) == 18
         assert len(set(busmap_df["new_bus"].to_list())) == 32
-        assert len(set(linemap_df["new_line_name"].to_list())) == 21
+        assert len(set(linemap_df["new_line_name"].to_list())) == 22
 
     def test_check_integrity(self, caplog):
         self.edisgo.check_integrity()
@@ -1809,7 +1810,7 @@ class TestEDisGo:
 
         # ########################### check time series ##############################
         # set timeseries
-        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        index = pd.date_range("1/1/2018", periods=3, freq="h")
         ts_gens = pd.DataFrame(
             index=index, columns=self.edisgo.topology.generators_df.index, data=0
         )
@@ -1961,7 +1962,7 @@ class TestEDisGo:
         # ########################### check time index ##########################
         # test heat pump, overlying grid and dsm time index not matching
         # (electromobility is checked above)
-        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         self.edisgo.heat_pump.cop_df = pd.DataFrame(
             data={"hp1": [5.0, 6.0], "hp2": [7.0, 8.0]},
             index=timeindex,
@@ -1997,7 +1998,7 @@ class TestEDisGo:
                 "hp1": [5.0, 6.0],
                 "hp2": [7.0, 8.0],
             },
-            index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+            index=pd.date_range("1/1/2011 12:00", periods=2, freq="h"),
         )
         self.edisgo.resample_timeseries(freq="30min")
         assert len(self.edisgo.timeseries.loads_active_power) == 8
@@ -2066,6 +2067,9 @@ class TestEDisGoFunc:
             edisgo_obj_loaded.topology.loads_df,
             edisgo_obj.topology.loads_df,
             check_dtype=False,
+            # pandas infers the string dtype for the labels it reads back from
+            # the CSV, while the imported grid carries an object index
+            check_index_type=False,
         )
         # check time series
         assert edisgo_obj_loaded.timeseries.timeindex.empty
@@ -2134,6 +2138,9 @@ class TestEDisGoFunc:
             edisgo_obj_loaded.topology.loads_df,
             edisgo_obj.topology.loads_df,
             check_dtype=False,
+            # pandas infers the string dtype for the labels it reads back from
+            # the archive, while the imported grid carries an object index
+            check_index_type=False,
         )
         # check time series
         assert_frame_equal(

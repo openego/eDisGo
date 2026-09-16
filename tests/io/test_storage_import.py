@@ -66,9 +66,9 @@ class TestStorageImport:
 
         # manipulate bus of the largest storage to be an MV bus
         loads_df = self.edisgo.topology.loads_df
-        bus_bat_voltage_level_5_building = loads_df[loads_df.building_id == 446933].bus[
-            0
-        ]
+        bus_bat_voltage_level_5_building = loads_df[
+            loads_df.building_id == 446933
+        ].bus.iloc[0]
         self.edisgo.topology.buses_df.at[bus_bat_voltage_level_5_building, "v_nom"] = (
             20.0
         )
@@ -81,23 +81,23 @@ class TestStorageImport:
         storage_df = self.edisgo.topology.storage_units_df
         assert len(storage_df) == 3
         # check that smallest storage is integrated at same bus as building
-        bus_bat_voltage_level_7 = storage_df[storage_df.p_nom == 0.005].bus[0]
+        bus_bat_voltage_level_7 = storage_df[storage_df.p_nom == 0.005].bus.iloc[0]
         assert (
             loads_df[loads_df.building_id == 446651].bus.values
             == bus_bat_voltage_level_7
         ).all()
         # check that medium storage cannot be integrated at same bus as building
-        bus_bat_voltage_level_6 = storage_df[storage_df.p_nom == 0.15].bus[0]
+        bus_bat_voltage_level_6 = storage_df[storage_df.p_nom == 0.15].bus.iloc[0]
         line_bat_voltage_level_6 = self.edisgo.topology.lines_df[
             self.edisgo.topology.lines_df.bus1 == bus_bat_voltage_level_6
         ]
         assert (
-            line_bat_voltage_level_6.bus0[0]
+            line_bat_voltage_level_6.bus0.iloc[0]
             in self.edisgo.topology.transformers_df.bus1.values
         )
         # check that largest storage can be connected to building because the building
         # is already connected to the MV
-        bus_bat_voltage_level_5 = storage_df[storage_df.p_nom == 2.0].bus[0]
+        bus_bat_voltage_level_5 = storage_df[storage_df.p_nom == 2.0].bus.iloc[0]
         assert bus_bat_voltage_level_5 == bus_bat_voltage_level_5_building
 
         assert "2.15 MW of home batteries integrated." in caplog.text
@@ -147,17 +147,17 @@ class TestStorageImport:
         assert len(self.edisgo.topology.storage_units_df) == 9
 
         # check that smallest storage is integrated at same bus as PV system
-        bus_bat_voltage_level_7 = storage_df[storage_df.p_nom == 0.005].bus[0]
+        bus_bat_voltage_level_7 = storage_df[storage_df.p_nom == 0.005].bus.iloc[0]
         assert (
             loads_df[loads_df.building_id == 446651].bus.values
             == bus_bat_voltage_level_7
         ).all()
         # check that medium storage is integrated at same bus as PV system
-        bus_bat_voltage_level_6 = storage_df[storage_df.p_nom == 0.15].bus[0]
+        bus_bat_voltage_level_6 = storage_df[storage_df.p_nom == 0.15].bus.iloc[0]
         assert "BusBar_mvgd_33535_lvgd_1164120011_LV" == bus_bat_voltage_level_6
         # check that largest storage can be connected to building because the building
         # is already connected to the MV
-        bus_bat_voltage_level_5 = storage_df[storage_df.p_nom == 2.0].bus[0]
+        bus_bat_voltage_level_5 = storage_df[storage_df.p_nom == 2.0].bus.iloc[0]
         assert bus_bat_voltage_level_5 == bus_bat_voltage_level_5_building
 
         assert "2.15 MW of home batteries integrated." in caplog.text

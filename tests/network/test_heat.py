@@ -12,7 +12,7 @@ from edisgo.network.heat import HeatPump
 class TestHeatPump:
     @classmethod
     def setup_class(cls):
-        cls.timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        cls.timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         cls.cop = pd.DataFrame(
             data={
                 "hp1": [5.0, 6.0],
@@ -232,7 +232,7 @@ class TestHeatPump:
         # reset heat_demand_df
         edisgo_object.heat_pump.heat_demand_df = pd.DataFrame()
         edisgo_object.set_timeindex(
-            pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+            pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         )
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,
@@ -359,7 +359,7 @@ class TestHeatPump:
         assert (heatpump.cop_df.iloc[4:8, 1] == 8).all()
 
         # test down-sampling
-        heatpump.resample_timeseries(freq="1H")
+        heatpump.resample_timeseries(freq="1h")
         assert len(heatpump.heat_demand_df) == 2
         assert len(heatpump.cop_df) == 2
 

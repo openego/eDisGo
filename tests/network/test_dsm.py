@@ -11,7 +11,7 @@ from edisgo.network.dsm import DSM
 class TestDSM:
     @pytest.yield_fixture(autouse=True)
     def setup_dsm_test_data(self):
-        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         self.p_max = pd.DataFrame(
             data={
                 "load_1": [5.0, 6.0],
@@ -113,7 +113,7 @@ class TestDSM:
         shutil.rmtree(save_dir)
 
     def test_check_integrity(self, caplog):
-        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         # create duplicate entries and loads that do not appear in each DSM dataframe
         self.dsm.p_max = pd.concat(
             [

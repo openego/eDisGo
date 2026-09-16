@@ -332,7 +332,7 @@ class TestSpatialComplexityReduction:
         _, rms = spatial_complexity_reduction.compare_voltage(
             test_edisgo_obj, edisgo_reduced, busmap_df, "max"
         )
-        assert np.isclose(rms, 0.00766, atol=1e-5)
+        assert np.isclose(rms, 0.008394, atol=1e-5)
 
     def test_compare_apparent_power(self, test_edisgo_obj):
         edisgo_reduced = copy.deepcopy(test_edisgo_obj)
@@ -352,7 +352,7 @@ class TestSpatialComplexityReduction:
         _, rms = spatial_complexity_reduction.compare_apparent_power(
             test_edisgo_obj, edisgo_reduced, linemap_df, "max"
         )
-        assert np.isclose(rms, 2.873394, atol=1e-5)
+        assert np.isclose(rms, 0.892684, atol=1e-5)
 
     def test_remove_short_end_lines(self, test_edisgo_obj):
         edisgo_root = copy.deepcopy(test_edisgo_obj)

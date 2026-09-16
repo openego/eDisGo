@@ -895,7 +895,7 @@ class TestTopology:
             "Bus_BranchTee_MVGrid_1_1",
             "Bus_BranchTee_MVGrid_1_4",
         ]
-        lv_grids_mv_bus = self.topology.grids[2].transformers_df["bus0"][0]
+        lv_grids_mv_bus = self.topology.grids[2].transformers_df["bus0"].iloc[0]
         feeder_of_lv_grids_mv_bus = self.topology.buses_df.loc[
             lv_grids_mv_bus, "mv_feeder"
         ]
@@ -983,6 +983,12 @@ class TestTopologyWithEdisgoObject:
                     attr[common_cols].sort_index(),
                     grid_attr[common_cols].sort_index(),
                     check_names=False,
+                    # The geodataframes are built from scratch, so pandas infers
+                    # the string dtype for their labels and text columns, while
+                    # the topology dataframes carry object ones. Only the content
+                    # is compared here.
+                    check_column_type=False,
+                    check_dtype=False,
                 )
 
     def test_from_csv(self):

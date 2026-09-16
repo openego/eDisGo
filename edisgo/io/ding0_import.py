@@ -11,6 +11,7 @@
 
 import os
 
+import numpy as np
 import pandas as pd
 
 from pypsa import Network as PyPSANetwork
@@ -89,6 +90,17 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
     grid = PyPSANetwork()
     grid.import_from_csv_folder(path)
 
+    # PyPSA fills missing values with the component's default since version 1.0,
+    # so that buses without georeference end up at (0, 0) instead of NaN. eDisGo
+    # tells the two apart - buses of an LV grid without georeference are given
+    # pseudo coordinates - so the missing coordinates are restored here.
+    buses_csv = pd.read_csv(os.path.join(path, "buses.csv"), index_col=0)
+    for coordinate in ["x", "y"]:
+        missing = grid.buses.index.intersection(
+            buses_csv.index[buses_csv.loc[:, coordinate].isna()]
+        )
+        grid.buses.loc[missing, coordinate] = np.nan
+
     # write dataframes to edisgo_obj
     edisgo_obj.topology.buses_df = grid.buses[edisgo_obj.topology.buses_df.columns]
     edisgo_obj.topology.lines_df = grid.lines[edisgo_obj.topology.lines_df.columns]
@@ -107,10 +119,12 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
         grid.loads.loc[loads_without_type, "type"] = "conventional_load"
         # rename retail to cts, as it is in newer ding0 versions called cts
         grid.loads.replace(to_replace=["retail"], value="cts", inplace=True)
-        # set up columns that are added in new ding0 version
-        grid.loads["building_id"] = None
-        grid.loads["number_households"] = None
-        grid.generators["source_id"] = None
+        # set up columns that are added in new ding0 version. NaN, not None, so
+        # that the columns come back as they are here after a save/load round
+        # trip through CSV, where an all-missing column reads back as NaN.
+        grid.loads["building_id"] = np.nan
+        grid.loads["number_households"] = np.nan
+        grid.generators["source_id"] = np.nan
     else:
         edisgo_obj.topology.buses_df["in_building"] = False
         grid.generators = grid.generators.rename(columns={"gens_id": "source_id"})

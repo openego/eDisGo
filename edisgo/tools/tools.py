@@ -1203,7 +1203,7 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
 def reduce_timeseries_data_to_given_timeindex(
     edisgo_obj,
     timeindex,
-    freq="1H",
+    freq="1h",
     timeseries=True,
     electromobility=True,
     save_ev_soc_initial=True,
@@ -1225,7 +1225,7 @@ def reduce_timeseries_data_to_given_timeindex(
         reduced, as the initial SoC is tried to be set using the time step before the
         first time step in the given `timeindex`. Offset aliases can be found here:
         https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
-        Default: '1H'.
+        Default: '1h'.
     timeseries : bool
         Indicates whether timeseries in :class:`~.network.timeseries.TimeSeries`
         are reduced to given time index. Default: True.

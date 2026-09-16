@@ -21,7 +21,7 @@ class TestOverlyingGrid:
     @pytest.fixture(autouse=True)
     def setup_fixture(self):
         self.overlying_grid = OverlyingGrid()
-        self.timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        self.timeindex = pd.date_range("1/1/2018", periods=2, freq="h")
         self.overlying_grid.renewables_curtailment = pd.Series(
             data=[2.4], index=[self.timeindex[0]]
         )

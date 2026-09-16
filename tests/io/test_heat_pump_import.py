@@ -77,8 +77,8 @@ class TestHeatPumpImport:
         assert len(dh_rh) == 1
         assert np.isclose(dh_rh.p_set.sum(), 0.042807)
         # assert central heat pump and resistive heater at same bus in voltage level 6
-        assert determine_bus_voltage_level(self.edisgo, dh_hp.bus[0]) == 6
-        assert dh_hp.bus[0] == dh_rh.bus[0]
+        assert determine_bus_voltage_level(self.edisgo, dh_hp.bus.iloc[0]) == 6
+        assert dh_hp.bus.iloc[0] == dh_rh.bus.iloc[0]
 
         # test without resistive heaters and individual heat pumps
         self.edisgo = EDisGo(
@@ -95,7 +95,7 @@ class TestHeatPumpImport:
         assert len(hp_df) == 1
         assert len(hp_df[hp_df.sector == "district_heating"]) == 1
         # assert central heat pump in voltage level 7
-        assert determine_bus_voltage_level(self.edisgo, hp_df.bus[0]) == 7
+        assert determine_bus_voltage_level(self.edisgo, hp_df.bus.iloc[0]) == 7
 
     def test__grid_integration(self, caplog):
         # ############# test integration of central heat pumps ####################
@@ -109,28 +109,28 @@ class TestHeatPumpImport:
         hp_df = loads_df[loads_df.type == "heat_pump"]
         assert len(hp_df) == 3
         # check that smallest heat pump is connected to LV
-        bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.05].bus[0]
+        bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.05].bus.iloc[0]
         assert self.edisgo.topology.buses_df.at[bus_hp_voltage_level_7, "v_nom"] == 0.4
         # check that medium heat pump is connected to MV/LV station
-        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.17].bus[0]
+        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.17].bus.iloc[0]
         line_hp_voltage_level_6 = self.edisgo.topology.lines_df[
             self.edisgo.topology.lines_df.bus1 == bus_hp_voltage_level_6
         ]
         assert (
-            line_hp_voltage_level_6.bus0[0]
+            line_hp_voltage_level_6.bus0.iloc[0]
             in self.edisgo.topology.transformers_df.bus1.values
         )
         # check that largest heat pump is connected to MV
-        bus_hp_voltage_level_5 = hp_df[hp_df.p_set == 1.0].bus[0]
+        bus_hp_voltage_level_5 = hp_df[hp_df.p_set == 1.0].bus.iloc[0]
         assert self.edisgo.topology.buses_df.at[bus_hp_voltage_level_5, "v_nom"] == 20.0
 
         # ############# test integration of individual heat pumps ####################
 
         # manipulate bus of the largest individual heat pump to be an MV bus
         loads_df = self.edisgo.topology.loads_df
-        bus_hp_voltage_level_5_building = loads_df[loads_df.building_id == 446933].bus[
-            0
-        ]
+        bus_hp_voltage_level_5_building = loads_df[
+            loads_df.building_id == 446933
+        ].bus.iloc[0]
         self.edisgo.topology.buses_df.at[bus_hp_voltage_level_5_building, "v_nom"] = (
             20.0
         )
@@ -145,24 +145,24 @@ class TestHeatPumpImport:
         hp_df = loads_df[loads_df.type == "heat_pump"]
         assert len(hp_df) == 6
         # check that smallest heat pump is integrated at same bus as building
-        bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.005].bus[0]
+        bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.005].bus.iloc[0]
         assert (
             loads_df[loads_df.building_id == 446963].bus.values
             == bus_hp_voltage_level_7
         ).all()
         # check that medium heat pump cannot be integrated at same bus as building
-        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.15].bus[0]
+        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.15].bus.iloc[0]
         line_hp_voltage_level_6 = self.edisgo.topology.lines_df[
             self.edisgo.topology.lines_df.bus1 == bus_hp_voltage_level_6
         ]
         assert (
-            line_hp_voltage_level_6.bus0[0]
+            line_hp_voltage_level_6.bus0.iloc[0]
             in self.edisgo.topology.transformers_df.bus1.values
         )
         assert len(loads_df[loads_df.building_id == 445710].bus.unique()) == 2
         # check that largest heat pump can be connected to building because the building
         # is already connected to the MV
-        bus_hp_voltage_level_5 = hp_df[hp_df.p_set == 2.0].bus[0]
+        bus_hp_voltage_level_5 = hp_df[hp_df.p_set == 2.0].bus.iloc[0]
         assert bus_hp_voltage_level_5 == bus_hp_voltage_level_5_building
 
         # ######## test check of duplicated names ###########
@@ -188,11 +188,11 @@ class TestHeatPumpImport:
         assert len(hp_df) == 2
         # check that resistive heater in same district heating network as heat pumps
         # is integrated at same bus
-        bus_rh = hp_df[hp_df.p_set == 21.0].bus[0]
+        bus_rh = hp_df[hp_df.p_set == 21.0].bus.iloc[0]
         assert bus_rh in loads_df[loads_df.sector == "district_heating"].bus.values
         # check that resistive heater in other district heating network is integrated
         # in voltage level 6
-        bus_rh = hp_df[hp_df.p_set == 0.17].bus[0]
+        bus_rh = hp_df[hp_df.p_set == 0.17].bus.iloc[0]
         assert determine_bus_voltage_level(self.edisgo, bus_rh) == 6
 
     def test_efficiency_resistive_heaters_oedb(self):

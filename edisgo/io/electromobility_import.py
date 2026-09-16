@@ -358,8 +358,10 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj):
 
         # add ags and use case info as well as normalize weights 0..1
         gdf = gdf.assign(
+            # The weights are read from the geopackage, where they may be
+            # stored as text - cast them before scaling.
             user_centric_weight=min_max_scaler.fit_transform(
-                gdf.user_centric_weight.values.reshape(-1, 1)
+                pd.to_numeric(gdf.user_centric_weight).to_numpy().reshape(-1, 1)
             ),
             ags=int(f.split(".")[0].split("_")[-1]),
             use_case=f.split(".")[0].split("_")[-2],
@@ -465,7 +467,7 @@ def assure_minimum_potential_charging_parks(
             num_gcs = len(use_case_gdf)
 
         # escape zero division
-        actual_gc_to_car_rate = np.Infinity if num_cars == 0 else num_gcs / num_cars
+        actual_gc_to_car_rate = np.inf if num_cars == 0 else num_gcs / num_cars
 
         # duplicate potential charging parks until desired quantity is ensured
         max_it = 50

@@ -17,7 +17,6 @@ from copy import deepcopy
 
 import numpy as np
 import pandas as pd
-import pypsa
 
 from edisgo.flex_opt import exceptions
 from edisgo.flex_opt.costs import line_expansion_costs
@@ -111,7 +110,7 @@ def to_powermodels(
         "costs_transformers"
     ]["lv"]
     # calculate per unit values
-    pypsa.pf.calculate_dependent_values(psa_net)
+    psa_net.calculate_dependent_values()
     # build PowerModels structure
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps

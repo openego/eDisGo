@@ -330,9 +330,15 @@ def _scored_most_critical_voltage_issues_time_interval(
     columns = [feeder_buses.loc[col] for col in voltage_diff.columns]
     voltage_diff_feeder = voltage_diff.copy()
     voltage_diff_feeder.columns = columns
-    voltage_diff_feeder = (
-        voltage_diff.transpose().reset_index().groupby(by="Bus").max().transpose()
-    )
+    # FIXME: this groups by bus, not by feeder - voltage_diff_feeder is
+    #  overwritten with a grouping of voltage_diff, whose columns are the buses,
+    #  so the feeder columns assigned above are discarded. Fixing it changes
+    #  which time intervals are selected, so it is left as it is here and
+    #  reported separately. Grouping by the column labels rather than by the
+    #  name of the column index keeps this independent of
+    #  what PyPSA names its axes - it called them "Bus" up to version 0.26 and
+    #  "name" from 1.0 on.
+    voltage_diff_feeder = voltage_diff.transpose().groupby(level=0).max().transpose()
 
     if weight_by_costs:
         # get costs per feeder
@@ -533,7 +539,7 @@ def _most_critical_time_interval(
     # intervals with a sum greater than zero are considered, as zero values mean, that
     # there is no grid issue in the respective time interval
     time_intervals = [
-        pd.date_range(end=timestep, periods=int(time_steps_per_time_interval), freq="H")
+        pd.date_range(end=timestep, periods=int(time_steps_per_time_interval), freq="h")
         for timestep in crit_timesteps.index
         if crit_timesteps[timestep] != 0.0
     ]
@@ -555,7 +561,9 @@ def _most_critical_time_interval(
     for i in range(len(time_intervals)):
         # check if worst voltage deviation of every bus is included in time interval
         max_per_bus_ti = grid_issues_magnitude_df.loc[time_intervals[i]].max()
-        time_intervals_df[percentage][i] = (
+        # .loc, not a chained assignment: pandas 3 writes the latter into a
+        # temporary copy, leaving the column as NaN
+        time_intervals_df.loc[i, percentage] = (
             len(max_per_bus_ti[max_per_bus_ti >= max_per_bus * deviation_factor])
             / total_buses
         )
@@ -705,7 +713,7 @@ def select_two_intervals(load_case, feedin_case):
     # no non-overlapping pair -> concatenate the two most critical intervals
     merged = top.union(feedin_case[0]).sort_values()
     start, end = merged.min(), merged.max()
-    freq = pd.infer_freq(top) or "H"
+    freq = pd.infer_freq(top) or "h"
     return [pd.date_range(start=start, end=end, freq=freq)]
 
 

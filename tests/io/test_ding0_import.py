@@ -39,7 +39,7 @@ class TestImportFromDing0:
     def test_path_error(self):
         """Test catching error when path to network does not exist."""
         msg = "Directory wrong_directory does not exist."
-        with pytest.raises(AssertionError, match=msg):
+        with pytest.raises(FileNotFoundError, match=msg):
             ding0_import.import_ding0_grid("wrong_directory", self.topology)
 
     def test_transformer_buses(self):

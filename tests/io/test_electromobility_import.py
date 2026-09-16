@@ -24,7 +24,7 @@ class TestElectromobilityImport:
         cls.charging_strategies = ["dumb", "reduced", "residual"]
 
         cls.edisgo_obj = EDisGo(ding0_grid=cls.ding0_path)
-        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="h")
         cls.edisgo_obj.set_timeindex(timeindex)
 
         cls.edisgo_obj.resample_timeseries()
@@ -100,7 +100,7 @@ class TestElectromobilityImport:
 
         # test grid friendly
         self.edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
-        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="h")
         self.edisgo_obj.set_timeindex(timeindex)
         self.edisgo_obj.resample_timeseries()
 
@@ -129,7 +129,7 @@ class TestElectromobilityImport:
 
         # test weight factors
         self.edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
-        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="h")
         self.edisgo_obj.set_timeindex(timeindex)
         self.edisgo_obj.resample_timeseries()
 
