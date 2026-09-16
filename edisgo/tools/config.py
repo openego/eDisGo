@@ -16,9 +16,10 @@
 #
 # eDisGo st available on RTD: https://edisgo.readthedocs.io.
 
+from __future__ import annotations
+
 import copy
 import datetime
-import importlib
 import json
 import logging
 import os
@@ -27,19 +28,99 @@ import shutil
 from glob import glob
 from zipfile import ZipFile
 
-import oedialect  # noqa: F401
 import sqlalchemy as sa
 
-from saio import register_schema
-from sqlalchemy import MetaData, Table
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Table
+from sqlalchemy.orm import declarative_base
 
 import edisgo
+import edisgo.io.oedialect  # noqa: F401  (registers the OEP dialect)
 
 from edisgo.io.db import engine as Engine
 from edisgo.io.db import session_scope_egon_data
 
 logger = logging.getLogger(__name__)
+
+
+class _ReflectedSchema:
+    """
+    ORM classes of one database schema, reflected on first use.
+
+    This takes over what the unmaintained `saio <https://github.com/
+    OpenEnergyPlatform/saio>`_ package did for eDisGo, which does not work with
+    SQLAlchemy 2.0. Reflecting a table is a round trip to the database - on the
+    OEP even an HTTP request - so the classes are cached per engine and schema.
+
+    Parameters
+    ----------
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Engine of the database to reflect from.
+    schema : str
+        Name of the database schema.
+
+    """
+
+    _cache: dict[tuple[str, str], _ReflectedSchema] = {}
+
+    def __init__(self, engine, schema):
+        self.engine = engine
+        self.schema = schema
+        self.base = declarative_base()
+        self._orm_classes = {}
+
+    @classmethod
+    def get(cls, engine, schema: str) -> _ReflectedSchema:
+        """Return the reflection of `schema` in the database behind `engine`."""
+        key = (str(engine.url), schema)
+        if key not in cls._cache:
+            cls._cache[key] = cls(engine, schema)
+        return cls._cache[key]
+
+    def orm_class(self, table_name: str):
+        """
+        Return the ORM class of one table of the schema.
+
+        Parameters
+        ----------
+        table_name : str
+            Name of the table or view.
+
+        Returns
+        -------
+        type
+            Declarative ORM class mapping the table.
+
+        """
+        if table_name not in self._orm_classes:
+            table = Table(
+                table_name,
+                self.base.metadata,
+                autoload_with=self.engine,
+                schema=self.schema,
+            )
+            class_dict = {"__tablename__": table_name, "__table__": table}
+            if not list(table.primary_key.columns):
+                # The declarative mapper requires a primary key. Views have
+                # none, so the columns are declared as one - this only affects
+                # the mapping, not the data read back. Columns of a type whose
+                # values are unhashable (arrays, JSON) are left out: the ORM
+                # puts the primary key values into its identity map, which a
+                # list value would raise a TypeError on.
+                primary_key = [
+                    column
+                    for column in table.columns
+                    if not isinstance(column.type, (sa.ARRAY, sa.JSON))
+                ] or [next(iter(table.columns))]
+                class_dict["__mapper_args__"] = {"primary_key": primary_key}
+                logger.debug(
+                    f"Reflection of {self.schema}.{table_name} found no primary key "
+                    f"(normal for views); mapping it by "
+                    f"{[column.name for column in primary_key]}."
+                )
+            self._orm_classes[table_name] = type(
+                table_name, (self.base,), class_dict
+            )
+        return self._orm_classes[table_name]
 
 try:
     import configparser as cp
@@ -217,11 +298,9 @@ class Config:
         if engine is None:
             engine = Engine()
         dictionary_schema_name = "data"
-        dictionary_table = self._get_module_attr(
-            self._get_saio_module(dictionary_schema_name, engine),
-            "edut_00",
-            f"saio.{dictionary_schema_name}",
-        )
+        dictionary_table = _ReflectedSchema.get(
+            engine, dictionary_schema_name
+        ).orm_class("edut_00")
         with session_scope_egon_data(engine) as session:
             query = session.query(dictionary_table)
             dictionary_entries = query.all()
@@ -234,27 +313,6 @@ class Config:
             }
 
         return name_mapping, schema_mapping
-
-    @staticmethod
-    def _get_module_attr(module, attribute: str, module_name: str):
-        try:
-            return getattr(module, attribute)
-        except AttributeError as exc:
-            raise AttributeError(
-                f"Module '{module_name}' has no attribute '{attribute}'. "
-                "Check the table mapping configuration."
-            ) from exc
-
-    def _get_saio_module(self, schema: str, engine: sa.engine.Engine):
-        register_schema(schema, engine)
-        module_name = f"saio.{schema}"
-        try:
-            return importlib.import_module(module_name)
-        except ModuleNotFoundError as exc:
-            raise ModuleNotFoundError(
-                f"Could not import module '{module_name}'. "
-                "Verify schema registration and saio package availability."
-            ) from exc
 
     @staticmethod
     def _parse_time(value):
@@ -306,9 +364,9 @@ class Config:
                     "Ensure database alias dictionaries are available."
                 )
 
-            module = self._get_saio_module(schema, engine)
+            reflection = _ReflectedSchema.get(engine, schema)
 
-            tables: list[sa.Table] = []
+            tables = []
             for table in table_names:
                 mapped_table = self.db_table_mapping.get(table)
                 if not mapped_table:
@@ -316,39 +374,14 @@ class Config:
                         f"No table mapping found for '{table}'. "
                         "Update the database alias dictionaries."
                     )
-                tables.append(
-                    self._get_module_attr(module, mapped_table, module.__name__)
-                )
+                tables.append(reflection.orm_class(mapped_table))
 
             return tables
         else:
             # --- Local egon_data DB case ---
-            Base = declarative_base()
-            metadata = MetaData(schema=schema_name)
-            metadata.reflect(bind=engine, only=table_names)
+            reflection = _ReflectedSchema.get(engine, schema_name)
 
-            orm_classes = []
-            for table_name in table_names:
-                table = Table(
-                    table_name, metadata, autoload_with=engine, schema=schema_name
-                )
-
-                # The declarative mapper requires a primary key. Some egon-data
-                # tables/views have none reflected; declare all columns as a
-                # composite primary key so the ORM class can be built. This
-                # mirrors what saio does on the OEP path ("assuming primary
-                # key") and only affects mapping, not the data read back.
-                class_dict = {"__tablename__": table_name, "__table__": table}
-                if not list(table.primary_key.columns):
-                    class_dict["__mapper_args__"] = {
-                        "primary_key": list(table.columns)
-                    }
-
-                # dynamisch eine ORM-Klasse erzeugen
-                orm_class = type(table_name, (Base,), class_dict)
-                orm_classes.append(orm_class)
-
-            return orm_classes
+            return [reflection.orm_class(table_name) for table_name in table_names]
 
     def from_cfg(self, config_path=None):
         """

@@ -9,22 +9,34 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-import os
-
 from contextlib import contextmanager
+from functools import cache
 
 from sqlalchemy.orm import sessionmaker
 
-if "READTHEDOCS" not in os.environ:
-    from egoio.tools.db import connection
 
-    Session = sessionmaker(bind=connection(readonly=True))
+@cache
+def _session_factory():
+    """
+    Return a session factory for the OEP, created on first use.
+
+    The legacy open_eGo tables (schemas ``supply`` and ``model_draft``, mapped
+    by :mod:`egoio.db_tables`) are read from the OEP. The engine is built on
+    the first query rather than at import time, so that importing eDisGo does
+    not open a connection.
+
+    """
+    from edisgo.io.db import engine
+
+    # ssh=False pins the source to the OEP: the legacy tables do not exist in
+    # an egon-data database, which engine() would otherwise auto-detect.
+    return sessionmaker(bind=engine(ssh=False))
 
 
 @contextmanager
 def session_scope():
     """Function to ensure that sessions are closed properly."""
-    session = Session()
+    session = _session_factory()()
     try:
         yield session
     except Exception:
