@@ -44,7 +44,7 @@ requirements = [
     "geopy >= 2.0.0, < 2.5.0",
     "jupyterlab < 4.6.0",
     "jupyter_dash < 0.5.0",
-    "matplotlib >= 3.3.0, < 3.11.0",
+    "matplotlib >= 3.3.0, < 3.12.0",
     "multiprocess < 0.71.0",
     "networkx >= 2.5.0, < 3.7.0",
     # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
