@@ -1473,10 +1473,10 @@ class TimeSeries:
         load_names = self._check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
-        # check if loads contain annual demand
+        # check if loads contain annual consumption
         if not all(loads_df.annual_consumption.notnull()):
             raise AttributeError(
-                "The annual consumption of some loads is missing. Please provide"
+                "The annual consumption of some loads is missing. Please provide it."
             )
 
         # scale time series by annual consumption
