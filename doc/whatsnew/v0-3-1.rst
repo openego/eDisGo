@@ -76,3 +76,39 @@ Changes
   from a saved grid with ``import_overlying_grid: true`` was rejected by the
   validator although the data was there, and the labels of the restored frames were
   left as written
+* Fixed the multi-interval OPF handing every interval the *first* interval's
+  flexibility inputs. When the time index is non-contiguous — as after
+  ``select_critical_timesteps`` — :func:`~.opf.powermodels_opf.pm_optimize` splits it
+  into contiguous intervals and solves each one separately, narrowing the active index
+  per interval with :meth:`~.edisgo.EDisGo.set_timeindex`. That only assigns
+  :attr:`~.network.timeseries.TimeSeries.timeindex`; it does not touch the
+  :class:`~.network.overlying_grid.OverlyingGrid`, :class:`~.network.dsm.DSM`,
+  :class:`~.network.heat.HeatPump` and :class:`~.network.electromobility.Electromobility`
+  containers, whose time series carry their own index and stayed on the full reduced one.
+  The grid side was unaffected because it goes through ``to_pypsa``, which follows the
+  active index, but ``to_powermodels`` reads those four containers raw and positionally
+  — ``.iloc[0]`` for a scalar, ``.tolist()`` for a per-time-step series — so every
+  interval received the first interval's overlying-grid requirements, EV flexibility
+  bands, heat demand and COP, and DSM energy envelopes. With ``opf_version`` 3 the HV
+  requirements are the only thing steering flexible dispatch, so all intervals produced
+  near-identical dispatch and slacks despite being solved independently. Where
+  inflexible components exist the mis-alignment was worse than a wrong value:
+  ``_build_hv_requirements`` subtracts an interval-scoped ``psa_net`` series from the
+  full-index requirement, and pandas aligns the two on their indices, yielding ``NaN``
+  for the non-overlapping steps and so a ``NaN`` scalar target. The interval loop now
+  narrows all four containers to the interval before each solve and restores them from
+  a snapshot afterwards, so each interval is optimized against its own requirements.
+  ``TimeSeries`` is deliberately left out of that narrowing: its active-power frames
+  accumulate each interval's results and slicing them would drop the intervals solved so
+  far. Each interval now also reseeds its own EV initial state of charge, which was
+  likewise computed once for the first interval and reused (openego/eDisGo#762)
+* ``to_powermodels`` now raises a ``ValueError`` naming the offending attributes when
+  the overlying-grid requirements do not match the active time index exactly, instead of
+  reading them positionally off a mismatched index. The requirements are read by
+  position, so a wider series silently hands the optimization the values of time steps
+  it is not solving for — which is how the interval bug above went unnoticed
+* Stopped ``to_powermodels`` raising ``IndexError: single positional indexer is
+  out-of-bounds`` for ``opf_version`` 3 or 4 on an eDisGo object whose overlying grid is
+  empty. The emptiness check on ``heat_pump_central_active_power`` ran before the ``try``
+  block meant to catch exactly that case, so the documented fallback to ``opf_version``
+  2 was unreachable
