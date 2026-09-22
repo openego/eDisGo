@@ -123,6 +123,7 @@ class OverlyingGrid:
         self.renewables_potential = kwargs.get(
             "renewables_potential", pd.Series(dtype="float64")
         )
+
     @property
     def _attributes(self):
         return [

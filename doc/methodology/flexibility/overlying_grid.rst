@@ -157,12 +157,18 @@ Constraints a validation test may rely on:
   flexible ones becomes zero rather than negative.
 * **The requirement is an equality with a penalised slack.** A perfect match is only
   expected when the slack is zero. The realised slacks are stored in
-  :attr:`~edisgo.opf.results.opf_result_class.OPFResults.hv_requirement_slacks_t`,
-  and a per-flexibility summary of the relative error (highest / mean / sum) in
-  ``opf_results.overlying_grid``. eDisGo already logs a warning when the highest
-  relative error of a flexibility exceeds 5 %. **That frame is the natural anchor for
-  an automated check**: assert that the highest relative error stays below an agreed
-  threshold, rather than recomputing the comparison from the time series.
+  :attr:`~edisgo.opf.results.opf_result_class.OPFResults.hv_requirement_slacks_t`.
+  Because the constraint is :math:`\sum p_{c,t} + p^{\mathrm{hvs}}_t = P_t`, the
+  unmet share of a requirement is :math:`|p^{\mathrm{hvs}}_t| / P_t` — **that slack
+  frame is the anchor for an automated check**.
+
+  Do *not* use the summary frame ``opf_results.overlying_grid`` for this. Its columns
+  are labelled "Highest / Mean / Sum relative error", but the quantity is computed as
+  :math:`|p^{\mathrm{hvs}}_t - P_t|`, which by the constraint above equals the
+  *achieved* dispatch, not the error. The 5 % warning eDisGo logs off that frame is
+  inverted in the same way: it stays quiet exactly when the requirement is missed
+  completely. See `openego/eDisGo#755
+  <https://github.com/openego/eDisGo/issues/755>`_.
 * **Units.** All overlying-grid power series are in MW; the OPF works in per unit and
   divides by ``s_base``. The values written back to the time series are in MW again.
 
@@ -198,24 +204,31 @@ Constraints a validation test may rely on:
 
 * **p.u. of the storage capacity.** The series are multiplied by ``p_nom *
   max_hours`` (battery) resp. the thermal storage ``capacity`` to obtain MWh.
-* **Column naming of ``thermal_storage_units_central_soc``.** Its columns must be the
-  district-heating ID as the *string of an integer* (``"130"``, not ``"130.0"`` and
-  not ``130``). :func:`~edisgo.io.powermodels_io._build_heat_storage` looks them up as
-  ``loads_df.district_heating_id.astype(int).astype(str)``, so a float-formatted or
-  integer column label raises a ``KeyError``.
+* **Column naming of ``thermal_storage_units_central_soc``.** Its columns have to be
+  the district-heating ID as the *string of an integer* (``"130"``, not ``"130.0"``
+  and not ``130``), because
+  :func:`~edisgo.io.powermodels_io._build_heat_storage` looks them up as
+  ``loads_df.district_heating_id.astype(int).astype(str)``. The
+  ``import_overlying_grid_data`` task normalises the labels of this frame and of
+  ``feedin_district_heating`` on import, so a float label coming from eTraGo is
+  repaired for the runner path. An object built by hand or restored by
+  :meth:`~edisgo.network.overlying_grid.OverlyingGrid.from_csv` outside the runner
+  still has to obey the convention, or the lookup raises a ``KeyError``.
 * **Only start and end are binding.** The values in between are scaffolding; the OPF
   chooses the trajectory. Comparing the full input SoC series against the result is
   not a meaningful check.
 
 .. _overlying-grid-mapping-generators:
 
-Group 3 — attributes applied directly as generator time series
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Group 3 — attributes applied outside the optimisation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-These two bypass the OPF entirely. :mod:`~edisgo.run.tasks.io` applies them in the
-``import_overlying_grid_data`` step via
-:meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined`, so they take
-effect under **every** ``opf_version``, and also without any OPF at all.
+These three bypass the OPF entirely; a pipeline task applies them. The two generator
+series are set by ``import_overlying_grid_data`` via
+:meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined`, the
+district-heating feed-in by ``aggregate_district_heating``. They therefore take effect
+under **every** ``opf_version``, and also without any OPF at all — but only if the
+pipeline contains the respective task.
 
 .. list-table::
    :header-rows: 1
@@ -231,6 +244,13 @@ effect under **every** ``opf_version``, and also without any OPF at all.
        (Series, p.u.)
      - :attr:`~edisgo.network.timeseries.TimeSeries.generators_active_power` of the
        fluctuating generators, before any curtailment from the ``curt`` requirement
+   * - ``feedin_district_heating``
+       (DataFrame, MW, one column per district-heating area)
+     - not a result of its own: it is subtracted from the heat demand of its
+       district-heating area in
+       :attr:`~edisgo.network.heat.HeatPump.heat_demand_df`, bounded at zero, before
+       the power-to-heat units of that area are merged into one component. It
+       therefore lowers the electricity the heat pumps draw
 
 Constraint a validation test may rely on: for dispatchable generators the eDisGo time
 series should reproduce the eTraGo input exactly (up to the technology-to-generator
@@ -240,17 +260,9 @@ result equals the potential **minus** the curtailment from Group 1.
 Group 4 — attributes that currently reach nothing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Two of the thirteen attributes have no consumer in the production pipeline. A
-validation test must not expect them to show up anywhere.
+One of the thirteen attributes has no consumer in the production pipeline. A
+validation test must not expect it to show up anywhere.
 
-* ``feedin_district_heating`` (DataFrame, MW, one column per district-heating area) —
-  other heat feed-in that is supposed to be subtracted from the district-heating heat
-  demand before the power-to-heat units have to cover it. Its only consumer is
-  :func:`~edisgo.tools.tools.aggregate_district_heating_components`, which reaches it
-  through the ``aggregate_district_heating`` pipeline task. A pipeline that does not
-  include that task leaves the feed-in unused and overstates the district-heating heat
-  demand accordingly. See `openego/eGo#202
-  <https://github.com/openego/eGo/issues/202>`_.
 * ``dispatchable_generators_reactive_power`` (DataFrame, Mvar) — has no consumer
   anywhere in eDisGo. It is read from CSV / accepted from eTraGo, stored, saved back
   out, and otherwise ignored. Reactive power of dispatchable generators is instead
@@ -276,7 +288,9 @@ the attribute names above. Two of its keys do not match:
      - ``thermal_storage_units_decentral_soc``
 
 Both are therefore silently dropped, and the same applies to the CSV path, whose
-files are named after the eGo keys. In an eGo run the two thermal-storage
+files are named after the eGo keys. Nothing warns about it — an unrecognised name is
+discarded without a message, see `openego/eDisGo#758
+<https://github.com/openego/eDisGo/issues/758>`_. In an eGo run the two thermal-storage
 state-of-charge attributes of Group 2 are consequently always empty, and the OPF
 falls back to a zero state of charge. The remaining eleven attributes match by name
 and do arrive. A validation test should treat the two as absent until the naming is
@@ -291,6 +305,33 @@ When the time index is a reduced, non-contiguous selection (as produced by
 interval. The mapping above holds per interval. Any comparison between an
 overlying-grid input and an eDisGo result must therefore be evaluated per interval and
 not across the whole reduced index.
+
+Known limitation: open defects that break the balances above
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The mapping above describes the intended behaviour. Three known defects keep some of
+the balances from closing, and a validation test written today will fail on them for
+reasons that have nothing to do with the grid or the scenario:
+
+* **The requirement handed to the solver can be silently reduced.** For ``cp`` and
+  ``hp`` the contribution of the inflexible units is subtracted and the remainder is
+  clipped at zero. Where the inflexible demand alone already exceeds the requirement,
+  the discarded surplus appears nowhere — not in the slack, not in a log message, not
+  on the eDisGo object — so energy conservation between eTraGo and eDisGo is lost
+  without a trace. ``storage`` and ``dsm`` are subtracted without a clip. See
+  `openego/eDisGo#756 <https://github.com/openego/eDisGo/issues/756>`_.
+* **The DSM shift is not kept in the results.** ``pdsm`` is written into
+  :attr:`~edisgo.network.timeseries.TimeSeries.loads_active_power`, but
+  :class:`~edisgo.opf.results.opf_result_class.OPFResults` has no DSM container, so
+  the shift cannot be recovered after the run. A DSM check has to snapshot the load
+  time series *before* :meth:`~edisgo.edisgo.EDisGo.pm_optimize` and difference
+  against it. See `openego/eDisGo#757
+  <https://github.com/openego/eDisGo/issues/757>`_.
+* **Battery power may be compared on the wrong side of the converter.** The storage
+  requirement is reported to be matched against battery-side power while eTraGo
+  exports the grid-side value; since the ohmic losses are not stored either, the
+  storage balance cannot currently be reconstructed from the saved results. See
+  `openego/eDisGo#753 <https://github.com/openego/eDisGo/issues/753>`_.
 
 Use in the optimisation
 -----------------------

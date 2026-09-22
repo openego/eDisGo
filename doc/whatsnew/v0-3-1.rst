@@ -107,6 +107,7 @@ Changes
   :class:`~.network.overlying_grid.OverlyingGrid` attributes, which eDisGo variable
   carries it into the optimisation, where the corresponding result appears, and which
   constraints between the two are expected to hold — intended as the reference for
-  automated validation tests. Two attributes are documented as currently having no
-  consumer in the production pipeline, and the class docstring, which listed only ten
-  of the thirteen attributes, is completed
+  automated validation tests. The page also names the known defects that currently
+  keep some of those balances from closing, so a test is not written against them by
+  mistake, and the class docstring, which listed only ten of the thirteen attributes,
+  is completed
