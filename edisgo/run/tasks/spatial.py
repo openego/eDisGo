@@ -15,8 +15,9 @@ Spatial complexity reduction tasks bracketing ``optimize``.
   the full grid on ``ctx`` and spatially reduces the working object so
   ``optimize`` runs on a smaller grid.
 * :func:`task_spatial_restore` (``spatial_restore``) — writes the optimized
-  flexible-component dispatch back onto the stashed full grid and makes it
-  the active object again, so ``reinforce`` runs on the full topology.
+  flexible-component dispatch back onto the stashed full grid, carries the
+  OPF results over to it, and makes it the active object again, so
+  ``reinforce`` runs on the full topology.
 
 Both are no-ops when ``spatial_reduction.enabled`` is false (the default),
 so a pipeline that carries this bracket behaves exactly like one that
@@ -110,9 +111,33 @@ def task_spatial_restore(edisgo, ctx, **overrides):
     :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`)
     for the matching/disaggregation rules.
 
+    :attr:`~.EDisGo.opf_results` is additionally carried over from the
+    reduced grid, since ``map_reduced_results_to_full_grid`` transfers only
+    dispatch time series. Without it the returned object would keep the
+    empty :class:`~.opf.results.opf_result_class.OPFResults` it was
+    deepcopied with before the solve, and ``save`` would write an empty
+    ``opf_results/`` directory.
+
+    The results are attached **verbatim**, so note what their indices refer
+    to. ``hv_requirement_slacks_t`` and ``overlying_grid`` are indexed by
+    flexibility category (``curt``, ``storage``, ``cp``, ``hp``, ``dsm``)
+    and are therefore topology-independent — these are what the
+    overlying-grid conservation checks read. ``battery_storage_t`` is
+    indexed by storage-unit name, which also carries over, as
+    :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction`
+    never aggregates storage units (it only relabels their buses). The
+    remaining frames — ``lines_t``, ``slack_generator_t``,
+    ``heat_storage_t`` and ``grid_slacks_t`` — are indexed by *reduced-grid*
+    component names, which under ``aggregation_mode=True`` do not match the
+    full grid's ``topology``. They are kept rather than dropped (having them
+    under reduced names is strictly more information than not having them),
+    but they cannot be joined against the full grid's components without
+    first mapping the names back.
+
     A no-op when ``ctx.full_grid_stash`` is ``None`` — i.e. when
     ``spatial_reduce`` did not run or ran disabled — so ``edisgo`` (the
-    grid ``optimize`` already ran on) is returned unchanged.
+    grid ``optimize`` already ran on, which already holds its own
+    ``opf_results``) is returned unchanged.
 
     Parameters
     ----------
@@ -129,8 +154,9 @@ def task_spatial_restore(edisgo, ctx, **overrides):
     Returns
     -------
     edisgo.EDisGo
-        The full-grid EDisGo instance with flexible dispatch restored, or
-        ``edisgo`` unchanged if there is no stash to restore from.
+        The full-grid EDisGo instance with flexible dispatch and
+        ``opf_results`` restored, or ``edisgo`` unchanged if there is no
+        stash to restore from.
 
     """
     full_grid = ctx.full_grid_stash
@@ -144,5 +170,14 @@ def task_spatial_restore(edisgo, ctx, **overrides):
         flexible_loads=ctx.flags.get("flexible_loads"),
         flexible_storage_units=ctx.flags.get("flexible_storage_units"),
     )
+
+    # Carry the OPF results over to the object the pipeline continues with.
+    # map_reduced_results_to_full_grid only transfers dispatch time series, so
+    # without this the full grid would keep the pristine, empty OPFResults it
+    # was deepcopied with before the solve, and `save` would write an empty
+    # opf_results/ directory. Plain rebinding, not a copy: the reduced grid is
+    # dropped right after this returns and nothing mutates opf_results again.
+    full_grid.opf_results = edisgo.opf_results
+
     ctx.full_grid_stash = None
     return full_grid
