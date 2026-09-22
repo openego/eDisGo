@@ -530,3 +530,86 @@ class TestPmOptimizeIntervalSplit:
         assert report[0]["status"] == "OPTIMAL"
         assert report[1]["status"] == "infeasible"
         assert edisgo_obj.timeseries.timeindex.equals(full)
+
+    def test_flex_inputs_narrowed_per_interval(self, edisgo_obj, monkeypatch):
+        """Each interval's OPF must see its OWN overlying-grid requirements.
+
+        Regression test for openego/eDisGo#762: set_timeindex only narrows
+        TimeSeries.timeindex, so the overlying grid kept the full reduced index
+        and to_powermodels read the first interval's values for every interval.
+        """
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        # distinguishable values per interval: 1.0 in week 1, 9.0 in week 2
+        values = [1.0] * len(a) + [9.0] * len(b)
+        edisgo_obj.overlying_grid.electromobility_active_power = pd.Series(
+            values, index=full
+        )
+        edisgo_obj.overlying_grid.dsm_active_power = pd.Series(values, index=full)
+        seen = []
+
+        def fake_single(e, **kw):
+            og = e.overlying_grid
+            seen.append(
+                {
+                    "cp_values": sorted(og.electromobility_active_power.unique()),
+                    "cp_len": len(og.electromobility_active_power),
+                    "dsm_values": sorted(og.dsm_active_power.unique()),
+                }
+            )
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+
+        assert len(seen) == 2
+        # each interval sees only its own value, over its own length
+        assert seen[0]["cp_values"] == [1.0]
+        assert seen[1]["cp_values"] == [9.0]
+        assert seen[0]["cp_len"] == len(a)
+        assert seen[1]["cp_len"] == len(b)
+        assert seen[0]["dsm_values"] == [1.0]
+        assert seen[1]["dsm_values"] == [9.0]
+        # and the full reduced index is restored afterwards
+        assert edisgo_obj.overlying_grid.electromobility_active_power.index.equals(full)
+        assert edisgo_obj.timeseries.timeindex.equals(full)
+
+    def test_dsm_and_heat_pump_narrowed_and_restored(self, edisgo_obj, monkeypatch):
+        """DSM and heat-pump inputs are narrowed per interval and restored."""
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        values = [1.0] * len(a) + [9.0] * len(b)
+        edisgo_obj.dsm.p_max = pd.DataFrame({"load1": values}, index=full)
+        edisgo_obj.heat_pump.cop_df = pd.DataFrame({"hp1": values}, index=full)
+        seen = []
+
+        def fake_single(e, **kw):
+            seen.append(
+                {
+                    "dsm": sorted(e.dsm.p_max["load1"].unique()),
+                    "dsm_len": len(e.dsm.p_max),
+                    "cop": sorted(e.heat_pump.cop_df["hp1"].unique()),
+                    "cop_len": len(e.heat_pump.cop_df),
+                }
+            )
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+
+        assert len(seen) == 2
+        assert seen[0]["dsm"] == [1.0] and seen[1]["dsm"] == [9.0]
+        assert seen[0]["cop"] == [1.0] and seen[1]["cop"] == [9.0]
+        assert seen[0]["dsm_len"] == len(a) and seen[1]["dsm_len"] == len(b)
+        assert seen[0]["cop_len"] == len(a) and seen[1]["cop_len"] == len(b)
+        # restored to the full reduced index
+        assert edisgo_obj.dsm.p_max.index.equals(full)
+        assert edisgo_obj.heat_pump.cop_df.index.equals(full)

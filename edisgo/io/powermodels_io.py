@@ -26,6 +26,81 @@ from edisgo.tools.tools import calculate_impedance_for_parallel_components
 logger = logging.getLogger(__name__)
 
 
+# Overlying-grid attributes the HV requirements (opf_version 3 and 4) are built
+# from. The SOC attributes are not listed: they are aligned onto the active time
+# index with align_series_to_timeindex, which reindexes (NaN) instead of reading
+# positionally, so a shorter or year-shifted index does not mis-align them.
+_HV_REQUIREMENT_ATTRIBUTES = (
+    "renewables_curtailment",
+    "storage_units_active_power",
+    "electromobility_active_power",
+    "heat_pump_decentral_active_power",
+    "heat_pump_central_active_power",
+    "dsm_active_power",
+)
+
+
+def _check_overlying_grid_covers_timeindex(edisgo_object):
+    """
+    Check that the overlying-grid requirements cover the active time index.
+
+    The HV requirements are read off the
+    :class:`~.network.overlying_grid.OverlyingGrid` attributes positionally
+    (``.iloc[0]`` for the scalar target, ``.tolist()`` for the per-time-step
+    series), so a requirement series that does not cover
+    :attr:`~.network.timeseries.TimeSeries.timeindex` is silently mis-read
+    rather than raising: the values of the wrong time steps are handed to the
+    optimization. This happens when the active time index is narrowed without
+    narrowing the overlying grid with it — see
+    :func:`~.opf.powermodels_opf._narrow_flex_inputs`.
+
+    A series that spans MORE than the active time index is rejected too, and is
+    in fact the case this guards against in practice: the positional reads take
+    the first row and the whole list, so a wider series silently hands the
+    optimization the values of time steps it is not solving for.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+
+    Raises
+    ------
+    ValueError
+        If a non-empty overlying-grid requirement series does not match the
+        active time index exactly.
+
+    """
+    timeindex = edisgo_object.timeseries.timeindex
+    if timeindex is None or len(timeindex) == 0:
+        return
+    mismatched = {}
+    for attr in _HV_REQUIREMENT_ATTRIBUTES:
+        series = getattr(edisgo_object.overlying_grid, attr, None)
+        if series is None or series.empty:
+            # An absent requirement is handled downstream: _build_hv_requirements
+            # raises IndexError and to_powermodels falls back to opf_version 2.
+            continue
+        n_missing = len(timeindex.difference(series.index))
+        n_extra = len(series.index.difference(timeindex))
+        if n_missing > 0 or n_extra > 0:
+            mismatched[attr] = (n_missing, n_extra)
+    if mismatched:
+        raise ValueError(
+            "Overlying grid requirements do not cover the time index the "
+            "optimization runs on. Mismatched time steps per attribute "
+            "(missing, additional): "
+            + ", ".join(
+                f"{attr} ({n_missing}, {n_extra})"
+                for attr, (n_missing, n_extra) in mismatched.items()
+            )
+            + f". The active time index has {len(timeindex)} time steps "
+            f"({timeindex[0]}..{timeindex[-1]}). The overlying grid requirements "
+            "are read positionally, so they must be reduced to exactly this time "
+            "index, e.g. with "
+            "edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex()."
+        )
+
+
 def to_powermodels(
     edisgo_object,
     s_base=1,
@@ -170,7 +245,16 @@ def to_powermodels(
     else:
         logger.warning("No loads found in network.")
     if (opf_version == 3) | (opf_version == 4):
-        if edisgo_object.overlying_grid.heat_pump_central_active_power.isna().iloc[0]:
+        _check_overlying_grid_covers_timeindex(edisgo_object)
+        # An entirely empty overlying grid is handled by the IndexError fallback
+        # below (opf_version 3/4 -> 2). Guard the emptiness check itself, which
+        # would otherwise raise that IndexError here, before the try block.
+        if (
+            not edisgo_object.overlying_grid.heat_pump_central_active_power.empty
+            and edisgo_object.overlying_grid.heat_pump_central_active_power.isna().iloc[
+                0
+            ]
+        ):
             edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
         hv_flex_dict = {
             "curt": edisgo_object.overlying_grid.renewables_curtailment.round(20)
@@ -370,14 +454,13 @@ def from_powermodels(
         # calculate relative error
         df2 = deepcopy(df)
         for flex in df2.columns:
-            # For a temporally reduced OPF the runner solves one interval at a
-            # time: df2 is indexed by the current interval's timeindex, while
-            # hv_flex_dict is built from the overlying-grid series over the full
-            # reduced index. Align the requirement to df2's timesteps so the
-            # element-wise error compares matching rows (otherwise a multi-
-            # interval run raises a 168-vs-336 broadcast error here). For a
-            # single full run df2.index equals the requirement index, so this
-            # is a no-op.
+            # Align the requirement to df2's timesteps so the element-wise error
+            # compares matching rows. Since _narrow_flex_inputs narrows the
+            # overlying grid to the interval before each solve, hv_flex_dict is
+            # already built on df2's index and this is a no-op; it is kept as a
+            # guard for callers that build hv_flex_dict on a wider index (which
+            # previously made a multi-interval run raise a 168-vs-336 broadcast
+            # error here).
             flex_req = hv_flex_dict[flex]
             if isinstance(flex_req, (pd.Series, pd.DataFrame)):
                 try:
@@ -396,10 +479,7 @@ def from_powermodels(
                 abs_error = abs(df2[flex].values - flex_req.sum(axis=1).values)
                 rel_error = [
                     abs_error[i] / flex_req.sum(axis=1).iloc[i]
-                    if (
-                        (abs_error > 0.01)[i]
-                        & (flex_req.sum(axis=1).iloc[i] != 0)
-                    )
+                    if ((abs_error > 0.01)[i] & (flex_req.sum(axis=1).iloc[i] != 0))
                     else 0
                     for i in range(len(abs_error))
                 ]
