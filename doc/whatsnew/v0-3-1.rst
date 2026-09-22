@@ -76,6 +76,32 @@ Changes
   from a saved grid with ``import_overlying_grid: true`` was rejected by the
   validator although the data was there, and the labels of the restored frames were
   left as written
+* Carried :attr:`~.edisgo.EDisGo.opf_results` over to the full grid in the
+  ``spatial_restore`` task. ``spatial_reduce`` stashes a deepcopy of the full grid
+  *before* the OPF runs and ``spatial_restore`` returns that stash, but
+  :meth:`~.edisgo.EDisGo.map_reduced_results_to_full_grid` transfers only the
+  flexible-component dispatch time series — so the object the pipeline continued
+  with still held the pristine, empty ``OPFResults`` constructed before the solve,
+  and ``save`` with ``save_opf_results: true`` wrote an ``opf_results/`` directory
+  containing no CSV files at all. This affected every run with
+  ``spatial_reduction.enabled: true`` regardless of ``opf_version``, and made the
+  overlying-grid conservation checks impossible to perform on a saved object, since
+  all of them read ``opf_results`` (openego/eGo#212). The results are attached
+  verbatim: ``hv_requirement_slacks_t`` and ``overlying_grid`` are indexed by
+  flexibility category and ``battery_storage_t`` by storage-unit name (storage units
+  are never aggregated), so these carry over unambiguously, while ``lines_t``,
+  ``slack_generator_t``, ``heat_storage_t`` and ``grid_slacks_t`` keep *reduced-grid*
+  component names that do not match the full grid's topology under
+  ``aggregation_mode: true``
+* Fixed ``ValueError: cannot reindex on an axis with duplicate labels`` during
+  :func:`~.io.generators_import.oedb` for grids in which one bus carries the
+  conventional loads of two different buildings (e.g. MV grids 33084 and 33695).
+  :func:`~.io.generators_import._integrate_pv_rooftop` derived a bus-to-building-ID
+  map from the conventional loads to supply the key for a building-ID based match of
+  existing PV rooftop plants. That match was replaced by a match on ``source_id``,
+  but the map was left behind and its result has been discarded ever since, so the
+  only remaining effect of the code was the crash above. It has been removed; the
+  function no longer reads the loads at all
 * Fixed the multi-interval OPF handing every interval the *first* interval's
   flexibility inputs. When the time index is non-contiguous — as after
   ``select_critical_timesteps`` — :func:`~.opf.powermodels_opf.pm_optimize` splits it

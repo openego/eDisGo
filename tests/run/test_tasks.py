@@ -27,6 +27,7 @@ from edisgo.run.tasks.flex import (
     task_import_flex,
 )
 from edisgo.run.tasks.io import task_import_overlying_grid_data
+from edisgo.run.tasks.spatial import task_spatial_restore
 from edisgo.run.tasks.timeseries import (
     task_manual_ts,
     task_select_critical_timesteps,
@@ -210,9 +211,7 @@ def _grid_with_district_heating():
             bus=edisgo.topology.buses_df.index[bus_i],
             p_set=p_set,
         )
-    hps = edisgo.topology.loads_df.index[
-        edisgo.topology.loads_df.type == "heat_pump"
-    ]
+    hps = edisgo.topology.loads_df.index[edisgo.topology.loads_df.type == "heat_pump"]
     ti = edisgo.timeseries.timeindex
     edisgo.heat_pump.cop_df = pd.DataFrame(
         {hp: [3.0, 3.0, 3.0] for hp in hps}, index=ti
@@ -621,6 +620,71 @@ class TestOptimizeTaskDelegation:
         )
         # carriers not listed stay empty
         assert captured["flexible_hps"] == []
+
+
+class TestSpatialRestoreCarriesOPFResults:
+    """
+    spatial_restore swaps the working object back to the pre-OPF full-grid
+    stash. That stash was deepcopied *before* the solve, so it carries a
+    pristine, empty OPFResults; the results must be carried over explicitly
+    or the run saves an empty opf_results/ directory (issue #760).
+
+    map_reduced_results_to_full_grid is stubbed out here: it needs
+    flexibility envelopes and a matching time index, and what is under test
+    is the object swap, not the dispatch mapping.
+    """
+
+    @staticmethod
+    def _stub_mapping(full_grid):
+        """Neutralise the dispatch mapping, recording that it was called."""
+        calls = []
+
+        def fake_map(**kw):
+            calls.append(kw)
+            return full_grid
+
+        full_grid.map_reduced_results_to_full_grid = fake_map
+        return calls
+
+    def test_opf_results_are_carried_onto_the_full_grid(self, edisgo_obj):
+        full_grid = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        calls = self._stub_mapping(full_grid)
+
+        # stand in for what from_powermodels writes onto the reduced grid
+        slacks = pd.DataFrame({"cp": [0.1, 0.2], "hp": [0.3, 0.4]})
+        edisgo_obj.opf_results.hv_requirement_slacks_t = slacks
+        edisgo_obj.opf_results.status = "OPTIMAL"
+
+        ctx = RunContext()
+        ctx.full_grid_stash = full_grid
+        result = task_spatial_restore(edisgo_obj, ctx)
+
+        # the stash is what the pipeline continues with ...
+        assert result is full_grid
+        assert len(calls) == 1
+        # ... and it no longer carries the empty pre-OPF results
+        assert not result.opf_results.hv_requirement_slacks_t.empty
+        pd.testing.assert_frame_equal(
+            result.opf_results.hv_requirement_slacks_t, slacks
+        )
+        assert result.opf_results.status == "OPTIMAL"
+        # the stash is cleared so a second restore is a no-op
+        assert ctx.full_grid_stash is None
+
+    def test_without_a_stash_the_optimized_grid_is_returned_unchanged(self, edisgo_obj):
+        """
+        Spatial reduction disabled: spatial_reduce left no stash, so the
+        object optimize ran on is returned as-is - it already holds its own
+        opf_results.
+        """
+        edisgo_obj.opf_results.status = "OPTIMAL"
+        ctx = RunContext()
+        assert ctx.full_grid_stash is None
+
+        result = task_spatial_restore(edisgo_obj, ctx)
+
+        assert result is edisgo_obj
+        assert result.opf_results.status == "OPTIMAL"
 
 
 def test_all_bundled_presets_validate():
