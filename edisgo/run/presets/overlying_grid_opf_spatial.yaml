@@ -44,6 +44,9 @@ pipeline:
   - apply_heat_pump_strategy: {strategy: uncontrolled}
   - build_flexibility_bands
   - import_overlying_grid_data
+  # merge each district heating area's PtH units and subtract the overlying
+  # grid's other heat feed-in from its demand; no-op without district heating
+  - aggregate_district_heating
   - select_critical_timesteps: {method: residual_load}   # TEMPORAL reduction
   - reactive_power
   - spatial_reduce                                        # SPATIAL: stash full grid, reduce
