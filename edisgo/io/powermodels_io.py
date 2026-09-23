@@ -399,10 +399,7 @@ def from_powermodels(
                 abs_error = abs(df2[flex].values - flex_req.sum(axis=1).values)
                 rel_error = [
                     abs_error[i] / flex_req.sum(axis=1).iloc[i]
-                    if (
-                        (abs_error > 0.01)[i]
-                        & (flex_req.sum(axis=1).iloc[i] != 0)
-                    )
+                    if ((abs_error > 0.01)[i] & (flex_req.sum(axis=1).iloc[i] != 0))
                     else 0
                     for i in range(len(abs_error))
                 ]
@@ -1342,11 +1339,15 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         # rows: a full-length series (or, on a non-final interval of a
         # temporally reduced run, an interval-length one) then raises
         # "Shape of passed values is (n, k), indices imply (m, k)".
-        soc_decentral = align_series_to_timeindex(
-            edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc,
-            edisgo_obj.timeseries.timeindex,
-            extra_step=True,
-        ).ffill().bfill()
+        soc_decentral = (
+            align_series_to_timeindex(
+                edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc,
+                edisgo_obj.timeseries.timeindex,
+                extra_step=True,
+            )
+            .ffill()
+            .bfill()
+        )
         data = pd.concat([soc_decentral] * len(decentral_hps), axis=1).values
     else:
         data = 0.0
@@ -1371,11 +1372,15 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         flexible_hps,
     )
     if not edisgo_obj.overlying_grid.thermal_storage_units_central_soc.empty:
-        soc_central = align_series_to_timeindex(
-            edisgo_obj.overlying_grid.thermal_storage_units_central_soc,
-            edisgo_obj.timeseries.timeindex,
-            extra_step=True,
-        ).ffill().bfill()
+        soc_central = (
+            align_series_to_timeindex(
+                edisgo_obj.overlying_grid.thermal_storage_units_central_soc,
+                edisgo_obj.timeseries.timeindex,
+                extra_step=True,
+            )
+            .ffill()
+            .bfill()
+        )
         data = soc_central[
             edisgo_obj.topology.loads_df.loc[central_hps]
             .district_heating_id.astype(int)

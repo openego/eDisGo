@@ -296,15 +296,16 @@ falls back to a zero state of charge. The remaining eleven attributes match by n
 and do arrive. A validation test should treat the two as absent until the naming is
 reconciled.
 
-Known limitation: temporal reduction with several intervals
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Temporal reduction with several intervals
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 When the time index is a reduced, non-contiguous selection (as produced by
 ``select_critical_timesteps``),
 :func:`~edisgo.opf.powermodels_opf.pm_optimize` solves one OPF per contiguous
-interval. The mapping above holds per interval. Any comparison between an
-overlying-grid input and an eDisGo result must therefore be evaluated per interval and
-not across the whole reduced index.
+interval, each against that interval's own slice of the overlying-grid,
+heat-pump, DSM and electromobility inputs. The mapping above therefore holds
+**per interval**: a comparison between an overlying-grid input and an eDisGo result
+has to be evaluated interval by interval, not across the whole reduced index.
 
 Known limitation: open defects that break the balances above
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
