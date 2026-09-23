@@ -138,3 +138,17 @@ Changes
   empty. The emptiness check on ``heat_pump_central_active_power`` ran before the ``try``
   block meant to catch exactly that case, so the documented fallback to ``opf_version``
   2 was unreachable
+* Fixed :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates` aborting with
+  ``NetworkXError: The node ... is not in the graph`` on a grid whose LV grid contains
+  a ring. The traversal that lays out the buses assumes a tree, where every node is
+  reached from exactly one neighbour; on a ring a node is discovered from both sides
+  and was queued twice, and by the time the second entry was processed the node had
+  already been removed from the working copy. A node is now queued at most once and
+  keeps the coordinates of its first discovery. Since nothing is ever skipped in a
+  tree, tree-shaped grids keep their previous coordinates exactly. This made the whole
+  ``spatial_complexity_reduction`` fail for such grids, because it generates pseudo
+  coordinates first (``apply_pseudo_coordinates``, default ``True``) — seen on MV grid
+  32064, whose ``LVGrid_8829100000`` holds 41 buses on 41 lines
+  (openego/eGo#227). A grid that is not fully connected no longer runs the queue dry
+  either; the unreachable buses keep their original coordinates and are named in a
+  warning
