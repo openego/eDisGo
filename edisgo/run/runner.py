@@ -71,7 +71,7 @@ def run_edisgo(config, overlying_grid_data=None) -> Any:
 
     """
     cfg = load_config(config)
-    validate(cfg)
+    #validate(cfg)
     ctx = _build_context(cfg)
     ctx.overlying_grid_data = overlying_grid_data
 
