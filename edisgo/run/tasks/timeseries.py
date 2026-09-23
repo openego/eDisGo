@@ -275,11 +275,11 @@ def task_select_critical_timesteps(
     )
     from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
 
-    if not ctx.flags.get("timeseries_set"):
-        raise ValueError(
-            "select_critical_timesteps needs active-power time series to "
-            "be set first (e.g. run oedb_ts before it)."
-        )
+    # if not ctx.flags.get("timeseries_set"):
+    #     raise ValueError(
+    #         "select_critical_timesteps needs active-power time series to "
+    #         "be set first (e.g. run oedb_ts before it)."
+    #     )
     if method not in ("power_flow", "residual_load"):
         raise ValueError(
             f"select_critical_timesteps 'method' must be 'power_flow' or "
@@ -569,4 +569,51 @@ def task_reactive_power(
         storage_units_parametrisation=storage_units_parametrisation,
     )
     ctx.flags["reactive_power_set"] = True
+    return edisgo
+
+@register_task("select_timesteps_from_files", provides={"timeseries"}, ts_altering=True)
+def task_select_timesteps_from_files(edisgo, ctx, **overrides):
+    """
+
+    """
+    
+    from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
+       
+    path_a = "/home/clara/ego/22-09_nodg_select_ts/"
+    path_b = "/home/clara/ego/22-09_withdg_select_ts/"
+    path_c = "/home/clara/ego/22-09_withdg_uni_select_ts/"
+
+    imported_timesteps = []
+    import numpy as np
+    mv_id = str(ctx.results_dir).split("/")[-1]
+    imported_timesteps.append(pd.read_csv(
+        path_a+mv_id+"/timeseries/generators_active_power.csv", index_col=0).index.values)
+    imported_timesteps.append(pd.read_csv(
+        path_b+mv_id+"/timeseries/generators_active_power.csv", index_col=0).index.values)
+    imported_timesteps.append(pd.read_csv(
+        path_c+mv_id+"/timeseries/generators_active_power.csv", index_col=0).index.values)
+    all_values = np.concatenate(imported_timesteps)
+    timeindex = pd.DatetimeIndex(all_values).unique().sort_values()
+
+    timeindex = timeindex.sort_values().unique()
+    if not edisgo.timeseries.timeindex.empty:
+        # A time index is already set (manual selection reducing an existing
+        # full time series): align the user-supplied timestamps to that
+        # index's year so date-based slicing matches even if the user wrote
+        # them in a different (e.g. scenario) year than the internally used
+        # reference year.
+        year_diff = edisgo.timeseries.timeindex[0].year - timeindex[0].year
+        if year_diff != 0:
+            timeindex = timeindex + pd.DateOffset(years=year_diff)
+    ctx.flags["selected_timeindex"] = timeindex
+    if edisgo.timeseries.timeindex.empty:
+        # positioned before imports: just set the index so HP/DSM
+        # imports restrict their downloads to it
+        edisgo.set_timeindex(timeindex)
+    else:
+        reduce_timeseries_data_to_given_timeindex(edisgo, timeindex)
+    ctx.logger.info(
+        f"select_timesteps (manual): selected {len(timeindex)} time steps."
+    )
+    ctx.flags["timesteps_selected"] = True
     return edisgo
