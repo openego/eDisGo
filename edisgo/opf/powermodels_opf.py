@@ -22,6 +22,7 @@ import pandas as pd
 from edisgo.flex_opt import exceptions
 from edisgo.io.powermodels_io import from_powermodels
 from edisgo.network.topology import Topology
+from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
 
 logger = logging.getLogger(__name__)
 
@@ -169,10 +170,17 @@ def pm_optimize(
       :class:`~.flex_opt.exceptions.InfeasibleModelError` is raised after the
       feasible intervals' results have been stored.
 
-    The overlying-grid SOC attributes and reactive-power time series (which
+    Before each interval the flexibility inputs are sliced to that interval
+    (:func:`~.tools.tools.reduce_timeseries_data_to_given_timeindex` with
+    ``timeseries=False``) so the OPF is built from the interval's own
+    overlying-grid requirements, heat-pump, DSM and electromobility data.
+    :meth:`~.edisgo.EDisGo.set_timeindex` alone would not do that -- it only
+    assigns ``timeseries.timeindex``. The full-length inputs, the
+    overlying-grid SOC attributes and the reactive-power time series (which
     ``to_powermodels`` / ``from_powermodels`` mutate or replace on the current
-    interval) are snapshotted and restored pristine before each interval so a
-    later interval sees intact input. Parameters are as for
+    interval) are snapshotted and restored pristine before each interval, and
+    the active-power frames deliberately stay on the full reduced index so the
+    per-interval results accumulate into them. Parameters are as for
     :func:`_pm_optimize_single`.
     """
     opf_kwargs = dict(
@@ -210,6 +218,9 @@ def pm_optimize(
     # Reactive power was set on the full reduced index before this call; restore
     # this input pristine before each interval. Active-power frames are NOT
     # restored — they accumulate each interval's OPF results via .loc.
+    #  * the flexibility inputs (overlying grid, heat pump, DSM, electromobility
+    #    bands) are sliced down to the current interval below, so the next
+    #    interval must start from the full-length originals again.
     og = edisgo_obj.overlying_grid
     og_snapshot = {attr: copy.deepcopy(getattr(og, attr)) for attr in og._attributes}
     reactive_attrs = [
@@ -221,6 +232,24 @@ def pm_optimize(
         attr: copy.deepcopy(getattr(edisgo_obj.timeseries, attr, None))
         for attr in reactive_attrs
     }
+    flex_snapshot = {
+        "heat_pump": {
+            attr: copy.deepcopy(getattr(edisgo_obj.heat_pump, attr))
+            for attr in ("cop_df", "heat_demand_df")
+        },
+        "dsm": {
+            attr: copy.deepcopy(getattr(edisgo_obj.dsm, attr))
+            for attr in edisgo_obj.dsm._attributes
+        },
+        "electromobility": {
+            "flexibility_bands": copy.deepcopy(
+                edisgo_obj.electromobility.flexibility_bands
+            ),
+            "initial_soc_df": copy.deepcopy(
+                getattr(edisgo_obj.electromobility, "initial_soc_df", None)
+            ),
+        },
+    }
 
     def _restore_pristine_inputs():
         for attr, value in og_snapshot.items():
@@ -228,6 +257,17 @@ def pm_optimize(
         for attr, value in reactive_snapshot.items():
             if value is not None:
                 setattr(edisgo_obj.timeseries, attr, copy.deepcopy(value))
+        for attr, value in flex_snapshot["heat_pump"].items():
+            setattr(edisgo_obj.heat_pump, attr, copy.deepcopy(value))
+        for attr, value in flex_snapshot["dsm"].items():
+            setattr(edisgo_obj.dsm, attr, copy.deepcopy(value))
+        edisgo_obj.electromobility.flexibility_bands = copy.deepcopy(
+            flex_snapshot["electromobility"]["flexibility_bands"]
+        )
+        if flex_snapshot["electromobility"]["initial_soc_df"] is not None:
+            edisgo_obj.electromobility.initial_soc_df = copy.deepcopy(
+                flex_snapshot["electromobility"]["initial_soc_df"]
+            )
 
     # Pre-allocate the storage active-power schedule over the FULL reduced index
     # so from_powermodels .loc-accumulates each interval's storage result instead
@@ -245,6 +285,19 @@ def pm_optimize(
         for interval in intervals:
             _restore_pristine_inputs()
             edisgo_obj.set_timeindex(interval)
+            # EDisGo.set_timeindex only assigns timeseries.timeindex -- it does
+            # not touch the flexibility containers. to_powermodels reads those
+            # raw (overlying_grid via .iloc[0] in _build_hv_requirements, and
+            # heat_pump / dsm / electromobility as full-length .tolist()s in
+            # _build_timeseries), while num_steps is the length of THIS
+            # interval. PowerModels.make_multinetwork then keeps only the first
+            # num_steps entries, i.e. interval 1's values -- for every interval.
+            # Slice the flexibility inputs to the interval, the way the in-eGo
+            # pipeline this loop replaced did. timeseries=False: the active-power
+            # frames stay on the full reduced index so results accumulate.
+            reduce_timeseries_data_to_given_timeindex(
+                edisgo_obj, interval, timeseries=False
+            )
             entry = {
                 "start": interval[0],
                 "end": interval[-1],
