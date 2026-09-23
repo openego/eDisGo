@@ -152,3 +152,16 @@ Changes
   (openego/eGo#227). A grid that is not fully connected no longer runs the queue dry
   either; the unreachable buses keep their original coordinates and are named in a
   warning
+* Fixed :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction`
+  giving a line that stands for several parallel systems ``num_parallel`` times its
+  impedance. The per-km values the aggregation rebuilds ``r`` and ``x`` from describe
+  one system, and the factor was left out, while ``num_parallel`` and ``s_nom`` were
+  carried over intact — so nothing in the reduced grid showed that its impedance no
+  longer matched. Few lines carry parallel systems, but they sit where a feeder leaves
+  the station and are therefore on the path of everything behind them: on MV grid
+  32064 an eight-system feeder came out at 0.164 Ohm/km instead of 0.0205, the
+  load-weighted path resistance of the whole grid doubled, and
+  :attr:`~.edisgo.EDisGo.reinforce` aborted with ``MaximumIterationError`` on a grid
+  that has no voltage issues at all before the reduction. Correcting 35 of 2421 lines
+  brings the voltage band back from 0.818–1.136 to 0.895–1.040 and lets the expansion
+  run through (openego/eDisGo#767)

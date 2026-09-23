@@ -296,6 +296,55 @@ class TestSpatialComplexityReduction:
         assert timeseries.generators_reactive_power.shape[1] == n_generators
         assert len(set(linemap_df["new_line_name"].to_list())) == 34
 
+    @pytest.mark.parametrize("n_parallel", [2, 8])
+    def test_apply_busmap_scales_impedance_with_num_parallel(
+        self, test_edisgo_obj, n_parallel
+    ):
+        """
+        A line standing for n parallel systems must come out n times less
+        resistive than the same line standing for one.
+
+        ``aggregate_lines_df`` recomputes r and x from the per-km values of the
+        line type, which describe ONE system. It used to leave out
+        ``num_parallel``, so a line with n systems came out with n times its
+        impedance, while ``num_parallel`` and ``s_nom`` were carried over intact
+        (openego/eDisGo#767). On MV grid 32064 that turned an eight-system feeder
+        at the head of a branch from 0.0205 into 0.164 Ohm/km, which put every bus
+        behind it far enough from the station to make the grid unsolvable.
+
+        The same grid is reduced twice, once with every line as a single system
+        and once with n parallel systems. ``num_parallel`` does not enter the
+        busmap, so both runs map the same way and the impedances have to differ
+        by exactly n.
+        """
+
+        def reduce_with(edisgo_obj, num_parallel):
+            edisgo_obj.topology.lines_df["num_parallel"] = num_parallel
+            busmap_df = self.setup_busmap_df(edisgo_obj)
+            linemap_df = spatial_complexity_reduction.apply_busmap(
+                edisgo_obj, busmap_df
+            )
+            return edisgo_obj.topology.lines_df, linemap_df
+
+        single, linemap_single = reduce_with(copy.deepcopy(test_edisgo_obj), 1)
+        multi, linemap_multi = reduce_with(copy.deepcopy(test_edisgo_obj), n_parallel)
+
+        assert linemap_single["new_line_name"].equals(linemap_multi["new_line_name"])
+
+        common = single.index.intersection(multi.index)
+        assert len(common) > 0
+
+        for line in common:
+            assert multi.loc[line, "length"] == pytest.approx(
+                single.loc[line, "length"], rel=1e-9
+            ), f"length changed with num_parallel for {line}"
+            assert multi.loc[line, "r"] * n_parallel == pytest.approx(
+                single.loc[line, "r"], rel=1e-6
+            ), f"resistance does not scale with num_parallel for {line}"
+            assert multi.loc[line, "x"] * n_parallel == pytest.approx(
+                single.loc[line, "x"], rel=1e-6
+            ), f"reactance does not scale with num_parallel for {line}"
+
     def test_spatial_complexity_reduction(self, test_edisgo_obj):
         (
             busmap_df,
