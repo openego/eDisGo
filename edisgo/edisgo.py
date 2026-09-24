@@ -189,13 +189,17 @@ class EDisGo:
         # instantiate other data classes
         self.results = Results(self)
         self.opf_results = OPFResults()
-        self.timeseries = timeseries.TimeSeries(
-            timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
-        )
+        self.timeseries = timeseries.TimeSeries()
         self.electromobility = Electromobility(edisgo_obj=self)
         self.heat_pump = HeatPump()
         self.dsm = DSM()
         self.overlying_grid = OverlyingGrid()
+
+        # set initial time index via set_timeindex (rather than passing it
+        # straight to TimeSeries()) so a leap year given here is shifted to
+        # the reference year immediately, before anything else is indexed by
+        # it - see set_timeindex
+        self.set_timeindex(kwargs.get("timeindex", pd.DatetimeIndex([])))
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
