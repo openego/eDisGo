@@ -6,6 +6,7 @@ import pytest
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints, reinforce_measures
+from edisgo.tools import tools
 
 
 class TestReinforceMeasures:
@@ -196,6 +197,107 @@ class TestReinforceMeasures:
         assert trafo_new.x_pu == trafo_copy.x_pu
         assert trafo_new.s_nom == trafo_copy.S_nom
         assert trafo_new.type_info == "630 kVA"
+
+    def test_reinforce_mv_lv_station_overloading_ront_clone_branch(self):
+        # Befund 2 (CONCEPT_ront.md, "Integrationsbefunde & Aufloesung"):
+        # the "second transformer of the same kind" clone branch in
+        # _reinforce_station_overloading() must not clone a RONT type_info
+        # onto the new transformer -- the new one resolves overloading
+        # (standard type), the existing RONT stays untouched (resolves
+        # voltage issues).
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        lv_grid_4 = self.edisgo.topology.get_lv_grid(4)
+        original_transformer_name = lv_grid_4.transformers_df.index[0]
+        original_type_info = self.edisgo.topology.transformers_df.at[
+            original_transformer_name, "type_info"
+        ]
+        self.edisgo.topology.transformers_df.at[
+            original_transformer_name, "type_info"
+        ] = tools.ront_type_name(original_type_info)
+
+        crit_lv_stations = pd.DataFrame(
+            {
+                "s_missing": [0.04],
+                "time_index": [self.timesteps[1]],
+                "grid": [lv_grid_4],
+            },
+            index=[lv_grid_4.station_name],
+        )
+        transformer_changes = reinforce_measures.reinforce_mv_lv_station_overloading(
+            self.edisgo, crit_lv_stations
+        )
+
+        new_transformer_name = transformer_changes["added"]["LVGrid_4_station"][0]
+
+        # the original (RONT) transformer is untouched
+        assert tools.is_ront(
+            self.edisgo.topology.transformers_df.at[
+                original_transformer_name, "type_info"
+            ]
+        )
+        # the newly added, cloned transformer is the plain standard type,
+        # not a second RONT -- but electrically identical (s_nom/r_pu/x_pu
+        # unchanged, since RONT and standard type are electrically the same)
+        new_trafo = self.edisgo.topology.transformers_df.loc[new_transformer_name]
+        assert not tools.is_ront(new_trafo.type_info)
+        assert new_trafo.type_info == original_type_info
+        assert (
+            new_trafo.s_nom
+            == self.edisgo.topology.transformers_df.at[
+                original_transformer_name, "s_nom"
+            ]
+        )
+
+    def test_reinforce_lv_grid_ront_voltage_issues(self):
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        transformer_name = lv_grid_1.transformers_df.index[0]
+        original_type_info = self.edisgo.topology.transformers_df.at[
+            transformer_name, "type_info"
+        ]
+
+        s_nom_before = self.edisgo.topology.transformers_df.at[
+            transformer_name, "s_nom"
+        ]
+        r_pu_before = self.edisgo.topology.transformers_df.at[transformer_name, "r_pu"]
+        x_pu_before = self.edisgo.topology.transformers_df.at[transformer_name, "x_pu"]
+
+        transformer_changes = (
+            reinforce_measures.reinforce_lv_grid_ront_voltage_issues(
+                self.edisgo, lv_grid_1
+            )
+        )
+
+        assert transformer_changes == {"changed": {"LVGrid_1": [transformer_name]}}
+        assert (
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"]
+            == f"{original_type_info} RONT"
+        )
+        assert (
+            self.edisgo.topology.transformers_df.at[transformer_name, "s_nom"]
+            == s_nom_before
+        )
+        assert (
+            self.edisgo.topology.transformers_df.at[transformer_name, "r_pu"]
+            == r_pu_before
+        )
+        assert (
+            self.edisgo.topology.transformers_df.at[transformer_name, "x_pu"]
+            == x_pu_before
+        )
+
+        # idempotency: a second call on an already-RONT transformer is a
+        # no-op (no double suffix, no further change reported)
+        transformer_changes_2 = (
+            reinforce_measures.reinforce_lv_grid_ront_voltage_issues(
+                self.edisgo, lv_grid_1
+            )
+        )
+        assert transformer_changes_2 == {"changed": {}}
+        assert (
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"]
+            == f"{original_type_info} RONT"
+        )
 
     def test_reinforce_lines_voltage_issues(self):
         # MV:

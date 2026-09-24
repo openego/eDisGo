@@ -211,6 +211,97 @@ def calculate_apparent_power(nominal_voltage, current, num_parallel):
     return sqrt(3) * nominal_voltage * current * num_parallel
 
 
+# suffix used to mark a transformer type as a RONT (regelbarer
+# Ortsnetztransformator); see :func:`is_ront`.
+RONT_TYPE_SUFFIX = " RONT"
+
+
+def is_ront(type_info):
+    """
+    Checks whether a given transformer type is a RONT (regelbarer
+    Ortsnetztransformator, voltage-regulating distribution transformer).
+
+    RONT transformer types are identified by the name of the standard
+    equipment type they are based on (see
+    :attr:`~.network.topology.Topology.equipment_data`), suffixed with
+    " RONT", e.g. "630 kVA RONT". RONT types are electrically identical to
+    their base standard type (same `s_nom`/`r_pu`/`x_pu`) -- only the
+    voltage-regulating capability, which is modelled in the LV voltage limit
+    check rather than in the power flow (see
+    :func:`~.flex_opt.check_tech_constraints._lv_allowed_voltage_limits`),
+    differs. See also CONCEPT_ront.md for the underlying assumptions.
+
+    Parameters
+    ----------
+    type_info : str
+        Transformer type name as in column 'type_info' of
+        :attr:`~.network.topology.Topology.transformers_df`.
+
+    Returns
+    -------
+    bool
+        True if `type_info` designates a RONT type.
+
+    """
+    return str(type_info).endswith(RONT_TYPE_SUFFIX)
+
+
+def ront_type_name(type_info):
+    """
+    Returns the RONT (regelbarer Ortsnetztransformator) type name
+    corresponding to a given standard transformer type name.
+
+    See :func:`is_ront`.
+
+    The RONT-suffixed name returned here is a marker, not a catalogue type:
+    it is not, and does not need to be, a row in
+    :attr:`~.network.topology.Topology.equipment_data` `["lv_transformers"]`.
+    A transformer's electrical parameters (`s_nom`/`r_pu`/`x_pu`) always come
+    from its existing row in
+    :attr:`~.network.topology.Topology.transformers_df`, which
+    :func:`~.flex_opt.reinforce_measures.reinforce_lv_grid_ront_voltage_issues`
+    leaves unchanged when converting to RONT -- no code path re-derives them
+    by looking up `type_info` (RONT-suffixed or not) in the equipment
+    catalogue, so this works for any base name, including non-standard ones
+    from grid import that never had a catalogue entry to begin with.
+
+    Parameters
+    ----------
+    type_info : str
+        Standard transformer type name, e.g. as in
+        :attr:`~.network.topology.Topology.equipment_data`
+        `["lv_transformers"]`.
+
+    Returns
+    -------
+    str
+        Corresponding RONT type name, e.g. "630 kVA RONT".
+
+    """
+    return f"{type_info}{RONT_TYPE_SUFFIX}"
+
+
+def standard_type_name(type_info):
+    """
+    Returns the standard transformer type name corresponding to a given
+    RONT type name (the inverse of :func:`ront_type_name`).
+
+    Parameters
+    ----------
+    type_info : str
+        RONT transformer type name, e.g. "630 kVA RONT".
+
+    Returns
+    -------
+    str
+        Corresponding standard type name, e.g. "630 kVA".
+
+    """
+    if not is_ront(type_info):
+        raise ValueError(f"'{type_info}' is not a RONT type (see is_ront).")
+    return type_info[: -len(RONT_TYPE_SUFFIX)]
+
+
 def drop_duplicated_indices(dataframe, keep="last"):
     """
     Drop rows of duplicate indices in dataframe.
