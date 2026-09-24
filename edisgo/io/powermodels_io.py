@@ -1127,13 +1127,15 @@ def _build_battery_storage(
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     if not edisgo_obj.overlying_grid.storage_units_soc.empty:
         # Align the SOC series (which may use another year) onto the edisgo
-        # time index plus one end-of-period step. Uses reindex, so a missing
-        # step yields NaN instead of a KeyError.
-        from edisgo.tools.tools import align_series_to_timeindex
+        # time index plus one end-of-period step, with a warning in case of
+        # a year shift. Uses reindex, so a missing step yields NaN instead of
+        # a KeyError.
+        from edisgo.tools.tools import align_to_edisgo_timeindex
 
-        soc_aligned = align_series_to_timeindex(
+        soc_aligned = align_to_edisgo_timeindex(
+            edisgo_obj,
             edisgo_obj.overlying_grid.storage_units_soc,
-            edisgo_obj.timeseries.timeindex,
+            name="OverlyingGrid.storage_units_soc",
             extra_step=True,
         )
         data = pd.concat(

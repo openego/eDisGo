@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 
 from hashlib import md5
 from math import pi, sqrt
@@ -36,6 +37,54 @@ if TYPE_CHECKING:
     from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
+
+
+def shift_timeindex_to_year(timeindex, year):
+    """
+    Shifts a DatetimeIndex by whole years to align it with a given target year.
+
+    Uses :class:`pandas.DateOffset` (not ``Timestamp.replace(year=...)``) to shift,
+    which does not raise on a 29 February timestamp when the target year is not a
+    leap year, but silently rolls it onto 28 February instead. To avoid the
+    resulting collision with the 28 February timestamps already present (and thus
+    duplicate timestamps in the result), any 29 February timestamps in `timeindex`
+    are dropped beforehand in case `year` is not a leap year.
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time index to shift. Assumed to span a single calendar year.
+    year : int
+        Target year to shift `timeindex` to.
+
+    Returns
+    -------
+    :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        `timeindex` shifted to `year`. Empty if `timeindex` is empty.
+
+    """
+    if timeindex.empty:
+        return timeindex
+
+    if not pd.Timestamp(year, 1, 1).is_leap_year:
+        feb_29 = (timeindex.month == 2) & (timeindex.day == 29)
+        if feb_29.any():
+            logger.warning(
+                f"Target year {year} is not a leap year. Dropping "
+                f"{feb_29.sum()} time step(s) on 29 February from the time index "
+                f"before shifting to {year}."
+            )
+            timeindex = timeindex[~feb_29]
+
+    year_diff = year - timeindex[0].year
+    shifted = timeindex + pd.DateOffset(years=year_diff)
+
+    assert not shifted.has_duplicates, (
+        f"shift_timeindex_to_year produced duplicate timestamps when shifting to "
+        f"year {year}."
+    )
+
+    return shifted
 
 
 def align_series_to_timeindex(ts, timeindex, extra_step=False):
@@ -85,6 +134,111 @@ def align_series_to_timeindex(ts, timeindex, extra_step=False):
         if freq is not None:
             target = timeindex.union([timeindex[-1] + freq])
     return ts.reindex(target)
+
+
+def _align_with_warning(ts, timeindex, name="", extra_step=False):
+    """
+    Align `ts` onto `timeindex`, warning if a year shift was needed.
+
+    Shared core of :func:`align_to_edisgo_timeindex` and the per-attribute
+    alignment in :func:`reduce_timeseries_data_to_given_timeindex`. `ts` is
+    always reindexed onto `timeindex` (so a `ts` with a different range
+    and/or frequency - e.g. SimBEV's native few-day, 15-minute-resolution
+    flexibility bands - ends up trimmed/expanded to it even when the
+    calendar year happens to already match); a year shift is additionally
+    applied, with a warning, whenever `ts`'s year actually differs from
+    `timeindex`'s.
+
+    Parameters
+    ----------
+    ts : :pandas:`pandas.Series<Series>` or :pandas:`pandas.DataFrame<DataFrame>`\
+        or None
+        The time series to align. Returned unchanged if ``None``, empty, or
+        if `timeindex` is empty.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Target time index to align to.
+    name : str, optional
+        Name of `ts` to mention in the log warning in case of a year mismatch.
+        Default: "".
+    extra_step : bool, optional
+        See parameter `extra_step` in :func:`align_series_to_timeindex`.
+        Default: False.
+
+    Returns
+    -------
+    Same type as `ts`
+        `ts` aligned onto `timeindex`.
+
+    """
+    if ts is None or ts.empty or timeindex.empty:
+        return ts
+
+    src_year = ts.index[0].year
+    target_year = timeindex[0].year
+
+    if src_year != target_year:
+        logger.warning(
+            f"Time series {name} is indexed in year {src_year}, shifting to "
+            f"{target_year} to match the target time index."
+        )
+
+        if pd.Timestamp(src_year, 1, 1).is_leap_year and not pd.Timestamp(
+            target_year, 1, 1
+        ).is_leap_year:
+            # A plain DateOffset shift (as done inside align_series_to_timeindex)
+            # rolls 29 February onto 28 February, colliding with the 28 February
+            # timestamp already present and producing a duplicate label that
+            # reindex() cannot handle. Drop 29 February from ts beforehand (in
+            # step with shift_timeindex_to_year dropping it from the index) so
+            # the DateOffset shift below has nothing left to collide.
+            feb_29 = (ts.index.month == 2) & (ts.index.day == 29)
+            ts = ts.loc[~feb_29].copy()
+            ts.index = shift_timeindex_to_year(ts.index, target_year)
+
+    return align_series_to_timeindex(ts, timeindex, extra_step=extra_step)
+
+
+def align_to_edisgo_timeindex(edisgo_obj, ts, name="", extra_step=False):
+    """
+    Align a time series to `edisgo_obj`'s own time index, with a warning.
+
+    Unlike :func:`align_series_to_timeindex`, which just shifts onto a given
+    target index, this determines the target from
+    :py:attr:`~.network.timeseries.TimeSeries.timeindex` itself, setting it up
+    via :func:`~.io.timeseries_import._timeindex_helper_func` first if it is
+    still empty. This is meant for import functions that bring in
+    externally-calendared raw data (e.g. overlying grid data, flexibility
+    bands), so a year mismatch is never silently dropped as ``NaN`` nor raises
+    a ``KeyError`` - see :func:`_align_with_warning` for the alignment itself.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    ts : :pandas:`pandas.Series<Series>` or :pandas:`pandas.DataFrame<DataFrame>`\
+        or None
+        The time series to align. Returned unchanged if ``None``, empty, or
+        if :py:attr:`~.network.timeseries.TimeSeries.timeindex` is empty.
+    name : str, optional
+        Name of `ts` to mention in the log warning in case of a year mismatch.
+        Default: "".
+    extra_step : bool, optional
+        See parameter `extra_step` in :func:`align_series_to_timeindex`.
+        Default: False.
+
+    Returns
+    -------
+    Same type as `ts`
+        `ts` aligned onto :py:attr:`~.network.timeseries.TimeSeries.timeindex`.
+
+    """
+    if edisgo_obj.timeseries.timeindex.empty:
+        from edisgo.io.timeseries_import import _timeindex_helper_func
+
+        _timeindex_helper_func(edisgo_obj)
+
+    return _align_with_warning(
+        ts, edisgo_obj.timeseries.timeindex, name=name, extra_step=extra_step
+    )
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -1246,6 +1400,14 @@ def reduce_timeseries_data_to_given_timeindex(
         Indicates whether timeseries in :class:`~.network.overlying_grid.OverlyingGrid`
         are reduced to given time index. Default: True.
 
+    Notes
+    -----
+    HeatPump, DSM and OverlyingGrid data (as well as the EV flexibility
+    bands) is year-aligned onto `timeindex` (via
+    :func:`align_series_to_timeindex`, with a warning) before being indexed
+    by it, in case it was imported independently of `timeindex` and is
+    indexed in a different calendar year.
+
     """
     # get frequency from time index data or default frequency
     try:
@@ -1254,6 +1416,14 @@ def reduce_timeseries_data_to_given_timeindex(
         frequency = freq
     if not isinstance(frequency, pd.Timedelta):
         frequency = pd.Timedelta(frequency)
+
+    def _align_reduce_target(df, name, extra_step=False):
+        # mirrors the alignment already applied to the EV flexibility bands
+        # below, so a df indexed in a different calendar year than timeindex
+        # (e.g. HeatPump/DSM/OverlyingGrid data imported independently of the
+        # EDisGo object's own time index) does not raise a KeyError on the
+        # .loc[timeindex] lookup that follows - see _align_with_warning
+        return _align_with_warning(df, timeindex, name=name, extra_step=extra_step)
 
     # generators, loads and storage units timeseries
     if timeseries:
@@ -1325,35 +1495,42 @@ def reduce_timeseries_data_to_given_timeindex(
     # Heat pumps timeseries
     if heat_pump:
         for attr in ["cop_df", "heat_demand_df"]:
-            if not getattr(edisgo_obj.heat_pump, attr).empty:
+            df = getattr(edisgo_obj.heat_pump, attr)
+            if not df.empty:
                 setattr(
                     edisgo_obj.heat_pump,
                     attr,
-                    getattr(edisgo_obj.heat_pump, attr).loc[timeindex],
+                    _align_reduce_target(df, f"HeatPump.{attr}").loc[timeindex],
                 )
     # Demand Side Management timeseries
     if dsm:
         for attr in edisgo_obj.dsm._attributes:
-            if not getattr(edisgo_obj.dsm, attr).empty:
+            df = getattr(edisgo_obj.dsm, attr)
+            if not df.empty:
                 setattr(
                     edisgo_obj.dsm,
                     attr,
-                    getattr(edisgo_obj.dsm, attr).loc[timeindex],
+                    _align_reduce_target(df, f"DSM.{attr}").loc[timeindex],
                 )
     # Overlying grid timeseries
     if overlying_grid:
         for attr in edisgo_obj.overlying_grid._attributes:
-            if not getattr(edisgo_obj.overlying_grid, attr).empty:
-                if attr in [
+            df = getattr(edisgo_obj.overlying_grid, attr)
+            if not df.empty:
+                is_soc_attr = attr in [
                     "thermal_storage_units_central_soc",
                     "thermal_storage_units_decentral_soc",
                     "storage_units_soc",
-                ]:
+                ]
+                df = _align_reduce_target(
+                    df, f"OverlyingGrid.{attr}", extra_step=is_soc_attr
+                )
+                if is_soc_attr:
                     try:
                         setattr(
                             edisgo_obj.overlying_grid,
                             attr,
-                            getattr(edisgo_obj.overlying_grid, attr).loc[
+                            df.loc[
                                 pd.Index(timeindex).append(
                                     pd.Index([timeindex[-1] + frequency])
                                 )
@@ -1363,13 +1540,13 @@ def reduce_timeseries_data_to_given_timeindex(
                         setattr(
                             edisgo_obj.overlying_grid,
                             attr,
-                            getattr(edisgo_obj.overlying_grid, attr).loc[timeindex],
+                            df.loc[timeindex],
                         )
                 else:
                     setattr(
                         edisgo_obj.overlying_grid,
                         attr,
-                        getattr(edisgo_obj.overlying_grid, attr).loc[timeindex],
+                        df.loc[timeindex],
                     )
 
 
@@ -1516,32 +1693,50 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
     return df
 
 
-def get_year_based_on_timeindex(edisgo_obj):
+def validate_scenario(scenario, valid=("eGon2035", "eGon100RE")):
     """
-    Checks if :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set and
-    if so, returns the year of the time index.
+    Validates that the given scenario is one of the supported scenarios.
+
+    The scenario determines which data is loaded (e.g. from the oedb); it no
+    longer determines the calendar year time series are indexed by (see
+    :func:`get_reference_year`).
 
     Parameters
     ----------
-    edisgo_object : :class:`~.EDisGo`
+    scenario : str
+        Scenario to validate.
+    valid : tuple(str)
+        Scenario names considered valid. Default: ``("eGon2035", "eGon100RE")``.
 
     Returns
-    --------
-    int or None
-        If a time index is available returns the year of the time index,
-        otherwise it returns None.
+    -------
+    str
+        `scenario`, unchanged, if it is valid.
+
+    Raises
+    ------
+    ValueError
+        If `scenario` is not in `valid`.
 
     """
-    year = edisgo_obj.timeseries.timeindex.year
-    if len(year) == 0:
-        return None
-    else:
-        return year[0]
+    if scenario not in valid:
+        raise ValueError(
+            f"Invalid input '{scenario}' for parameter 'scenario'. Possible "
+            f"options are {', '.join(repr(v) for v in valid)}."
+        )
+    return scenario
 
 
 def get_year_based_on_scenario(scenario):
     """
     Returns the year the given scenario was set up for.
+
+    .. deprecated::
+        The scenario no longer determines the calendar year time series are
+        indexed by (see :func:`get_reference_year`). Use
+        :func:`validate_scenario` to validate a scenario name instead. This
+        function is kept for backwards compatibility and will be removed in a
+        future release.
 
     Parameters
     ----------
@@ -1556,12 +1751,52 @@ def get_year_based_on_scenario(scenario):
         provided it returns None.
 
     """
+    warnings.warn(
+        "get_year_based_on_scenario is deprecated and will be removed in a "
+        "future release. The scenario no longer determines the calendar year "
+        "time series are indexed by (see get_reference_year); use "
+        "validate_scenario to validate a scenario name instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if scenario == "eGon2035":
         return 2035
     elif scenario == "eGon100RE":
         return 2045
     else:
         return None
+
+
+def get_reference_year(edisgo_obj) -> int:
+    """
+    Returns the reference year used to index time series, as configured in
+    section 'timeindex', key 'reference_year' of
+    :class:`~.tools.config.Config`.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    Returns
+    --------
+    int
+        The configured reference year.
+
+    Raises
+    ------
+    ValueError
+        If the configured reference year is a leap year.
+
+    """
+    reference_year = edisgo_obj.config["timeindex"]["reference_year"]
+    if pd.Timestamp(reference_year, 1, 1).is_leap_year:
+        raise ValueError(
+            f"The configured reference year {reference_year} (see section "
+            f"'timeindex', key 'reference_year' in the timeseries config) is a "
+            f"leap year. Leap years are currently not supported as the reference "
+            f"year for time series indices. Please choose a non-leap year."
+        )
+    return reference_year
 
 
 def hash_dataframe(df: pd.DataFrame) -> str:
