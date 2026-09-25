@@ -165,3 +165,12 @@ Changes
   that has no voltage issues at all before the reduction. Correcting 35 of 2421 lines
   brings the voltage band back from 0.818–1.136 to 0.895–1.040 and lets the expansion
   run through (openego/eDisGo#767)
+* Fixed the standing loss of a thermal storage being applied per hour regardless of the
+  time step length. ``p_loss`` is a loss per day (4 % of the state of charge for
+  individual heating), and the decay between two time steps was written as
+  ``(1 - p_loss) ** (1/24)`` — correct at hourly resolution and wrong at every other
+  one: four times too much loss per 15-minute step, four times too little per four-hour
+  step. The exponent is now ``time_elapsed / 24``, which reproduces the previous value
+  exactly for hourly steps and gives the full daily loss for a daily one. This only
+  takes effect together with the ``time_elapsed`` fix of openego/eDisGo#693, without
+  which a sub-hourly step still arrives as 0 (openego/eDisGo#697)
