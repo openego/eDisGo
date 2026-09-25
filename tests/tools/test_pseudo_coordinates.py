@@ -1,3 +1,5 @@
+import logging
+
 import networkx as nx
 import numpy as np
 import pytest
@@ -73,6 +75,77 @@ class TestPseudoCoordinates:
         for node in result.nodes:
             assert "pos" in result.nodes[node]
             assert not any(np.isnan(result.nodes[node]["pos"]))
+
+    def test__make_coordinates_counts_skipped_neighbours_in_the_fan(self):
+        """
+        A skipped neighbour keeps its slot in the branch fan.
+
+        Where a node is reached from two sides, the second discovery is skipped
+        — but the neighbour counter handed to ``coordinate_branch`` still counts
+        it, because that counter is the index of the branch in the fan and has
+        to stay in step with the number of neighbours the angle is divided by.
+        Renumbering over the surviving branches instead would make a node's
+        angle depend on the order in which the traversal happens to reach its
+        neighbours.
+
+        In the graph below ``a``-``b``-``c`` form a ring, so ``c`` is discovered
+        twice; ``e`` hangs behind the ring and is the node whose placement the
+        counting rule decides. Moving the increment below the skip moves ``e``.
+        """
+        graph = nx.Graph()
+        for node in ("station", "a", "b", "c", "d", "e"):
+            graph.add_node(node, pos=(0, 0))
+        for bus0, bus1 in (
+            ("station", "a"),
+            ("a", "b"),
+            ("a", "c"),
+            ("b", "c"),  # closes the ring
+            ("b", "e"),
+            ("c", "d"),
+        ):
+            graph.add_edge(bus0, bus1, length=1.0)
+
+        result = _make_coordinates(graph, branch_detour_factor=1.3)
+
+        expected = {
+            "station": (0, 0),
+            "a": (769.2307692307692, 0),
+            "b": (769.230769230769, -769.2307692307694),
+            "c": (1538.4615384615383, 0),
+            "d": (2307.6923076923076, 0),
+            "e": (1153.8461538461534, -1435.4041567572608),
+        }
+        for node, (x, y) in expected.items():
+            assert result.nodes[node]["pos"] == pytest.approx((x, y), abs=1e-6)
+
+    def test__make_coordinates_disconnected_graph(self, caplog):
+        """
+        Buses that cannot be reached keep their coordinates instead of raising.
+
+        The layout walks outwards from the start node, so a separate connected
+        component is never discovered. The queue then runs dry while the working
+        copy still holds those buses, which used to leave the loop asking for
+        the next queue entry and raising ``IndexError: deque index out of
+        range``. They now keep the coordinates they came in with and are named
+        in a warning.
+        """
+        graph = nx.Graph()
+        graph.add_node("station", pos=(0.0, 0.0))
+        graph.add_node("a", pos=(0.0, 0.0))
+        graph.add_node("island_1", pos=(11.0, 48.0))
+        graph.add_node("island_2", pos=(12.0, 49.0))
+        graph.add_edge("station", "a", length=0.1)
+        graph.add_edge("island_1", "island_2", length=0.1)
+        assert not nx.is_connected(graph)
+
+        with caplog.at_level(logging.WARNING):
+            result = _make_coordinates(graph, branch_detour_factor=1.3)
+
+        # the unreachable buses are untouched, not moved and not dropped
+        assert result.nodes["island_1"]["pos"] == (11.0, 48.0)
+        assert result.nodes["island_2"]["pos"] == (12.0, 49.0)
+        assert set(result.nodes) == {"station", "a", "island_1", "island_2"}
+        assert "2 bus(es) are not reachable from station" in caplog.text
 
     def test__make_coordinates_tree_graph_is_unchanged(self):
         """
