@@ -75,10 +75,11 @@ reference system (SRID 4326).
 config_opf_julia
 ----------------
 
-``config_opf_julia.cfg`` points to the Julia binary used by the multi-period optimal
-power flow (:ref:`flexibility-opf`). It is only relevant when running
-:meth:`~edisgo.edisgo.EDisGo.pm_optimize`; see :ref:`opf-requirements` for the full
-Julia/Gurobi setup.
+``config_opf_julia.cfg`` is a legacy configuration file. The multi-period optimal
+power flow (:ref:`flexibility-opf`) resolves the ``julia`` executable from the system
+``PATH``, so ``julia_bin`` is not read; :meth:`~edisgo.edisgo.EDisGo.pm_optimize`
+needs ``julia`` to be on the ``PATH`` instead. See :ref:`opf-requirements` for the
+Julia and Gurobi setup it actually requires.
 
 .. include:: ../../edisgo/config/config_opf_julia_default.cfg
    :literal:

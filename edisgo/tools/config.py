@@ -169,20 +169,40 @@ class Config:
     def db_schema_mapping(self, value):
         self._config_dict["db_schema_mapping"] = value
 
-    def _ensure_db_mappings_loaded(self) -> None:
-        """Lazy-loads DB mappings only when needed for remote OEP access."""
+    def _ensure_db_mappings_loaded(self, engine: sa.engine.Engine = None) -> None:
+        """Lazy-loads DB mappings only when needed for remote OEP access.
+
+        ``engine`` is forwarded to :meth:`get_database_alias_dictionaries` and
+        should be the OEP engine the mapped tables are read from; see that
+        method for what happens when it is ``None``.
+        """
         if self._config_dict.get("db_table_mapping") and self._config_dict.get(
             "db_schema_mapping"
         ):
             return
 
-        name_mapping, schema_mapping = self.get_database_alias_dictionaries()
+        name_mapping, schema_mapping = self.get_database_alias_dictionaries(engine)
         self.db_table_mapping = name_mapping
         self.db_schema_mapping = schema_mapping
 
-    def get_database_alias_dictionaries(self) -> tuple[dict[str, str], dict[str, str]]:
+    def get_database_alias_dictionaries(
+        self, engine: sa.engine.Engine = None
+    ) -> tuple[dict[str, str], dict[str, str]]:
         """
         Retrieves the database alias dictionaries for table and schema mappings.
+
+        Parameters
+        ----------
+        engine : sqlalchemy.engine.Engine, optional
+            Engine to read the ``data.edut_00`` alias dictionary from. It must
+            point at the same database the mapped tables are read from (the
+            OEP), so callers pass the engine handed to
+            :meth:`import_tables_from_oep`. If ``None``, the database is
+            auto-detected via :func:`edisgo.io.db.engine` — which, in an
+            environment that has an egon-data configuration file, resolves to
+            the local egon-data database (opening an SSH tunnel) rather than
+            the OEP, where ``edut_00`` does not exist. Passing the engine
+            explicitly avoids that mismatch.
 
         Returns
         -------
@@ -194,7 +214,8 @@ class Config:
             - ``schema_mapping``: dictionary mapping source schema names to target
               schema names.
         """
-        engine = Engine()
+        if engine is None:
+            engine = Engine()
         dictionary_schema_name = "data"
         dictionary_table = self._get_module_attr(
             self._get_saio_module(dictionary_schema_name, engine),
@@ -277,7 +298,7 @@ class Config:
             A list of SQLAlchemy Table objects corresponding to the imported tables.
         """
         if "openenergyplatform" in str(engine.url):
-            self._ensure_db_mappings_loaded()
+            self._ensure_db_mappings_loaded(engine)
             schema = self.db_schema_mapping.get(schema_name)
             if not schema:
                 raise KeyError(
@@ -312,12 +333,19 @@ class Config:
                     table_name, metadata, autoload_with=engine, schema=schema_name
                 )
 
+                # The declarative mapper requires a primary key. Some egon-data
+                # tables/views have none reflected; declare all columns as a
+                # composite primary key so the ORM class can be built. This
+                # mirrors what saio does on the OEP path ("assuming primary
+                # key") and only affects mapping, not the data read back.
+                class_dict = {"__tablename__": table_name, "__table__": table}
+                if not list(table.primary_key.columns):
+                    class_dict["__mapper_args__"] = {
+                        "primary_key": list(table.columns)
+                    }
+
                 # dynamisch eine ORM-Klasse erzeugen
-                orm_class = type(
-                    table_name,
-                    (Base,),
-                    {"__tablename__": table_name, "__table__": table},
-                )
+                orm_class = type(table_name, (Base,), class_dict)
                 orm_classes.append(orm_class)
 
             return orm_classes

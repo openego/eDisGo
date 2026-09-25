@@ -1,0 +1,19 @@
+# worst_case — database-free entry point / smoke test:
+# load a ding0 topology, set synthetic worst-case time series (feed-in +
+# load case), reinforce, save. Extend it with your own grid path:
+#
+#   run_edisgo({
+#       "extends": "worst_case",
+#       "grid": {"ding0_path": "/path/to/ding0_grid"},
+#       "results": {"directory": "/path/to/results"},
+#   })
+
+scenario: eGon2035
+
+pipeline:
+  - setup_grid
+  - worst_case_ts
+  - reactive_power
+  - check_integrity
+  - reinforce
+  - save

@@ -245,6 +245,9 @@ linkcheck_ignore = [
     r"https://numpy.org/*",
     # ACM Digital Library (via doi.org) returns 403 to the CI bot, link is correct
     r"https://doi.org/10.1145/.*",
+    # IET DOIs resolve via the Crossref multiple-resolution chooser and the IET
+    # digital library returns 403 to the CI bot, link is correct
+    r"https://doi.org/10.1049/.*",
     # pandoc.org intermittently fails decompression in CI, link is correct
     r"https://pandoc.org",
 ]
@@ -265,7 +268,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "eDisGo"
-copyright = "2017, open_eGo-Team"
+copyright = "2017-2026, open_eGo-Team"
 author = "open_eGo-Team"
 
 # The version info for the project you're documenting, acts as replacement for

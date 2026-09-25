@@ -647,6 +647,189 @@ def _troubleshooting_mode(
     return edisgo_obj
 
 
+def intervals_overlap(a, b):
+    """
+    Return True if two contiguous time-step intervals overlap.
+
+    Each interval is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>` of
+    contiguous, sorted time steps. Overlap is checked on the closed
+    ``[min, max]`` ranges, so intervals that merely touch (share an end point)
+    count as overlapping.
+    """
+    return (a.min() <= b.max()) and (b.min() <= a.max())
+
+
+def select_two_intervals(load_case, feedin_case):
+    """
+    Pick the time intervals to analyze from two ranked candidate lists.
+
+    Used to reduce the ranked most-critical intervals (e.g. from
+    :func:`get_most_critical_time_intervals`) to the intervals actually analyzed:
+
+    * Start from the most critical interval of each list (index 0).
+    * If they do not overlap, both are kept — two disconnected intervals are
+      returned (a later optimization can detect the gap and optimize each
+      interval separately).
+    * If they overlap, walk down the second list to the highest ranked interval
+      that does not overlap the top interval of the first list, and keep that
+      pair instead.
+    * If no non-overlapping pair exists, the two most critical intervals are
+      concatenated into a single contiguous interval and only that one is
+      returned.
+
+    Parameters
+    ----------
+    load_case : list of pandas.DatetimeIndex
+        First ranked list of intervals (most critical first). May be empty.
+    feedin_case : list of pandas.DatetimeIndex
+        Second ranked list of intervals (most critical first). May be empty.
+
+    Returns
+    -------
+    list of pandas.DatetimeIndex
+        One or two contiguous, non-overlapping intervals. Empty if both input
+        lists are empty.
+    """
+    if not load_case and not feedin_case:
+        return []
+    if not load_case:
+        return [feedin_case[0]]
+    if not feedin_case:
+        return [load_case[0]]
+
+    top = load_case[0]
+    for cand in feedin_case:
+        if not intervals_overlap(top, cand):
+            return [top, cand]
+
+    # no non-overlapping pair -> concatenate the two most critical intervals
+    merged = top.union(feedin_case[0]).sort_values()
+    start, end = merged.min(), merged.max()
+    freq = pd.infer_freq(top) or "H"
+    return [pd.date_range(start=start, end=end, freq=freq)]
+
+
+def _build_centered_interval(
+    timestep, timeindex, time_steps_per_time_interval, time_step_day_start
+):
+    """
+    Build a contiguous interval centered on a critical time step.
+
+    The interval has ``time_steps_per_time_interval`` steps, is centered on
+    ``timestep``, and its start is snapped to the ``time_step_day_start`` hour of
+    day (so intervals begin on that hour). The interval is clipped to lie within
+    ``timeindex``; if centering would run past either end, it is shifted inward.
+    Centering guarantees the critical step is not the last step of the interval
+    (where a storage state-of-charge-end constraint would force zero power).
+
+    Parameters
+    ----------
+    timestep : pandas.Timestamp
+        Critical time step to center on.
+    timeindex : pandas.DatetimeIndex
+        The full (sorted) time index the interval must lie within.
+    time_steps_per_time_interval : int
+        Interval length in steps.
+    time_step_day_start : int
+        Hour of day the interval should start on.
+
+    Returns
+    -------
+    pandas.DatetimeIndex
+        The contiguous interval.
+    """
+    n = int(time_steps_per_time_interval)
+    step = timeindex[1] - timeindex[0]
+    half = (n // 2) * step
+    # center on the critical step, then snap the start back to the day-start hour
+    start = timestep - half
+    while start.hour != int(time_step_day_start):
+        start = start - step
+    end = start + (n - 1) * step
+    # keep the interval within the available time index; shift inward if needed
+    if start < timeindex[0]:
+        start = timeindex[0]
+        end = start + (n - 1) * step
+    if end > timeindex[-1]:
+        end = timeindex[-1]
+        start = end - (n - 1) * step
+        if start < timeindex[0]:
+            start = timeindex[0]
+    return pd.date_range(start=start, end=end, freq=step)
+
+
+def _most_critical_time_intervals_residual_load(
+    edisgo_obj,
+    num_time_intervals=None,
+    percentage=1.0,
+    time_steps_per_time_interval=168,
+    time_step_day_start=0,
+    save_steps=False,
+    path="",
+):
+    """
+    Determine the most critical time intervals from the residual load.
+
+    Ranks the critical single time steps by residual load (via
+    :func:`get_most_critical_time_steps` with ``by="residual_load"``) and wraps
+    each into an interval centered on the step and snapped to the
+    ``time_step_day_start`` hour (see :func:`_build_centered_interval`). Returns a
+    DataFrame ranked by residual magnitude with per-case columns
+    ``time_steps_load_case`` (highest residual) and ``time_steps_feedin_case``
+    (lowest residual). Overlaps between intervals are allowed (mirroring the
+    power-flow interval selection); a downstream :func:`select_two_intervals`
+    picks a non-overlapping pair.
+    """
+    timeindex = edisgo_obj.timeseries.timeindex
+
+    # number of ranked intervals per case
+    if num_time_intervals is None:
+        num_time_intervals = int(np.ceil(len(timeindex) * percentage))
+
+    from edisgo.network.overlying_grid import (
+        distribute_overlying_grid_requirements,
+    )
+
+    distributed = distribute_overlying_grid_requirements(edisgo_obj)
+    residual = distributed.timeseries.residual_load
+
+    load_steps = residual.sort_values(ascending=False).index[:num_time_intervals]
+    feedin_steps = residual.sort_values(ascending=True).index[:num_time_intervals]
+
+    load_intervals = [
+        _build_centered_interval(
+            t, timeindex, time_steps_per_time_interval, time_step_day_start
+        )
+        for t in load_steps
+    ]
+    feedin_intervals = [
+        _build_centered_interval(
+            t, timeindex, time_steps_per_time_interval, time_step_day_start
+        )
+        for t in feedin_steps
+    ]
+
+    steps = pd.DataFrame(
+        {
+            "time_steps_load_case": load_intervals,
+            "time_steps_feedin_case": feedin_intervals,
+        }
+    )
+    if len(steps) == 0:
+        logger.info("No critical steps detected. No network expansion required.")
+
+    if save_steps:
+        abs_path = os.path.abspath(path)
+        steps.to_csv(
+            os.path.join(
+                abs_path,
+                f"{edisgo_obj.topology.id}_t_{time_steps_per_time_interval}"
+                f"_residual_load.csv",
+            )
+        )
+    return steps
+
+
 def get_most_critical_time_intervals(
     edisgo_obj,
     num_time_intervals=None,
@@ -659,6 +842,7 @@ def get_most_critical_time_intervals(
     overloading_factor=0.95,
     voltage_deviation_factor=0.95,
     weight_by_costs=True,
+    by="power_flow",
 ):
     """
     Get time intervals sorted by severity of overloadings as well as voltage issues.
@@ -747,15 +931,32 @@ def get_most_critical_time_intervals(
         time intervals.
 
         Default: True.
+    by : str
+        Criticality measure used to determine the intervals. Options:
+
+        * "power_flow" (default): run a power flow and score rolling windows by
+          overloading and voltage violations. Returns columns
+          ``time_steps_overloading`` / ``time_steps_voltage_issues``.
+        * "residual_load": no power flow — rank the critical single steps by
+          residual load (see :func:`get_most_critical_time_steps` with
+          ``by="residual_load"``) and center an interval on each, snapped to the
+          ``time_step_day_start`` hour. Returns columns ``time_steps_load_case``
+          (highest residual) / ``time_steps_feedin_case`` (lowest residual).
+          Overlaps between intervals are allowed.
+
+        Default: "power_flow".
 
     Returns
     --------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Contains time intervals in which grid expansion needs due to overloading and
-        voltage issues are detected. The time intervals are determined independently
-        for overloading and voltage issues and sorted descending by the expected
-        cumulated grid expansion costs, so that the time intervals with the highest
-        expected costs correspond to index 0.
+        Contains time intervals in which grid expansion needs are detected,
+        ranked most-critical first. Column names depend on ``by`` (see above):
+        ``time_steps_overloading``/``time_steps_voltage_issues`` for
+        ``power_flow``, ``time_steps_load_case``/``time_steps_feedin_case`` for
+        ``residual_load``. For ``power_flow`` the intervals are determined
+        independently for overloading and voltage issues and sorted descending by
+        the expected cumulated grid expansion costs, so that the time intervals
+        with the highest expected costs correspond to index 0.
         In case of overloading, the time steps in the respective time interval are given
         in column "time_steps_overloading" and the share of components for which the
         maximum overloading is reached during the time interval is given in column
@@ -766,6 +967,28 @@ def get_most_critical_time_intervals(
         "percentage_buses_max_voltage_deviation".
 
     """
+    if by not in ("power_flow", "residual_load"):
+        raise ValueError(
+            f"get_most_critical_time_intervals: 'by' must be 'power_flow' or "
+            f"'residual_load', got {by!r}."
+        )
+
+    if by == "residual_load":
+        # No power flow: rank the critical single steps by residual load (via
+        # get_most_critical_time_steps(by="residual_load")) and wrap each into an
+        # interval centered on the step and snapped to the time_step_day_start
+        # block. Returns per-case columns time_steps_load_case /
+        # time_steps_feedin_case (ranked, overlaps allowed).
+        return _most_critical_time_intervals_residual_load(
+            edisgo_obj,
+            num_time_intervals=num_time_intervals,
+            percentage=percentage,
+            time_steps_per_time_interval=time_steps_per_time_interval,
+            time_step_day_start=time_step_day_start,
+            save_steps=save_steps,
+            path=path,
+        )
+
     # check frequency of time series data
     timeindex = edisgo_obj.timeseries.timeindex
     timedelta = timeindex[1] - timeindex[0]
@@ -845,6 +1068,64 @@ def get_most_critical_time_intervals(
     return steps
 
 
+def _most_critical_time_steps_residual_load(
+    edisgo_obj,
+    num_steps_loading=None,
+    num_steps_voltage=None,
+    percentage=1.0,
+):
+    """
+    Rank time steps by residual load, without running a power flow.
+
+    Distributes the overlying-grid dispatch onto the grid components (via
+    :func:`~.network.overlying_grid.distribute_overlying_grid_requirements`) and
+    evaluates the residual load (load minus generation minus storage) over the
+    whole time index. The load-case steps are those with the highest residual
+    load, the feed-in-case steps those with the lowest (most negative).
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    num_steps_loading : int or None
+        Number of highest-residual (load-case) steps to select. If None,
+        ``percentage`` of all steps is used.
+    num_steps_voltage : int or None
+        Number of lowest-residual (feed-in-case) steps to select. If None,
+        ``percentage`` of all steps is used.
+    percentage : float
+        Fraction of all time steps to select per case when the corresponding
+        ``num_steps_*`` is None. Default: 1.0.
+
+    Returns
+    -------
+    :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Unique union of the selected load-case and feed-in-case time steps.
+    """
+    from edisgo.network.overlying_grid import (
+        distribute_overlying_grid_requirements,
+    )
+
+    distributed = distribute_overlying_grid_requirements(edisgo_obj)
+    residual = distributed.timeseries.residual_load
+
+    n = len(residual)
+    if num_steps_loading is None:
+        num_steps_loading = int(n * percentage)
+    if num_steps_voltage is None:
+        num_steps_voltage = int(n * percentage)
+    num_steps_loading = min(num_steps_loading, n)
+    num_steps_voltage = min(num_steps_voltage, n)
+
+    # highest residual = worst load case; lowest residual = worst feed-in case
+    load_case = residual.sort_values(ascending=False).index[:num_steps_loading]
+    feedin_case = residual.sort_values(ascending=True).index[:num_steps_voltage]
+
+    steps = load_case.append(feedin_case)
+    if len(steps) == 0:
+        logger.warning("No critical steps detected. No network expansion required.")
+    return pd.DatetimeIndex(steps.unique())
+
+
 def get_most_critical_time_steps(
     edisgo_obj: EDisGo,
     mode=None,
@@ -857,6 +1138,7 @@ def get_most_critical_time_steps(
     use_troubleshooting_mode=True,
     run_initial_analyze=True,
     weight_by_costs=True,
+    by="power_flow",
 ) -> pd.DatetimeIndex:
     """
     Get the time steps with the most critical overloading and voltage issues.
@@ -926,14 +1208,51 @@ def get_most_critical_time_steps(
         If False, only the relative overloading is used.
 
         Default: True.
+    by : str
+        Criticality measure used to rank time steps. Options:
+
+        * "power_flow" (default): run a power flow and score steps by overloading
+          and voltage violations (the parameters `mode`, `timesteps`,
+          `lv_grid_id`, `scale_timeseries`, `use_troubleshooting_mode`,
+          `run_initial_analyze`, `weight_by_costs` apply to this measure).
+        * "residual_load": no power flow — rank steps by the residual load
+          (load minus generation minus storage) after distributing the
+          overlying-grid dispatch onto the components. The highest residual
+          steps are the critical load cases, the lowest (most negative) the
+          critical feed-in cases. `num_steps_loading` / `num_steps_voltage` /
+          `percentage` control how many of each are selected; the power-flow
+          parameters are ignored.
+
+        Default: "power_flow".
 
     Returns
     --------
     :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
         Time index with unique time steps where maximum overloading or maximum
-        voltage deviation is reached for at least one component respectively bus.
+        voltage deviation is reached for at least one component respectively bus
+        (``by="power_flow"``), or with the highest/lowest residual load
+        (``by="residual_load"``).
 
     """
+    if by not in ("power_flow", "residual_load"):
+        raise ValueError(
+            f"get_most_critical_time_steps: 'by' must be 'power_flow' or "
+            f"'residual_load', got {by!r}."
+        )
+
+    if by == "residual_load":
+        # No power flow needed: rank time steps by the residual load (load minus
+        # generation minus storage) after distributing the overlying-grid
+        # dispatch onto the components. The most critical load-case steps have
+        # the highest residual load, the most critical feed-in-case steps the
+        # lowest (most negative). Returns the union of both, deduplicated.
+        return _most_critical_time_steps_residual_load(
+            edisgo_obj,
+            num_steps_loading=num_steps_loading,
+            num_steps_voltage=num_steps_voltage,
+            percentage=percentage,
+        )
+
     # Run power flow
     if run_initial_analyze:
         if use_troubleshooting_mode:

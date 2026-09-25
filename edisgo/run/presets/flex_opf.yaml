@@ -1,0 +1,37 @@
+# flex_opf — OPF over selected flexibilities:
+# base-reinforce the grid, import the carriers listed under
+# `flexibilities:`, load real egon_data time series, run a powermodels
+# OPF over the same flexibilities, final reinforce. The reinforcement
+# cost after base_reinforce is the delta caused by the flex assets
+# under optimal dispatch.
+#
+# `flexibilities:` controls both what import_flex imports and what
+# optimize treats as flexible — override the list to select carriers:
+#
+#   run_edisgo({
+#       "extends": "flex_opf",
+#       "grid": {"ding0_path": "/path/to/ding0_grid"},
+#       "results": {"directory": "/path/to/results"},
+#       "flexibilities": ["heat_pumps", "home_batteries"],
+#   })
+
+scenario: eGon2035
+
+flexibilities: [heat_pumps, electromobility, dsm, home_batteries]
+
+pipeline:
+  - setup_grid: {import_generators: true}
+  - base_reinforce
+  - import_flex:
+      electromobility: {charging_strategy: null}
+  - oedb_ts:
+      timeindex: {start: "2035-01-01", periods: 168, freq: h}
+      dispatchable: {other: 0.7}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - build_flexibility_bands
+  - reactive_power
+  - check_integrity
+  - optimize: {method: soc, opf_version: 2}
+  - reinforce
+  - save

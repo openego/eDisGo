@@ -66,13 +66,13 @@ Publications using eDisGo
 eDisGo has since been used for the grid analysis and reinforcement-cost calculations
 in the following peer-reviewed studies:
 
-* `Challenges of top-down flexibility deployment for grid expansion across all voltage levels <https://doi.org/10.1088/2753-3751/ae2686>`_ — Büttner et al., *Environmental Research: Energy*, 2025.
+* `Challenges of top-down flexibility deployment for grid expansion across all voltage levels <https://iopscience.iop.org/article/10.1088/2753-3751/ae2686>`_ — Büttner et al., *Environmental Research: Energy*, 2025.
 * `Analyzing the Impact of Dynamic Tariff Adoption and Regulatory Options on Distribution Grids with an Open-Source Framework <https://doi.org/10.1145/3679240.3734590>`_ — Semmelmann et al., *ACM e-Energy*, 2025.
-* `On the Integration of Electric Vehicles Into German Distribution Grids Through Smart Charging <https://doi.org/10.1109/tia.2024.3494777>`_ — Heider et al., *IEEE Transactions on Industry Applications*, 2024 (conference version: `SEST 2022 <https://doi.org/10.1109/sest53650.2022.9898464>`_).
-* `Grid Reinforcement Costs with Increasing Penetrations of Distributed Energy Resources <https://doi.org/10.1109/powertech55446.2023.10202913>`_ — Heider et al., *IEEE PowerTech Belgrade*, 2023.
-* `On the impact of heat pump installations and peak blocking strategies on grid expansion costs <https://doi.org/10.1109/isgteurope56780.2023.10407931>`_ — Semmelmann et al., *IEEE ISGT Europe*, 2023.
+* `On the Integration of Electric Vehicles Into German Distribution Grids Through Smart Charging <https://ieeexplore.ieee.org/document/10748389/>`_ — Heider et al., *IEEE Transactions on Industry Applications*, 2024 (conference version: `SEST 2022 <https://ieeexplore.ieee.org/document/9898464/>`_).
+* `Grid Reinforcement Costs with Increasing Penetrations of Distributed Energy Resources <https://ieeexplore.ieee.org/document/10202913/>`_ — Heider et al., *IEEE PowerTech Belgrade*, 2023.
+* `On the impact of heat pump installations and peak blocking strategies on grid expansion costs <https://ieeexplore.ieee.org/document/10407931/>`_ — Semmelmann et al., *IEEE ISGT Europe*, 2023.
 * `Assessing the impacts of market-oriented electric vehicle charging on German distribution grids <https://doi.org/10.1049/icp.2021.2515>`_ — Schachler et al., *CIRED 2021*.
-* `Distribution System Planning with Battery Storage using Multiperiod Optimal Power Flow <https://doi.org/10.2991/ahe.k.210202.007>`_ — Pedersen et al., 2021.
+* `Distribution System Planning with Battery Storage using Multiperiod Optimal Power Flow <https://www.atlantis-press.com/proceedings/ires-20/125952211>`_ — Pedersen et al., 2021.
 
 The synthetic distribution grids analysed in these studies are generated with
 `ding0 <https://github.com/openego/ding0>`_; an example dataset is published on

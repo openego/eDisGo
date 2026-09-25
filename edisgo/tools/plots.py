@@ -397,7 +397,7 @@ def mv_grid_topology(
         else:
             return colors_dict["else"], sizes_dict["else"]
 
-    def nodes_by_technology(buses, edisgo_obj):
+    def nodes_by_technology(buses, edisgo_obj, grid_area=1):
         bus_sizes = {}
         bus_colors = {}
         colors_dict = {
@@ -411,17 +411,18 @@ def mv_grid_topology(
             "DisconnectingPoint": "0.75",
             "else": "orange",
         }
-        sizes_dict = {
-            "BranchTee": 10000,
-            "GeneratorFluctuating": 100000,
-            "Generator": 100000,
-            "Load": 100000,
-            "LVStation": 50000,
-            "MVStation": 120000,
-            "Storage": 100000,
-            "DisconnectingPoint": 75000,
-            "else": 200000,
+        fractions_dict = {
+            "BranchTee": 0.00005,
+            "GeneratorFluctuating": 0.0005,
+            "Generator": 0.0005,
+            "Load": 0.0005,
+            "LVStation": 0.00025,
+            "MVStation": 0.0006,
+            "Storage": 0.0005,
+            "DisconnectingPoint": 0.00035,
+            "else": 0.001,
         }
+        sizes_dict = {k: v * grid_area for k, v in fractions_dict.items()}
         for bus in buses:
             connected_components = (
                 edisgo_obj.topology.get_connected_components_from_bus(bus)
@@ -588,7 +589,8 @@ def mv_grid_topology(
 
     # bus colors and sizes
     if node_color == "technology":
-        bus_sizes, bus_colors = nodes_by_technology(pypsa_plot.buses.index, edisgo_obj)
+        bus_sizes = 0  # placeholder; overwritten after Mercator conversion
+        bus_colors = "r"
         bus_cmap = None
     elif node_color == "voltage":
         bus_sizes, bus_colors = nodes_by_voltage(
@@ -655,6 +657,14 @@ def mv_grid_topology(
         )
         pypsa_plot.buses.loc[:, "x"] = x2
         pypsa_plot.buses.loc[:, "y"] = y2
+    if node_color == "technology":
+        x_range = pypsa_plot.buses.x.max() - pypsa_plot.buses.x.min()
+        y_range = pypsa_plot.buses.y.max() - pypsa_plot.buses.y.min()
+        grid_area = x_range * y_range
+        bus_sizes, bus_colors = nodes_by_technology(
+            pypsa_plot.buses.index, edisgo_obj, grid_area=grid_area
+        )
+        bus_cmap = None
 
     # plot
     plt.figure(figsize=(12, 8))

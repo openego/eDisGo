@@ -38,6 +38,55 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def align_series_to_timeindex(ts, timeindex, extra_step=False):
+    """
+    Align a time series to a target time index, tolerating a year mismatch.
+
+    Data imported for the overlying grid (from CSV or eTraGo) may be indexed
+    in a different year than the EDisGo time index. This helper shifts the
+    series' index by whole years to match ``timeindex`` (using
+    :class:`pandas.DateOffset`, which — unlike ``Timestamp.replace(year=...)``
+    — does not raise on a Feb-29 timestamp when the target year is not a leap
+    year) and reindexes onto it. Missing steps become ``NaN`` rather than
+    raising a ``KeyError``.
+
+    Parameters
+    ----------
+    ts : :pandas:`pandas.Series<Series>` or \
+        :pandas:`pandas.DataFrame<DataFrame>` or None
+        The time series to align. Returned unchanged if ``None``, empty, or
+        when ``timeindex`` is empty.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Target time index to align to.
+    extra_step : bool, optional
+        If ``True``, append one trailing step to the target index (used for
+        state-of-charge series that carry an end-of-period value). The step
+        width is taken from ``timeindex.freq``, falling back to the spacing
+        of the first two entries; if neither is available (single-entry
+        index without freq) no extra step is added.
+
+    Returns
+    -------
+    Same type as ``ts``
+        ``ts`` reindexed onto the (optionally extended) target index.
+
+    """
+    if ts is None or ts.empty or timeindex.empty:
+        return ts
+    year_diff = timeindex[0].year - ts.index[0].year
+    if year_diff != 0:
+        ts = ts.copy()
+        ts.index = ts.index + pd.DateOffset(years=year_diff)
+    target = timeindex
+    if extra_step:
+        freq = timeindex.freq or (
+            timeindex[1] - timeindex[0] if len(timeindex) > 1 else None
+        )
+        if freq is not None:
+            target = timeindex.union([timeindex[-1] + freq])
+    return ts.reindex(target)
+
+
 def select_worstcase_snapshots(edisgo_obj):
     """
     Select two worst-case snapshots from time series
@@ -1017,20 +1066,45 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
             ]
             # in case there is more than 1 PtH unit, get name of heat pump, otherwise
             # get name of single PtH unit
-            if len(district_hps) > 1:
+            central_hps = district_hps[district_hps.sector == "district_heating"]
+            central_rhs = district_hps[
+                district_hps.sector == "district_heating_resistive_heater"
+            ]
+            if len(district_hps) > 1 and not central_hps.empty:
                 # district heat pump component
-                district_hp = district_hps[
-                    district_hps.sector == "district_heating"
-                ].index[0]
+                district_hp = central_hps.index[0]
             else:
+                # Either a single unit, or several units none of which is a heat
+                # pump -- central heat pumps and central resistive heaters are
+                # imported by independent queries, and a resistive heater that
+                # cannot be attached to a heat pump is integrated on its own
+                # (see io.heat_pump_import), so an area can hold resistive
+                # heaters only. Fall back to the first unit, which is what the
+                # single-unit case does as well.
                 district_hp = district_hps.index[0]
 
             # reduce demand by feedin from other sources (e.g. solarthermal, geothermal)
             if not feedin_district_heating.empty:
                 if str(int(district)) in feedin_district_heating.columns:
-                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                    remaining_demand = (
                         edisgo_obj.heat_pump.heat_demand_df[district_hp]
                         - feedin_district_heating[str(int(district))]
+                    )
+                    # The remaining demand is bounded below by zero: in a time step
+                    # where the other heat sources deliver more than the network
+                    # needs, the power-to-heat unit is simply switched off. Without
+                    # the bound the negative heat demand is divided by the COP in
+                    # apply_heat_pump_operating_strategy and the unit turns into a
+                    # generator feeding the grid.
+                    if (remaining_demand < 0).any():
+                        logger.warning(
+                            f"Feed-in from other heat supply sources exceeds the heat "
+                            f"demand of district heating grid {district} in "
+                            f"{int((remaining_demand < 0).sum())} time step(s). The "
+                            f"remaining heat demand is set to zero in those steps."
+                        )
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                        remaining_demand.clip(lower=0)
                     )
                 else:
                     logger.info(
@@ -1038,11 +1112,18 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                         f"grid {district}."
                     )
 
-            if len(district_hps) > 1:
+            if len(district_hps) > 1 and (central_hps.empty or central_rhs.empty):
+                logger.warning(
+                    f"District heating grid {district} holds "
+                    f"{len(district_hps)} power-to-heat units but not one of each "
+                    f"type (heat pump / resistive heater), so they cannot be "
+                    f"merged into a single component. Sectors present: "
+                    f"{sorted(district_hps.sector.unique())}."
+                )
+
+            if len(district_hps) > 1 and not (central_hps.empty or central_rhs.empty):
                 # get name of resistive heater component
-                district_rh = district_hps[
-                    district_hps.sector == "district_heating_resistive_heater"
-                ].index[0]
+                district_rh = central_rhs.index[0]
                 # calculate rated power of aggregated component
                 new_p_set = edisgo_obj.topology.loads_df.loc[
                     district_hps.index
@@ -1053,9 +1134,10 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                 ).clip(lower=0)
                 hp_p_set = edisgo_obj.topology.loads_df.at[district_hp, "p_set"]
                 if (el_demand > hp_p_set).any():
-                    # calculate COP by weighted COP of single components
-                    # (weighted by their contribution to cover heat demand)
-                    # determine percentage of contribution per component
+                    # Share of the heat demand each component covers. The heat pump
+                    # runs up to its rated power, the resistive heater covers the
+                    # rest; dividing both by el_demand gives shares of the heat,
+                    # because el_demand is heat demand over a single COP.
                     df = pd.concat(
                         [
                             (el_demand.clip(upper=hp_p_set) / el_demand)
@@ -1067,8 +1149,15 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                         ],
                         axis=1,
                     )
-                    new_cop = (
-                        edisgo_obj.heat_pump.cop_df[district_hps.index] * df
+                    # The aggregated COP has to reproduce the electricity demand of
+                    # the two components for the combined heat demand Q:
+                    #     Q / COP_agg = Q_hp / COP_hp + Q_rh / COP_rh
+                    # Dividing by Q makes 1 / COP_agg the heat-share-weighted mean of
+                    # the reciprocals, i.e. the harmonic mean -- not the arithmetic
+                    # mean of the COPs, which is always the larger of the two and
+                    # therefore always understates the electricity demand.
+                    new_cop = 1 / (
+                        df / edisgo_obj.heat_pump.cop_df[district_hps.index]
                     ).sum(axis=1)
                 else:
                     new_cop = edisgo_obj.heat_pump.cop_df[district_hp]
@@ -1179,6 +1268,25 @@ def reduce_timeseries_data_to_given_timeindex(
                 )
     # Battery electric vehicle timeseries
     if electromobility:
+        # The EV flexibility bands are built in import_electromobility from the
+        # raw SimBEV grid (typically 15-min and in the reference year 2011),
+        # independently of the analysis time index. Before slicing by datetime,
+        # align them to the target index: first resample to its frequency
+        # (Electromobility.resample uses the correct per-band aggregation —
+        # mean for power, max for energy), then shift the year and reindex via
+        # align_series_to_timeindex so datetime .loc lookups below succeed.
+        _bands = edisgo_obj.electromobility.flexibility_bands
+        _band0 = next((b for b in _bands.values() if not b.empty), None)
+        if _band0 is not None and len(_band0.index) > 1:
+            band_freq = _band0.index[1] - _band0.index[0]
+            if band_freq != frequency:
+                edisgo_obj.electromobility.resample(freq=frequency)
+            # year-align every (now correctly-sampled) band onto the timeindex
+            for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+                if not df.empty:
+                    edisgo_obj.electromobility.flexibility_bands[key] = (
+                        align_series_to_timeindex(df, timeindex)
+                    )
         if save_ev_soc_initial:
             # timestep EV SOC from timestep before if possible
             ts_before = timeindex[0] - frequency
@@ -1374,7 +1482,7 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
     for col in df.columns:
         col_type = df[col].dtype
 
-        if col_type != object and str(col_type) != "category":
+        if not pd.api.types.is_object_dtype(col_type) and str(col_type) != "category":
             c_min = df[col].min()
             c_max = df[col].max()
 

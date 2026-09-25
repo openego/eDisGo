@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pandas.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_index_equal
 
 from edisgo.edisgo import EDisGo
 from edisgo.io import electromobility_import
@@ -184,6 +184,60 @@ class TestElectromobility:
             "upper_energy"
         ].index
         assert (flex_bands_index[1] - flex_bands_index[0]) == pd.Timedelta("1H")
+
+    def test_get_flexibility_bands_scopes_to_mismatched_timeindex(self):
+        """
+        Regression test for eDisGo#703: get_flexibility_bands used to build
+        bands spanning SimBEV's own native calendar/range only, with no
+        alignment to edisgo.timeseries.timeindex - indexing the bands by a
+        timeindex in a different year (SimBEV's start_date here is 2011)
+        and/or a shorter window than SimBEV's simulated range raised
+        KeyError. The bands must now be year-aligned and trimmed to exactly
+        that timeindex.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+
+        assert edisgo_obj.electromobility.simbev_config_df.start_date.values[
+            0
+        ] == np.datetime64("2011-01-01")
+        short_timeindex = pd.date_range("2035-01-15", periods=24, freq="h")
+        edisgo_obj.set_timeindex(short_timeindex)
+
+        bands = edisgo_obj.electromobility.get_flexibility_bands(
+            edisgo_obj, ["work", "public"]
+        )
+
+        for key in ("upper_power", "lower_energy", "upper_energy"):
+            assert_index_equal(bands[key].index, short_timeindex)
+            # must not raise KeyError
+            edisgo_obj.electromobility.flexibility_bands[key].loc[short_timeindex]
+
+    def test_get_flexibility_bands_empty_timeindex_is_a_no_op(self):
+        """
+        With no timeindex set at all, get_flexibility_bands must return the
+        bands untouched, spanning SimBEV's own native calendar/range - there
+        is nothing to align/trim against yet.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+
+        assert edisgo_obj.timeseries.timeindex.empty
+
+        bands = edisgo_obj.electromobility.get_flexibility_bands(
+            edisgo_obj, ["work", "public"]
+        )
+
+        assert len(bands["upper_power"].index) == 7 * 96  # 7 days, 15-min steps
+        assert bands["upper_power"].index[0] == pd.Timestamp("2011-01-01")
 
     def test_fix_flexibility_bands_rounding_errors(self, caplog):
         # set up test data
