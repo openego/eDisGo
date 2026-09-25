@@ -1,0 +1,167 @@
+Release v0.3.1
+================
+
+Release date: not yet released
+
+Changes
+-------
+
+* Corrected the Julia version documented in ``config_opf_julia.cfg``, which still
+  pointed at ``julia-1.1.0/bin`` while the bundled ``eDisGo_OPF.jl`` package targets
+  Julia 1.12. The file is included verbatim in the configuration reference, so the
+  stale path was published in the documentation. Its ``julia_bin`` value has not been
+  read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
+  system ``PATH``; the reference now says so instead of claiming the file points to the
+  binary in use
+* Wired district-heating handling into the runner pipeline. The overlying grid's
+  ``feedin_district_heating`` — thermal feed-in from other heat sources such as solar
+  or geothermal — had no consumer at all: its only consumer,
+  :func:`~.tools.tools.aggregate_district_heating_components`, was called by no
+  pipeline task, so the district-heating heat demand was overstated by that feed-in
+  and the power-to-heat units of an area were never merged. A new
+  ``aggregate_district_heating`` task does both and is part of the three
+  overlying-grid presets; it is a no-op on grids without district heating
+  (openego/eGo#202). Note that this changes results for existing configs that
+  ``extends`` one of those presets without defining their own ``pipeline:`` — a
+  config that does define one replaces the preset's step list wholesale and is
+  unaffected. The task declares ``requires={"overlying_grid"}``, which
+  ``import_overlying_grid_data`` now provides, so a pipeline that puts the two in
+  the wrong order is rejected. Note that this catches a wrong *order* only —
+  with ``overlying_grid.enabled: false`` there is no feed-in to subtract and the
+  task still does the merge half silently
+* Normalised the district-heating column labels of ``feedin_district_heating`` and
+  ``thermal_storage_units_central_soc`` to the string of an integer (``"130"``) in
+  ``import_overlying_grid_data``. Both consumers look the ID up in that form, so a float
+  label from eTraGo silently missed the feed-in and raised a ``KeyError`` on the
+  central thermal-storage state of charge
+* Bounded the district heating heat demand at zero after subtracting the overlying
+  grid's feed-in from other heat sources in
+  :func:`~.tools.tools.aggregate_district_heating_components`. In a time step where
+  solar thermal or geothermal deliver more than the network needs, the remaining
+  demand went negative, and
+  :meth:`~.edisgo.EDisGo.apply_heat_pump_operating_strategy` divided it by the COP
+  into a negative load — the power-to-heat unit fed the grid instead of being
+  switched off. The power flow used that injection unchecked. A warning now names
+  the district heating area and the number of affected time steps
+* Corrected the aggregated COP of a district heating area in
+  :func:`~.tools.tools.aggregate_district_heating_components`. When the heat pump
+  and the resistive heater of an area are merged, the COP of the combined component
+  has to reproduce the electricity both units draw, which makes it the heat-share
+  weighted mean of the *reciprocal* COPs. The code took the arithmetic mean of the
+  COPs instead, which is never smaller, so the electricity demand of district
+  heating was systematically understated — by
+  ``(COP_hp - COP_rh)**2 / (COP_hp + COP_rh)**2`` in the worst case, i.e. 25 % for a
+  heat pump at COP 3 against a resistive heater at COP 1. The error was zero while
+  the heat pump alone covered the demand and largest exactly when the resistive
+  heater had to step in, so it depressed the grid load in the cold hours that
+  determine the reinforcement need. The aggregated COP also feeds the OPF through
+  ``heat_pump.cop_df``
+* Stopped :func:`~.tools.tools.aggregate_district_heating_components` raising
+  ``IndexError: index 0 is out of bounds`` on a district heating area that holds
+  several power-to-heat units but not one of each type. Central heat pumps and
+  central resistive heaters are imported by independent queries, and a resistive
+  heater that cannot be attached to a heat pump is integrated as a component of its
+  own, so an area can legitimately hold resistive heaters only. Such an area is now
+  left unmerged with a warning naming the sectors it contains
+* Hardened the district-heating label normalisation in
+  ``import_overlying_grid_data``: labels are read one at a time, so a single
+  unreadable one (a ``NaN`` from a geo-join miss, say) no longer leaves every other
+  label of the frame unnormalised; ``OverflowError``, which an ``inf`` label raises
+  and which is not a ``ValueError``, is caught rather than killing the run; and a
+  set of labels that would collapse onto duplicates is left unchanged with a
+  warning, because a duplicate ID makes the lookups downstream return a DataFrame
+  where a Series is expected
+* ``load_from_base`` now declares that it provides the overlying grid and applies the
+  district-heating label normalisation to what it restored. A pipeline continuing
+  from a saved grid with ``import_overlying_grid: true`` was rejected by the
+  validator although the data was there, and the labels of the restored frames were
+  left as written
+* Carried :attr:`~.edisgo.EDisGo.opf_results` over to the full grid in the
+  ``spatial_restore`` task. ``spatial_reduce`` stashes a deepcopy of the full grid
+  *before* the OPF runs and ``spatial_restore`` returns that stash, but
+  :meth:`~.edisgo.EDisGo.map_reduced_results_to_full_grid` transfers only the
+  flexible-component dispatch time series — so the object the pipeline continued
+  with still held the pristine, empty ``OPFResults`` constructed before the solve,
+  and ``save`` with ``save_opf_results: true`` wrote an ``opf_results/`` directory
+  containing no CSV files at all. This affected every run with
+  ``spatial_reduction.enabled: true`` regardless of ``opf_version``, and made the
+  overlying-grid conservation checks impossible to perform on a saved object, since
+  all of them read ``opf_results`` (openego/eGo#212). The results are attached
+  verbatim: ``hv_requirement_slacks_t`` and ``overlying_grid`` are indexed by
+  flexibility category and ``battery_storage_t`` by storage-unit name (storage units
+  are never aggregated), so these carry over unambiguously, while ``lines_t``,
+  ``slack_generator_t``, ``heat_storage_t`` and ``grid_slacks_t`` keep *reduced-grid*
+  component names that do not match the full grid's topology under
+  ``aggregation_mode: true``
+* Fixed ``ValueError: cannot reindex on an axis with duplicate labels`` during
+  :func:`~.io.generators_import.oedb` for grids in which one bus carries the
+  conventional loads of two different buildings (e.g. MV grids 33084 and 33695).
+  :func:`~.io.generators_import._integrate_pv_rooftop` derived a bus-to-building-ID
+  map from the conventional loads to supply the key for a building-ID based match of
+  existing PV rooftop plants. That match was replaced by a match on ``source_id``,
+  but the map was left behind and its result has been discarded ever since, so the
+  only remaining effect of the code was the crash above. It has been removed; the
+  function no longer reads the loads at all
+* Fixed the multi-interval OPF handing every interval the *first* interval's
+  flexibility inputs. When the time index is non-contiguous — as after
+  ``select_critical_timesteps`` — :func:`~.opf.powermodels_opf.pm_optimize` splits it
+  into contiguous intervals and solves each one separately, narrowing the active index
+  per interval with :meth:`~.edisgo.EDisGo.set_timeindex`. That only assigns
+  :attr:`~.network.timeseries.TimeSeries.timeindex`; it does not touch the
+  :class:`~.network.overlying_grid.OverlyingGrid`, :class:`~.network.dsm.DSM`,
+  :class:`~.network.heat.HeatPump` and :class:`~.network.electromobility.Electromobility`
+  containers, whose time series carry their own index and stayed on the full reduced one.
+  The grid side was unaffected because it goes through ``to_pypsa``, which follows the
+  active index, but ``to_powermodels`` reads those four containers raw and positionally
+  — ``.iloc[0]`` for a scalar, ``.tolist()`` for a per-time-step series — so every
+  interval received the first interval's overlying-grid requirements, EV flexibility
+  bands, heat demand and COP, and DSM energy envelopes. With ``opf_version`` 3 the HV
+  requirements are the only thing steering flexible dispatch, so all intervals produced
+  near-identical dispatch and slacks despite being solved independently. Where
+  inflexible components exist the mis-alignment was worse than a wrong value:
+  ``_build_hv_requirements`` subtracts an interval-scoped ``psa_net`` series from the
+  full-index requirement, and pandas aligns the two on their indices, yielding ``NaN``
+  for the non-overlapping steps and so a ``NaN`` scalar target. The interval loop now
+  narrows all four containers to the interval before each solve and restores them from
+  a snapshot afterwards, so each interval is optimized against its own requirements.
+  ``TimeSeries`` is deliberately left out of that narrowing: its active-power frames
+  accumulate each interval's results and slicing them would drop the intervals solved so
+  far. Each interval now also reseeds its own EV initial state of charge, which was
+  likewise computed once for the first interval and reused (openego/eDisGo#762)
+* ``to_powermodels`` now raises a ``ValueError`` naming the offending attributes when
+  the overlying-grid requirements do not match the active time index exactly, instead of
+  reading them positionally off a mismatched index. The requirements are read by
+  position, so a wider series silently hands the optimization the values of time steps
+  it is not solving for — which is how the interval bug above went unnoticed
+* Stopped ``to_powermodels`` raising ``IndexError: single positional indexer is
+  out-of-bounds`` for ``opf_version`` 3 or 4 on an eDisGo object whose overlying grid is
+  empty. The emptiness check on ``heat_pump_central_active_power`` ran before the ``try``
+  block meant to catch exactly that case, so the documented fallback to ``opf_version``
+  2 was unreachable
+* Fixed :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates` aborting with
+  ``NetworkXError: The node ... is not in the graph`` on a grid whose LV grid contains
+  a ring. The traversal that lays out the buses assumes a tree, where every node is
+  reached from exactly one neighbour; on a ring a node is discovered from both sides
+  and was queued twice, and by the time the second entry was processed the node had
+  already been removed from the working copy. A node is now queued at most once and
+  keeps the coordinates of its first discovery. Since nothing is ever skipped in a
+  tree, tree-shaped grids keep their previous coordinates exactly. This made the whole
+  ``spatial_complexity_reduction`` fail for such grids, because it generates pseudo
+  coordinates first (``apply_pseudo_coordinates``, default ``True``) — seen on MV grid
+  32064, whose ``LVGrid_8829100000`` holds 41 buses on 41 lines
+  (openego/eGo#227). A grid that is not fully connected no longer runs the queue dry
+  either; the unreachable buses keep their original coordinates and are named in a
+  warning
+* Fixed :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction`
+  giving a line that stands for several parallel systems ``num_parallel`` times its
+  impedance. The per-km values the aggregation rebuilds ``r`` and ``x`` from describe
+  one system, and the factor was left out, while ``num_parallel`` and ``s_nom`` were
+  carried over intact — so nothing in the reduced grid showed that its impedance no
+  longer matched. Few lines carry parallel systems, but they sit where a feeder leaves
+  the station and are therefore on the path of everything behind them: on MV grid
+  32064 an eight-system feeder came out at 0.164 Ohm/km instead of 0.0205, the
+  load-weighted path resistance of the whole grid doubled, and
+  :attr:`~.edisgo.EDisGo.reinforce` aborted with ``MaximumIterationError`` on a grid
+  that has no voltage issues at all before the reduction. Correcting 35 of 2421 lines
+  brings the voltage band back from 0.818–1.136 to 0.895–1.040 and lets the expansion
+  run through (openego/eDisGo#767)

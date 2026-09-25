@@ -1540,8 +1540,13 @@ def apply_busmap(
         else:
             kind = df["kind"].values[0]
 
+        # The per-km values describe one system of the given type, so a line
+        # standing for ``num_parallel`` systems contributes that many of them to
+        # the parallel sum.
+        parallel_systems = df["num_parallel"].astype(float).values
+
         x_sum = 0
-        for line_type in df["type_info"].values:
+        for line_type, n_parallel in zip(df["type_info"].values, parallel_systems):
             try:
                 x_line = line_data_df.loc[line_data_df.U_n.isin([v_nom])].loc[
                     line_type, "L_per_km"
@@ -1549,12 +1554,12 @@ def apply_busmap(
             except KeyError:
                 x_line = line_data_df.loc[line_type, "L_per_km"]
                 logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
-            x_sum = x_sum + 1 / x_line
+            x_sum = x_sum + n_parallel / x_line
         x_sum = 1 / x_sum
         x = length * 2 * math.pi * 50 * x_sum / 1000
 
         r_sum = 0
-        for line_type in df["type_info"].values:
+        for line_type, n_parallel in zip(df["type_info"].values, parallel_systems):
             try:
                 r_line = line_data_df.loc[line_data_df.U_n.isin([v_nom])].loc[
                     line_type, "R_per_km"
@@ -1563,7 +1568,7 @@ def apply_busmap(
                 r_line = line_data_df.loc[line_type, "R_per_km"]
                 logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
 
-            r_sum = r_sum + 1 / r_line
+            r_sum = r_sum + n_parallel / r_line
         r_sum = 1 / r_sum
         r = length * r_sum
 

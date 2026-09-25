@@ -176,11 +176,21 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
     graph_copy.remove_node(start_node)
     # ``next_nodes`` is a FIFO queue; using a deque with ``popleft`` preserves the
     # exact processing order of the previous ``list``/``remove`` implementation.
-    while graph_copy.number_of_nodes() > 0:
+    # The layout assumes a tree, where every node is reached from exactly one
+    # neighbour. On a ring a node is reachable from both sides, so it is enqueued
+    # at most once and keeps the position of its first discovery, which the
+    # breadth-first order reaches over the shorter path.
+    enqueued = set(next_nodes)
+    while graph_copy.number_of_nodes() > 0 and next_nodes:
         next_node = next_nodes[0]
         n = 0
         for node in list(nx.neighbors(graph_copy, next_node)):
+            # ``n`` counts every neighbour, skipped ones included: it is the index
+            # of the branch in the fan-out and has to stay in step with the
+            # neighbour count handed to ``coordinate_branch`` below.
             n = n + 1
+            if node in enqueued:
+                continue
             if node in path_to_max_distance_node:
                 pos, origin_angle = coordinate_longest_path(
                     graph_root.nodes[next_node]["pos"],
@@ -207,9 +217,18 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
             graph_root.nodes[node]["pos"] = pos
             graph_root.nodes[node]["origin_angle"] = origin_angle
             next_nodes.append(node)
+            enqueued.add(node)
 
         graph_copy.remove_node(next_node)
         next_nodes.popleft()
+
+    if graph_copy.number_of_nodes() > 0:
+        # Only reachable if the graph is disconnected: the queue runs dry while
+        # nodes are left over. Those keep the coordinates they came in with.
+        logger.warning(
+            f"Pseudo coordinates: {graph_copy.number_of_nodes()} bus(es) are not "
+            f"reachable from {start_node} and keep their original coordinates."
+        )
 
     return graph_root
 
