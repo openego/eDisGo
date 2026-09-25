@@ -165,6 +165,17 @@ Changes
   that has no voltage issues at all before the reduction. Correcting 35 of 2421 lines
   brings the voltage band back from 0.818–1.136 to 0.895–1.040 and lets the expansion
   run through (openego/eDisGo#767)
+* Fixed the time step length handed to the OPF. ``time_elapsed`` drives every
+  inter-time-step coupling of the PowerModels problem — battery, thermal storage, DSM
+  and electromobility energy balances — and was computed as
+  ``int((snapshots[1] - snapshots[0]).seconds / 3600)``. Both parts were wrong:
+  ``.seconds`` is the seconds *component* of the difference rather than its total, so a
+  step of exactly one day came out as 0 and one of 25 h as 1 h; and the ``int()``
+  truncated any sub-hourly step to 0, which degenerates the couplings to
+  ``energy_2 == energy_1`` and decouples power from energy entirely. The value is now
+  derived from ``total_seconds()`` and returned as a float. The snapshots are also
+  checked: fewer than two, non-equidistant or non-increasing steps raise instead of
+  silently producing a meaningless global value (openego/eDisGo#693)
 * Fixed the standing loss of a thermal storage being applied per hour regardless of the
   time step length. ``p_loss`` is a loss per day (4 % of the state of charge for
   individual heating), and the decay between two time steps was written as
