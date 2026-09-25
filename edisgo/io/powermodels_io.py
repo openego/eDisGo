@@ -191,8 +191,8 @@ def to_powermodels(
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps
     pm["name"] = f"ding0_{edisgo_object.topology.id}_t_{timesteps}"
-    pm["time_elapsed"] = int(
-        (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
+    pm["time_elapsed"] = _get_time_elapsed_in_hours(
+        psa_net.snapshots
     )  # length of timesteps in hours
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
@@ -2082,6 +2082,42 @@ def _build_component_timeseries(
                 }
 
     pm["time_series"][kind] = pm_comp
+
+
+def _get_time_elapsed_in_hours(snapshots):
+    """
+    Calculate time elapsed in hours between two consecutive snapshots.
+
+    Parameters
+    ----------
+    snapshots : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        DatetimeIndex of snapshots.
+
+    Returns
+    -------
+    float
+        Time elapsed in hours between two consecutive snapshots.
+    """
+    if len(snapshots) < 2:
+        raise ValueError(
+            "At least two snapshots are required to determine time_elapsed "
+            "for the PowerModels OPF."
+        )
+
+    snapshot_deltas = snapshots.to_series().diff().dropna()
+
+    if not (snapshot_deltas == snapshot_deltas.iloc[0]).all():
+        raise ValueError(
+            "PowerModels OPF requires equidistant snapshots because "
+            "inter-timestep couplings use one global time_elapsed value."
+        )
+
+    time_elapsed = snapshot_deltas.iloc[0].total_seconds() / 3600
+
+    if time_elapsed <= 0:
+        raise ValueError("Snapshot time step must be positive.")
+
+    return time_elapsed
 
 
 def _mapping(
