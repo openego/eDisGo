@@ -679,7 +679,7 @@ class TestHeatStorageStandingLoss:
             self.edisgo,
             opf_version=2,
             silence_moi=True,
-            method="soc",
+            method="nc",
             flexible_hps=np.array([self.hp]),
         )
         assert self.edisgo.opf_results.status in ("LOCALLY_SOLVED", "OPTIMAL")
@@ -687,6 +687,9 @@ class TestHeatStorageStandingLoss:
         e = self.edisgo.opf_results.heat_storage_t.e[self.hp]
         p = self.edisgo.opf_results.heat_storage_t.p[self.hp]
         assert len(e) == len(self.edisgo.timeseries.timeindex)
+        # the storage has to be charged for the decay to be observable at all;
+        # on an empty storage both exponents give the same (zero) result
+        assert e.max() > 0.1
 
         p_loss = 0.04
         decay = (1 - p_loss) ** (time_elapsed / 24)
