@@ -214,13 +214,12 @@ class HeatPump:
             used. Default: None.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to set data in case `ts_cop` is
-            'oedb'. Leap years can currently not be handled. In case the given
-            timeindex contains a leap year, the data will be indexed using the default
-            year 2011 and returned for the whole year.
+            'oedb'.
             If no timeindex is provided, the timeindex set in
             :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
             If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-            is indexed using the default year 2011 and returned for the whole year.
+            is indexed using the reference year set in the config (default 2011) and
+            returned for the whole year.
 
         """
         if isinstance(ts_cop, str) and ts_cop == "oedb":
@@ -310,10 +309,7 @@ class HeatPump:
                     timeindex = cop_df.index
                 else:
                     timeindex, _ = timeseries_import._timeindex_helper_func(
-                        edisgo_object,
-                        kwargs.get("timeindex", None),
-                        default_year=2011,
-                        allow_leap_year=False,
+                        edisgo_object, kwargs.get("timeindex", None)
                     )
                 # assign efficiency time series to each heat pump
                 eta_df = pd.DataFrame(
@@ -396,14 +392,13 @@ class HeatPump:
             used. Default: None.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to set data in case `ts_heat_demand` is
-            'oedb'. Leap years can currently not be handled. In case the given
-            timeindex contains a leap year, the data will be indexed using the default
-            year (2035 in case of the 'eGon2035' and to 2045 in case of the
-            'eGon100RE' scenario) and returned for the whole year.
+            'oedb'.
             If no timeindex is provided, the timeindex set in
-            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
-            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-            is indexed using the default year and returned for the whole year.
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used. If that is
+            not set either, the time index to use is determined by
+            :func:`~.io.timeseries_import._timeindex_helper_func`, setting
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` to the configured
+            reference year (see :func:`~.tools.tools.get_reference_year`).
 
         """
         # in case time series from oedb are used, retrieve oedb time series

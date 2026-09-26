@@ -30,6 +30,7 @@ from edisgo.run.tasks.io import task_import_overlying_grid_data
 from edisgo.run.tasks.spatial import task_spatial_restore
 from edisgo.run.tasks.timeseries import (
     task_manual_ts,
+    task_oedb_ts,
     task_select_critical_timesteps,
     task_set_timeindex,
 )
@@ -186,6 +187,35 @@ class TestImportOverlyingGridData:
         result = task_import_overlying_grid_data(edisgo_obj, ctx)
         assert result is edisgo_obj
         assert "path" in caplog.text.lower()
+
+    def test_etrago_dispatchable_generators_ts_is_aligned(self, edisgo_obj, caplog):
+        """
+        Regression test: dispatchable_generators_active_power from eTraGo
+        results used to be applied to TimeSeries with no year alignment at
+        all (unlike renewables_potential, which was already aligned) - a
+        year mismatch against edisgo.timeseries.timeindex (2011 here) meant
+        the resulting active power series silently came back empty. Both are
+        now aligned identically by OverlyingGrid.from_etrago before the task
+        applies them.
+        """
+        disp_ts = pd.DataFrame(
+            {"other": [1.0, 1.0, 1.0]},
+            index=pd.date_range("2035-01-01", periods=3, freq="h"),
+        )
+        ctx = self._ctx(
+            {"enabled": True, "source": "etrago"},
+            overlying_grid_data={"dispatchable_generators_active_power": disp_ts},
+        )
+
+        with caplog.at_level("WARNING"):
+            result = task_import_overlying_grid_data(edisgo_obj, ctx)
+
+        assert "2035" in caplog.text
+        assert not result.timeseries.generators_active_power.empty
+        pd.testing.assert_index_equal(
+            result.timeseries.generators_active_power.index,
+            edisgo_obj.timeseries.timeindex,
+        )
 
 
 def _grid_with_district_heating():
@@ -556,6 +586,36 @@ class TestSetTimeindex:
             pd.Timestamp("2011-06-01 01:00"),
             pd.Timestamp("2011-06-01 03:00"),
         ]
+
+
+class TestOedbTs:
+    """
+    fluctuating/conventional_loads are disabled below to keep these tests
+    DB-free, in line with this module's convention (see module docstring).
+    Only the scenario validation and time-index resolution are exercised;
+    the actual oedb import is covered separately by the DB-backed tests in
+    tests/io/test_timeseries_import.py.
+    """
+
+    def test_reference_year_independent_of_scenario(self, edisgo_obj):
+        # 'eGon100RE' used to map to year 2045 via the now removed
+        # get_year_based_on_scenario; the resulting time index must instead
+        # be in the configured reference year (default 2011), regardless of
+        # scenario, whenever neither an explicit timeindex nor
+        # TimeSeries.timeindex is set
+        edisgo_obj.set_timeindex(pd.DatetimeIndex([]))
+        ctx = RunContext(scenario="eGon100RE")
+        result = task_oedb_ts(
+            edisgo_obj, ctx, fluctuating=None, conventional_loads=None
+        )
+        assert not result.timeseries.timeindex.empty
+        assert result.timeseries.timeindex[0].year == 2011
+        assert result.timeseries.timeindex[0].year != 2045
+
+    def test_invalid_scenario_raises(self, edisgo_obj):
+        ctx = RunContext(scenario="invalid")
+        with pytest.raises(ValueError, match="invalid"):
+            task_oedb_ts(edisgo_obj, ctx, fluctuating=None, conventional_loads=None)
 
 
 class TestSelectCriticalTimesteps:

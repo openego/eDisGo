@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 
@@ -99,6 +100,80 @@ class TestOverlyingGrid:
         assert (self.overlying_grid.feedin_district_heating.dtypes == "float32").all()
 
         shutil.rmtree(save_dir)
+
+    def test_from_csv_aligns_to_edisgo_obj_timeindex(self, caplog):
+        """
+        Data read from CSV may be indexed in a different calendar year than
+        the EDisGo object it is loaded into (e.g. CSVs written independently
+        of a particular run) - if an `edisgo_obj` is passed, from_csv must
+        year-align onto its timeindex, with a warning.
+        """
+        # self.timeindex (set up in setup_fixture) is in 2018
+        save_dir = os.path.join(os.getcwd(), "overlying_grid_csv_align")
+        self.overlying_grid.to_csv(save_dir)
+
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo_obj.set_timeindex(pd.date_range("1/1/2011", periods=2, freq="h"))
+
+        og = OverlyingGrid()
+        with caplog.at_level(logging.WARNING):
+            og.from_csv(save_dir, edisgo_obj=edisgo_obj)
+
+        assert "OverlyingGrid.feedin_district_heating" in caplog.text
+        assert "2018" in caplog.text
+        assert "2011" in caplog.text
+        pd.testing.assert_index_equal(
+            og.feedin_district_heating.index, edisgo_obj.timeseries.timeindex
+        )
+
+        # without edisgo_obj, data is used as-is (untouched, original year)
+        og_no_align = OverlyingGrid()
+        og_no_align.from_csv(save_dir)
+        assert og_no_align.feedin_district_heating.index[0].year == 2018
+
+        shutil.rmtree(save_dir)
+
+    def test_from_etrago_aligns_to_edisgo_obj_timeindex(self, caplog):
+        """
+        eTraGo results may be indexed in a different calendar year (e.g.
+        eTraGo's own scenario year) than the EDisGo object they are set on -
+        from_etrago must year-align every attribute onto its timeindex, with
+        a warning, and carry the SoC attributes' extra trailing time step.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo_obj.set_timeindex(pd.date_range("1/1/2011", periods=2, freq="h"))
+
+        overlying_grid_data = {
+            "renewables_curtailment": pd.Series(
+                data=[1.0, 2.0],
+                index=pd.date_range("1/1/2018", periods=2, freq="h"),
+            ),
+            "storage_units_soc": pd.Series(
+                data=[0.1, 0.2, 0.3],
+                index=pd.date_range("1/1/2018", periods=3, freq="h"),
+            ),
+        }
+
+        og = OverlyingGrid()
+        with caplog.at_level(logging.WARNING):
+            og.from_etrago(edisgo_obj, overlying_grid_data)
+
+        assert "OverlyingGrid.renewables_curtailment" in caplog.text
+        assert "OverlyingGrid.storage_units_soc" in caplog.text
+        pd.testing.assert_index_equal(
+            og.renewables_curtailment.index, edisgo_obj.timeseries.timeindex
+        )
+        # SoC attribute carries one extra trailing step beyond timeindex
+        assert len(og.storage_units_soc) == len(edisgo_obj.timeseries.timeindex) + 1
+        assert (
+            og.storage_units_soc.index[-1]
+            == edisgo_obj.timeseries.timeindex[-1] + pd.Timedelta("1h")
+        )
+
+        # keys not in _attributes are ignored
+        og2 = OverlyingGrid()
+        og2.from_etrago(edisgo_obj, {"not_an_attribute": pd.Series([1.0])})
+        assert not hasattr(og2, "not_an_attribute")
 
     def test_resample(self, caplog):
         mean_value_curtailment_orig = self.overlying_grid.renewables_curtailment.mean()
