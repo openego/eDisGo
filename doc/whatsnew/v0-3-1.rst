@@ -152,3 +152,20 @@ Changes
   (openego/eGo#227). A grid that is not fully connected no longer runs the queue dry
   either; the unreachable buses keep their original coordinates and are named in a
   warning
+* Made the allocation of charging demand to charging parks reproducible. The random
+  draws were seeded, but the result still depended on the row order of the input:
+  :func:`~.io.electromobility_import.assure_minimum_potential_charging_parks`
+  renumbered the potential charging parks by position after a sort with many ties,
+  and duplicated parks were sampled by position, so a different row order let the
+  same seeded draw pick a different park. Neither source guarantees an order — the
+  database queries have no ``ORDER BY`` and the TracBEV files are read in
+  ``os.listdir`` order — so the same data could yield a different grid on another
+  run or machine. The potential charging parks are now sorted by use case, ``ags``,
+  weight and location before they are used, and
+  :func:`~.io.electromobility_import.distribute_charging_demand` sorts the charging
+  processes by car, park start and park end, which also fixes which capacity is taken
+  for a car charging with different capacities at the same destination and the order
+  of public charging processes with identical parking times. Note that this changes
+  allocation results once compared to earlier versions, and that
+  :attr:`~.network.electromobility.Electromobility.charging_processes_df` is now
+  re-indexed from zero in that sorted order (openego/eDisGo#742)

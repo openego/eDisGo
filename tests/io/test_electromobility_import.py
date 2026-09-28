@@ -191,6 +191,53 @@ class TestElectromobilityImport:
 
         assert edisgo_ids_cp == edisgo_ids_topology
 
+    def test_charging_point_allocation_independent_of_input_order(self, monkeypatch):
+        """
+        The allocation must not depend on the row order of the input data, as
+        neither the database nor os.listdir guarantee any order.
+
+        """
+
+        def allocate():
+            edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
+            electromobility_import.import_electromobility_from_dir(
+                edisgo_obj, self.simbev_path, self.tracbev_path
+            )
+            electromobility_import.distribute_charging_demand(edisgo_obj)
+            electromobility_import.integrate_charging_parks(edisgo_obj)
+            return edisgo_obj
+
+        def shuffled(read_func, reset_index):
+            def wrapper(*args, **kwargs):
+                df = read_func(*args, **kwargs)
+                df = df.sample(frac=1, random_state=3)
+                return df.reset_index(drop=True) if reset_index else df
+
+            return wrapper
+
+        reference = allocate()
+
+        monkeypatch.setattr(
+            electromobility_import,
+            "read_csvs_charging_processes",
+            shuffled(electromobility_import.read_csvs_charging_processes, True),
+        )
+        monkeypatch.setattr(
+            electromobility_import,
+            "read_gpkg_potential_charging_parks",
+            shuffled(electromobility_import.read_gpkg_potential_charging_parks, False),
+        )
+        result = allocate()
+
+        pd.testing.assert_frame_equal(
+            result.topology.charging_points_df.sort_index(),
+            reference.topology.charging_points_df.sort_index(),
+        )
+        pd.testing.assert_frame_equal(
+            result.electromobility.charging_processes_df,
+            reference.electromobility.charging_processes_df,
+        )
+
     def test_simbev_config_from_oedb(self):
         config_df = electromobility_import.simbev_config_from_oedb(
             engine=pytest.engine, scenario="eGon2035"
