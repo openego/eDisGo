@@ -17,7 +17,12 @@ from shapely.geometry import Point
 from edisgo import EDisGo
 from edisgo.edisgo import import_edisgo_from_files
 from edisgo.flex_opt.reinforce_grid import enhanced_reinforce_grid
+from edisgo.io import electromobility_import
 from edisgo.network.results import Results
+from edisgo.tools.tools import (
+    get_reference_year,
+    reduce_timeseries_data_to_given_timeindex,
+)
 
 
 class TestEDisGo:
@@ -218,8 +223,14 @@ class TestEDisGo:
         # options where database connection is needed are tested in separate function
 
         # check warning
-        self.edisgo.set_time_series_active_power_predefined()
-        assert "No timeindex was set. TimeSeries.timeindex is automatically" in caplog.text
+        # (with no profile source given, none of the import functions that set
+        # TimeSeries.timeindex via _timeindex_helper_func are reached, so only the
+        # generic "better to set a time index" warning fires here)
+        with caplog.at_level(logging.WARNING):
+            self.edisgo.set_time_series_active_power_predefined()
+        assert (
+            "better to set a time index" in caplog.text
+        )
 
         # check if right functions are called
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
@@ -315,9 +326,41 @@ class TestEDisGo:
             ],
         )
 
+        # TimeSeries.timeindex is now auto-set by _timeindex_helper_func (Fall c,
+        # called from the first oedb import that runs) to the configured reference
+        # year (default 2011), not the scenario year - the scenario only selects
+        # which data is loaded, it no longer determines the calendar year.
         assert not edisgo_object.timeseries.timeindex.empty
-        assert edisgo_object.timeseries.timeindex[0].year == 2035
+        assert edisgo_object.timeseries.timeindex[0].year == 2011
         assert edisgo_object.timeseries.timeindex.shape == (8760,)
+
+    @pytest.mark.slow
+    def test_set_time_series_active_power_predefined_oedb_reference_year_independent_of_scenario(  # noqa: E501
+        self,
+    ):
+        # 'eGon100RE' used to map to year 2045 via the now removed
+        # get_year_based_on_scenario; the resulting time index must instead
+        # be in the configured reference year (default 2011), regardless of
+        # scenario, whenever neither an explicit timeindex nor
+        # TimeSeries.timeindex is set
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path,
+            legacy_ding0_grids=False,
+        )
+        assert edisgo_object.timeseries.timeindex.empty
+
+        edisgo_object.set_time_series_active_power_predefined(
+            conventional_loads_ts="oedb",
+            fluctuating_generators_ts="oedb",
+            scenario="eGon100RE",
+            engine=pytest.engine,
+            conventional_loads_names=[
+                "Load_mvgd_33535_lvgd_1164210000_244_residential"
+            ],
+        )
+
+        assert edisgo_object.timeseries.timeindex[0].year == 2011
+        assert edisgo_object.timeseries.timeindex[0].year != 2045
 
     def test_set_time_series_reactive_power_control(self):
         # set active power time series for fixed cosphi
@@ -1392,7 +1435,7 @@ class TestEDisGo:
         )
         # fmt: on
 
-    def test_import_heat_pumps(self):
+    def test_import_heat_pumps(self, caplog):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -1405,20 +1448,99 @@ class TestEDisGo:
             )
 
         # ################# test with leap year #############
-        edisgo_object.import_heat_pumps(
-            scenario="eGon2035",
-            engine=pytest.engine,
-            timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
-            import_types=["individual_heat_pumps", "central_heat_pumps"],
-        )
+        # import_heat_pumps no longer intercepts leap years itself (that
+        # recursion was removed); the given timeindex is passed through
+        # unchanged and it is instead HeatPump.set_heat_demand/set_cop (via
+        # _timeindex_helper_func) that detects the leap year, shifts it to
+        # the configured reference year (default 2011) and warns - keeping
+        # the original (here: 2-hour) window length instead of falling back
+        # to a full year.
+        with caplog.at_level(logging.WARNING):
+            edisgo_object.import_heat_pumps(
+                scenario="eGon2035",
+                engine=pytest.engine,
+                timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
+                import_types=["individual_heat_pumps", "central_heat_pumps"],
+            )
+        assert "leap year" in caplog.text
 
         loads_df = edisgo_object.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
         assert len(hp_df) == 151
-        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 151)
-        assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2035
-        assert edisgo_object.heat_pump.cop_df.shape == (8760, 151)
-        assert edisgo_object.heat_pump.cop_df.index[0].year == 2035
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (2, 151)
+        assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
+        assert edisgo_object.heat_pump.cop_df.shape == (2, 151)
+        assert edisgo_object.heat_pump.cop_df.index[0].year == 2011
+
+    @pytest.mark.slow
+    def test_import_heat_pumps_reference_year_independent_of_scenario(self):
+        # 'eGon2035' used to map to year 2035 via the now removed
+        # get_year_based_on_scenario; the resulting time index must instead
+        # be in the configured reference year (default 2011), regardless of
+        # scenario, whenever neither an explicit timeindex nor
+        # TimeSeries.timeindex is set.
+        # Note: 'eGon100RE' would make the same point (it used to map to
+        # 2045), but ding0_test_network_3 has zero heat pumps for that
+        # scenario, so there would be no heat_demand_df/cop_df to check.
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        assert edisgo_object.timeseries.timeindex.empty
+
+        edisgo_object.import_heat_pumps(
+            scenario="eGon2035",
+            engine=pytest.engine,
+            import_types=["individual_heat_pumps", "central_heat_pumps"],
+        )
+
+        assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
+        assert edisgo_object.heat_pump.heat_demand_df.index[0].year != 2035
+        assert edisgo_object.heat_pump.cop_df.index[0].year == 2011
+
+    @pytest.mark.slow
+    def test_set_time_series_and_import_heat_pumps_order_independent(self):
+        """
+        Whichever of set_time_series_active_power_predefined (oedb feed-in)
+        or import_heat_pumps runs first on a fresh EDisGo object (empty
+        TimeSeries.timeindex), both end up auto-setting TimeSeries.timeindex
+        via _timeindex_helper_func to the same configured reference year -
+        the order in which the two are called must not matter.
+        """
+        feedin_kwargs = dict(
+            fluctuating_generators_ts="oedb",
+            scenario="eGon2035",
+            engine=pytest.engine,
+        )
+        heat_pump_kwargs = dict(
+            scenario="eGon2035",
+            engine=pytest.engine,
+            import_types=["individual_heat_pumps", "central_heat_pumps"],
+        )
+
+        # feed-in first, then heat pumps
+        edisgo_feedin_first = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        assert edisgo_feedin_first.timeseries.timeindex.empty
+        edisgo_feedin_first.set_time_series_active_power_predefined(**feedin_kwargs)
+        edisgo_feedin_first.import_heat_pumps(**heat_pump_kwargs)
+
+        # heat pumps first, then feed-in
+        edisgo_heat_pumps_first = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        assert edisgo_heat_pumps_first.timeseries.timeindex.empty
+        edisgo_heat_pumps_first.import_heat_pumps(**heat_pump_kwargs)
+        edisgo_heat_pumps_first.set_time_series_active_power_predefined(
+            **feedin_kwargs
+        )
+
+        assert not edisgo_feedin_first.timeseries.timeindex.empty
+        assert not edisgo_heat_pumps_first.timeseries.timeindex.empty
+        assert edisgo_feedin_first.timeseries.timeindex.equals(
+            edisgo_heat_pumps_first.timeseries.timeindex
+        )
+        assert edisgo_feedin_first.timeseries.timeindex[0].year == 2011
 
     def test_apply_charging_strategy(self):
         self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
@@ -1986,6 +2108,157 @@ class TestEDisGo:
             "There are time steps in timeindex of TimeSeries object that are not in "
             "the index of DSM.p_max" in caplog.text
         )
+
+    def test_predefined_fluctuating_generators_by_technology_aligns_user_dataframe(
+        self, caplog
+    ):
+        """
+        Regression test for the timeindex/reference-year refactor: a
+        user-provided DataFrame passed to
+        predefined_fluctuating_generators_by_technology (via
+        set_time_series_active_power_predefined) may be indexed in a
+        different calendar year than TimeSeries.timeindex. It must be
+        aligned onto the reference year (not left in its own year), with
+        unchanged values, no NaN, and exactly one warning.
+        """
+        reference_year = get_reference_year(self.edisgo)
+        self.edisgo.set_timeindex(
+            pd.date_range(f"{reference_year}-01-01", periods=3, freq="h")
+        )
+        solar_gens = self.edisgo.topology.generators_df[
+            self.edisgo.topology.generators_df.type == "solar"
+        ].index
+
+        user_ts = pd.DataFrame(
+            {"solar": [0.1, 0.2, 0.3]},
+            index=pd.date_range("2019-01-01", periods=3, freq="h"),
+        )
+        with caplog.at_level(logging.WARNING):
+            self.edisgo.set_time_series_active_power_predefined(
+                fluctuating_generators_ts=user_ts,
+            )
+
+        # exactly one warning about the alignment itself (an unrelated "OEP
+        # token file not found" warning may also be logged, depending on
+        # environment/config, but is not part of what this test checks)
+        alignment_warnings = [
+            r.message
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "ts_generators" in r.message
+        ]
+        assert len(alignment_warnings) == 1
+        assert "2019" in alignment_warnings[0]
+        assert str(reference_year) in alignment_warnings[0]
+
+        active_power = self.edisgo.timeseries.generators_active_power
+        assert active_power.index[0].year == reference_year
+        assert not active_power[solar_gens].isna().any().any()
+        for gen in solar_gens:
+            p_nom = self.edisgo.topology.generators_df.at[gen, "p_nom"]
+            expected = (
+                pd.Series([0.1, 0.2, 0.3], index=self.edisgo.timeseries.timeindex)
+                * p_nom
+            )
+            pd.testing.assert_series_equal(
+                active_power[gen], expected, check_names=False
+            )
+
+    def test_get_flexibility_bands_no_timeindex_uses_reference_year(self):
+        """
+        Regression test for the timeindex/reference-year refactor: with
+        TimeSeries.timeindex empty, building flexibility bands from real
+        SimBEV/TracBEV test data must set up TimeSeries.timeindex on the
+        configured reference year and align the bands onto it - not leave
+        everything in SimBEV's own native calendar.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj,
+            pytest.simbev_example_scenario_path,
+            pytest.tracbev_example_scenario_path,
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+
+        assert edisgo_obj.timeseries.timeindex.empty
+
+        reference_year = get_reference_year(edisgo_obj)
+        bands = edisgo_obj.electromobility.get_flexibility_bands(
+            edisgo_obj, ["work", "public"]
+        )
+
+        assert not edisgo_obj.timeseries.timeindex.empty
+        assert edisgo_obj.timeseries.timeindex[0].year == reference_year
+        for key in ("upper_power", "lower_energy", "upper_energy"):
+            assert bands[key].index[0].year == reference_year
+            pd.testing.assert_index_equal(
+                bands[key].index, edisgo_obj.timeseries.timeindex
+            )
+
+    def test_reduce_timeseries_data_to_given_timeindex_heat_pump_different_year(
+        self, caplog
+    ):
+        """
+        Regression test for the timeindex/reference-year refactor:
+        reduce_timeseries_data_to_given_timeindex must align HeatPump data
+        indexed in a different calendar year onto the given target
+        timeindex (with a warning) instead of raising a KeyError.
+        """
+        target_timeindex = pd.date_range("2011-01-01", periods=3, freq="h")
+        self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            {"heat_pump_1": [1.0, 2.0, 3.0]},
+            index=pd.date_range("2019-01-01", periods=3, freq="h"),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            reduce_timeseries_data_to_given_timeindex(self.edisgo, target_timeindex)
+
+        assert "HeatPump.heat_demand_df" in caplog.text
+        result = self.edisgo.heat_pump.heat_demand_df
+        pd.testing.assert_index_equal(result.index, target_timeindex)
+        assert not result.isna().any().any()
+        assert list(result["heat_pump_1"]) == [1.0, 2.0, 3.0]
+
+    def test_check_integrity_warns_on_timeseries_year_mismatch(self, caplog):
+        """
+        TimeSeries.check_integrity must warn (not raise) when a non-empty
+        attribute's underlying data is indexed in a different calendar year
+        than TimeSeries.timeindex.
+        """
+        self.edisgo.set_timeindex(pd.date_range("2011-01-01", periods=3, freq="h"))
+        gen = self.edisgo.topology.generators_df.index[0]
+        self.edisgo.timeseries.generators_active_power = pd.DataFrame(
+            {gen: [0.1, 0.2, 0.3]},
+            index=pd.date_range("2019-01-01", periods=3, freq="h"),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            self.edisgo.timeseries.check_integrity()
+
+        assert (
+            "generators_active_power is indexed in year 2019, which does not "
+            "match the year of TimeSeries.timeindex (2011)." in caplog.text
+        )
+
+    def test_check_integrity_skips_year_mismatch_warning_for_worst_case(self, caplog):
+        """
+        The year-mismatch check must not fire for worst-case time series
+        (timeindex starting before 1971, see TimeSeries.is_worst_case), even
+        if the underlying data genuinely differs in year.
+        """
+        self.setup_worst_case_time_series()
+        assert self.edisgo.timeseries.is_worst_case
+
+        gen = self.edisgo.topology.generators_df.index[0]
+        self.edisgo.timeseries._generators_active_power = pd.DataFrame(
+            {gen: [0.1, 0.2]},
+            index=pd.date_range("2019-01-01", periods=2, freq="h"),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            self.edisgo.timeseries.check_integrity()
+
+        assert "does not match the year of TimeSeries.timeindex" not in caplog.text
 
     def test_resample_timeseries(self):
         self.setup_worst_case_time_series()

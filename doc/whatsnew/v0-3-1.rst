@@ -6,6 +6,36 @@ Release date: not yet released
 Changes
 -------
 
+* Added a configurable reference year for indexing imported time series: a new
+  ``reference_year`` key in the ``timeindex`` section of ``config_timeseries.cfg``
+  (default 2011) replaces the previously hard-coded default year, and is read via
+  the new :func:`~.tools.tools.get_reference_year`. Leap years are no longer
+  supported as a target for indexing time series data: wherever a leap year is
+  given explicitly or already set as
+  :py:attr:`~.network.timeseries.TimeSeries.timeindex`, it is now consistently
+  shifted to the configured reference year with a logged warning (dropping any
+  29 February time steps via the new :func:`~.tools.tools.shift_timeindex_to_year`)
+  instead of the previous mix of silent per-function fallback years and a bespoke
+  recursive leap-year check in :meth:`~.edisgo.EDisGo.import_heat_pumps`.
+  :func:`~.io.timeseries_import._timeindex_helper_func`, the shared helper behind
+  the oedb and demandlib time series imports, dropped its ``default_year`` and
+  ``allow_leap_year`` parameters accordingly; its signature is now
+  ``_timeindex_helper_func(edisgo_object, timeindex=None)`` and it always falls
+  back to the configured reference year
+* The scenario (``'eGon2035'``/``'eGon100RE'``) passed to the oedb/demandlib time
+  series and DSM imports (:func:`~.io.timeseries_import.heat_demand_oedb`,
+  :func:`~.io.timeseries_import.electricity_demand_oedb`,
+  :func:`~.io.dsm_import.oedb`, :meth:`~.edisgo.EDisGo.import_heat_pumps`,
+  :func:`~.run.tasks.timeseries.task_oedb_ts`) no longer determines the calendar
+  year time series are indexed by; it only selects which data is loaded, as
+  before, while the year always comes from the configured reference year (see
+  above). :func:`~.tools.tools.get_year_based_on_scenario` is deprecated (emits
+  a ``DeprecationWarning`` on every call, still returns 2035/2045/``None`` for
+  backwards compatibility) and will be removed in a future release; use the new
+  :func:`~.tools.tools.validate_scenario` to validate a scenario name instead,
+  which every one of the functions listed above now calls at its own start,
+  replacing several previously inconsistent (and in one case entirely missing)
+  inline scenario checks with a single consistent one
 * Corrected the Julia version documented in ``config_opf_julia.cfg``, which still
   pointed at ``julia-1.1.0/bin`` while the bundled ``eDisGo_OPF.jl`` package targets
   Julia 1.12. The file is included verbatim in the configuration reference, so the

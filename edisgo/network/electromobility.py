@@ -23,7 +23,7 @@ import pandas as pd
 from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
-from edisgo.tools.tools import align_series_to_timeindex
+from edisgo.tools.tools import align_to_edisgo_timeindex
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -402,15 +402,16 @@ class Electromobility:
         The bands are always built spanning SimBEV's own native calendar and
         simulated date range (independent of ``edisgo_obj.timeseries.timeindex``
         - a charging process straddling a later window's boundary must still
-        count toward the band inside that window). If
-        ``edisgo_obj.timeseries.timeindex`` is non-empty, the returned/stored
-        bands are then year-aligned (SimBEV's calendar is commonly a fixed
-        reference year, independent of the scenario year) and trimmed to
-        exactly that timeindex - this is done regardless of `resample`, since
-        it is a correctness fix (avoiding a ``KeyError`` when a consumer later
-        indexes the bands by ``edisgo_obj.timeseries.timeindex``), not an
-        optional resampling convenience. When the timeindex is empty, the
-        bands are returned untouched, spanning SimBEV's own range/calendar.
+        count toward the band inside that window). The returned/stored bands
+        are then always year-aligned onto ``edisgo_obj.timeseries.timeindex``
+        via :func:`~.tools.tools.align_to_edisgo_timeindex` (SimBEV's calendar
+        is commonly a fixed reference year, independent of the scenario year)
+        - this is done regardless of `resample`, since it is a correctness fix
+        (avoiding a ``KeyError`` when a consumer later indexes the bands by
+        ``edisgo_obj.timeseries.timeindex``), not an optional resampling
+        convenience. If ``edisgo_obj.timeseries.timeindex`` is still empty, it
+        is itself set up on the configured reference year first, so the bands
+        never stay in SimBEV's own calendar.
 
         Returns
         --------
@@ -605,18 +606,20 @@ class Electromobility:
         # reduce_timeseries_data_to_given_timeindex right after calling this
         # method). The bands built above always span SimBEV's own native
         # calendar (its start_date, typically a fixed reference year like
-        # 2011) and simulated range - independent of edisgo_timeindex, which
-        # is why this can't just be a `.loc[edisgo_timeindex]` here: a year
-        # mismatch alone would raise KeyError, and a shorter/different-range
-        # edisgo_timeindex would too. align_series_to_timeindex year-shifts
-        # and reindexes (filling any still-missing steps with NaN rather than
-        # raising) before the final trim below.
-        if len(edisgo_timeindex) > 0:
-            for key, df in self.flexibility_bands.items():
-                if not df.empty:
-                    self.flexibility_bands[key] = align_series_to_timeindex(
-                        df, edisgo_timeindex
-                    ).loc[edisgo_timeindex]
+        # 2011) and simulated range - independent of edisgo_obj.timeseries
+        # .timeindex, which is why this can't just be a `.loc[timeindex]`
+        # here: a year mismatch alone would raise KeyError, and a
+        # shorter/different-range timeindex would too. align_to_edisgo_
+        # timeindex year-shifts and reindexes (filling any still-missing
+        # steps with NaN rather than raising), setting up
+        # edisgo_obj.timeseries.timeindex on the configured reference year
+        # first if it is still empty - the bands are therefore always
+        # aligned, never left in SimBEV's own calendar.
+        for key, df in self.flexibility_bands.items():
+            if not df.empty:
+                self.flexibility_bands[key] = align_to_edisgo_timeindex(
+                    edisgo_obj, df, name=f"flexibility_bands['{key}']"
+                )
 
         return self.flexibility_bands
 

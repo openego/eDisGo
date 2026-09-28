@@ -305,6 +305,47 @@ class TestPowermodelsIO:
             )
         )
 
+    def test_to_powermodels_aligns_storage_units_soc_to_different_year(self, caplog):
+        """
+        OverlyingGrid.storage_units_soc may be indexed in a different
+        calendar year than the EDisGo object's own timeindex (e.g. imported
+        independently, see _build_battery_storage). It must be year-aligned
+        (with a warning) onto edisgo.timeseries.timeindex plus one trailing
+        step - not left in its original year, and not raise a KeyError.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo_obj.set_time_series_worst_case_analysis()
+        assert edisgo_obj.timeseries.timeindex[0].year == 1970
+
+        soc_year = 2018
+        edisgo_obj.overlying_grid.storage_units_soc = pd.Series(
+            data=[0.5, 0.6, 0.7, 0.8],
+            index=pd.date_range(f"{soc_year}-01-01", periods=4, freq="h"),
+        )
+
+        with caplog.at_level("WARNING"):
+            powermodels_network, _ = powermodels_io.to_powermodels(
+                edisgo_obj,
+                flexible_storage_units=(
+                    edisgo_obj.topology.storage_units_df.index.values
+                ),
+            )
+
+        assert "OverlyingGrid.storage_units_soc" in caplog.text
+        assert str(soc_year) in caplog.text
+        assert "1970" in caplog.text
+
+        # storage_units_soc now lives on edisgo_obj's own (1970) timeindex
+        # plus one trailing step, not the SOC series' original 2018 calendar
+        assert edisgo_obj.overlying_grid.storage_units_soc.index[0].year == 1970
+        assert len(edisgo_obj.overlying_grid.storage_units_soc) == (
+            len(edisgo_obj.timeseries.timeindex) + 1
+        )
+
+        storage = powermodels_network["storage"]["1"]
+        assert not pd.isna(storage["soc_initial"])
+        assert not pd.isna(storage["soc_end"])
+
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()

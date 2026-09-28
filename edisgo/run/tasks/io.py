@@ -12,8 +12,6 @@ Input/output tasks — persisting results and ingesting external data.
 
 from __future__ import annotations
 
-import os
-
 from edisgo.run.registry import register_task
 
 
@@ -215,16 +213,31 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     ``source: etrago`` consumes ``ctx.overlying_grid_data`` (a dict of
     DataFrames as returned by ``get_etrago_results_per_bus``), injected
     via the ``overlying_grid_data=`` kwarg of
-    :func:`edisgo.run.run_edisgo`. Sets overlying-grid attributes and
-    dispatchable/fluctuating generator time series from it.
+    :func:`edisgo.run.run_edisgo`, via
+    :meth:`~.network.overlying_grid.OverlyingGrid.from_etrago`. Sets
+    overlying-grid attributes and dispatchable/fluctuating generator
+    time series from it.
 
     ``source: csv`` loads overlying-grid attributes from CSVs in
     ``overlying_grid.path`` (full directory path for ONE grid — same
     leaf-dir convention as ``grid.ding0_path``; callers handling many
-    grids must compose the per-grid subdirectory themselves).
+    grids must compose the per-grid subdirectory themselves) via
+    :meth:`~.network.overlying_grid.OverlyingGrid.from_csv`.
     ``dispatchable_generators_active_power.csv`` and
     ``renewables_potential.csv``, if present in that dir, are applied
     as generator time series.
+
+    Both ``OverlyingGrid`` methods above align the data they load onto
+    ``edisgo.timeseries.timeindex`` themselves (see
+    :func:`~.tools.tools.align_to_edisgo_timeindex`), warning on a year
+    shift — this task contains no calendar-year logic of its own.
+
+    District-heating column labels are normalised afterwards (see
+    :func:`normalise_district_heating_labels`), so downstream consumers
+    (e.g. the ``aggregate_district_heating`` task, which ``requires`` the
+    ``overlying_grid`` this task ``provides``) can address areas by the
+    string of an integer regardless of whether the source used float or
+    integer labels.
 
     Parameters
     ----------
@@ -243,27 +256,12 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
         The modified EDisGo instance.
 
     """
-    import pandas as pd
-
     og_cfg = ctx.raw_config.get("overlying_grid") or {}
     if not og_cfg.get("enabled"):
         return edisgo
 
     source = og_cfg.get("source")
     overlying_grid_data = ctx.overlying_grid_data
-    edisgo_ti = edisgo.timeseries.timeindex
-
-    soc_attrs = {
-        "storage_units_soc",
-        "thermal_storage_units_decentral_soc",
-        "thermal_storage_units_central_soc",
-    }
-
-    from edisgo.tools.tools import align_series_to_timeindex
-
-    def _to_edisgo_timeindex(ts, extra_step=False):
-        # bind the stage's edisgo time index to the shared aligner
-        return align_series_to_timeindex(ts, edisgo_ti, extra_step=extra_step)
 
     if source not in ("etrago", "csv"):
         ctx.logger.warning(
@@ -272,7 +270,8 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
         )
         return edisgo
 
-    # --- 1) load the overlying-grid attributes for the chosen source ---
+    # load (and, internally, year-align) the overlying-grid attributes for
+    # the chosen source
     if source == "etrago":
         if overlying_grid_data is None:
             ctx.logger.warning(
@@ -280,9 +279,7 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
                 "overlying_grid_data passed to run_edisgo — skipping."
             )
             return edisgo
-        for attr in edisgo.overlying_grid._attributes:
-            if attr in overlying_grid_data:
-                setattr(edisgo.overlying_grid, attr, overlying_grid_data[attr])
+        edisgo.overlying_grid.from_etrago(edisgo, overlying_grid_data)
     else:  # source == "csv"
         overlying_grid_path = overlying_grid_path or og_cfg.get("path")
         if overlying_grid_path is None:
@@ -291,50 +288,25 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
                 "overlying_grid.path configured — skipping."
             )
             return edisgo
-        edisgo.overlying_grid.from_csv(overlying_grid_path)
+        edisgo.overlying_grid.from_csv(overlying_grid_path, edisgo_obj=edisgo)
 
-    # --- 2) reindex the overlying-grid attributes onto the edisgo timeindex
-    # (data may use a different year; SOC series carry one extra end step) ---
-    for attr in edisgo.overlying_grid._attributes:
-        ts = getattr(edisgo.overlying_grid, attr)
-        if ts is None or ts.empty:
-            continue
-        setattr(
-            edisgo.overlying_grid,
-            attr,
-            _to_edisgo_timeindex(ts, extra_step=attr in soc_attrs),
-        )
-
-    # --- 2b) normalise the district-heating column labels ---
+    # normalise the district-heating column labels (eTraGo/CSV data may carry
+    # float or integer labels; downstream consumers expect the string of an
+    # integer)
     normalise_district_heating_labels(edisgo.overlying_grid, ctx.logger)
 
-    # --- 3) set dispatchable/fluctuating generator time series ---
-    if source == "etrago":
-        disp_ts = overlying_grid_data.get("dispatchable_generators_active_power")
-        pot_ts = overlying_grid_data.get("renewables_potential")
-        if disp_ts is not None and not disp_ts.empty:
-            edisgo.set_time_series_active_power_predefined(
-                dispatchable_generators_ts=disp_ts,
-            )
-        if pot_ts is not None and not pot_ts.empty:
-            edisgo.set_time_series_active_power_predefined(
-                fluctuating_generators_ts=_to_edisgo_timeindex(pot_ts),
-            )
-    else:  # source == "csv": load the two generator-TS CSVs from the dir
-
-        def _load_generator_ts(filename):
-            path = os.path.join(overlying_grid_path, filename)
-            if not os.path.isfile(path):
-                return None
-            ts = pd.read_csv(path, index_col=0, parse_dates=True)
-            return _to_edisgo_timeindex(ts)
-
-        disp_ts = _load_generator_ts("dispatchable_generators_active_power.csv")
-        pot_ts = _load_generator_ts("renewables_potential.csv")
-        if disp_ts is not None or pot_ts is not None:
-            edisgo.set_time_series_active_power_predefined(
-                dispatchable_generators_ts=disp_ts,
-                fluctuating_generators_ts=pot_ts,
-            )
+    # set dispatchable/fluctuating generator time series - both attributes
+    # were already loaded and year-aligned onto edisgo.timeseries.timeindex
+    # above, for either source
+    disp_ts = edisgo.overlying_grid.dispatchable_generators_active_power
+    pot_ts = edisgo.overlying_grid.renewables_potential
+    if disp_ts is not None and not disp_ts.empty:
+        edisgo.set_time_series_active_power_predefined(
+            dispatchable_generators_ts=disp_ts,
+        )
+    if pot_ts is not None and not pot_ts.empty:
+        edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts=pot_ts,
+        )
 
     return edisgo

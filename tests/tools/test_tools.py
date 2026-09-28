@@ -1,10 +1,12 @@
 import copy
+import logging
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from numpy.testing import assert_allclose, assert_array_equal
+from pandas.testing import assert_index_equal
 
 from edisgo import EDisGo
 from edisgo.tools import tools
@@ -624,3 +626,59 @@ class TestTools:
     def test_reduce_memory_usage(self):
         # ToDo implement
         pass
+
+    def test_shift_timeindex_to_year(self, caplog):
+        # test with a normal (non-leap) year source and a normal target year
+        source = pd.date_range("1/1/2011", periods=8760, freq="H")
+        shifted = tools.shift_timeindex_to_year(source, 2035)
+        assert_index_equal(
+            shifted, pd.date_range("1/1/2035", periods=8760, freq="H")
+        )
+        assert not shifted.has_duplicates
+
+        # test with a leap year source containing 29 February and a non-leap
+        # target year - the 29 February time steps must be dropped and a
+        # warning logged, the result must not contain duplicate timestamps
+        source_leap = pd.date_range("1/1/2020", periods=8784, freq="H")
+        assert ((source_leap.month == 2) & (source_leap.day == 29)).sum() == 24
+        with caplog.at_level(logging.WARNING):
+            shifted = tools.shift_timeindex_to_year(source_leap, 2035)
+        assert "not a leap year" in caplog.text
+        assert ((shifted.month == 2) & (shifted.day == 29)).sum() == 0
+        assert len(shifted) == 8760
+        assert not shifted.has_duplicates
+        assert_index_equal(
+            shifted, pd.date_range("1/1/2035", periods=8760, freq="H")
+        )
+
+        # test that shifting onto a leap year target keeps 29 February
+        shifted = tools.shift_timeindex_to_year(source_leap, 2032)
+        assert ((shifted.month == 2) & (shifted.day == 29)).sum() == 24
+        assert len(shifted) == 8784
+        assert not shifted.has_duplicates
+
+        # test with empty index
+        empty_index = pd.DatetimeIndex([])
+        assert tools.shift_timeindex_to_year(empty_index, 2035).empty
+
+    def test_validate_scenario(self):
+        # valid scenarios are returned unchanged
+        assert tools.validate_scenario("eGon2035") == "eGon2035"
+        assert tools.validate_scenario("eGon100RE") == "eGon100RE"
+
+        # invalid string
+        with pytest.raises(ValueError, match="invalid_scenario"):
+            tools.validate_scenario("invalid_scenario")
+
+        # None
+        with pytest.raises(ValueError, match="None"):
+            tools.validate_scenario(None)
+
+        # empty string
+        with pytest.raises(ValueError, match="Possible options"):
+            tools.validate_scenario("")
+
+        # custom valid set
+        assert tools.validate_scenario("foo", valid=("foo", "bar")) == "foo"
+        with pytest.raises(ValueError, match="Possible options"):
+            tools.validate_scenario("eGon2035", valid=("foo", "bar"))

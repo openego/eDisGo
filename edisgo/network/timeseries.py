@@ -23,7 +23,11 @@ import pandas as pd
 
 from edisgo.flex_opt import q_control
 from edisgo.io import timeseries_import
-from edisgo.tools.tools import assign_voltage_level_to_component, resample
+from edisgo.tools.tools import (
+    align_to_edisgo_timeindex,
+    assign_voltage_level_to_component,
+    resample,
+)
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -69,6 +73,9 @@ class TimeSeries:
         Is used to distinguish between normal time series analysis and worst-case
         analysis. Is determined by checking if the timindex starts before 1971 as the
         default for worst-case is 1970. Be mindful when creating your own worst-cases.
+        1970 is a deliberate marker for worst-case time steps and does not follow the
+        reference year configured in ``[timeindex] reference_year`` (see
+        :func:`~.tools.tools.get_reference_year`).
 
         Returns
         -------
@@ -615,6 +622,11 @@ class TimeSeries:
 
         Also be aware that loads for which type information is not set are handled
         as conventional loads.
+
+        The generated worst-case time steps are indexed starting 1 January 1970 (see
+        :attr:`is_worst_case`). This is a deliberate marker for worst-case time steps,
+        not an actual calendar year, and does not follow the reference year configured
+        in ``[timeindex] reference_year`` (see :func:`~.tools.tools.get_reference_year`).
 
         """
 
@@ -1238,6 +1250,10 @@ class TimeSeries:
                 first level containing the technology as string and the second level
                 the weather cell ID as integer.
                 Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+                If indexed in a different year than
+                :py:attr:`~.network.timeseries.TimeSeries.timeindex`, it is
+                shifted onto it (with a warning) - see
+                :func:`~.tools.tools.align_to_edisgo_timeindex`.
 
                 When importing a ding0 grid and/or using predefined scenarios
                 of the future generator park,
@@ -1275,7 +1291,14 @@ class TimeSeries:
                 ts_generators = timeseries_import.feedin_oedb(
                     edisgo_object, engine=engine, timeindex=timeindex
                 )
-        elif not isinstance(ts_generators, pd.DataFrame):
+        elif isinstance(ts_generators, pd.DataFrame):
+            # user-provided data may have its own calendar - align it to
+            # edisgo_object's own time index instead of relying on it to
+            # already match (oedb data above is already indexed correctly)
+            ts_generators = align_to_edisgo_timeindex(
+                edisgo_object, ts_generators, name="ts_generators"
+            )
+        else:
             raise ValueError(
                 "'ts_generators' must either be a pandas DataFrame or 'oedb'."
             )
@@ -1431,7 +1454,10 @@ class TimeSeries:
 
                 See parameter `conventional_loads_ts` in
                 :func:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for
-                more information.
+                more information. If indexed in a different year than
+                :py:attr:`~.network.timeseries.TimeSeries.timeindex`, it is
+                shifted onto it (with a warning) - see
+                :func:`~.tools.tools.align_to_edisgo_timeindex`.
 
         load_names : list(str)
             Defines for which conventional loads to use sector-specific time series.
@@ -1450,13 +1476,21 @@ class TimeSeries:
             ts_loads = timeseries_import.load_time_series_demandlib(
                 edisgo_object, timeindex=timeindex
             )
-        elif not isinstance(ts_loads, pd.DataFrame):
+        elif isinstance(ts_loads, pd.DataFrame):
+            if ts_loads.empty:
+                logger.warning("The profile you entered is empty. Method is skipped.")
+                return
+            # user-provided data may have its own calendar - align it to
+            # edisgo_object's own time index instead of relying on it to
+            # already match (demandlib data above is already indexed
+            # correctly)
+            ts_loads = align_to_edisgo_timeindex(
+                edisgo_object, ts_loads, name="ts_loads"
+            )
+        else:
             raise ValueError(
                 "'ts_loads' must either be a pandas DataFrame or 'demandlib'."
             )
-        elif ts_loads.empty:
-            logger.warning("The profile you entered is empty. Method is skipped.")
-            return
 
         # write to TimeSeriesRaw
         for col in ts_loads:
@@ -2128,6 +2162,13 @@ class TimeSeries:
     def check_integrity(self):
         """
         Check for NaN, duplicated indices or columns and if time series is empty.
+
+        Also checks, unless :py:attr:`is_worst_case`, whether the underlying data of
+        every non-empty attribute is indexed in the same calendar year as
+        :py:attr:`timeindex` - a mismatch is not raised as an error (the public
+        getters already fall back to an empty DataFrame with their own warning in
+        that case, see :attr:`_internal_getter`), but is worth surfacing explicitly,
+        as it means the attribute effectively went missing.
         """
         if len(self.timeindex) == 0:
             logger.warning("No time index set. Empty time series will be returned.")
@@ -2149,6 +2190,20 @@ class TimeSeries:
                     logger.warning(
                         f"{attr} has duplicated columns: {duplicated_labels}"
                     )
+
+                if not self.is_worst_case:
+                    raw_df = getattr(self, f"_{attr}", None)
+                    year_mismatch = (
+                        raw_df is not None
+                        and not raw_df.empty
+                        and raw_df.index[0].year != self.timeindex[0].year
+                    )
+                    if year_mismatch:
+                        logger.warning(
+                            f"{attr} is indexed in year {raw_df.index[0].year}, "
+                            f"which does not match the year of TimeSeries.timeindex "
+                            f"({self.timeindex[0].year})."
+                        )
 
     def drop_component_time_series(self, df_name, comp_names):
         """
