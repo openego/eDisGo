@@ -613,3 +613,92 @@ class TestPmOptimizeIntervalSplit:
         # restored to the full reduced index
         assert edisgo_obj.dsm.p_max.index.equals(full)
         assert edisgo_obj.heat_pump.cop_df.index.equals(full)
+
+
+class TestHeatStorageStandingLoss:
+    """
+    The standing loss of a thermal storage has to scale with the time step.
+
+    ``p_loss`` is a loss per DAY (``powermodels_io._build_heat_storage``: 4 % of
+    SOC per day for individual heating), so the decay between two time steps is
+    ``(1 - p_loss) ** (time_elapsed / 24)``. The exponent used to be a fixed
+    ``1/24``, which is only correct at hourly resolution (openego/eDisGo#697).
+
+    The test runs the OPF on a 15-minute index and checks the energy balance the
+    solver enforced, which is possible because both variables of the constraint
+    are written back: ``heat_storage_t.e`` is ``hse`` and ``heat_storage_t.p`` is
+    ``phs``. It also asserts that the fixed exponent does NOT satisfy the same
+    balance, so the test fails if the old formula comes back.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        cls.edisgo.set_time_series_worst_case_analysis()
+        cls.hp = "Heat_Pump_standing_loss"
+        cls.edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector="individual_heating",
+            load_id=1,
+            ts_active_power=pd.Series(
+                index=cls.edisgo.timeseries.timeindex, data=[0.5, 0.5, 0.5, 0.5]
+            ),
+            ts_reactive_power="default",
+            bus=cls.edisgo.topology.buses_df.index[27],
+            p_set=3,
+        )
+        hp_name = cls.edisgo.topology.loads_df[
+            cls.edisgo.topology.loads_df.type == "heat_pump"
+        ].index[-1]
+        cls.hp = hp_name
+        cls.edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={hp_name: [5.0, 6.0, 5.0, 6.0]},
+            index=cls.edisgo.timeseries.timeindex,
+        )
+        cls.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            data={hp_name: [1.0, 2.0, 2.0, 1.0]},
+            index=cls.edisgo.timeseries.timeindex,
+        )
+        cls.edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
+            data={"capacity": [8.0], "efficiency": [1.0]}, index=[hp_name]
+        )
+        cls.edisgo.apply_heat_pump_operating_strategy()
+        # 15-minute steps, so time_elapsed is 0.25 and the daily loss rate has to
+        # be raised to 0.25/24 instead of 1/24
+        cls.edisgo.resample_timeseries(freq="15min")
+
+    @pytest.mark.runonlinux
+    def test_standing_loss_uses_the_elapsed_time(self):
+        time_elapsed = (
+            self.edisgo.timeseries.timeindex[1] - self.edisgo.timeseries.timeindex[0]
+        ).total_seconds() / 3600
+        assert time_elapsed == pytest.approx(0.25)
+
+        pm_optimize(
+            self.edisgo,
+            opf_version=2,
+            silence_moi=True,
+            method="nc",
+            flexible_hps=np.array([self.hp]),
+        )
+        assert self.edisgo.opf_results.status in ("LOCALLY_SOLVED", "OPTIMAL")
+
+        e = self.edisgo.opf_results.heat_storage_t.e[self.hp]
+        p = self.edisgo.opf_results.heat_storage_t.p[self.hp]
+        assert len(e) == len(self.edisgo.timeseries.timeindex)
+        # the storage has to be charged for the decay to be observable at all;
+        # on an empty storage both exponents give the same (zero) result
+        assert e.max() > 0.1
+
+        p_loss = 0.04
+        decay = (1 - p_loss) ** (time_elapsed / 24)
+        decay_fixed = (1 - p_loss) ** (1 / 24)  # the exponent before #697
+
+        expected = e.values[:-1] * decay - time_elapsed * p.values[1:]
+        assert np.allclose(e.values[1:], expected, atol=1e-6)
+
+        # the balance must NOT hold with the fixed exponent, otherwise this test
+        # would pass against the old formula as well
+        wrong = e.values[:-1] * decay_fixed - time_elapsed * p.values[1:]
+        assert not np.allclose(e.values[1:], wrong, atol=1e-6)
