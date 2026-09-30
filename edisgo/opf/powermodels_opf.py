@@ -22,6 +22,7 @@ import pandas as pd
 from edisgo.flex_opt import exceptions
 from edisgo.io.powermodels_io import from_powermodels
 from edisgo.network.topology import Topology
+from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,43 @@ _OPF_NESTED_TIME_FRAMES = (
     "grid_slacks_t",
     "battery_storage_t",
 )
+
+
+def _narrow_flex_inputs(edisgo_obj, interval):
+    """
+    Narrow the flexibility input time series to one interval of a split OPF.
+
+    :func:`~.edisgo.EDisGo.set_timeindex` only assigns
+    :attr:`~.network.timeseries.TimeSeries.timeindex`; it does not touch the
+    :class:`~.network.overlying_grid.OverlyingGrid`,
+    :class:`~.network.dsm.DSM`, :class:`~.network.heat.HeatPump` and
+    :class:`~.network.electromobility.Electromobility` containers, whose time
+    series each carry their own DatetimeIndex. ``to_powermodels`` reads those
+    containers raw — unlike the grid side, which goes through ``to_pypsa`` and
+    therefore follows the active time index — so on a narrowed index the two
+    diverge and the flexibility inputs are read positionally off the wider
+    index. Narrow them here so every reader sees the interval's own values.
+
+    ``timeseries=False``: the :class:`~.network.timeseries.TimeSeries`
+    active-power frames accumulate each interval's OPF results via ``.loc``
+    (see :func:`_pm_optimize_multi`), so slicing them per interval would drop
+    the results of the intervals solved so far.
+
+    This is destructive — the caller is responsible for restoring the full
+    reduced index from a snapshot before narrowing to the next interval.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    interval : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Contiguous time index of the interval to narrow to.
+
+    """
+    reduce_timeseries_data_to_given_timeindex(
+        edisgo_obj,
+        interval,
+        timeseries=False,
+    )
 
 
 def _with_freq(index):
@@ -172,7 +210,10 @@ def pm_optimize(
     The overlying-grid SOC attributes and reactive-power time series (which
     ``to_powermodels`` / ``from_powermodels`` mutate or replace on the current
     interval) are snapshotted and restored pristine before each interval so a
-    later interval sees intact input. Parameters are as for
+    later interval sees intact input. The same snapshot covers the overlying-grid,
+    DSM, heat-pump and electromobility time series, which
+    :func:`_narrow_flex_inputs` narrows to the interval before each solve — see
+    there for why ``set_timeindex`` alone is not enough. Parameters are as for
     :func:`_pm_optimize_single`.
     """
     opf_kwargs = dict(
@@ -207,6 +248,10 @@ def pm_optimize(
     #  * overlying-grid SOC attributes are rewritten in place by to_powermodels;
     #  * the reactive-power time series are fully REPLACED (not .loc-updated) by
     #    the set_time_series_reactive_power_control() call inside from_powermodels.
+    #  * the overlying-grid, DSM, heat-pump and electromobility time series are
+    #    narrowed to the current interval below (see _narrow_flex_inputs), which
+    #    is destructive — they must be restored from the full reduced index
+    #    before the next interval narrows them again.
     # Reactive power was set on the full reduced index before this call; restore
     # this input pristine before each interval. Active-power frames are NOT
     # restored — they accumulate each interval's OPF results via .loc.
@@ -221,6 +266,21 @@ def pm_optimize(
         attr: copy.deepcopy(getattr(edisgo_obj.timeseries, attr, None))
         for attr in reactive_attrs
     }
+    dsm_snapshot = {
+        attr: copy.deepcopy(getattr(edisgo_obj.dsm, attr))
+        for attr in edisgo_obj.dsm._attributes
+    }
+    heat_pump_snapshot = {
+        attr: copy.deepcopy(getattr(edisgo_obj.heat_pump, attr))
+        for attr in edisgo_obj.heat_pump._timeseries_attributes
+    }
+    emob_snapshot = copy.deepcopy(edisgo_obj.electromobility.flexibility_bands)
+    # initial_soc_df is not a declared Electromobility attribute — it only exists
+    # once reduce_timeseries_data_to_given_timeindex has run. Snapshot it only if
+    # it is there, and drop it again on restore if it was not.
+    emob_soc_snapshot = copy.deepcopy(
+        getattr(edisgo_obj.electromobility, "initial_soc_df", None)
+    )
 
     def _restore_pristine_inputs():
         for attr, value in og_snapshot.items():
@@ -228,6 +288,15 @@ def pm_optimize(
         for attr, value in reactive_snapshot.items():
             if value is not None:
                 setattr(edisgo_obj.timeseries, attr, copy.deepcopy(value))
+        for attr, value in dsm_snapshot.items():
+            setattr(edisgo_obj.dsm, attr, copy.deepcopy(value))
+        for attr, value in heat_pump_snapshot.items():
+            setattr(edisgo_obj.heat_pump, attr, copy.deepcopy(value))
+        edisgo_obj.electromobility.flexibility_bands = copy.deepcopy(emob_snapshot)
+        if emob_soc_snapshot is not None:
+            edisgo_obj.electromobility.initial_soc_df = copy.deepcopy(emob_soc_snapshot)
+        elif hasattr(edisgo_obj.electromobility, "initial_soc_df"):
+            del edisgo_obj.electromobility.initial_soc_df
 
     # Pre-allocate the storage active-power schedule over the FULL reduced index
     # so from_powermodels .loc-accumulates each interval's storage result instead
@@ -245,6 +314,7 @@ def pm_optimize(
         for interval in intervals:
             _restore_pristine_inputs()
             edisgo_obj.set_timeindex(interval)
+            _narrow_flex_inputs(edisgo_obj, interval)
             entry = {
                 "start": interval[0],
                 "end": interval[-1],

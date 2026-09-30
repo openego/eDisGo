@@ -305,6 +305,66 @@ class TestGeneratorsImport:
             "matched to an existing PV rooftop plant." in caplog.text
         )
 
+    def test__integrate_pv_rooftop_two_buildings_on_one_bus(self):
+        """
+        A bus carrying conventional loads of two different buildings must not
+        break the PV rooftop import.
+
+        This used to raise "cannot reindex on an axis with duplicate labels"
+        (openego/eGo#213, seen on MV grids 33084 and 33695): the function built
+        a bus -> building ID map from the conventional loads, and that map was
+        deduplicated on "building_id" while being indexed by "bus". Two
+        buildings on one bus therefore left a duplicated bus label, the join
+        multiplied the generator rows and ``DataFrame.update`` rejected the
+        non-unique index.
+
+        That map has since been removed entirely -- it fed a building-ID based
+        matching that was replaced by source-ID matching in d33e8515 -- so the
+        function no longer reads ``loads_df`` at all and the crash is
+        structurally impossible. This test is kept as a guard against
+        reintroducing a per-bus load lookup here.
+
+        Note that the shipped test grid cannot produce the situation on its
+        own: it has 70 buses with more than one conventional load, but all of
+        them share a single building ID. The second building is therefore
+        added explicitly.
+        """
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        loads_df = edisgo.topology.loads_df
+        gens_df = edisgo.topology.generators_df
+        # a bus that carries both a PV rooftop generator and a conventional load
+        pv_buses = set(gens_df[gens_df.subtype == "pv_rooftop"].bus)
+        conv = loads_df[loads_df.type == "conventional_load"]
+        bus = conv[conv.bus.isin(pv_buses)].bus.iloc[0]
+        existing = conv[conv.bus == bus].iloc[0]
+
+        # second building on the same bus
+        second = existing.copy()
+        second["building_id"] = int(existing.building_id) + 1_000_000
+        edisgo.topology.loads_df.loc["Load_second_building_same_bus"] = second
+
+        pv_df = pd.DataFrame(
+            data={
+                "p_nom": [0.005],
+                "weather_cell_id": [11051],
+                "building_id": [430903],
+                "generator_id": [1],
+                "type": ["solar"],
+                "subtype": ["pv_rooftop"],
+                "source_id": ["SEE970362202254"],
+            },
+            index=[1],
+        )
+
+        # used to raise ValueError: cannot reindex on an axis with duplicate labels
+        generators_import._integrate_pv_rooftop(edisgo, pv_df)
+
+        # no generator was duplicated by the join (generators whose source_id
+        # is absent from the scenario are legitimately decommissioned here)
+        assert not edisgo.topology.generators_df.index.has_duplicates
+
     def test__integrate_new_pv_rooftop_to_buildings(self, caplog):
         pv_df = pd.DataFrame(
             data={

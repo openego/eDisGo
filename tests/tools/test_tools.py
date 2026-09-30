@@ -10,6 +10,140 @@ from edisgo import EDisGo
 from edisgo.tools import tools
 
 
+def _district_heating_grid(cop_rh=1.0):
+    """
+    Small grid with one district heating area (ID 130) holding a heat pump and a
+    resistive heater, plus the heat-pump data the aggregation needs.
+    """
+    edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+    edisgo.set_timeindex(pd.date_range("2011-01-01", periods=3, freq="h"))
+    for sector, p_set in (
+        ("district_heating", 2),
+        ("district_heating_resistive_heater", 5),
+    ):
+        edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector=sector,
+            district_heating_id=130,
+            ts_active_power=pd.Series(
+                index=edisgo.timeseries.timeindex, data=[1.0, 1.0, 1.0]
+            ),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[27],
+            p_set=p_set,
+        )
+    loads = edisgo.topology.loads_df
+    hp = loads.index[loads.sector == "district_heating"][0]
+    rh = loads.index[loads.sector == "district_heating_resistive_heater"][0]
+    ti = edisgo.timeseries.timeindex
+    edisgo.heat_pump.cop_df = pd.DataFrame(
+        {hp: [3.0] * 3, rh: [cop_rh] * 3}, index=ti
+    )
+    edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+        {hp: [9.0] * 3, rh: [9.0] * 3}, index=ti
+    )
+    return edisgo, hp, rh
+
+
+class TestAggregateDistrictHeatingComponents:
+    """
+    Unit tests for :func:`edisgo.tools.tools.aggregate_district_heating_components`.
+    """
+
+    def test_area_without_a_central_heat_pump_warns_instead_of_raising(self, caplog):
+        """
+        An area can hold several resistive heaters and no heat pump: central
+        heat pumps and central resistive heaters are imported by independent
+        queries, and a resistive heater that cannot be attached to a heat pump
+        is integrated on its own (io.heat_pump_import). Picking the heat pump
+        used to index [0] into an empty selection and raise IndexError.
+        """
+        import logging
+
+        edisgo, hp, rh = _district_heating_grid()
+        # turn the heat pump into a second resistive heater
+        edisgo.topology.loads_df.at[hp, "sector"] = (
+            "district_heating_resistive_heater"
+        )
+
+        with caplog.at_level(logging.WARNING, logger="edisgo.tools.tools"):
+            tools.aggregate_district_heating_components(edisgo)
+
+        # no crash, both units survive, and the reason is stated
+        assert hp in edisgo.topology.loads_df.index
+        assert rh in edisgo.topology.loads_df.index
+        assert "cannot be merged" in caplog.text
+
+    def test_area_without_a_resistive_heater_is_left_alone(self):
+        """The mirror case: several units, none of them a resistive heater."""
+        edisgo, hp, rh = _district_heating_grid()
+        edisgo.topology.loads_df.at[rh, "sector"] = "district_heating"
+
+        tools.aggregate_district_heating_components(edisgo)
+
+        assert hp in edisgo.topology.loads_df.index
+        assert rh in edisgo.topology.loads_df.index
+
+    def test_aggregated_cop_reproduces_the_electricity_demand(self):
+        """
+        The aggregated COP must reproduce the electricity the two components
+        actually draw, i.e. it is the harmonic mean of their COPs weighted by
+        heat share, not the arithmetic one.
+
+        Heat pump COP 3 with 2 MW rated power covers 6 MW of the 9 MW demand
+        drawing 2 MW; the resistive heater at COP 1 covers the remaining 3 MW
+        drawing 3 MW. So 5 MW in total and COP_agg = 9 / 5 = 1.8. The
+        arithmetic mean gives 2/3 * 3 + 1/3 * 1 = 2.333, i.e. 3.857 MW -- 23 %
+        of the electricity demand missing.
+        """
+        edisgo, hp, _ = _district_heating_grid(cop_rh=1.0)
+        tools.aggregate_district_heating_components(edisgo)
+
+        cop = edisgo.heat_pump.cop_df[hp]
+        demand = edisgo.heat_pump.heat_demand_df[hp]
+        assert_allclose(cop.values, 1.8)
+        # the definition that matters: heat demand over aggregated COP is the
+        # electricity the two components really draw
+        assert_allclose((demand / cop).values, 5.0)
+
+    def test_aggregated_cop_is_unchanged_while_the_heat_pump_suffices(self):
+        """
+        As long as the heat pump alone can cover the demand the resistive
+        heater never runs, so the aggregated COP stays the heat pump's.
+        """
+        edisgo, hp, _ = _district_heating_grid(cop_rh=1.0)
+        # 3 MW demand needs 1 MW electricity, below the 2 MW rated power
+        edisgo.heat_pump.heat_demand_df.loc[:, :] = 3.0
+        tools.aggregate_district_heating_components(edisgo)
+        assert_allclose(edisgo.heat_pump.cop_df[hp].values, 3.0)
+
+    def test_feedin_above_demand_does_not_produce_a_negative_demand(self, caplog):
+        """
+        Other heat sources delivering more than the network needs must switch the
+        power-to-heat unit off, not turn it into a generator.
+        """
+        import logging
+
+        edisgo, hp, _ = _district_heating_grid()
+        # 12 MW of solar thermal against a 9 MW demand in the middle time step
+        feedin = pd.DataFrame(
+            {"130": [1.0, 12.0, 1.0]}, index=edisgo.timeseries.timeindex
+        )
+        with caplog.at_level(logging.WARNING, logger="edisgo.tools.tools"):
+            tools.aggregate_district_heating_components(
+                edisgo, feedin_district_heating=feedin
+            )
+
+        demand = edisgo.heat_pump.heat_demand_df[hp]
+        assert (demand >= 0).all(), demand.tolist()
+        assert demand.iloc[1] == 0.0
+        assert "exceeds the heat demand" in caplog.text
+        # and the resulting load is not an injection
+        edisgo.apply_heat_pump_operating_strategy(heat_pump_names=[hp])
+        assert (edisgo.timeseries.loads_active_power[hp] >= 0).all()
+
+
 class TestTools:
     @classmethod
     def setup_class(self):

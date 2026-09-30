@@ -103,6 +103,9 @@ pipeline:
   - apply_heat_pump_strategy: {strategy: uncontrolled}
   - build_flexibility_bands                    # hourly bands on the 2035 index
   - import_overlying_grid_data
+  # merge each district heating area's PtH units and subtract the overlying
+  # grid's other heat feed-in from its demand; no-op without district heating
+  - aggregate_district_heating
   - reactive_power
   - spatial_reduce                             # no-op unless spatial_reduction.enabled
   - optimize:

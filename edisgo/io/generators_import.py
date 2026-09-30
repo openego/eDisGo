@@ -1030,24 +1030,9 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
                 MaStR ID of the PV plant.
 
     """
-    # match building ID to existing solar generators
-    loads_df = edisgo_object.topology.loads_df
-    busses_building_id = (
-        loads_df[loads_df.type == "conventional_load"]
-        .drop_duplicates(subset=["building_id"])
-        .set_index("bus")
-        .loc[:, ["building_id"]]
-    )
     gens_df = edisgo_object.topology.generators_df[
         edisgo_object.topology.generators_df.subtype == "pv_rooftop"
     ].copy()
-    gens_df_building_id = gens_df.loc[:, ["bus"]].join(
-        busses_building_id, how="left", on="bus"
-    )
-    # using update to make sure to not overwrite existing building ID information
-    if "building_id" not in gens_df.columns:
-        gens_df["building_id"] = None
-    gens_df.update(gens_df_building_id, overwrite=False)
 
     # remove decommissioned PV rooftop plants
     gens_decommissioned = gens_df[
