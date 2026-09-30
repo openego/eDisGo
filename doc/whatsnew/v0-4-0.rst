@@ -1,0 +1,13 @@
+Release v0.4.0
+================
+
+Release date: unreleased
+
+Changes
+-------
+
+* Added :attr:`~.network.results.Results.reinforce_log`, a long-format dataframe
+  that records, for every reinforcement measure taken in
+  :func:`~.flex_opt.reinforce_grid.reinforce_grid`, which component violated which
+  limit, at what time step, and what change and cost that caused `#741
+  <https://github.com/openego/eDisGo/issues/741>`_

@@ -760,6 +760,14 @@ class Results:
             "pfa_v_mag_pu_seed",
             "v_res",
             "i_res",
+            # not a power-flow attribute like the others above, but included
+            # here for the same reason: running the same deterministic
+            # pipeline (reinforce_grid()) on equal starting states must
+            # produce an equal reinforce_log, just as it must produce equal
+            # v_res/i_res. equipment_changes/grid_expansion_costs would
+            # qualify on the same grounds but are not checked here either;
+            # that is a pre-existing gap, not a decision made for this
+            # attribute specifically.
             "reinforce_log",
         ]
         try:

@@ -1256,7 +1256,11 @@ def enhanced_reinforce_grid(
     return edisgo_object
 
 
-def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> None:
+def run_separate_lv_grids(
+    edisgo_obj: EDisGo,
+    threshold: int | float = 2,
+    log_reinforcement: bool = True,
+) -> None:
     """
     Separate all highly overloaded LV grids within the MV grid.
 
@@ -1274,6 +1278,11 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
         Overloading threshold. If the overloading is higher than the threshold times
         the total nominal apparent power of the MV/LV transformer(s), the grid is
         separated.
+    log_reinforcement : bool
+        If True, every grid separation is appended as a row to
+        :attr:`~.network.results.Results.reinforce_log` and logged via an
+        INFO message, mirroring :func:`~.flex_opt.reinforce_grid.reinforce_grid`.
+        Default: True.
 
     Returns
     -------
@@ -1281,6 +1290,13 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
         The reinforced eDisGo object.
 
     """
+    existing_reinforce_log = edisgo_obj.results.reinforce_log
+    run_id = (
+        0
+        if existing_reinforce_log.empty
+        else int(existing_reinforce_log["run_id"].max()) + 1
+    )
+
     lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
     n_grids_init = len(lv_grids)
 
@@ -1341,7 +1357,8 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
                 - reactive_power_dict["storage_units"]
             )
 
-            worst_case = np.hypot(active_power, reactive_power).max()
+            combined_apparent_power = np.hypot(active_power, reactive_power)
+            worst_case = combined_apparent_power.max()
 
             transformers_s_nom = lv_grid.transformers_df.s_nom.sum()
 
@@ -1350,14 +1367,63 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
                 transformers_changes, lines_changes = separate_lv_grid(
                     edisgo_obj, lv_grid
                 )
+
+                # criterion_component naming matches
+                # check_tech_constraints.mv_lv_station_max_overload()'s
+                # convention for the same station, for consistency across
+                # reinforce_log rows
+                criterion_component = f"{lv_grid}_station"
+                issues = pd.DataFrame(
+                    {
+                        "time_index": [combined_apparent_power.idxmax()],
+                        "value": [worst_case],
+                        "threshold": [threshold * transformers_s_nom],
+                        "lv_grid_id": [lv_grid.id],
+                    },
+                    index=[criterion_component],
+                )
+                # new lines/transformers are freshly created names that
+                # don't match criterion_component directly, same situation
+                # as e.g. reinforce_mv_lv_station_voltage_issues()
+                mapping = {
+                    name: criterion_component
+                    for names in transformers_changes.get("added", {}).values()
+                    for name in names
+                }
+                mapping.update(
+                    {name: criterion_component for name in lines_changes}
+                )
+
                 if len(lines_changes) > 0:
                     _add_lines_changes_to_equipment_changes(
                         edisgo_obj, lines_changes, 1
+                    )
+                    _add_reinforcement_log_entries(
+                        edisgo_obj,
+                        1,
+                        "separate_lv_grid",
+                        "grid_separation",
+                        issues,
+                        lines_changes,
+                        run_id=run_id,
+                        mapping=mapping,
+                        log_reinforcement=log_reinforcement,
                     )
 
                 if len(transformers_changes) > 0:
                     _add_transformer_changes_to_equipment_changes(
                         edisgo_obj, transformers_changes, 1, "added"
+                    )
+                    _add_reinforcement_log_entries(
+                        edisgo_obj,
+                        1,
+                        "separate_lv_grid",
+                        "grid_separation",
+                        issues,
+                        transformers_changes["added"],
+                        run_id=run_id,
+                        mapping=mapping,
+                        log_reinforcement=log_reinforcement,
                     )
 
             else:
@@ -1451,7 +1517,12 @@ def _add_reinforcement_log_entries(
     missing apparent power in MVA, and 'limit' is NaN, since by the time this
     function runs the station's transformer set has already been changed by
     the reinforcement measure, so there is no reliable pre-reinforcement
-    apparent power/allowed-capacity pair left to derive a limit from.
+    apparent power/allowed-capacity pair left to derive a limit from. For
+    trigger "grid_separation" (used by
+    :func:`~.flex_opt.reinforce_grid.run_separate_lv_grids`, `issues` indexed
+    by the original LV grid's station and carrying 'value'/'threshold'),
+    'value'/'limit' are taken directly from those columns, since both are
+    already known exactly and need no arithmetic derivation.
 
     `run_id` distinguishes separate calls to
     :func:`~.flex_opt.reinforce_grid.reinforce_grid` (e.g. from
@@ -1483,7 +1554,10 @@ def _add_reinforcement_log_entries(
         else set(existing_log.loc[existing_log["run_id"] == run_id, "changed_component"])
     )
 
-    rows = []
+    # resolve criterion_component/changed_components_quantities for every
+    # entry in `changes` up front, so all changed components in this call
+    # are known before any cost lookup happens
+    entries = []
     for key, value in changes.items():
         if isinstance(value, (list, tuple, np.ndarray)):
             # station reinforcement: value is the list of transformers
@@ -1517,7 +1591,34 @@ def _add_reinforcement_log_entries(
                 f"Unexpected shape of 'changes' entry for key '{key}': "
                 f"{value!r}."
             )
+        entries.append((criterion_component, changed_components_quantities))
 
+    # batch the cost lookups once per call instead of once per changed
+    # component: line_expansion_costs() rebuilds a pyproj transformer and
+    # recomputes the grid district area on every call, which is wasteful
+    # when done once per line/transformer instead of once for all of them
+    all_changed_components = [
+        name
+        for _, changed_components_quantities in entries
+        for name, _ in changed_components_quantities
+    ]
+    changed_lines = [
+        c for c in all_changed_components if c in edisgo.topology.lines_df.index
+    ]
+    changed_transformers = [
+        c for c in all_changed_components if c not in edisgo.topology.lines_df.index
+    ]
+    line_costs_all = (
+        line_expansion_costs(edisgo, changed_lines) if changed_lines else None
+    )
+    transformer_costs_all = (
+        transformer_expansion_costs(edisgo, changed_transformers)
+        if changed_transformers
+        else None
+    )
+
+    rows = []
+    for criterion_component, changed_components_quantities in entries:
         issue = issues.loc[criterion_component]
         time_index = issue["time_index"]
         if "lv_grid_id" in issues.columns:
@@ -1563,6 +1664,13 @@ def _add_reinforcement_log_entries(
                 issue_value = issue["s_missing"]
                 limit = np.nan
             issue_type = "overloading"
+        elif trigger == "grid_separation":
+            # run_separate_lv_grids() already knows both numbers directly
+            # (aggregated worst-case apparent power vs. threshold *
+            # transformer capacity) - no p.u./MVA back-derivation needed
+            issue_value = issue["value"]
+            limit = issue["threshold"]
+            issue_type = "overloading"
         else:
             raise ValueError(f"Trigger '{trigger}' is not a valid option.")
 
@@ -1574,20 +1682,19 @@ def _add_reinforcement_log_entries(
 
         for changed_component, quantity in changed_components_quantities:
             if is_line:
-                line_costs = line_expansion_costs(edisgo, [changed_component])
                 equipment = edisgo.topology.lines_df.at[
                     changed_component, "type_info"
                 ]
-                voltage_level = line_costs.at[changed_component, "voltage_level"]
+                voltage_level = line_costs_all.at[changed_component, "voltage_level"]
                 costs_earthworks = (
                     0.0
                     if changed_component in lines_already_costed
-                    else line_costs.at[changed_component, "costs_earthworks"]
+                    else line_costs_all.at[changed_component, "costs_earthworks"]
                 )
                 lines_already_costed.add(changed_component)
                 costs = (
                     costs_earthworks
-                    + line_costs.at[changed_component, "costs_cable"] * quantity
+                    + line_costs_all.at[changed_component, "costs_cable"] * quantity
                 )
                 length_km = (
                     quantity
@@ -1599,14 +1706,11 @@ def _add_reinforcement_log_entries(
                 s_nom_after = edisgo.topology.lines_df.at[changed_component, "s_nom"]
                 group_length += length_km
             else:
-                transformer_costs = transformer_expansion_costs(
-                    edisgo, [changed_component]
-                )
                 equipment = changed_component
-                voltage_level = transformer_costs.at[
+                voltage_level = transformer_costs_all.at[
                     changed_component, "voltage_level"
                 ]
-                costs = transformer_costs.at[changed_component, "costs"]
+                costs = transformer_costs_all.at[changed_component, "costs"]
                 # length/num_parallel are line-only concepts
                 length_km = np.nan
                 num_parallel_after = np.nan
@@ -1647,6 +1751,8 @@ def _add_reinforcement_log_entries(
         # "overvoltage 0.031 p.u." rather than "overvoltage 1.081 p.u.")
         if trigger == "voltage":
             headline = f"{issue_type} {abs(voltage_dev):.3f} p.u."
+        elif trigger == "grid_separation":
+            headline = f"overloading {issue_value:.3f} MVA > {limit:.3f} MVA threshold"
         elif "max_rel_overload" in issues.columns:
             headline = f"overloading {relative_load:.3f} p.u. > 1.000 p.u."
         else:
