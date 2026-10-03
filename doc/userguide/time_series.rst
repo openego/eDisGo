@@ -62,6 +62,31 @@ which time step maps to which case. Note that this **overwrites** any previously
 (non-worst-case) time series. The definition of load and feed-in case is explained in
 :ref:`load-feedin-case`.
 
+**Simultaneity factors**
+
+Conventional loads and generators use fixed scale factors from the config file
+:ref:`config_timeseries` in section ``worst_case_scale_factor``.
+
+For **charging points (CP)** in the load case, the simultaneity factor is determined
+dynamically based on the number of charging points *n* and their nominal charging power.
+Three power classes are supported: 3.7 kW (slow AC), 11 kW (fast AC) and 22 kW (fast AC).
+Support points are taken from VDE FNN (2021): *Ermittlung von Gleichzeitigkeitsfaktoren
+fuer Ladevorgaenge an privaten Ladepunkten* (suburban residential evening scenario,
+conservative worst case). Interpolation is performed in log-space over *n*; for *n > 150*
+the factor is clamped to the value at *n = 150*. In the feed-in case the CP factor is
+always 0.0 (no reverse power flow from charging assumed), consistent with the dena study
+*Integrierte Energiewende* (p. 90).
+
+For **heat pumps (HP)** in the load case, the simultaneity factor depends only on the
+number of heat pumps *n*. Support points are derived from the Kerber simultaneity
+function *g(n) = g_inf + (1 − g_inf) · n^(−3/4)* (Kerber 2011, eq. 3.2) with an
+asymptote *g_inf = 0.9* based on the Consentec/E.ON distribution network study (peak
+load cold winter day). The same log-space interpolation and clamping scheme as for
+charging points is applied. In the feed-in case the HP factor is always 0.0.
+
+Support point values for both CP and HP are defined in the config file
+:ref:`config_timeseries` in section ``simultaneity_curves``.
+
 Predefined
 ~~~~~~~~~~
 
