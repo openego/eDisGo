@@ -2040,8 +2040,8 @@ def apply_reduced_results_to_full_grid(
                 f"full_grid.timeseries.timeindex's time steps (e.g. "
                 f"{missing[0]!r}). This usually means the full-grid stash "
                 f"was taken before the time index was finalized - run "
-                f"time-index selection (e.g. select_timesteps) before "
-                f"spatial_reduce."
+                f"the time-step selection (set_timeindex or "
+                f"select_critical_timesteps) before spatial_reduce."
             )
 
     def _old_name_map(loads_df: DataFrame, names: list) -> dict:
