@@ -110,9 +110,7 @@ class TestChargingStrategy:
 
         ts = self.edisgo_obj.timeseries
         assert ts.timeindex.equals(timeindex)
-        assert ts.charging_points_active_power(self.edisgo_obj).index.equals(
-            timeindex
-        )
+        assert ts.charging_points_active_power(self.edisgo_obj).index.equals(timeindex)
 
     def test_charging_strategy_with_subset_of_parks(self):
         """
