@@ -204,3 +204,8 @@ Changes
   ``set_timeindex`` / ``select_critical_timesteps`` parameters (e.g. ``timestamps``
   with a range, ``periods`` with ``end``), and a ``spatial_reduction`` block that is
   not a mapping or is enabled without a ``spatial_reduce`` step
+* Fixed ``apply_charging_strategy`` filling the gaps of a non-contiguous time index:
+  it resamples the time series to the frequency of the charging processes and back,
+  which covered the whole range from the first to the last time step. A time index of
+  e.g. two separate weeks became one long interval, so a later OPF ran over months
+  instead of two weeks
