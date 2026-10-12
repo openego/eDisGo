@@ -209,3 +209,10 @@ Changes
   which covered the whole range from the first to the last time step. A time index of
   e.g. two separate weeks became one long interval, so a later OPF ran over months
   instead of two weeks
+* Connected the legacy OEP imports (``oedb_legacy`` generators, ``feedin_oedb_legacy``,
+  the legacy weather cells and grid district polygon) with the OEP token. They used an
+  anonymous ``egoio`` connection, and the OEP limits all anonymous clients together to
+  4 open connections, so they failed with ``HTTP 429`` as soon as other anonymous
+  clients held them. :func:`~.tools.session_scope` now uses
+  :func:`~.io.db.engine` with ``ssh=False``, which reads the token like the other OEP
+  imports (openego/eDisGo#739)
