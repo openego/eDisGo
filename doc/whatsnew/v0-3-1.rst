@@ -185,3 +185,10 @@ Changes
   exactly for hourly steps and gives the full daily loss for a daily one. This only
   takes effect together with the ``time_elapsed`` fix of openego/eDisGo#693, without
   which a sub-hourly step still arrives as 0 (openego/eDisGo#697)
+* Connected the legacy OEP imports (``oedb_legacy`` generators, ``feedin_oedb_legacy``,
+  the legacy weather cells and grid district polygon) with the OEP token. They used an
+  anonymous ``egoio`` connection, and the OEP limits all anonymous clients together to
+  4 open connections, so they failed with ``HTTP 429`` as soon as other anonymous
+  clients held them. :func:`~.tools.session_scope` now uses
+  :func:`~.io.db.engine` with ``ssh=False``, which reads the token like the other OEP
+  imports (openego/eDisGo#739)
