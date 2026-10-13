@@ -169,3 +169,43 @@ Changes
   allocation results once compared to earlier versions, and that
   :attr:`~.network.electromobility.Electromobility.charging_processes_df` is now
   re-indexed from zero in that sorted order (openego/eDisGo#742)
+* Fixed :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction`
+  giving a line that stands for several parallel systems ``num_parallel`` times its
+  impedance. The per-km values the aggregation rebuilds ``r`` and ``x`` from describe
+  one system, and the factor was left out, while ``num_parallel`` and ``s_nom`` were
+  carried over intact — so nothing in the reduced grid showed that its impedance no
+  longer matched. Few lines carry parallel systems, but they sit where a feeder leaves
+  the station and are therefore on the path of everything behind them: on MV grid
+  32064 an eight-system feeder came out at 0.164 Ohm/km instead of 0.0205, the
+  load-weighted path resistance of the whole grid doubled, and
+  :attr:`~.edisgo.EDisGo.reinforce` aborted with ``MaximumIterationError`` on a grid
+  that has no voltage issues at all before the reduction. Correcting 35 of 2421 lines
+  brings the voltage band back from 0.818–1.136 to 0.895–1.040 and lets the expansion
+  run through (openego/eDisGo#767)
+* Fixed the time step length handed to the OPF. ``time_elapsed`` drives every
+  inter-time-step coupling of the PowerModels problem — battery, thermal storage, DSM
+  and electromobility energy balances — and was computed as
+  ``int((snapshots[1] - snapshots[0]).seconds / 3600)``. Both parts were wrong:
+  ``.seconds`` is the seconds *component* of the difference rather than its total, so a
+  step of exactly one day came out as 0 and one of 25 h as 1 h; and the ``int()``
+  truncated any sub-hourly step to 0, which degenerates the couplings to
+  ``energy_2 == energy_1`` and decouples power from energy entirely. The value is now
+  derived from ``total_seconds()`` and returned as a float. The snapshots are also
+  checked: fewer than two, non-equidistant or non-increasing steps raise instead of
+  silently producing a meaningless global value (openego/eDisGo#693)
+* Fixed the standing loss of a thermal storage being applied per hour regardless of the
+  time step length. ``p_loss`` is a loss per day (4 % of the state of charge for
+  individual heating), and the decay between two time steps was written as
+  ``(1 - p_loss) ** (1/24)`` — correct at hourly resolution and wrong at every other
+  one: four times too much loss per 15-minute step, four times too little per four-hour
+  step. The exponent is now ``time_elapsed / 24``, which reproduces the previous value
+  exactly for hourly steps and gives the full daily loss for a daily one. This only
+  takes effect together with the ``time_elapsed`` fix of openego/eDisGo#693, without
+  which a sub-hourly step still arrives as 0 (openego/eDisGo#697)
+* Connected the legacy OEP imports (``oedb_legacy`` generators, ``feedin_oedb_legacy``,
+  the legacy weather cells and grid district polygon) with the OEP token. They used an
+  anonymous ``egoio`` connection, and the OEP limits all anonymous clients together to
+  4 open connections, so they failed with ``HTTP 429`` as soon as other anonymous
+  clients held them. :func:`~.tools.session_scope` now uses
+  :func:`~.io.db.engine` with ``ssh=False``, which reads the token like the other OEP
+  imports (openego/eDisGo#739)
