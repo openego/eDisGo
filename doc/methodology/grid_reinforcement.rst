@@ -189,8 +189,16 @@ at an LV station (after 2/3 of the path length), or — if there is none to spli
 the node is connected directly to the MV station busbar; in **LV** grids the split
 point is the first node at or beyond 2/3 of the path length, moved back to a node
 outside a building. If the relevant node is already directly connected to the station,
-a parallel standard line is added when the line is already of standard type, otherwise
-the line is **replaced** by a standard line. Only one voltage problem per feeder is
+no line can be split; instead lines on the path to the critical node are reinforced
+one at a time, each time choosing the line whose reinforcement reduces the path
+resistance the most. How many lines are reinforced depends on the size of the voltage
+issue: the voltage deviation at the critical node is divided by the voltage difference
+between station and critical node, and the path resistance is reduced by half of this
+share (half, because the full share led to more reinforcement than needed). A line of
+standard type gets a parallel standard line; any other line is **replaced** by a
+standard line, unless this would increase its resistance (e.g. a line with a larger
+cross section), in which case it gets a parallel line of the same type. Only one
+voltage problem per feeder is
 treated per iteration, because each measure affects the whole feeder.
 
 Separating overloaded LV grids

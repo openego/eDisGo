@@ -399,9 +399,10 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
 
     1. Disconnect line at 2/3 of the length between station and critical node
     farthest away from the station and install new standard line
-    2. Install parallel standard line
+    2. If no line can be disconnected, reinforce lines on the path between
+    station and critical node (see :func:`_reinforce_lines_on_path`)
 
-    In LV grids only lines outside buildings are reinforced; loads and
+    In LV grids lines are only disconnected outside buildings; loads and
     generators in buildings cannot be directly connected to the MV/LV station.
 
     In MV grids lines can only be disconnected at LV stations because they
@@ -497,45 +498,29 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         # directly connected to the station), line cannot be
         # disconnected and must therefore be reinforced
         if node_2_3 in nodes_feeder.keys():
-            # all lines on the path from the station to the critical node are
-            # reinforced, not only the first line segment. As no line can be
-            # disconnected in this case, reinforcing the first segment alone
-            # does not necessarily reduce the voltage deviation at the critical
-            # node - the voltage drop is generally dominated by the segments
-            # further away from the station. Reinforcing only the first segment
-            # therefore leads to the same measure being repeated without effect
-            # in every iteration of the grid reinforcement, until it aborts with
-            # a MaximumIterationError.
-            for bus_0, bus_1 in zip(path[:-1], path[1:]):
-                crit_line_name = graph.get_edge_data(bus_0, bus_1)["branch_name"]
-                crit_line = grid.lines_df.loc[crit_line_name]
-
-                # if critical line is already a standard line install one
-                # more parallel line
-                if crit_line.type_info == standard_line:
-                    edisgo_obj.topology.update_number_of_parallel_lines(
-                        pd.Series(
-                            index=[crit_line_name],
-                            data=[
-                                edisgo_obj.topology._lines_df.at[
-                                    crit_line_name, "num_parallel"
-                                ]
-                                + 1
-                            ],
-                        )
-                    )
-
-                # if critical line is not yet a standard line replace old
-                # line by a standard line
-                else:
-                    # number of parallel standard lines could be calculated
-                    # following [2] p.103; for now number of parallel
-                    # standard lines is iterated
-                    edisgo_obj.topology.change_line_type(
-                        [crit_line_name], standard_line
-                    )
-
-                lines_changes[crit_line_name] = 1
+            # share of the voltage difference between station and critical node
+            # that needs to be removed to solve the voltage issue, used to decide
+            # how many lines on the path are reinforced
+            v_res = edisgo_obj.results.v_res
+            time_step = crit_nodes.at[node, "time_index"]
+            v_diff_path = abs(
+                v_res.at[time_step, node] - v_res.at[time_step, station_node]
+            )
+            if v_diff_path > 0:
+                share = min(
+                    1.0, crit_nodes.at[node, "abs_max_voltage_dev"] / v_diff_path
+                )
+            else:
+                share = 1.0
+            path_lines = [
+                graph.get_edge_data(bus_0, bus_1)["branch_name"]
+                for bus_0, bus_1 in zip(path[:-1], path[1:])
+            ]
+            lines_changes.update(
+                _reinforce_lines_on_path(
+                    edisgo_obj, grid, path_lines, standard_line, share
+                )
+            )
 
         # if node_2_3 is not a representative, disconnect line
         else:
@@ -562,6 +547,78 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             f"==> {len(lines_changes)} line(s) was/were reinforced due to voltage "
             "issues."
         )
+
+    return lines_changes
+
+
+def _reinforce_lines_on_path(edisgo_obj, grid, path_lines, standard_line, share):
+    """
+    Reinforce lines on the path from the station to a critical node.
+
+    Lines are reinforced one at a time. Each time, the line whose reinforcement
+    reduces the resistance of the path the most is chosen. This is repeated until
+    the resistance of the path is reduced by `share` / 2, e.g. by 10 % for a share
+    of 0.2.
+
+    Only half of the share is used because the share assumes that the voltage
+    difference along the path decreases proportionally to the path resistance. In the
+    test grids, using the full share led to more reinforcement than needed. Voltage
+    issues that remain are handled in the next iteration of the grid reinforcement.
+
+    A line that is not yet a standard line is replaced by one standard line, unless
+    this would increase its resistance, e.g. because the line has a larger cross
+    section than the standard line. In that case, as for standard lines, one more
+    parallel line of the same type is installed.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    grid : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+    path_lines : list(str)
+        Names of lines on the path from the station to the critical node.
+    standard_line : str
+        Name of standard line type.
+    share : float
+        Voltage deviation at the critical node divided by the voltage difference
+        between station and critical node, i.e. the share of the voltage difference
+        that needs to be removed to solve the voltage issue. Between 0 and 1.
+
+    Returns
+    -------
+    dict
+        Dictionary with name of lines as keys and the corresponding number of
+        lines added as values.
+
+    """
+    cables = "lv_cables" if isinstance(grid, LVGrid) else "mv_cables"
+    r_per_km_standard = edisgo_obj.topology.equipment_data[cables].at[
+        standard_line, "R_per_km"
+    ]
+    lines = grid.lines_df.loc[path_lines]
+    r_target = lines.r.sum() * (1 - share / 2)
+
+    lines_changes = {}
+    while lines.r.sum() > r_target:
+        r_standard = r_per_km_standard * lines.length
+        replace = (lines.type_info != standard_line) & (r_standard < lines.r)
+        r_reduction = (lines.r / (lines.num_parallel + 1)).where(
+            ~replace, lines.r - r_standard
+        )
+        if r_reduction.max() <= 0:
+            break
+        line_name = r_reduction.idxmax()
+
+        if replace[line_name]:
+            edisgo_obj.topology.change_line_type([line_name], standard_line)
+        else:
+            edisgo_obj.topology.update_number_of_parallel_lines(
+                pd.Series(
+                    index=[line_name],
+                    data=[lines.at[line_name, "num_parallel"] + 1],
+                )
+            )
+        lines_changes[line_name] = lines_changes.get(line_name, 0) + 1
+        lines = grid.lines_df.loc[path_lines]
 
     return lines_changes
 

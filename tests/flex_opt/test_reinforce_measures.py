@@ -302,16 +302,14 @@ class TestReinforceMeasures:
         # * check where node_2_3 is in_building => problem at
         #   Bus_BranchTee_LVGrid_5_2, node_2_3 is moved back to
         #   Bus_BranchTee_LVGrid_5_1, which is the feeder representative, so no
-        #   line can be disconnected. All lines on the path from the station to
-        #   the critical node are reinforced, i.e. Line_50000003 (first line in
-        #   feeder, not a standard line) and Line_50000002 (line to the critical
-        #   node, not a standard line). Line_50000003 is only 0.56 m long, while
-        #   Line_50000002 is 30 m of NAYY 4x1x35 and therefore causes most of
-        #   the voltage deviation - reinforcing the first line segment only
-        #   would not resolve the voltage issue.
+        #   line can be disconnected and lines on the path are reinforced.
+        #   Line_50000002 (30 m NAYY 4x1x35) is replaced by a standard line, as
+        #   this reduces the resistance the most. Line_50000003 (first line in
+        #   feeder, 0.56 m NAYY 4x1x300) is not changed, as a standard line
+        #   would increase its resistance.
         # * check where node_2_3 is not in_building => problem at
         #   Bus_BranchTee_LVGrid_5_5, leads to reinforcement of line
-        #   Line_50000009 (which is the only line in the feeder and a standard
+        #   Line_50000009 (which is the only line on the path and a standard
         #   line)
 
         crit_nodes = pd.DataFrame(
@@ -328,17 +326,10 @@ class TestReinforceMeasures:
         )
 
         reinforced_lines = lines_changes.keys()
-        assert len(lines_changes) == 3
-        assert "Line_50000003" in reinforced_lines
+        assert len(lines_changes) == 2
         assert "Line_50000002" in reinforced_lines
         assert "Line_50000009" in reinforced_lines
         # check that LV station is one of the buses
-        assert (
-            "BusBar_MVGrid_1_LVGrid_5_LV"
-            in self.edisgo.topology.lines_df.loc[
-                "Line_50000003", ["bus0", "bus1"]
-            ].values
-        )
         assert (
             "BusBar_MVGrid_1_LVGrid_5_LV"
             in self.edisgo.topology.lines_df.loc[
@@ -352,28 +343,13 @@ class TestReinforceMeasures:
                 "Line_50000009", ["bus0", "bus1"]
             ].values
         )
-        assert (
-            "Bus_BranchTee_LVGrid_5_1"
-            in self.edisgo.topology.lines_df.loc[
-                "Line_50000003", ["bus0", "bus1"]
-            ].values
-        )
         # check line parameters
         std_line = self.edisgo.topology.equipment_data["lv_cables"].loc[
             self.edisgo.config["grid_expansion_standard_equipment"]["lv_line"]
         ]
         line = self.edisgo.topology.lines_df.loc["Line_50000003"]
-        assert line.type_info == std_line.name
-        assert np.isclose(line.r, std_line.R_per_km * line.length)
-        assert np.isclose(
-            line.x, std_line.L_per_km * line.length * 2 * np.pi * 50 / 1e3
-        )
-        assert np.isclose(
-            line.s_nom, np.sqrt(3) * grid.nominal_voltage * std_line.I_max_th
-        )
+        assert line.type_info == "NAYY 4x1x300"
         assert line.num_parallel == 1
-        # second line segment on the path to the critical node is reinforced as
-        # well
         line = self.edisgo.topology.lines_df.loc["Line_50000002"]
         assert line.type_info == std_line.name
         assert np.isclose(line.r, std_line.R_per_km * line.length)
