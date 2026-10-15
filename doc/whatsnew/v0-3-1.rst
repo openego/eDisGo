@@ -198,11 +198,12 @@ Changes
   per iteration, which reduces the voltage deviation less with every iteration and
   never touches the rest of the path, so grid reinforcement could abort with
   :class:`~.flex_opt.exceptions.MaximumIterationError`. This happens e.g. after a long
-  first line was installed by disconnecting the feeder in a previous iteration. Now the
-  lines on the path to the critical node whose reinforcement reduces the resistance the
-  most are reinforced, until the resistance of the path is reduced by an estimate of
-  the share needed to solve the voltage issue. Lines thicker than the standard line are
-  no longer replaced by a single standard line but get a parallel line of the same
-  type. In the test grids this solves voltage issues that previously could not be
-  solved and does not increase grid expansion costs where reinforcement already
+  first line was installed by disconnecting the feeder in a previous iteration. Now
+  lines on the path to the critical node are reinforced one at a time, each time
+  choosing the measure with the largest reduction of resistance times current per
+  cost, until the voltage difference along the path is reduced by an estimate of the
+  share needed to solve the voltage issue. Lines thicker than the standard line are no
+  longer replaced by a single standard line but get a parallel line of the same type.
+  In the test grids this solves voltage issues that previously could not be solved and
+  does not increase grid expansion costs where reinforcement already
   converged (openego/eDisGo#738)

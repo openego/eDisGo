@@ -304,9 +304,9 @@ class TestReinforceMeasures:
         #   Bus_BranchTee_LVGrid_5_1, which is the feeder representative, so no
         #   line can be disconnected and lines on the path are reinforced.
         #   Line_50000002 (30 m NAYY 4x1x35) is replaced by a standard line, as
-        #   this reduces the resistance the most. Line_50000003 (first line in
-        #   feeder, 0.56 m NAYY 4x1x300) is not changed, as a standard line
-        #   would increase its resistance.
+        #   this reduces resistance times current the most per cost.
+        #   Line_50000003 (first line in feeder, 0.56 m NAYY 4x1x300) is not
+        #   changed, as a standard line would increase its resistance.
         # * check where node_2_3 is not in_building => problem at
         #   Bus_BranchTee_LVGrid_5_5, leads to reinforcement of line
         #   Line_50000009 (which is the only line on the path and a standard

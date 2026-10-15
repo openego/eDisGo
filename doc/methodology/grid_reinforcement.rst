@@ -189,17 +189,75 @@ at an LV station (after 2/3 of the path length), or — if there is none to spli
 the node is connected directly to the MV station busbar; in **LV** grids the split
 point is the first node at or beyond 2/3 of the path length, moved back to a node
 outside a building. If the relevant node is already directly connected to the station,
-no line can be split; instead lines on the path to the critical node are reinforced
-one at a time, each time choosing the line whose reinforcement reduces the path
-resistance the most. How many lines are reinforced depends on the size of the voltage
-issue: the voltage deviation at the critical node is divided by the voltage difference
-between station and critical node, and the path resistance is reduced by half of this
-share (half, because the full share led to more reinforcement than needed). A line of
-standard type gets a parallel standard line; any other line is **replaced** by a
-standard line, unless this would increase its resistance (e.g. a line with a larger
-cross section), in which case it gets a parallel line of the same type. Only one
-voltage problem per feeder is
+no line can be split and the lines on the path to the critical node are reinforced
+instead, see :ref:`path-reinforcement`. Only one voltage problem per feeder is
 treated per iteration, because each measure affects the whole feeder.
+
+.. _path-reinforcement:
+
+Reinforcing lines on the path to the critical node
+""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The split point at two thirds of the path is often the first node of the feeder, for
+example when an earlier iteration split the feeder and installed a long new line from
+the station. Then no line can be split and the lines on the path from the station to
+the critical node are reinforced. In every iteration of the grid reinforcement, the
+helper ``_reinforce_lines_on_path`` in
+:py:mod:`~edisgo.flex_opt.reinforce_measures` does the following:
+
+#. **Estimate how much needs to be removed.** The voltage deviation at the critical
+   node is divided by the voltage difference between station and critical node:
+
+   .. math::
+
+      share = \frac{\Delta u_\mathrm{deviation}}{|u_\mathrm{node} - u_\mathrm{station}|}
+
+#. **Set the target.** The voltage difference along the path is estimated as
+   :math:`\sum_i r_i \cdot I_i`, the resistance times the current of each line on the
+   path at the time step of the voltage issue. It is to be reduced by
+   :math:`share / 2`. Only half of the share is used, because using the full share
+   led to more reinforcement than needed in the test grids. Remaining voltage issues
+   are handled in the next iteration, after a new power flow.
+
+#. **Reinforce one line at a time.** For every line on the path, the reduction of
+   :math:`r \cdot I` and the cost of the possible measure are calculated:
+
+   * a line of standard type gets one more parallel line, which reduces its resistance
+     from :math:`r` to :math:`r \cdot n / (n + 1)` for :math:`n` parallel lines,
+   * any other line is replaced by one standard line, unless this would increase its
+     resistance, e.g. because it has a larger cross section than the standard line. In
+     that case it gets a parallel line of the same type.
+
+   The cost of a measure is the cost of the new cable plus the earthwork, if the line
+   was not reinforced before. Earthwork is paid only once per line (see
+   :ref:`grid-expansion-costs`), so another parallel line on an already reinforced
+   line is cheaper than reinforcing a new one. The measure with the largest reduction
+   of :math:`r \cdot I` per cost is applied, until the target is reached.
+
+The example below shows a 10 kV feeder with five lines. A generator at B5 and a PV
+plant at B3 raise the voltage at all buses above the allowed 5 %. The current on L1 to
+L3 is 1.4 times the current on L4 and L5, because the PV plant feeds in at B3. The
+example uses a simplified model in which the voltage rise is proportional to
+:math:`\sum r \cdot I` and costs follow the default costs for rural MV cables (60 kEUR/km
+earthwork, 20 kEUR/km cable); eDisGo itself runs a power flow after every iteration.
+
+.. only:: html
+
+   Move the slider to go through the reinforcement measure by measure. The table shows,
+   for every line, the measure that would be applied, its reduction of
+   :math:`r \cdot I` and its costs. The highlighted row is the chosen measure.
+
+   .. raw:: html
+      :file: voltage_path_reinforcement.html
+
+.. figure:: ../images/voltage_path_reinforcement.png
+   :width: 100%
+
+   Reinforcement of the example feeder. In the first iteration, the overhead lines L4
+   and L5 are replaced by standard lines and then get a second, parallel standard line,
+   which is cheap because the earthwork is already paid. In the second iteration L1,
+   which carries the highest current, gets a parallel line. L2 and L3 are not changed,
+   as a standard line would increase their resistance.
 
 Separating overloaded LV grids
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -24,6 +24,7 @@ from networkx.algorithms.shortest_paths.weighted import (
     _dijkstra as dijkstra_shortest_path_length,
 )
 
+from edisgo.flex_opt.costs import line_expansion_costs
 from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.tools.tools import get_downstream_buses
 
@@ -516,9 +517,19 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
                 graph.get_edge_data(bus_0, bus_1)["branch_name"]
                 for bus_0, bus_1 in zip(path[:-1], path[1:])
             ]
+            # current through each line at the time step of the voltage issue,
+            # all lines are weighted equally if no current is available
+            current = (
+                edisgo_obj.results.i_res.reindex(columns=path_lines)
+                .loc[time_step]
+                .abs()
+                .fillna(0.0)
+            )
+            if current.sum() == 0:
+                current[:] = 1.0
             lines_changes.update(
                 _reinforce_lines_on_path(
-                    edisgo_obj, grid, path_lines, standard_line, share
+                    edisgo_obj, grid, path_lines, standard_line, share, current
                 )
             )
 
@@ -551,19 +562,28 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     return lines_changes
 
 
-def _reinforce_lines_on_path(edisgo_obj, grid, path_lines, standard_line, share):
+def _reinforce_lines_on_path(
+    edisgo_obj, grid, path_lines, standard_line, share, current
+):
     """
     Reinforce lines on the path from the station to a critical node.
 
-    Lines are reinforced one at a time. Each time, the line whose reinforcement
-    reduces the resistance of the path the most is chosen. This is repeated until
-    the resistance of the path is reduced by `share` / 2, e.g. by 10 % for a share
-    of 0.2.
+    The voltage difference along the path is estimated as the sum of resistance times
+    current of all lines on the path. Lines are reinforced one at a time until this
+    voltage difference is reduced by `share` / 2, e.g. by 10 % for a share of 0.2.
+
+    Each time, the measure that reduces the voltage difference the most per cost is
+    chosen. The cost of a measure is the cost of the new cable plus, if the line was
+    not reinforced before, the cost of the earthwork. Earthwork is only paid once per
+    line, as in :func:`~.flex_opt.costs.grid_expansion_costs`, so adding another
+    parallel line to an already reinforced line is cheaper than reinforcing a new
+    one.
 
     Only half of the share is used because the share assumes that the voltage
-    difference along the path decreases proportionally to the path resistance. In the
-    test grids, using the full share led to more reinforcement than needed. Voltage
-    issues that remain are handled in the next iteration of the grid reinforcement.
+    difference along the path decreases proportionally to the reduction of
+    resistance times current. In the test grids, using the full share led to more
+    reinforcement than needed. Voltage issues that remain are handled in the next
+    iteration of the grid reinforcement.
 
     A line that is not yet a standard line is replaced by one standard line, unless
     this would increase its resistance, e.g. because the line has a larger cross
@@ -582,6 +602,9 @@ def _reinforce_lines_on_path(edisgo_obj, grid, path_lines, standard_line, share)
         Voltage deviation at the critical node divided by the voltage difference
         between station and critical node, i.e. the share of the voltage difference
         that needs to be removed to solve the voltage issue. Between 0 and 1.
+    current : :pandas:`pandas.Series<Series>`
+        Current through each line on the path at the time step of the voltage
+        issue. Index contains the names of the lines in `path_lines`.
 
     Returns
     -------
@@ -594,19 +617,26 @@ def _reinforce_lines_on_path(edisgo_obj, grid, path_lines, standard_line, share)
     r_per_km_standard = edisgo_obj.topology.equipment_data[cables].at[
         standard_line, "R_per_km"
     ]
+    costs = line_expansion_costs(edisgo_obj, path_lines)
+    reinforced_before = edisgo_obj.results.equipment_changes.index
     lines = grid.lines_df.loc[path_lines]
-    r_target = lines.r.sum() * (1 - share / 2)
+    v_target = (lines.r * current).sum() * (1 - share / 2)
 
     lines_changes = {}
-    while lines.r.sum() > r_target:
+    while (lines.r * current).sum() > v_target:
         r_standard = r_per_km_standard * lines.length
         replace = (lines.type_info != standard_line) & (r_standard < lines.r)
         r_reduction = (lines.r / (lines.num_parallel + 1)).where(
             ~replace, lines.r - r_standard
         )
-        if r_reduction.max() <= 0:
+        v_reduction = r_reduction * current
+        if v_reduction.max() <= 0:
             break
-        line_name = r_reduction.idxmax()
+        new_line = ~lines.index.isin(reinforced_before) & ~lines.index.isin(
+            list(lines_changes)
+        )
+        measure_costs = costs.costs_cable + costs.costs_earthworks.where(new_line, 0.0)
+        line_name = (v_reduction / measure_costs).fillna(0.0).idxmax()
 
         if replace[line_name]:
             edisgo_obj.topology.change_line_type([line_name], standard_line)
