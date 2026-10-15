@@ -1,0 +1,266 @@
+<div class="fsp" id="fsp">
+<style>
+.fsp { --ink: #1d2731; --muted: #5d6a73; --rule: #d7dee3; --grid: #eef2f4; --acc: #0f6f8c; --acc-soft: #dcedf3;
+  --bad: #c2362b; --bad-soft: #f8e1de; --ok: #2b7a4b; --ok-soft: #dff0e5; --c300: #6a4fb3; --c150: #0f6f8c; --c95: #8a6d3b; --c50: #7c8a3b; --one: #e07b00;
+  border: 1px solid var(--rule); padding: 14px 16px; margin: 0 0 24px; background: #fff; color: var(--ink);
+  font-size: 14px; line-height: 1.45; }
+.fsp * { box-sizing: border-box; }
+.fsp .fsp-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.fsp .fsp-tab { font: 600 13px/1.2 inherit; padding: 6px 10px; border: 1px solid var(--rule); background: #fff; color: var(--ink);
+  border-radius: 4px; cursor: pointer; }
+.fsp .fsp-tab[aria-pressed=true] { background: var(--acc); border-color: var(--acc); color: #fff; }
+.fsp .fsp-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.fsp .fsp-nav { font: 600 16px/1 monospace; width: 32px; height: 30px; border: 1px solid var(--rule); background: #fff;
+  color: var(--ink); border-radius: 4px; cursor: pointer; }
+.fsp button:disabled { opacity: .35; cursor: default; }
+.fsp button:focus-visible, .fsp input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.fsp input[type=range] { flex: 1 1 200px; min-width: 0; accent-color: var(--acc); }
+.fsp .fsp-step { font-weight: 600; min-width: 14em; }
+.fsp .fsp-status { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 10px 0 4px; color: var(--muted); }
+.fsp .fsp-status b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.fsp .fsp-pill { padding: 1px 8px; border-radius: 99px; font-weight: 600; }
+.fsp .fsp-pill.bad { background: var(--bad-soft); color: var(--bad); }
+.fsp .fsp-pill.ok { background: var(--ok-soft); color: var(--ok); }
+.fsp .fsp-pill.idle { background: var(--grid); color: var(--muted); }
+.fsp svg { display: block; width: 100%; height: auto; }
+.fsp svg text { font-family: inherit; fill: var(--ink); }
+.fsp .fsp-sm { font-size: 11px; fill: var(--muted); }
+.fsp .fsp-lbl { font-size: 13px; font-weight: 700; }
+.fsp .fsp-h { font-size: 12px; font-weight: 700; fill: var(--muted); }
+.fsp .fsp-explain { margin: 8px 0 6px; }
+.fsp .fsp-scroll { overflow-x: auto; }
+.fsp table { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 13px; margin: 4px 0 0; }
+.fsp th, .fsp td { border: 0; border-bottom: 1px solid var(--rule); padding: 4px 8px; text-align: left; background: none; }
+.fsp th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.fsp td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fsp tr.worse td { background: var(--bad-soft); }
+.fsp tr.better td { background: var(--ok-soft); }
+.fsp .fsp-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.fsp .fsp-legend i { display: inline-block; width: 22px; border-top: 3px solid; vertical-align: middle; margin-right: 5px; }
+</style>
+<div class="fsp-tabs" role="group" aria-label="Example feeder" id="fsp-tabs"></div>
+<div class="fsp-controls">
+  <button type="button" class="fsp-nav" id="fsp-prev" aria-label="Previous step">‹</button>
+  <input type="range" id="fsp-range" min="0" max="1" value="0" aria-label="Step">
+  <button type="button" class="fsp-nav" id="fsp-next" aria-label="Next step">›</button>
+  <span class="fsp-step" id="fsp-step"></span>
+</div>
+<div class="fsp-status" id="fsp-status"></div>
+<svg id="fsp-net" viewBox="0 0 800 210" role="img" aria-label="LV feeder with buses B1 to B6"></svg>
+<div class="fsp-legend" id="fsp-legend"></div>
+<p class="fsp-explain" id="fsp-explain"></p>
+<div class="fsp-scroll" id="fsp-table"></div>
+<svg id="fsp-prof" viewBox="0 0 800 220" role="img" aria-label="Voltage drop along the feeder"></svg>
+<svg id="fsp-curve" viewBox="0 0 800 250" role="img" aria-label="Voltage drop at B6 over the load behind the split node"></svg>
+<script>
+(function () {
+  var D = {"km":[0.4,0.2,0.18,0.12,0.12,0.1],"limit":0.065,"std":"NAYY 4x1x150","scenarios":{"thin":{"title":"Older, thinner cables","types":["NAYY 4x1x95","NAYY 4x1x95","NAYY 4x1x95","NAYY 4x1x50","NAYY 4x1x50","NAYY 4x1x50"],"n":[1,1,1,1,1,1],"loads":[8,8,8,8,8,8],"critical":[3,4,5,6],"far":6,"two_thirds":0.7467,"split":3,"km_new":0.78,"r_path":0.2496,"r_new":0.1607,"p_behind":32.0,"before":[0.0,0.04517,0.06412,0.07783,0.08729,0.09362,0.09626],"after":{"1":[0.0,0.01411,0.01764,0.03813,0.04719,0.05324,0.05577]},"curves":{"before":{"points":[[0.6,0.0191],[1.9,0.02202],[3.2,0.02497],[4.5,0.02793],[5.8,0.03091],[7.7,0.03541],[9.0,0.03843],[10.9,0.04299],[12.2,0.04606],[14.1,0.0507],[15.4,0.05381],[17.3,0.05852],[18.6,0.06168],[20.5,0.06647],[21.8,0.06969],[23.7,0.07456],[25.0,0.07783],[26.9,0.08278],[28.2,0.08611],[30.1,0.09116],[31.4,0.09455],[33.3,0.09969],[34.6,0.10315],[36.5,0.10838],[37.8,0.11191],[39.7,0.11726],[41.0,0.12086],[42.9,0.12632],[44.2,0.13],[46.1,0.13558],[47.4,0.13934],[49.3,0.14505],[50.6,0.1489],[52.5,0.15475],[53.8,0.1587],[55.7,0.16469],[57.0,0.16875],[58.9,0.17491],[60.2,0.17907],[62.1,0.18541],[63.4,0.18969],[65.3,0.19622],[66.6,0.20064],[68.5,0.20738],[69.8,0.21194],[71.7,0.21891],[73.0,0.22364],[74.9,0.23087],[76.2,0.23578],[78.1,0.2433],[79.4,0.24841],[81.3,0.25625],[82.6,0.2616],[84.5,0.26982],[85.8,0.27543],[87.7,0.28408],[89.0,0.29],[90.9,0.29915],[92.2,0.30545],[94.1,0.31521],[95.4,0.32196],[97.3,0.33247],[98.6,0.33977],[100.5,0.35124],[101.8,0.35927],[103.7,0.37201],[105.0,0.38105],[106.9,0.39562],[108.2,0.40616],[110.1,0.42367],[111.4,0.43688],[113.3,0.46042],[114.6,0.48065],[116.2,0.52446],[116.4,0.54423]],"p_max":116.4},"1":{"points":[[0.6,0.00106],[1.9,0.00319],[3.2,0.00532],[4.5,0.00747],[5.8,0.00962],[7.7,0.01286],[9.0,0.01504],[10.9,0.01831],[12.2,0.02051],[14.1,0.02382],[15.4,0.02604],[17.3,0.02938],[18.6,0.03162],[20.5,0.035],[21.8,0.03727],[23.7,0.04069],[25.0,0.04298],[26.9,0.04644],[28.2,0.04875],[30.1,0.05225],[31.4,0.05459],[33.3,0.05813],[34.6,0.0605],[36.5,0.06408],[37.8,0.06648],[39.7,0.07011],[41.0,0.07254],[42.9,0.07621],[44.2,0.07867],[46.1,0.08239],[47.4,0.08488],[49.3,0.08865],[50.6,0.09117],[52.5,0.09499],[53.8,0.09756],[55.7,0.10143],[57.0,0.10403],[58.9,0.10796],[60.2,0.11059],[62.1,0.11458],[63.4,0.11726],[65.3,0.12131],[66.6,0.12402],[68.5,0.12814],[69.8,0.1309],[71.7,0.13508],[73.0,0.13789],[74.9,0.14214],[76.2,0.145],[78.1,0.14932],[79.4,0.15223],[81.3,0.15663],[82.6,0.1596],[84.5,0.16408],[85.8,0.1671],[87.7,0.17168],[89.0,0.17476],[90.9,0.17943],[92.2,0.18257],[94.1,0.18734],[95.4,0.19055],[97.3,0.19543],[98.6,0.19871],[100.5,0.2037],[101.8,0.20706],[103.7,0.21217],[105.0,0.21562],[106.9,0.22086],[108.2,0.2244],[110.1,0.22979],[111.4,0.23342],[113.3,0.23896],[114.6,0.24271],[116.5,0.24841],[117.8,0.25228],[119.7,0.25817],[121.0,0.26216],[122.9,0.26826],[124.2,0.2724],[126.1,0.27872],[127.4,0.28302],[129.3,0.2896],[130.6,0.29407],[132.5,0.30094],[133.8,0.30563],[135.7,0.31283],[137.0,0.31775],[138.9,0.32533],[140.2,0.33053],[142.1,0.33857],[143.4,0.3441],[145.3,0.35269],[146.6,0.35862],[148.5,0.36788],[149.8,0.37433],[151.7,0.38446],[153.0,0.39158],[154.9,0.40289],[156.2,0.41094],[158.1,0.42397],[159.4,0.43346],[161.3,0.44937],[162.6,0.46155],[164.5,0.48392],[165.8,0.50468],[166.9,0.54641]],"p_max":166.9}}},"thick":{"title":"Thick first section (as in grid 34632)","types":["NAYY 4x1x150","NAYY 4x1x300","NAYY 4x1x300","NAYY 4x1x150","NAYY 4x1x150","NAYY 4x1x150"],"n":[5,2,2,1,1,1],"loads":[10,10,40,50,60,64],"critical":[3,4,5,6],"far":6,"two_thirds":0.7467,"split":3,"km_new":0.78,"r_path":0.0355,"r_new":0.1607,"p_behind":214.0,"before":[0.0,0.03057,0.05103,0.06862,0.10332,0.12829,0.1391],"after":{"1":null,"2":[0.0,0.00233,0.00314,0.15261,0.19133,0.21925,0.23135]},"curves":{"before":{"points":[[4.3,0.00553],[17.1,0.01278],[25.7,0.01766],[38.5,0.02506],[47.1,0.03006],[59.9,0.03764],[68.5,0.04276],[81.3,0.05052],[89.9,0.05577],[102.7,0.06374],[111.3,0.06913],[124.1,0.07732],[132.7,0.08286],[145.5,0.09129],[154.1,0.097],[166.9,0.10569],[175.5,0.11158],[188.3,0.12056],[196.9,0.12665],[209.7,0.13595],[218.3,0.14227],[231.1,0.15192],[239.7,0.15849],[252.5,0.16854],[261.1,0.17539],[273.9,0.1859],[282.5,0.19308],[295.3,0.20411],[303.9,0.21166],[316.7,0.2233],[325.3,0.23129],[338.1,0.24366],[346.7,0.25218],[359.5,0.26543],[368.1,0.27461],[380.9,0.28896],[389.5,0.29897],[402.3,0.31477],[410.9,0.32589],[423.7,0.34368],[432.3,0.35642],[445.1,0.37723],[453.7,0.39258],[466.5,0.41883],[475.1,0.43965],[487.9,0.48149],[496.2,0.54693]],"p_max":496.2},"1":{"points":[[4.3,0.00611],[17.1,0.02489],[25.7,0.03781],[38.5,0.05784],[47.1,0.07168],[59.9,0.09326],[68.5,0.10826],[81.3,0.13181],[89.9,0.14831],[102.7,0.1745],[111.3,0.19308],[124.1,0.22304],[132.7,0.24475],[145.5,0.28083],[154.1,0.3081],[166.9,0.35687],[175.5,0.39907],[186.2,0.4968],[186.9,0.5237]],"p_max":186.9},"2":{"points":[[4.3,0.00366],[17.1,0.01481],[25.7,0.02236],[38.5,0.03391],[47.1,0.04175],[59.9,0.05375],[68.5,0.06191],[81.3,0.07442],[89.9,0.08294],[102.7,0.09603],[111.3,0.10497],[124.1,0.11873],[132.7,0.12815],[145.5,0.14269],[154.1,0.15268],[166.9,0.16817],[175.5,0.17885],[188.3,0.19548],[196.9,0.20701],[209.7,0.2251],[218.3,0.23774],[231.1,0.25773],[239.7,0.27187],[252.5,0.29457],[261.1,0.31091],[273.9,0.33783],[282.5,0.35791],[295.3,0.39295],[303.9,0.42175],[316.7,0.48825],[320.0,0.53833]],"p_max":320.0}}}}};
+  var root = document.getElementById("fsp");
+  var NS = "http://www.w3.org/2000/svg";
+  function el(tag, a, txt) { var e = document.createElementNS(NS, tag); for (var k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; }
+  function f(v, d) { return v.toFixed(d == null ? 1 : d); }
+  function pc(v, d) { return f(v * 100, d) + " %"; }
+  var KM = D.km, nodeKm = [0];
+  KM.forEach(function (k) { nodeKm.push(nodeKm[nodeKm.length - 1] + k); });
+  var total = nodeKm[nodeKm.length - 1], X0 = 80, X1 = 770;
+  function x(km) { return X0 + km / total * (X1 - X0); }
+  var COL = { "NAYY 4x1x300": "var(--c300)", "NAYY 4x1x150": "var(--c150)", "NAYY 4x1x95": "var(--c95)", "NAYY 4x1x50": "var(--c50)" };
+  var STEPS = { thin: ["start", "point", "split", "pf_ok"], thick: ["start", "point", "split", "pf_fail", "parallel", "pf_ok"] };
+  var key = "thick", idx = 0, range = root.querySelector("#fsp-range");
+
+  function nNew(sc, kind) {
+    var ns = Object.keys(sc.after).map(Number);
+    return kind === "parallel" || (kind === "pf_ok" && ns.length > 1) ? Math.max.apply(null, ns) : 1;
+  }
+
+  function drawNet(sc, kind) {
+    var svg = root.querySelector("#fsp-net"); svg.textContent = "";
+    var y = 70, split = sc.split, isSplit = ["split", "pf_fail", "parallel", "pf_ok"].indexOf(kind) >= 0;
+    var n2 = nNew(sc, kind);
+    if (kind === "point") {
+      svg.appendChild(el("rect", { x: x(0), y: y - 34, width: x(nodeKm[split]) - x(0), height: 68, fill: "var(--acc-soft)", rx: 4 }));
+      svg.appendChild(el("text", { x: (x(0) + x(nodeKm[split])) / 2, y: y + 50, "text-anchor": "middle", "class": "fsp-sm" }, "bypassed path station → B" + split));
+      var xm = x(sc.two_thirds);
+      svg.appendChild(el("line", { x1: xm, x2: xm, y1: y - 46, y2: y + 30, stroke: "var(--ink)", "stroke-dasharray": "4 3" }));
+      svg.appendChild(el("text", { x: xm, y: y - 50, "text-anchor": "middle", "class": "fsp-sm" }, "2/3 of " + f(nodeKm[sc.far], 2) + " km = " + f(sc.two_thirds, 2) + " km"));
+    }
+    sc.types.forEach(function (t, k) {
+      var xa = x(nodeKm[k]) + 7, xb = x(nodeKm[k + 1]) - 7, mid = (xa + xb) / 2;
+      if (isSplit && k === split - 1) {
+        var yb = 150, xs = x(0), xe = x(nodeKm[split]);
+        for (var j = 0; j < n2; j++) {
+          var off = (j - (n2 - 1) / 2) * 5;
+          svg.appendChild(el("path", { d: "M" + (xs + off) + " " + (y + 10) + " V" + (yb + off) + " H" + (xe + off) + " V" + (y + 8),
+            fill: "none", stroke: "var(--c150)", "stroke-width": 2.5 }));
+        }
+        svg.appendChild(el("text", { x: (xs + xe) / 2, y: yb + 24, "text-anchor": "middle", "class": "fsp-lbl", style: "fill: var(--c150)" },
+          "L" + split + " (new): " + (n2 > 1 ? n2 + "× " : "") + D.std + ", " + f(sc.km_new, 2) + " km"));
+        svg.appendChild(el("line", { x1: xa, x2: xb, y1: y, y2: y, stroke: "var(--rule)", "stroke-width": 2, "stroke-dasharray": "3 4" }));
+        svg.appendChild(el("text", { x: mid, y: y - 22, "text-anchor": "middle", "class": "fsp-sm" }, "disconnected"));
+        return;
+      }
+      var n = Math.min(sc.n[k], 6);
+      for (var i = 0; i < n; i++) {
+        var yy = y + (i - (n - 1) / 2) * 5;
+        svg.appendChild(el("line", { x1: xa, x2: xb, y1: yy, y2: yy, stroke: COL[t], "stroke-width": t === "NAYY 4x1x300" ? 4 : 2.5 }));
+      }
+      svg.appendChild(el("text", { x: mid, y: y - 34, "text-anchor": "middle", "class": "fsp-lbl" }, "L" + (k + 1) + (sc.n[k] > 1 ? " ×" + sc.n[k] : "")));
+      svg.appendChild(el("text", { x: mid, y: y - 20, "text-anchor": "middle", "class": "fsp-sm" }, t.replace("NAYY 4x1x", "")));
+    });
+    svg.appendChild(el("rect", { x: x(0) - 10, y: y - 24, width: 8, height: 48, fill: "var(--ink)" }));
+    svg.appendChild(el("text", { x: x(0) - 16, y: y + 4, "text-anchor": "end", "class": "fsp-sm" }, "station"));
+    for (var b = 1; b < nodeKm.length; b++) {
+      var crit = (kind === "start" || kind === "point") && sc.critical.indexOf(b) >= 0;
+      var hl = (kind === "point" && b === split) || (kind === "start" && b === sc.far);
+      svg.appendChild(el("circle", { cx: x(nodeKm[b]), cy: y, r: hl ? 7.5 : 5.5, fill: crit ? "var(--bad)" : "#fff",
+        stroke: hl ? "var(--acc)" : crit ? "var(--bad)" : "var(--ink)", "stroke-width": hl ? 3 : 1.6 }));
+      var shift = isSplit && b === split ? { x: x(nodeKm[b]) + 7, a: "start" } : { x: x(nodeKm[b]), a: "middle" };
+      svg.appendChild(el("text", { x: shift.x, y: y + 22, "text-anchor": shift.a, "class": "fsp-sm" }, "B" + b));
+      svg.appendChild(el("text", { x: shift.x, y: y + 35, "text-anchor": shift.a, "class": "fsp-sm" }, sc.loads[b - 1] + " kW"));
+    }
+  }
+
+  function legend(sc) {
+    var seen = {}, h = "";
+    sc.types.concat([D.std]).forEach(function (t) {
+      if (seen[t]) return; seen[t] = 1;
+      h += "<span><i style='border-color:" + COL[t] + (t === "NAYY 4x1x300" ? ";border-top-width:5px" : "") + "'></i>" + t + (t === D.std ? " (standard line)" : "") + "</span>";
+    });
+    root.querySelector("#fsp-legend").innerHTML = h + "<span>stacked lines = parallel systems, loads with cos φ ≈ 0.95</span>";
+  }
+
+  function drawProfile(sc, kind) {
+    var svg = root.querySelector("#fsp-prof"); svg.textContent = "";
+    var top = 26, bot = 190, all = sc.before.slice();
+    Object.keys(sc.after).forEach(function (n) { if (sc.after[n]) all = all.concat(sc.after[n]); });
+    var vmax = Math.ceil(Math.max.apply(null, all) * 100 / 5) * 5 / 100 + 0.02;
+    function yv(v) { return bot - v / vmax * (bot - top); }
+    svg.appendChild(el("text", { x: X0 - 70, y: 14, "class": "fsp-h" }, "Voltage drop along the feeder (power flow)"));
+    svg.appendChild(el("rect", { x: X0, y: top, width: X1 - X0, height: yv(D.limit) - top, fill: "var(--bad-soft)" }));
+    var stepv = vmax > 0.15 ? 0.05 : 0.02;
+    for (var v = 0; v <= vmax + 1e-9; v += stepv) {
+      svg.appendChild(el("line", { x1: X0, x2: X1, y1: yv(v), y2: yv(v), stroke: "var(--grid)" }));
+      svg.appendChild(el("text", { x: X0 - 6, y: yv(v) + 4, "text-anchor": "end", "class": "fsp-sm" }, f(v * 100, 0) + " %"));
+    }
+    svg.appendChild(el("line", { x1: X0, x2: X1, y1: yv(D.limit), y2: yv(D.limit), stroke: "var(--bad)", "stroke-width": 1.4, "stroke-dasharray": "6 4" }));
+    svg.appendChild(el("text", { x: X0 + 6, y: yv(D.limit) - 5, "class": "fsp-sm", style: "fill: var(--bad)" }, "allowed voltage drop " + pc(D.limit)));
+    nodeKm.forEach(function (km, i) { svg.appendChild(el("text", { x: x(km), y: bot + 16, "text-anchor": "middle", "class": "fsp-sm" }, i ? "B" + i : "station")); });
+    function line(ids, p, color, dash, w) {
+      svg.appendChild(el("path", { d: ids.map(function (b, i) { return (i ? "L" : "M") + x(nodeKm[b]) + " " + yv(p[b]); }).join(" "),
+        fill: "none", stroke: color, "stroke-width": w, "stroke-dasharray": dash }));
+      ids.forEach(function (b) { if (b) svg.appendChild(el("circle", { cx: x(nodeKm[b]), cy: yv(p[b]), r: 3, fill: color })); });
+    }
+    var allIds = nodeKm.map(function (_, i) { return i; });
+    line(allIds, sc.before, kind === "start" || kind === "point" ? "var(--acc)" : "#9aa4ab", kind === "start" || kind === "point" ? null : "5 4", kind === "start" || kind === "point" ? 2.4 : 1.6);
+    if (kind === "pf_ok") {
+      var p = sc.after[String(nNew(sc, kind))], front = [], rear = [0];
+      allIds.forEach(function (b) { if (b < sc.split) front.push(b); else rear.push(b); });
+      line(front, p, "var(--acc)", null, 2.4); line(rear, p, "var(--acc)", null, 2.4);
+      var vEnd = p[p.length - 1];
+      svg.appendChild(el("text", { x: X1 - 10, y: Math.max(yv(vEnd) - 10, top + 14), "text-anchor": "end", "class": "fsp-lbl", style: "fill:" + (vEnd > D.limit ? "var(--bad)" : "var(--ok)") }, "after split: " + pc(vEnd)));
+    } else if (kind === "pf_fail") {
+      svg.appendChild(el("text", { x: (X0 + X1) / 2, y: (top + bot) / 2, "text-anchor": "middle", "class": "fsp-lbl", style: "fill: var(--bad)" }, "no power flow solution after the split"));
+    } else if (kind === "split" || kind === "parallel") {
+      svg.appendChild(el("text", { x: (X0 + X1) / 2, y: (top + bot) / 2, "text-anchor": "middle", "class": "fsp-sm" }, "power flow of the new topology follows in the next step"));
+    }
+    if (kind !== "start" && kind !== "point") svg.appendChild(el("text", { x: X0 + 6, y: top + 14, "class": "fsp-sm" }, "dashed: before the split"));
+  }
+
+  function drawCurve(sc, kind) {
+    var svg = root.querySelector("#fsp-curve"); svg.textContent = "";
+    var top = 26, bot = 210, L = 80, R = 770;
+    var keys = ["before"];
+    if (kind !== "start" && kind !== "point") keys.push("1");
+    if (kind === "parallel" || (kind === "pf_ok" && nNew(sc, kind) > 1)) keys.push(String(nNew(sc, kind)));
+    var pmax = 0, vmax = 0;
+    Object.keys(sc.curves).forEach(function (k) { var c = sc.curves[k]; pmax = Math.max(pmax, c.p_max); c.points.forEach(function (p) { vmax = Math.max(vmax, p[1]); }); });
+    pmax = Math.max(pmax, sc.p_behind) * 1.08; vmax = Math.ceil(vmax * 10) / 10;
+    function xp(p) { return L + p / pmax * (R - L); }
+    function yv(v) { return bot - v / vmax * (bot - top); }
+    svg.appendChild(el("text", { x: L - 70, y: 14, "class": "fsp-h" }, "Voltage drop at B6 over the load behind the split node — curves end where the power flow has no solution"));
+    for (var v = 0; v <= vmax + 1e-9; v += 0.1) {
+      svg.appendChild(el("line", { x1: L, x2: R, y1: yv(v), y2: yv(v), stroke: "var(--grid)" }));
+      svg.appendChild(el("text", { x: L - 6, y: yv(v) + 4, "text-anchor": "end", "class": "fsp-sm" }, f(v * 100, 0) + " %"));
+    }
+    var tick = pmax > 300 ? 100 : pmax > 120 ? 50 : 20;
+    for (var p = 0; p <= pmax; p += tick) svg.appendChild(el("text", { x: xp(p), y: bot + 16, "text-anchor": "middle", "class": "fsp-sm" }, p + " kW"));
+    svg.appendChild(el("line", { x1: L, x2: R, y1: yv(D.limit), y2: yv(D.limit), stroke: "var(--bad)", "stroke-width": 1.2, "stroke-dasharray": "6 4" }));
+    var STY = { before: ["#9aa4ab", "5 4", "before the split"], 1: ["var(--one)", null, "split, 1× " + D.std] };
+    keys.forEach(function (k, i) {
+      var c = sc.curves[k], s = STY[k] || ["var(--acc)", null, "split, " + k + "× " + D.std];
+      svg.appendChild(el("path", { d: c.points.map(function (q, j) { return (j ? "L" : "M") + xp(q[0]) + " " + yv(q[1]); }).join(" "),
+        fill: "none", stroke: s[0], "stroke-width": 2.4, "stroke-dasharray": s[1] }));
+      var last = c.points[c.points.length - 1], xe = xp(last[0]), ye = yv(last[1]);
+      svg.appendChild(el("path", { d: "M" + (xe - 5) + " " + (ye - 5) + " L" + (xe + 5) + " " + (ye + 5) + " M" + (xe - 5) + " " + (ye + 5) + " L" + (xe + 5) + " " + (ye - 5), stroke: s[0], "stroke-width": 2.4 }));
+      svg.appendChild(el("text", { x: xe + 8, y: ye + 4, "class": "fsp-sm" }, "max. " + f(c.p_max, 0) + " kW"));
+      svg.appendChild(el("line", { x1: L + 10, x2: L + 34, y1: top + 14 + i * 16, y2: top + 14 + i * 16, stroke: s[0], "stroke-width": 2.4, "stroke-dasharray": s[1] }));
+      svg.appendChild(el("text", { x: L + 40, y: top + 18 + i * 16, "class": "fsp-sm" }, s[2]));
+    });
+    svg.appendChild(el("line", { x1: xp(sc.p_behind), x2: xp(sc.p_behind), y1: top, y2: bot, stroke: "var(--ink)", "stroke-width": 1.2 }));
+    svg.appendChild(el("text", { x: xp(sc.p_behind) + 5, y: bot - 8, "class": "fsp-sm", style: "fill: var(--ink)" }, "load behind B" + sc.split + ": " + f(sc.p_behind, 0) + " kW"));
+  }
+
+  function rTable(sc, n) {
+    var rows = [["bypassed path station → B" + sc.split, sc.r_path, null]];
+    for (var k = 1; k <= n; k++) rows.push(["new line, " + (k > 1 ? k + " parallel systems" : "one standard line"), sc.r_new / k, sc.r_new / k > sc.r_path]);
+    var h = "<table><thead><tr><th>Connection station → B" + sc.split + "</th><th class='num'>Length</th><th class='num'>Resistance</th></tr></thead><tbody>";
+    rows.forEach(function (r) {
+      h += "<tr" + (r[2] === true ? " class='worse'" : r[2] === false ? " class='better'" : "") + "><td>" + r[0] + "</td><td class='num'>" + f(sc.km_new, 2) + " km</td><td class='num'>" + f(r[1], 3) + " Ω</td></tr>";
+    });
+    return h + "</tbody></table>";
+  }
+
+  function render() {
+    var sc = D.scenarios[key], steps = STEPS[key], kind = steps[idx];
+    range.max = steps.length - 1; range.value = idx;
+    root.querySelector("#fsp-prev").disabled = idx === 0;
+    root.querySelector("#fsp-next").disabled = idx === steps.length - 1;
+    var LABEL = { start: "Voltage issue", point: "Find the split node", split: "Split the feeder", pf_fail: "Power flow", parallel: "Add a parallel line", pf_ok: "Power flow" };
+    root.querySelector("#fsp-step").textContent = "Step " + (idx + 1) + " of " + steps.length + ": " + LABEL[kind];
+    var n2 = nNew(sc, kind), st;
+    if (kind === "pf_fail") st = "<span class='fsp-pill bad'>no solution</span>";
+    else if (kind === "pf_ok") { var e = sc.after[String(n2)]; e = e[e.length - 1]; st = "<span class='fsp-pill " + (e > D.limit ? "bad" : "ok") + "'>" + pc(e) + "</span>"; }
+    else if (kind === "start" || kind === "point") st = "<span class='fsp-pill bad'>" + pc(sc.before[sc.before.length - 1]) + "</span>";
+    else st = "<span class='fsp-pill idle'>not computed yet</span>";
+    root.querySelector("#fsp-status").innerHTML = "<span>voltage drop at B6: " + st + "</span>" +
+      "<span>resistance station → B" + sc.split + ": <b>" + f(sc.r_path, 3) + " Ω</b>" + (["start", "point"].indexOf(kind) < 0 ? " → <b>" + f(sc.r_new / n2, 3) + " Ω</b>" : "") + "</span>";
+    drawNet(sc, kind); legend(sc); drawProfile(sc, kind); drawCurve(sc, kind);
+    var ex = root.querySelector("#fsp-explain"), tb = root.querySelector("#fsp-table"), worse = sc.r_new > sc.r_path, tx;
+    tb.innerHTML = "";
+    if (kind === "start") {
+      tx = "The power flow shows a voltage drop above the allowed " + pc(D.limit) + " at B" + sc.critical.join(", B") + ". Per feeder, only the critical bus <b>farthest from the station</b> is treated: B" + sc.far + ", at " + f(nodeKm[sc.far], 2) + " km.";
+    } else if (kind === "point") {
+      tx = "The split node is the first bus at or beyond two thirds of the path length to B" + sc.far + ": B" + sc.split + " at " + f(nodeKm[sc.split], 2) + " km. In LV grids it is moved back towards the station if it lies inside a building, in MV grids it is moved forward to the next LV station. " +
+        (worse ? "Here the bypassed path is built from thick and parallel cables: its resistance is lower than that of the new standard line." : "The bypassed path has a higher resistance than the new standard line would have.");
+      tb.innerHTML = rTable(sc, 1);
+    } else if (kind === "split") {
+      tx = "L" + sc.split + ", the line ending at B" + sc.split + ", is disconnected from B" + (sc.split - 1) + " and connected to the station. It becomes one " + D.std + " with the length of the path, " + f(sc.km_new, 2) + " km. B" + sc.split + " to B6 now form a feeder of their own, B1 to B" + (sc.split - 1) + " keep the old lines. " +
+        (worse ? "The new line has " + f(sc.r_new / sc.r_path, 1) + " times the resistance of the path it bypasses, and the whole load behind B" + sc.split + " now flows through it." : "The new line has a lower resistance than the bypassed path, and the old path now carries only the load of B1 to B" + (sc.split - 1) + ".");
+      tb.innerHTML = rTable(sc, 1);
+    } else if (kind === "pf_fail") {
+      tx = "The power flow does not converge. Not because of a numerical problem: there is no solution. A line can only transfer a limited power to its end, about U²/(4R) for a purely resistive line. Beyond that, a larger current reduces the voltage more than it increases the power. With one standard line, the feeder behind B" + sc.split + " can be supplied with at most " + f(sc.curves["1"].p_max, 0) + " kW; it has " + f(sc.p_behind, 0) + " kW. Until openego/eDisGo#777 was fixed, grid reinforcement aborted here with <code>ValueError: Power flow analysis did not converge</code>.";
+    } else if (kind === "parallel") {
+      tx = "Instead of aborting, every LV grid with split lines from this step is analysed on its own. Only lines in grids that do not converge on their own get a parallel line (here: L" + sc.split + ", 1 of at most 4). Split lines in the MV grid get it without this check. Then the power flow of the whole grid is repeated.";
+      tb.innerHTML = rTable(sc, n2);
+    } else {
+      var e2 = sc.after[String(n2)], end = e2[e2.length - 1];
+      tx = n2 > 1
+        ? "With " + n2 + " parallel lines the power flow converges again (up to " + f(sc.curves[String(n2)].p_max, 0) + " kW). But the voltage drop at B6 is " + pc(end) + ", worse than " + pc(sc.before[sc.before.length - 1]) + " before the split: the new connection still has " + f(sc.r_new / n2 / sc.r_path, 1) + " times the resistance of the bypassed path. The next iteration treats the new feeder: its node at two thirds is B" + sc.split + ", which is now directly connected to the station, so the lines on the path are reinforced (see below)."
+        : "The power flow converges and the voltage drop at B6 falls from " + pc(sc.before[sc.before.length - 1]) + " to " + pc(end) + (end <= D.limit ? ", within the allowed band. The split solved the voltage issue with one new standard line." : ". Remaining issues are handled in the next iteration.");
+    }
+    ex.innerHTML = tx;
+  }
+
+  var tabs = root.querySelector("#fsp-tabs");
+  Object.keys(D.scenarios).forEach(function (k) {
+    var b = document.createElement("button"); b.type = "button"; b.className = "fsp-tab"; b.textContent = D.scenarios[k].title;
+    b.addEventListener("click", function () { key = k; idx = 0; tabs.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === b); }); render(); });
+    b.setAttribute("aria-pressed", k === key); tabs.appendChild(b);
+  });
+  range.addEventListener("input", function () { idx = +range.value; render(); });
+  root.querySelector("#fsp-prev").addEventListener("click", function () { if (idx > 0) { idx--; render(); } });
+  root.querySelector("#fsp-next").addEventListener("click", function () { if (idx < STEPS[key].length - 1) { idx++; render(); } });
+  render();
+})();
+</script>
+</div>

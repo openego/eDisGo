@@ -222,5 +222,7 @@ Changes
   40 LV grids are
   reinforced in one step on 34632, the LV grids with split lines are first checked
   on their own, and only the split lines of those that do not converge get the
-  parallel line. Grids whose power flow converges are not affected
-  (openego/eDisGo#777)
+  parallel line. Grids whose power flow converges are not affected. The grid
+  reinforcement methodology now describes the feeder split, the transfer limit of
+  the new line and this fallback, with an interactive example for the HTML docs, and
+  lists the limits of line reinforcement due to voltage issues (openego/eDisGo#777)
