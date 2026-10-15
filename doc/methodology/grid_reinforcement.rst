@@ -193,6 +193,15 @@ no line can be split and the lines on the path to the critical node are reinforc
 instead, see :ref:`path-reinforcement`. Only one voltage problem per feeder is
 treated per iteration, because each measure affects the whole feeder.
 
+The rear part of a split feeder is connected to the station by **one** new standard
+line, which can have a higher resistance than the path it bypasses if that path
+consists of thicker or parallel lines. If the power flow after a reinforcement step
+then does not converge, the lines installed by splitting a feeder in that step get a
+parallel line and the power flow is repeated, up to four times; if it then still does
+not converge, reinforcement aborts with the power flow error. In LV, the power flow is
+first conducted for each LV grid with split lines on its own, and only the split lines
+of LV grids that do not converge get the parallel line.
+
 .. _path-reinforcement:
 
 Reinforcing lines on the path to the critical node
