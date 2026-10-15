@@ -210,19 +210,12 @@ Changes
 * Stopped grid reinforcement aborting with ``ValueError: Power flow analysis did not
   converge`` after splitting a feeder due to voltage issues.
   :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` connects the
-  rear part of a split feeder to the station by one new standard line, without
-  checking it against the path it bypasses. Where that path consists of thicker or
-  parallel lines, the new line has a higher resistance than the path, and with enough
-  load behind the split the next power flow has no solution — seen on MV grid 34632
-  after the spatial complexity reduction, where the bypassed path had five parallel
-  lines and the new line four times its resistance. If the power flow after a
-  voltage reinforcement step does not converge, the lines installed by splitting a
-  feeder in that step now get a parallel line and the power flow is repeated, up to
-  four times; only if it then still does not converge is the error raised. As about
-  40 LV grids are
-  reinforced in one step on 34632, the LV grids with split lines are first checked
-  on their own, and only the split lines of those that do not converge get the
-  parallel line. Grids whose power flow converges are not affected. The grid
-  reinforcement methodology now describes the feeder split, the transfer limit of
-  the new line and this fallback, with an interactive example for the HTML docs, and
-  lists the limits of line reinforcement due to voltage issues (openego/eDisGo#777)
+  rear part of a split feeder to the station by one standard line. Where the bypassed
+  path consists of thicker or parallel lines, this line has a higher resistance than
+  the path, and with enough load behind the split the power flow has no solution, as
+  in an LV grid of MV grid 34632 after the spatial complexity reduction. If the power
+  flow then does not converge, the split lines in LV grids that do not converge on
+  their own get a parallel line and the power flow is repeated, in up to four rounds,
+  before the error is raised. Grids whose power flow converges are not affected. The
+  methodology docs now describe the feeder split with an interactive example and the
+  limits of line reinforcement due to voltage issues (openego/eDisGo#777)

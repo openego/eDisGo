@@ -22,7 +22,9 @@ It only needs matplotlib and numpy.
 from __future__ import annotations
 
 import heapq
+import json
 import os
+import re
 
 import matplotlib
 
@@ -42,6 +44,7 @@ GREEN = "#2e7d32"
 GREY = "#9aa0a6"
 DARK = "#202124"
 PURPLE = "#6f42c1"
+RED = "#c2362b"
 
 plt.rcParams.update(
     {
@@ -378,7 +381,7 @@ def fig_heat_pump():
     )
     axr.set_xlabel("time step (hour)")
     axr.set_ylabel("power")
-    axr.set_ylim(0, max(p_heat.max(), q.max()) * 1.25)
+    axr.set_ylim(0, max(p_heat.max(), q.max()) * 1.15)
 
     axe = axr.twinx()  # separate axis: E_th is an energy, not a power
     axe.fill_between(t, 0, e_th, color=PURPLE, alpha=0.12)
@@ -629,7 +632,7 @@ FS_SCENARIOS = {
         "loads": [8] * 6,
     },
     "thick": {
-        "title": "Thick first section (as in grid 34632)",
+        "title": "Thick, parallel first section",
         "types": ["NAYY 4x1x150"] + ["NAYY 4x1x300"] * 2 + ["NAYY 4x1x150"] * 3,
         "n": [5, 2, 2, 1, 1, 1],
         "loads": [10, 10, 40, 50, 60, 64],
@@ -642,7 +645,7 @@ def _fs_impedance(cable, km, n):
     return r_km * km / n, 2 * np.pi * 50 * l_km * 1e-3 * km / n
 
 
-def _fs_power_flow(lines, p_kw, v_start=None):
+def _fs_power_flow(lines, p_kw):
     """
     Newton-Raphson power flow of a 0.4 kV grid with the slack at bus 0.
 
@@ -661,7 +664,7 @@ def _fs_power_flow(lines, p_kw, v_start=None):
         y_bus[b, a] -= y
     p = np.asarray(p_kw, float) / 1e3
     s_set = -(p + 1j * p * FS_TAN_PHI)
-    v = np.ones(nb, complex) if v_start is None else v_start.copy()
+    v = np.ones(nb, complex)
     pq = np.arange(1, nb)
     for _ in range(100):
         i = y_bus @ v
@@ -717,17 +720,13 @@ def _fs_transfer_curve(sc, split_n):
     behind = np.arange(len(p)) >= sc["split"]
     p_behind = p[behind].sum()
 
-    def solve(scale, v_start):
-        return _fs_power_flow(lines, np.where(behind, p * scale, p), v_start)
-
-    curve, v, scale, step = [], None, 0.0, 0.02
+    curve, scale, step = [], 0.0, 0.02
     while step > 1e-4:
-        v_new = solve(scale + step, v)
-        if v_new is None:
+        v = _fs_power_flow(lines, np.where(behind, p * (scale + step), p))
+        if v is None:
             step /= 2
             continue
         scale += step
-        v = v_new
         curve.append([round(scale * p_behind, 1), round(float(1 - abs(v[-1])), 5)])
     # thin out the points, which get dense where the step size was reduced
     points = [curve[0]]
@@ -743,24 +742,20 @@ def feeder_split_example():
     data = {"km": FS_KM, "limit": FS_LIMIT, "std": FS_STANDARD, "scenarios": {}}
     for key, sc in FS_SCENARIOS.items():
         sc = dict(sc)
-        before = _fs_drop(_fs_power_flow(_fs_lines(sc), np.r_[0.0, sc["loads"]]))
+        p = np.r_[0.0, sc["loads"]]
+        before = _fs_drop(_fs_power_flow(_fs_lines(sc), p))
         crit = [b for b in range(1, len(before)) if before[b] > FS_LIMIT]
         far = max(crit, key=lambda b: nodes_km[b])
         two_thirds = 2 / 3 * nodes_km[far]
         sc["split"] = int(np.argmax(nodes_km >= two_thirds))
-        r_path = sum(
-            _fs_impedance(c, km, n)[0]
-            for c, km, n in list(zip(sc["types"], FS_KM, sc["n"]))[: sc["split"]]
-        )
+        r_path = sum(line[2] for line in _fs_lines(sc)[: sc["split"]])
         km_new = nodes_km[sc["split"]]
+        # number of parallel split lines needed for a power flow solution
         after = {}
-        n_new = 1
-        while True:
-            v = _fs_power_flow(_fs_lines(sc, n_new), np.r_[0.0, sc["loads"]])
-            after[n_new] = _fs_drop(v)
-            if v is not None or n_new == 5:
+        for n_new in range(1, 6):
+            after[n_new] = _fs_drop(_fs_power_flow(_fs_lines(sc, n_new), p))
+            if after[n_new] is not None:
                 break
-            n_new += 1
         data["scenarios"][key] = {
             "title": sc["title"],
             "types": sc["types"],
@@ -786,9 +781,6 @@ def feeder_split_example():
 
 def write_feeder_split_widget(data):
     """Write the example data into the interactive step-through."""
-    import json
-    import re
-
     path = os.path.join(HERE, "..", "methodology", "feeder_split.html")
     with open(path) as f:
         html = f.read()
@@ -863,8 +855,8 @@ def fig_feeder_split(data):
                 0,
                 "o",
                 ms=7,
-                mfc="#c2362b" if crit else "white",
-                mec="#c2362b" if crit else DARK,
+                mfc=RED if crit else "white",
+                mec=RED if crit else DARK,
                 mew=1.4,
             )
             ax.text(nodes_km[b], 0.07, f"B{b}", ha="center", fontsize=8.5)
@@ -908,7 +900,7 @@ def fig_feeder_split(data):
         f"load behind\nthe split: {sc['p_behind']:.0f} kW",
         fontsize=8.5,
     )
-    ax_d.axhline(data["limit"] * 100, color="#c2362b", lw=1.2, ls=(0, (6, 4)))
+    ax_d.axhline(data["limit"] * 100, color=RED, lw=1.2, ls=(0, (6, 4)))
     ax_d.set_xlabel("load behind the split node in kW")
     ax_d.set_ylabel("voltage drop at B6 in %")
     ax_d.set_ylim(0, 60)
@@ -933,8 +925,8 @@ def fig_feeder_split(data):
             ax_c.plot(nodes_km[front], drop[front], color=color, lw=2, marker="o", ms=4)
             ax_c.plot(nodes_km[rear], drop[rear], color=color, lw=2, marker="o", ms=4)
         ax_c.plot([], [], color=color, ls=ls, lw=2, label=label)
-    ax_c.axhline(data["limit"] * 100, color="#c2362b", lw=1.2, ls=(0, (6, 4)))
-    ax_c.text(0.01, data["limit"] * 100 + 0.6, "allowed 6.5 %", color="#c2362b")
+    ax_c.axhline(data["limit"] * 100, color=RED, lw=1.2, ls=(0, (6, 4)))
+    ax_c.text(0.01, data["limit"] * 100 + 0.6, "allowed 6.5 %", color=RED)
     ax_c.set_xticks(nodes_km)
     ax_c.set_xticklabels(["station"] + [f"B{b}" for b in range(1, len(nodes_km))])
     ax_c.set_ylabel("voltage drop in %")

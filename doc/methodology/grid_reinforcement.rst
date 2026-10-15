@@ -189,9 +189,9 @@ measure affects the whole feeder. There are two measures:
 
 * the feeder is **split** and its rear part is connected to the station by a new line
   (:ref:`feeder-split`), or,
-* if the feeder cannot be split because the split node is already directly connected
-  to the station, the **lines on the path** to the critical node are reinforced
-  (:ref:`path-reinforcement`).
+* if the node at two thirds of the path is already directly connected to the
+  station, so there is nothing to split, the **lines on the path** to the critical
+  node are reinforced (:ref:`path-reinforcement`).
 
 Both measures are rules of thumb; what they cannot do is summarised in
 :ref:`voltage-reinforcement-limits`.
@@ -208,9 +208,9 @@ Splitting a feeder
    the next LV station, as only LV stations have the switch disconnectors needed to
    operate the feeder as a half ring; if there is none up to the critical node, the
    critical node itself is connected to the station.
-#. **Connect it to the station.** The line ending at the split node is disconnected
-   from its predecessor and connected to the station. It becomes **one standard line**
-   (``lv_line``, ``mv_line_10kv`` or ``mv_line_20kv`` in
+#. **Connect it to the station.** The line ending at the split node, the **split
+   line**, is disconnected from its predecessor and connected to the station. It
+   becomes **one standard line** (``lv_line``, ``mv_line_10kv`` or ``mv_line_20kv`` in
    :ref:`config_grid_expansion`) with the length of the path from the station to the
    split node, i.e. the new cable is assumed to be laid along the existing route. The
    split node and everything behind it now form a feeder of their own. The front part
@@ -228,14 +228,14 @@ part is proportional to :math:`a^2/2` and at the end of the rear part to
 
 .. _feeder-split-weaker-line:
 
-When the new line is weaker than the bypassed path
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+When the split line is weaker than the bypassed path
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The new line replaces the path from the station to the split node for everything
+The split line replaces the path from the station to the split node for everything
 behind the split. Usually the old path consists of thinner or older cables, and the
-new standard line has a lower resistance. If the path is built from thicker or
-parallel cables, the new line can have a **higher** resistance than the path it
-bypasses, while it carries the whole load behind the split.
+standard line has a lower resistance. If the path is built from thicker or parallel
+cables, the split line can have a **higher** resistance than the path it bypasses,
+while it carries the whole load behind the split.
 
 Then the voltage behind the split gets worse instead of better, and with enough load
 the power flow has **no solution** at all, because a line can transfer only a limited
@@ -248,34 +248,33 @@ station this limit is
 
 reached when half of the voltage drops along the line; beyond it, a larger current
 reduces the voltage more than it increases the power. Reactive power lowers the limit
-further. The Newton-Raphson power flow then does not converge, and grid reinforcement
-used to abort with ``ValueError: Power flow analysis did not converge``
-(`openego/eDisGo#777 <https://github.com/openego/eDisGo/issues/777>`_).
+further. The Newton-Raphson power flow then does not converge.
 
-Therefore, if the power flow after a reinforcement step due to voltage issues does
-not converge and feeders were split in that step, reinforcement does not abort right
-away (``_analyze_after_voltage_reinforcement`` in
+So that reinforcement does not abort in this case, the following is done if the power
+flow after a reinforcement step due to voltage issues does not converge and feeders
+were split in that step (``_analyze_after_voltage_reinforcement`` in
 :py:mod:`~edisgo.flex_opt.reinforce_grid`):
 
-#. **Find the grids that cause it.** Every LV grid with lines installed by splitting a
-   feeder in this step is analysed on its own (``mode="lv"``, only the time steps that
-   did not converge). In one step all LV grids with voltage issues are reinforced at
-   once, often dozens, and usually only a few of them have no solution.
-#. **Add a parallel line.** The split lines of LV grids that do not converge on their
-   own get one parallel line. Split lines in the MV grid get one without this check,
-   as there is only one MV grid. If every LV grid converges on its own, all split
-   lines of the step get one.
-#. **Repeat the power flow** of the whole grid. If it still does not converge, steps
-   1 and 2 are repeated for the grids that did not converge, up to four parallel
-   lines in total. After that, the power flow error is raised.
+#. **Find the grids that cause it.** Every LV grid with split lines is analysed on its
+   own (``mode="lv"``, only the time steps that did not converge). This finds the few
+   LV grids without a solution among the many reinforced in one step. If all split
+   lines are in one grid, e.g. the MV grid, this check is skipped.
+#. **Add a parallel line** to the split lines of the LV grids that do not converge on
+   their own, or to all split lines of the step if every LV grid converges on its own
+   or the check was skipped.
+#. **Repeat the power flow** with the same settings as the reinforcement step. If it
+   still does not converge, steps 1 and 2 are repeated for the split lines that got a
+   parallel line, in up to four rounds, i.e. at most four additional lines per split
+   line. After that, the power flow error is raised.
 
 The added lines are written to ``equipment_changes`` and are part of the costs. In
 grids whose power flow converges after the split, nothing changes.
 
 The example below shows an LV feeder with six lines in two variants: older, thinner
-cables, where the split works as intended, and a feeder whose first section consists
-of five parallel NAYY 4x1x150 and two NAYY 4x1x300 cables, modelled on the LV grid in
-which reinforcement of MV grid 34632 aborted. Loads have a :math:`\cos\varphi` of
+cables, where the split works as intended, and a feeder with a thick first section,
+in which L1 has five parallel NAYY 4x1x150 and L2 and L3 have two parallel
+NAYY 4x1x300 each, modelled on a real LV grid after spatial complexity reduction.
+Loads have a :math:`\cos\varphi` of
 about 0.95, the allowed voltage drop is 6.5 % (``lv_max_v_drop`` with
 ``split_voltage_band=True``), and the voltages come from a Newton-Raphson power flow
 of the example feeder.
@@ -311,7 +310,7 @@ described in the next section.
 Reinforcing lines on the path to the critical node
 """"""""""""""""""""""""""""""""""""""""""""""""""""
 
-The split point at two thirds of the path is often the first node of the feeder, for
+The split node at two thirds of the path is often the first node of the feeder, for
 example when an earlier iteration split the feeder and installed a long new line from
 the station. Then no line can be split and the lines on the path from the station to
 the critical node are reinforced. In every iteration of the grid reinforcement, the
@@ -385,8 +384,8 @@ close to what a grid operator would do, but has limits:
   considered. With unevenly distributed loads, or in grids reduced by the
   :ref:`spatial complexity reduction <complexity-reduction>` with few buses per
   feeder, the bus after two thirds can carry most of the load of the feeder.
-* **The new line is not compared with the bypassed path.** It is always one standard
-  line. Where the path is thicker or has parallel lines, the voltage behind the split
+* **The split line is not compared with the bypassed path.** It is always one
+  standard line. Where the path is thicker or has parallel lines, the voltage behind the split
   gets worse, also when the power flow still converges. This is not detected as such;
   it shows up as a voltage issue in the next iteration and is then solved by
   reinforcing the lines on the path, which can cost more than reinforcing the old path
@@ -399,15 +398,16 @@ close to what a grid operator would do, but has limits:
   MV/LV station. If the power flow of the whole grid does not converge although each
   LV grid converges on its own, the cause cannot be attributed, and all split lines of
   the step get a parallel line, more than needed. Split lines in the MV grid always
-  get one.
+  get one. The check costs one power flow per LV grid with split lines.
 * **The cause of a non-converging power flow is not checked.** If feeders were split
   in the step, up to four parallel lines are added to them before the error is raised,
   even if the power flow does not converge for another reason.
-* **The loading of the new line is not checked when splitting.** An overloaded new
-  line is reinforced in the final step due to overloading (see `How it works`_).
-* **The new line follows the existing route.** Its length, and therefore its cost, is
+* **The loading of the split line is not checked when splitting.** An overloaded
+  split line is reinforced in the final step due to overloading (see `How it works`_).
+* **The split line follows the existing route.** Its length, and therefore its cost, is
   the length of the path to the split node; a shorter route is not searched for. In MV
-  grids no switch disconnector is inserted at the split point (see the note above).
+  grids no switch disconnector is inserted at the split node (see the note in
+  `Enhanced reinforcement`_).
 * **Path reinforcement uses a linear estimate.** The voltage difference along the path
   is estimated as :math:`\sum r \cdot I` with the currents of one time step, the one
   with the largest deviation at the critical node, before reinforcement. Reactance and
