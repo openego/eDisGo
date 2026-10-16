@@ -8,13 +8,12 @@
 (function () {
   var RW = window.RW, svg = document.getElementById("rw-lo-svg");
   var LEVELS = {
-    lv: { std: "NAYY 4x1x150", u: 0.4, cable: 9, earth: 51, types: {
-      "NAYY 4x1x150": [0.275, "cable"], "NAYY 4x1x95": [0.215, "cable"], "NAYY 4x1x50": [0.144, "cable"],
-      "NAYY 4x1x240": [0.364, "cable"], "NAYY 4x1x300": [0.419, "cable"] } },
-    mv: { std: "NA2XS2Y 3x1x240", u: 20, cable: 20, earth: 60, types: {
+    lv: { std: RW.DATA.lvStd, u: 0.4, cable: RW.DATA.costs.lv.cable, earth: RW.DATA.costs.lv.rural - RW.DATA.costs.lv.cable, types: {} },
+    mv: { std: "NA2XS2Y 3x1x240", u: 20, cable: RW.DATA.costs.mv.cable, earth: RW.DATA.costs.mv.rural - RW.DATA.costs.mv.cable, types: {
       "NA2XS2Y 3x1x240": [0.417, "cable"], "NA2XS2Y 3x1x150 RE/25": [0.319, "cable"], "NA2XS(FL)2Y 3x1x300 RM/25": [0.476, "cable"],
       "48-AL1/8-ST1A": [0.21, "line"], "94-AL1/15-ST1A": [0.35, "line"] } }
   };
+  ["NAYY 4x1x150", "NAYY 4x1x95", "NAYY 4x1x50", "NAYY 4x1x240", "NAYY 4x1x300"].forEach(function (t) { LEVELS.lv.types[t] = [RW.DATA.lvCables[t][1], "cable"]; });
   var st = { lvl: "lv", type: "NAYY 4x1x95", n: 1, ol: 1.4, len: 0.3 };
   var ctl = document.getElementById("rw-lo-ctl"), ctl2 = document.getElementById("rw-lo-ctl2"), sel = RW.h("select"), nsel = RW.h("select");
   sel.id = "rw-lo-type"; nsel.id = "rw-lo-n";

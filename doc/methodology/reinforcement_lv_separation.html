@@ -14,7 +14,8 @@
     { id: "F3", buses: 1, len: 0.05, kw: 40 },
     { id: "F4", buses: 1, len: 0.05, kw: 40 }
   ];
-  var LINES = { "1x150": [1, 275], "2x150": [2, 275], "1x240": [1, 364], "1x95": [1, 215] };
+  var I = function (t) { return Math.round(RW.DATA.lvCables["NAYY 4x1x" + t][1] * 1000); };
+  var LINES = { "1x150": [1, I(150)], "2x150": [2, I(150)], "1x240": [1, I(240)], "1x95": [1, I(95)] };
   var st = { scale: 2.8, line: "2x150" }, TRAFO = 400;
   var ctl = document.getElementById("rw-sep-ctl");
   ctl.appendChild(RW.slider("rw-sep-sc", "load", 0.6, 3.5, 0.05, st.scale, function (v) { return "× " + RW.f(v, 2); }, function (v) { st.scale = v; draw(); }));
@@ -35,7 +36,7 @@
       var from = first ? 1 : half, kwBehind = (fd.buses - from + 1) * fd.kw * st.scale;
       plan[fd.id] = { moves: sep && moves, from: from, inept: first, kw: kwBehind };
     });
-    var stdA = 275, nNew = Math.max(1, Math.ceil(Ln[0] * Ln[1] / stdA - 1e-9)), oldA = Ln[0] * Ln[1], newA = nNew * stdA;
+    var stdA = I(150), nNew = Math.max(1, Math.ceil(Ln[0] * Ln[1] / stdA - 1e-9)), oldA = Ln[0] * Ln[1], newA = nNew * stdA;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     var W = 800, H = 330; svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     var sx = 60, sy = 130, nsx = 60, nsy = 290, x0 = 190, dx = 92, ROWY = [40, 100, 165, 215];

@@ -7,7 +7,7 @@
 <script>
 (function () {
   var RW = window.RW, svg = document.getElementById("rw-cost-svg");
-  var C = { lv: { cable: 9, rural: 60, urban: 100, trafo: 10, tname: "MV/LV" }, mv: { cable: 20, rural: 80, urban: 140, trafo: 1000, tname: "HV/MV" } };
+  var C = RW.DATA.costs, TNAME = { lv: "MV/LV", mv: "HV/MV" };
   var st = { lvl: "lv", area: "rural", len: 0.4, q: 2, tr: 1 };
   var c1 = document.getElementById("rw-cost-ctl"), c2 = document.getElementById("rw-cost-ctl2");
   c1.appendChild(RW.seg([{ id: "lv", label: "LV" }, { id: "mv", label: "MV" }], st.lvl, function (id) { st.lvl = id; draw(); }, "Voltage level"));
@@ -32,7 +32,7 @@
     for (var i = 0; i < st.q; i++) seg(cable, "var(--acc)", "cable " + RW.f(cable, 1));
     for (var j = 0; j < st.tr; j++) seg(c.trafo, "var(--thick)", "transformer " + c.trafo);
     RW.el("text", { x: L, y: 20, "class": "rw-sm" }, "kEUR", svg);
-    RW.el("text", { x: L, y: 100, "font-size": 12 }, "line: " + RW.f(c[st.area] - c.cable, 0) + " kEUR/km earthwork once + " + st.q + " × " + c.cable + " kEUR/km cable; " + c.tname + " transformer " + c.trafo + " kEUR each", svg);
+    RW.el("text", { x: L, y: 100, "font-size": 12 }, "line: " + RW.f(c[st.area] - c.cable, 0) + " kEUR/km earthwork once + " + st.q + " × " + c.cable + " kEUR/km cable; " + TNAME[st.lvl] + " transformer " + c.trafo + " kEUR each", svg);
     RW.stats(document.getElementById("rw-cost-stats"), [
       ["line", RW.f(line, 1) + " kEUR", ""],
       ["of which earthwork", RW.f(earth, 1) + " kEUR", ""],
