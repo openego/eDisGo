@@ -1002,7 +1002,7 @@ def distribute_private_charging_demand(edisgo_obj: EDisGo) -> None:
 
                     # booked to the stale charging_park_id (see NOTE above, #679)
                     designated_charging_point_capacity_df.at[
-                        charging_park_id, "designated_charging_point_capacity"
+                        drawn_charging_park_id, "designated_charging_point_capacity"
                     ] += charging_capacity
 
                     charging_point_id += 1
