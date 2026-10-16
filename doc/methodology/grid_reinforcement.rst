@@ -77,9 +77,9 @@ wrapper that reinforces **voltage level by voltage level** and falls back to eve
 more drastic measures until a grid is found on which the power flow converges:
 
 #. **Separate heavily overloaded LV grids** (if ``separate_lv_grids=True``,
-   default). An LV grid whose overloading exceeds ``separation_threshold`` times the
-   nominal apparent power of its MV/LV transformer(s) is split by adding a new MV/LV
-   station (:py:func:`~edisgo.flex_opt.reinforce_grid.run_separate_lv_grids`).
+   default). An LV grid whose largest residual apparent power (load minus generation
+   and storage) exceeds ``separation_threshold`` times the nominal apparent power of
+   its MV/LV transformer(s) is split by adding a new MV/LV station (:py:func:`~edisgo.flex_opt.reinforce_grid.run_separate_lv_grids`).
 #. **Reinforce each LV grid on its own.** If a single LV grid does not converge in
    the power flow, it is split first
    (:py:func:`~edisgo.flex_opt.reinforce_measures.separate_lv_grid`) and then
@@ -107,9 +107,9 @@ iteration errors; for well-behaved grids the standard reinforcement is sufficien
 .. note::
 
    The MV line reinforcement that splits a feeder with **voltage issues** at an LV
-   station does not yet actually insert a switch disconnector at the split point
-   (``TODO`` in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`),
-   so the resulting half-rings are not switchable in the model. See
+   station does not insert a switch disconnector at the split point
+   (:py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`), so
+   the resulting half-rings are not switchable in the model. See
    :ref:`switches-explained` for the role of switch disconnectors in reinforcement.
 
 Identifying problems
@@ -149,9 +149,9 @@ deviation is already close to the limit.
 :py:func:`~edisgo.flex_opt.check_tech_constraints.voltage_deviation_from_allowed_voltage_limits`
 returns the absolute deviations.
 
-With the default settings the voltage drop in the load case is split as follows; the
-voltage rise in the feed-in case is split the same way (5 % MV, 1.5 % MV/LV station,
-3.5 % LV):
+With the default settings the allowed voltage drop in the load case is split as
+follows. The voltage rise in the feed-in case is split into the same levels with
+other limits: 5 % MV, 1.5 % MV/LV station and 3.5 % LV.
 
 .. list-table::
    :header-rows: 1
@@ -172,13 +172,16 @@ voltage rise in the feed-in case is split the same way (5 % MV, 1.5 % MV/LV stat
      - 10 %
      - 1 p.u.
 
-The values are ``mv_max_v_drop``, ``mv_lv_station_max_v_drop``, ``lv_max_v_drop`` and
-``mv_lv_max_v_drop``; the HV/MV station voltage includes ``hv_mv_trafo_offset``.
+The values are ``mv_max_v_drop``, ``mv_lv_station_max_v_drop`` and ``lv_max_v_drop``.
+The HV/MV station voltage is 1 p.u. plus ``hv_mv_trafo_offset``, narrowed by
+``hv_mv_trafo_control_deviation`` (both 0 by default). Without the split, the limits are
+fixed at 0.9 and 1.1 p.u.
 
 .. only:: html
 
    Move the sliders to set the voltage drop in each level and switch between both
-   modes. The shaded areas are below the allowed voltage.
+   modes. The example shows the load case, i.e. the voltage drop; shaded areas are
+   below the allowed voltage.
 
    .. raw:: html
       :file: reinforcement_voltage_band.html
@@ -245,6 +248,9 @@ compare the missing power :math:`S_\text{missing}` with the existing transformer
 
 .. only:: html
 
+   Choose the existing transformers and move the peak load, the largest residual
+   apparent power (load minus generation) of the station, to see which measure applies.
+
    .. raw:: html
       :file: reinforcement_station_overloading.html
 
@@ -284,8 +290,10 @@ Both measures are rules of thumb; what they cannot do is summarised in
 
    The example below runs the iterations on three small LV feeders. Choose a feeder,
    change the load and step through the iterations. It uses a simplified model
-   (resistance only, :math:`\cos\varphi = 1`); the two sections after it explain each
-   measure with a full power flow.
+   (resistance only, :math:`\cos\varphi = 1`) and the default configuration values.
+   The log names the measures with the terms *share* and :math:`\sum r \cdot I`, which
+   are explained in :ref:`path-reinforcement`. The next section shows the split with a
+   full power flow.
 
    .. raw:: html
       :file: reinforcement_lv_voltage.html
@@ -417,7 +425,7 @@ path except house connections:
 
    .. math::
 
-      share = \frac{\Delta u_\mathrm{deviation}}{|u_\mathrm{node} - u_\mathrm{station}|}
+      \mathit{share} = \frac{\Delta u_\mathrm{deviation}}{|u_\mathrm{node} - u_\mathrm{station}|}
 
 #. **Set the target.** The voltage difference along the path is estimated as
    :math:`\sum_i r_i \cdot I_i`, the resistance times the current of each line on the
@@ -477,8 +485,12 @@ close to what a grid operator would do, but has limits:
 
 * **Splitting is not compared with other measures.** If the node at two thirds can be
   split, the feeder is split, even where replacing a single short, thin cable on the
-  path would be much cheaper (see the example "one thin cable" above and
-  openego/eDisGo#781).
+  path would be much cheaper (openego/eDisGo#781).
+* **House connections are never reinforced due to voltage issues.** If a voltage issue
+  is caused mainly by a long house connection, reinforcing the other lines on the path
+  cannot solve it, and the reinforcement ends with
+  :class:`~edisgo.flex_opt.exceptions.MaximumIterationError`. In the ding0 test grids,
+  house connections are at most 33 m long.
 * **The split node only depends on the path length.** Loads and line types are not
   considered. With unevenly distributed loads, or in grids reduced by the
   :ref:`spatial complexity reduction <complexity-reduction>` with few buses per
@@ -491,8 +503,8 @@ close to what a grid operator would do, but has limits:
   directly would have.
 * **Parallel lines after a non-converging power flow restore convergence, they do not
   size the line.** The smallest number of lines with which the power flow converges is
-  installed, not the number that solves the voltage issue. In the example above, the
-  voltage drop at B6 with two lines is 23 % instead of 14 % before the split.
+  installed, not the number that solves the voltage issue. In the example with a thick
+  first section (:ref:`feeder-split-weaker-line`), the voltage drop at B6 with two lines is 23 % instead of 14 % before the split.
 * **LV grids are checked on their own**, with the slack at the secondary side of the
   MV/LV station. If the power flow of the whole grid does not converge although each
   LV grid converges on its own, the cause cannot be attributed, and all split lines of
@@ -524,8 +536,8 @@ and storage) exceeds ``separation_threshold`` (default 2) times the rated power 
 transformers, and by :py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid`
 for LV grids whose power flow does not converge.
 
-#. **Feeders are treated from the shortest to the longest.** For each feeder the bus
-   at half of the path length to its last bus is found; like the split node above, it
+#. **Feeders are treated from the one with the fewest buses to the one with the most.**
+   For each feeder the bus at half of the path length to its last bus is found; like the split node above, it
    is moved towards the station until it lies outside a building.
 #. **The rear half moves to the new grid.** The line ending at that bus is removed, and
    the bus and everything behind it are connected to the new station by a new line of
@@ -541,9 +553,10 @@ for LV grids whose power flow does not converge.
 
 .. only:: html
 
-   Increase the load until the grid exceeds twice the rated power of its 400 kVA
-   transformer, and change the cable type of the feeders to see how strong the new
-   lines to the new station become.
+   The example starts above the threshold of twice the rated power of the 400 kVA
+   transformer; reduce the load below about ×2.55 to see a grid that is not separated.
+   Change the cable type of the feeders to see how strong the new lines to the new
+   station become.
 
    .. raw:: html
       :file: reinforcement_lv_separation.html
@@ -572,10 +585,12 @@ added cable costs the cable price:
 
 with the line length :math:`l` and the number :math:`q` of added cables. Transformers
 cost a fixed amount each (``costs_transformers``: 10 kEUR for MV/LV, 1000 kEUR for
-HV/MV), independent of their size. Lines that were added and removed again during the
-reinforcement, e.g. when a feeder is split again later, are not counted twice.
+HV/MV), independent of their size.
 
 .. only:: html
+
+   Choose the voltage level and the area type and move the sliders to see how the
+   cost of a reinforced line and of added transformers is made up.
 
    .. raw:: html
       :file: reinforcement_costs.html

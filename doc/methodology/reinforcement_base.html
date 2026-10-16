@@ -24,7 +24,8 @@
 .rw label.rw-sl b { color: var(--ink); font-variant-numeric: tabular-nums; min-width: 5.5em; }
 .rw select { font: inherit; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; color: var(--ink); }
 .rw svg { display: block; width: 100%; height: auto; }
-.rw svg text { font-family: inherit; fill: var(--ink); }
+.rw svg text { font-family: inherit; }
+.rw svg text:not([fill]) { fill: var(--ink); }
 .rw .rw-sm { font-size: 11px; fill: var(--muted); }
 .rw .rw-box { border: 1px solid var(--rule); background: var(--bg); border-radius: 4px; padding: 6px; }
 .rw .rw-stats { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }

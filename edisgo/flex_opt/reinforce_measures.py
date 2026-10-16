@@ -516,11 +516,11 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             else:
                 share = 1.0
             # house connections (lines to buses in buildings) are not reinforced
-            in_building = grid.buses_df.in_building.eq(True)
+            in_building = grid.buses_df.in_building
             path_lines = [
                 graph.get_edge_data(bus_0, bus_1)["branch_name"]
                 for bus_0, bus_1 in zip(path[:-1], path[1:])
-                if not (in_building.get(bus_0, False) or in_building.get(bus_1, False))
+                if not (in_building[bus_0] or in_building[bus_1])
             ]
             # current through each line at the time step of the voltage issue,
             # all lines are weighted equally if no current is available
@@ -888,7 +888,7 @@ def separate_lv_grid(
     * New MV/LV station is connected to the existing MV/LV station.
     * The determined nodes are disconnected from the previous nodes and connected to the
       new MV/LV station. The new line is of the standard type, with as many parallel
-      lines as needed to be at least as strong (`s_nom`) as the line it replaces.
+      lines as needed to be at least as strong (``s_nom``) as the line it replaces.
 
     Notes:
 
@@ -1270,14 +1270,13 @@ def separate_lv_grid(
 
             # the new line carries the load of the line it replaces, so it gets as
             # many parallel standard lines as needed to be at least as strong (the
-            # small offset keeps e.g. exactly two standard lines from rounding to 3)
-            num_parallel = max(
-                1,
-                math.ceil(
-                    edisgo_obj.topology.lines_df.at[line_removed, "s_nom"]
-                    / s_nom_standard_line
-                    - 1e-9
-                ),
+            # small offset keeps e.g. exactly two standard lines from rounding to 3);
+            # one standard line if the replaced line has no nominal power
+            s_nom_removed = edisgo_obj.topology.lines_df.at[line_removed, "s_nom"]
+            num_parallel = (
+                1
+                if pd.isna(s_nom_removed)
+                else max(1, math.ceil(s_nom_removed / s_nom_standard_line - 1e-9))
             )
 
             line_added_lv = edisgo_obj.add_component(

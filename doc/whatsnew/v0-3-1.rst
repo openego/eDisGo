@@ -204,7 +204,8 @@ Changes
   cost, until the voltage difference along the path is reduced by an estimate of the
   share needed to solve the voltage issue. Lines thicker than the standard line are no
   longer replaced by a single standard line but get a parallel line of the same type.
-  House connections, i.e. lines to buses in buildings, are not reinforced.
+  House connections, i.e. lines to buses in buildings, are not reinforced, as they
+  often do not belong to the grid operator.
   In the test grids this solves voltage issues that previously could not be solved and
   does not increase grid expansion costs where reinforcement already
   converged (openego/eDisGo#738)
@@ -213,7 +214,8 @@ Changes
   at least as strong as the line it replaces. Before, this was always one standard
   line, even where the replaced line was e.g. two parallel standard lines, so the
   separation could create a new overload. The new MV/LV transformer now has the type
-  of the standard transformer instead of ``None`` in ``type_info`` (from openego/eDisGo#391)
+  of the standard transformer instead of ``None`` in ``type_info`` (adopted from
+  openego/eDisGo#391)
 * Rewrote the grid reinforcement methodology page with interactive examples for the
   order of the reinforcement steps, the split voltage band, line and station
   overloading, the iterations of the line reinforcement due to voltage issues in LV

@@ -490,6 +490,17 @@ class TestReinforceMeasures:
             assert data.s_nom >= replaced - 1e-9
             assert lines_changes[line] == data.num_parallel
 
+    def test_separate_lv_grid_line_without_nominal_power(self):
+        # a replaced line without nominal power is replaced by one standard line
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        lv_grid = self.edisgo.topology.get_lv_grid(5)
+        self.edisgo.topology._lines_df.loc[lv_grid.lines_df.index, "s_nom"] = np.nan
+
+        _, lines_changes = reinforce_measures.separate_lv_grid(self.edisgo, lv_grid)
+
+        assert lines_changes
+        assert all(n == 1 for n in lines_changes.values())
+
     def test_separate_lv_grid(self):
         self.edisgo = copy.deepcopy(self.edisgo_root)
 
@@ -559,21 +570,3 @@ class TestReinforceMeasures:
                 "mv_lv_transformer"
             ]
             assert (new_g_1.transformers_df.type_info == std_trafo).all()
-
-            # each new line to the new station is at least as strong as the line
-            # it replaces
-            new_lines = new_g_1.lines_df[
-                new_g_1.lines_df.bus0.isin(new_g_1.transformers_df.bus1)
-                | new_g_1.lines_df.bus1.isin(new_g_1.transformers_df.bus1)
-            ]
-            assert not new_lines.empty
-            for line in new_lines.index:
-                node = (
-                    new_lines.at[line, "bus1"]
-                    if new_lines.at[line, "bus0"] in new_g_1.transformers_df.bus1.values
-                    else new_lines.at[line, "bus0"]
-                )
-                replaced = orig_g.lines_df[
-                    (orig_g.lines_df.bus0 == node) | (orig_g.lines_df.bus1 == node)
-                ]
-                assert (new_lines.at[line, "s_nom"] >= replaced.s_nom - 1e-9).any()

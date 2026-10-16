@@ -17,11 +17,11 @@
   var RW = window.RW, T = function (x) { return "NAYY 4x1x" + x; };
   var NETS = {
     even: { label: "evenly loaded feeder", scale: [0.6, 2, 1.3], g: RW.feeder([1, 2, 3, 4, 5, 6].map(function (i) { return { id: "B" + i, type: T(150), len: 0.08, load: 25 }; })),
-      text: "Six standard cables, 25 kW per house. The farthest house is H6; the first bus at two thirds of its path is B5, which is connected to the station by a new 400 m standard line." },
+      text: "Six standard cables, 25 kW per house. The farthest house hangs at B6; the first bus at two thirds of its path is B5, which is connected to the station by a new 400 m standard line." },
     long: { label: "long first line", scale: [0.7, 1.3, 1], g: RW.feeder([
         { id: "B1", type: T(240), len: 1.0, load: 5 }, { id: "B2", type: T(50), len: 0.15, load: 10 },
         { id: "B3", type: T(50), len: 0.15, load: 10 }, { id: "B4", type: T(50), len: 0.12, load: 35, hc: { type: T(35), len: 0.05 } }]),
-      text: "The first line is 1 km long, so the bus at two thirds is B1, which is already connected to the station: no split is possible. The lines on the path are reinforced by the largest reduction of r·I per cost. The 50 m house connection to H4 would be the cheapest measure, but house connections are not reinforced." },
+      text: "The first line is 1 km long, so the bus at two thirds is B1, which is already connected to the station: no split is possible. The lines on the path are reinforced by the largest reduction of r·I per cost. The 50 m house connection at B4 would be the cheapest measure, but house connections are not reinforced." },
     thin: { label: "one thin cable", scale: [0.8, 1.4, 1], g: RW.feeder([
         { id: "B1", type: T(150), len: 0.1, load: 20 }, { id: "B2", type: T(150), len: 0.1, load: 20 }, { id: "B3", type: T(35), len: 0.1, load: 20 },
         { id: "B4", type: T(150), len: 0.1, load: 20 }, { id: "B5", type: T(150), len: 0.1, load: 20 }]),
