@@ -102,6 +102,63 @@ class TestCosts:
         assert costs.loc["Line_50000002", "type"] == "NAYY 4x1x35"
         assert costs.loc["Line_50000002", "voltage_level"] == "lv"
 
+    def test_costs_ront_transformer(self):
+        # "changed" transformer entries (currently only RONT conversions,
+        # see CONCEPT_ront.md) must be costed alongside "added" ones, with
+        # the ront_surcharge on top of the base lv rate -- and must NOT be
+        # costed if later removed (e.g. a subsequent, more severe overload
+        # replaced the whole station).
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        edisgo.analyze()
+
+        transformer_name = "LVStation_1_transformer_1"
+        edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+            "160 kVA RONT"
+        )
+
+        edisgo.results.equipment_changes = pd.DataFrame(
+            {
+                "iteration_step": [3, 5],
+                "change": ["changed", "changed"],
+                "equipment": [transformer_name, "LVStation_9_transformer_1"],
+                "quantity": [1, 1],
+            },
+            index=["LVGrid_1_station", "LVGrid_9_station"],
+        )
+
+        costs = costs_mod.grid_expansion_costs(edisgo)
+
+        assert len(costs) == 2
+        assert costs.at[transformer_name, "total_costs"] == 10 + 20
+        assert costs.at[transformer_name, "voltage_level"] == "mv/lv"
+        # non-RONT "changed" transformer entry: plain base rate, no surcharge
+        assert costs.at["LVStation_9_transformer_1", "total_costs"] == 10
+
+    def test_costs_ront_transformer_later_removed_not_costed(self):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        edisgo.analyze()
+
+        transformer_name = "LVStation_1_transformer_1"
+        edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+            "160 kVA RONT"
+        )
+        edisgo.topology.transformers_df.drop(transformer_name, inplace=True)
+
+        edisgo.results.equipment_changes = pd.DataFrame(
+            {
+                "iteration_step": [3, 6],
+                "change": ["changed", "removed"],
+                "equipment": [transformer_name, transformer_name],
+                "quantity": [1, 1],
+            },
+            index=["LVGrid_1_station", "LVGrid_1_station"],
+        )
+
+        costs = costs_mod.grid_expansion_costs(edisgo)
+        assert transformer_name not in costs.index
+
     def test_line_expansion_costs(self):
         costs = costs_mod.line_expansion_costs(self.edisgo)
         assert len(costs) == len(self.edisgo.topology.lines_df)
