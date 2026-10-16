@@ -183,3 +183,92 @@ class TestTemporalComplexityReduction:
             steps.loc[0, "time_steps_voltage_issues"]
             == pd.date_range("1/1/2018", periods=24, freq="H")
         ).all()
+
+
+class TestIntervalHelpers:
+    """Relocated pure helpers + residual_load selection (no DB / no power flow)."""
+
+    @staticmethod
+    def _week(start):
+        return pd.date_range(start=start, periods=168, freq="h")
+
+    def test_intervals_overlap(self):
+        a = self._week("2035-01-01")
+        assert temp_red.intervals_overlap(a, self._week("2035-01-04"))
+        assert not temp_red.intervals_overlap(a, self._week("2035-06-01"))
+
+    def test_select_two_intervals_disjoint(self):
+        result = temp_red.select_two_intervals(
+            [self._week("2035-01-01")], [self._week("2035-06-01")]
+        )
+        assert len(result) == 2
+        assert not temp_red.intervals_overlap(result[0], result[1])
+
+    def test_select_two_intervals_next_ranked(self):
+        load = [self._week("2035-01-01")]
+        volt = [self._week("2035-01-03"), self._week("2035-09-01")]
+        result = temp_red.select_two_intervals(load, volt)
+        assert len(result) == 2 and result[1].equals(volt[1])
+
+    def test_select_two_intervals_concatenate(self):
+        result = temp_red.select_two_intervals(
+            [self._week("2035-01-01")], [self._week("2035-01-03")]
+        )
+        assert len(result) == 1
+        assert (result[0][1:] - result[0][:-1]).nunique() == 1  # contiguous
+
+    def test_select_two_intervals_single_and_empty(self):
+        week = self._week("2035-01-01")
+        assert temp_red.select_two_intervals([week], [])[0].equals(week)
+        assert temp_red.select_two_intervals([], [week])[0].equals(week)
+        assert temp_red.select_two_intervals([], []) == []
+
+    def test_build_centered_interval(self):
+        idx = pd.date_range("2035-01-01 00:00", periods=8760, freq="h")
+        t = pd.Timestamp("2035-02-10 12:00")
+        iv = temp_red._build_centered_interval(t, idx, 168, 4)
+        assert len(iv) == 168
+        assert iv[0].hour == 4  # starts on the day-start hour
+        assert t in iv  # critical step contained
+        assert iv[-1] != t  # centered -> not the last step
+
+    def test_residual_load_steps_and_intervals(self, monkeypatch):
+        import types
+
+        idx = pd.date_range("2035-01-01 00:00", periods=8760, freq="h")
+        residual = pd.Series(range(8760), index=idx, dtype=float)
+        fake = types.SimpleNamespace(
+            timeseries=types.SimpleNamespace(residual_load=residual)
+        )
+        monkeypatch.setattr(
+            "edisgo.network.overlying_grid.distribute_overlying_grid_requirements",
+            lambda e: fake,
+        )
+        # steps: top-3 highest + bottom-2 lowest residual
+        steps = temp_red.get_most_critical_time_steps(
+            object(), by="residual_load", num_steps_loading=3, num_steps_voltage=2
+        )
+        assert idx[-1] in steps and idx[0] in steps and len(steps) == 5
+
+        # intervals: per-case columns, centered on the residual max/min steps
+        e = types.SimpleNamespace(
+            timeseries=types.SimpleNamespace(timeindex=idx),
+            topology=types.SimpleNamespace(id="g"),
+        )
+        df = temp_red.get_most_critical_time_intervals(
+            e,
+            by="residual_load",
+            num_time_intervals=2,
+            time_steps_per_time_interval=168,
+            time_step_day_start=4,
+        )
+        assert list(df.columns) == ["time_steps_load_case", "time_steps_feedin_case"]
+        assert len(df) == 2
+        # top load-case interval is centered on the global max residual step
+        assert idx[-1] in df.loc[0, "time_steps_load_case"]
+
+    def test_bad_by_raises(self):
+        with pytest.raises(ValueError, match="power_flow.*residual_load"):
+            temp_red.get_most_critical_time_steps(object(), by="bogus")
+        with pytest.raises(ValueError, match="power_flow.*residual_load"):
+            temp_red.get_most_critical_time_intervals(object(), by="bogus")
