@@ -8,7 +8,11 @@ from pandas.testing import assert_frame_equal
 
 from edisgo import EDisGo
 from edisgo.flex_opt.costs import grid_expansion_costs
-from edisgo.flex_opt.reinforce_grid import reinforce_grid, run_separate_lv_grids
+from edisgo.flex_opt.reinforce_grid import (
+    _analyze_after_voltage_reinforcement,
+    reinforce_grid,
+    run_separate_lv_grids,
+)
 
 
 class TestReinforceGrid:
@@ -62,6 +66,121 @@ class TestReinforceGrid:
             num_steps_loading=2,
         )
         assert len(res_reduced.i_res) == 2
+
+    @staticmethod
+    def _split(edisgo, grid, lines):
+        """Connect `lines` to the station of `grid`, as splitting a feeder does."""
+        buses_before = edisgo.topology.lines_df[["bus0", "bus1"]].copy()
+        station = grid.transformers_df.bus1.iloc[0]
+        edisgo.topology._lines_df.loc[lines, "bus0"] = station
+        return buses_before
+
+    @staticmethod
+    def _fake_analyze(edisgo, calls, rounds_diverging, lv_grids_diverging=(5,)):
+        """
+        Fake of EDisGo.analyze that records its calls. The power flow diverges in the
+        first `rounds_diverging` calls for the whole grid and always for the LV grids
+        in `lv_grids_diverging` on their own.
+        """
+
+        def analyze(**kwargs):
+            calls.append(kwargs)
+            if kwargs.get("mode") == "lv":
+                diverges = kwargs["lv_grid_id"] in lv_grids_diverging
+            else:
+                diverges = sum(c.get("mode") != "lv" for c in calls) <= rounds_diverging
+            timeindex = edisgo.timeseries.timeindex
+            if not diverges:
+                return timeindex, timeindex[:0]
+            if kwargs.get("raise_not_converged", True):
+                raise ValueError("Power flow analysis did not converge")
+            return timeindex[1:], timeindex[:1]
+
+        return analyze
+
+    def test_analyze_after_voltage_reinforcement_without_split(self, monkeypatch):
+        edisgo = copy.deepcopy(self.edisgo)
+        buses_before = edisgo.topology.lines_df[["bus0", "bus1"]].copy()
+        calls = []
+        monkeypatch.setattr(edisgo, "analyze", self._fake_analyze(edisgo, calls, 1))
+
+        # without split lines, non-convergence is raised right away
+        with pytest.raises(ValueError, match="did not converge"):
+            _analyze_after_voltage_reinforcement(edisgo, buses_before, 1, mode="mv")
+        assert calls == [{"raise_not_converged": True, "mode": "mv"}]
+
+    def test_analyze_after_voltage_reinforcement_mv(self, monkeypatch):
+        edisgo = copy.deepcopy(self.edisgo)
+        grid = edisgo.topology.mv_grid
+        lines = ["Line_10007", "Line_10023"]
+        buses_before = self._split(edisgo, grid, lines)
+        calls = []
+        monkeypatch.setattr(edisgo, "analyze", self._fake_analyze(edisgo, calls, 1))
+
+        _analyze_after_voltage_reinforcement(edisgo, buses_before, 3, mode="mv")
+
+        # all split lines are in one grid, so no grid is analysed on its own
+        assert calls == [{"raise_not_converged": False, "mode": "mv"}] * 2
+        assert (edisgo.topology.lines_df.loc[lines, "num_parallel"] == 2).all()
+        changes = edisgo.results.equipment_changes
+        assert sorted(changes.index) == lines
+        assert (changes.iteration_step == 3).all() and (changes.quantity == 1).all()
+
+    @pytest.mark.parametrize(
+        "lv_grids_diverging, lines_with_parallel_line",
+        [((5,), ["lv_5"]), ((), ["lv_1", "lv_5"])],
+    )
+    def test_analyze_after_voltage_reinforcement_lv(
+        self, monkeypatch, lv_grids_diverging, lines_with_parallel_line
+    ):
+        edisgo = copy.deepcopy(self.edisgo)
+        lines = {
+            "lv_1": edisgo.topology.get_lv_grid(1).lines_df.index[1:3].tolist(),
+            "lv_5": edisgo.topology.get_lv_grid(5).lines_df.index[1:2].tolist(),
+        }
+        buses_before = self._split(
+            edisgo, edisgo.topology.get_lv_grid(1), lines["lv_1"]
+        )
+        self._split(edisgo, edisgo.topology.get_lv_grid(5), lines["lv_5"])
+        num_parallel_before = edisgo.topology.lines_df.num_parallel.copy()
+        calls = []
+        monkeypatch.setattr(
+            edisgo,
+            "analyze",
+            self._fake_analyze(edisgo, calls, 1, lv_grids_diverging),
+        )
+
+        _analyze_after_voltage_reinforcement(edisgo, buses_before, 4)
+
+        # LV grids 1 and 5 are analysed on their own, for the diverging time step
+        assert sorted(c["lv_grid_id"] for c in calls[1:3]) == [1, 5]
+        assert all(
+            c["timesteps"].equals(edisgo.timeseries.timeindex[:1]) for c in calls[1:3]
+        )
+        # if every LV grid converges on its own, all split lines get a parallel line
+        expected = [line for key in lines_with_parallel_line for line in lines[key]]
+        added = edisgo.topology.lines_df.num_parallel - num_parallel_before
+        assert sorted(added[added > 0].index) == sorted(expected)
+        assert sorted(edisgo.results.equipment_changes.index) == sorted(expected)
+
+    def test_analyze_after_voltage_reinforcement_max_rounds(self, monkeypatch):
+        edisgo = copy.deepcopy(self.edisgo)
+        grid = edisgo.topology.get_lv_grid(5)
+        line = grid.lines_df.index[1]
+        buses_before = self._split(edisgo, grid, [line])
+        num_parallel_before = edisgo.topology.lines_df.at[line, "num_parallel"]
+        calls = []
+        monkeypatch.setattr(edisgo, "analyze", self._fake_analyze(edisgo, calls, 99))
+
+        with pytest.raises(ValueError, match="did not converge"):
+            _analyze_after_voltage_reinforcement(edisgo, buses_before, 5)
+
+        # first power flow and four rounds, the last one raises
+        assert len(calls) == 5
+        assert calls[-1] == {"raise_not_converged": True}
+        num_parallel = edisgo.topology.lines_df.at[line, "num_parallel"]
+        assert num_parallel == num_parallel_before + 4
+        assert len(edisgo.results.equipment_changes) == 4
 
     def test_run_separate_lv_grids(self):
         edisgo = copy.deepcopy(self.edisgo)
