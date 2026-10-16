@@ -13,6 +13,11 @@ Changes
   read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
   system ``PATH``; the reference now says so instead of claiming the file points to the
   binary in use
+* Added :attr:`~.network.results.Results.reinforce_log`, a long-format dataframe
+  that records, for every reinforcement measure taken in
+  :func:`~.flex_opt.reinforce_grid.reinforce_grid`, which component violated which
+  limit, at what time step, and what change and cost that caused `#741
+  <https://github.com/openego/eDisGo/issues/741>`_
 * Wired district-heating handling into the runner pipeline. The overlying grid's
   ``feedin_district_heating`` — thermal feed-in from other heat sources such as solar
   or geothermal — had no consumer at all: its only consumer,
