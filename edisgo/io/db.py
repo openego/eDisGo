@@ -339,11 +339,11 @@ def engine(
         return create_engine(
             f"postgresql+oedialect://:{token}@{database_url}",
             echo=False,
-            # The OEP limits the number of open connections per account (8 at the
-            # time of writing). A pooled connection stays open on the OEP after
-            # use, so a few processes with the same token, e.g. parallel CI jobs,
-            # already reach the limit. Without pooling, each connection is closed
-            # right after use.
+            # The OEP limits open connections per account (8 at the time of
+            # writing) and closes a connection only on request, not when the
+            # process ends. The default pool keeps released connections open for
+            # reuse, so a few processes with the same token, e.g. parallel CI
+            # jobs, reach the limit. NullPool closes each connection on release.
             poolclass=NullPool,
         )
 
