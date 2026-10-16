@@ -30,6 +30,7 @@ from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.session import Session
+from sqlalchemy.pool import NullPool
 from sshtunnel import SSHTunnelForwarder
 
 if TYPE_CHECKING:
@@ -338,6 +339,12 @@ def engine(
         return create_engine(
             f"postgresql+oedialect://:{token}@{database_url}",
             echo=False,
+            # The OEP limits the number of open connections per account (8 at the
+            # time of writing). A pooled connection stays open on the OEP after
+            # use, so a few processes with the same token, e.g. parallel CI jobs,
+            # already reach the limit. Without pooling, each connection is closed
+            # right after use.
+            poolclass=NullPool,
         )
 
     cred = credentials(path=path)
