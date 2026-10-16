@@ -486,7 +486,7 @@ def _get_grid_component_dict(grid_object):
         ],
         "Line": grid_object.lines_df.loc[
             :,
-            ["bus0", "bus1", "x", "r", "s_nom", "num_parallel", "length"],
+            ["bus0", "bus1", "x", "r", "b", "s_nom", "num_parallel", "length"],
         ],
     }
     return components

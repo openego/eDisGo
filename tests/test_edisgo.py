@@ -583,8 +583,8 @@ class TestEDisGo:
 
         results = edisgo_obj.results
 
-        assert len(results.grid_expansion_costs) == 454
-        assert len(results.equipment_changes) == 892
+        assert len(results.grid_expansion_costs) == 453
+        assert len(results.equipment_changes) == 835
         assert results.v_res.shape == (4, 148)
 
         edisgo_obj = copy.deepcopy(self.edisgo)
