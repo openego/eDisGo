@@ -551,7 +551,8 @@ class TestEDisGo:
         )
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 134
-        assert len(results.equipment_changes) == 233
+        # house connections are not reinforced due to voltage issues
+        assert len(results.equipment_changes) == 230
         assert results.v_res.shape == (4, 142)
 
         # ############### test with catch convergence worst case true ################
@@ -562,7 +563,8 @@ class TestEDisGo:
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 134
-        assert len(results.equipment_changes) == 221
+        # house connections are not reinforced due to voltage issues
+        assert len(results.equipment_changes) == 218
         assert results.v_res.shape == (4, 142)
 
     @pytest.mark.slow
@@ -584,7 +586,9 @@ class TestEDisGo:
         results = edisgo_obj.results
 
         assert len(results.grid_expansion_costs) == 454
-        assert len(results.equipment_changes) == 918
+        # house connections are not reinforced due to voltage issues and lines to new
+        # stations are at least as strong as the lines they replace
+        assert len(results.equipment_changes) == 884
         assert results.v_res.shape == (4, 148)
 
         edisgo_obj = copy.deepcopy(self.edisgo)

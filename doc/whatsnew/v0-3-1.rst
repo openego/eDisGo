@@ -204,9 +204,16 @@ Changes
   cost, until the voltage difference along the path is reduced by an estimate of the
   share needed to solve the voltage issue. Lines thicker than the standard line are no
   longer replaced by a single standard line but get a parallel line of the same type.
+  House connections, i.e. lines to buses in buildings, are not reinforced.
   In the test grids this solves voltage issues that previously could not be solved and
   does not increase grid expansion costs where reinforcement already
   converged (openego/eDisGo#738)
+* :func:`~.flex_opt.reinforce_measures.separate_lv_grid` connects the rear half of
+  each feeder to the new station with as many parallel standard lines as needed to be
+  at least as strong as the line it replaces. Before, this was always one standard
+  line, even where the replaced line was e.g. two parallel standard lines, so the
+  separation could create a new overload. The new MV/LV transformer now has the type
+  of the standard transformer instead of ``None`` in ``type_info`` (from openego/eDisGo#391)
 * Stopped grid reinforcement aborting with ``ValueError: Power flow analysis did not
   converge`` after splitting a feeder due to voltage issues.
   :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` connects the

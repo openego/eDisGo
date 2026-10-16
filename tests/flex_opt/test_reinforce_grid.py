@@ -200,7 +200,8 @@ class TestReinforceGrid:
                 assert len(g.buses_df) > 1
 
         assert len(lv_grids_new) == 26
-        assert np.isclose(edisgo.results.grid_expansion_costs.total_costs.sum(), 440.06)
+        # lines to the new stations are at least as strong as the lines they replace
+        assert np.isclose(edisgo.results.grid_expansion_costs.total_costs.sum(), 444.26)
 
         # check if all generators are still present
         assert np.isclose(

@@ -26,7 +26,7 @@ from networkx.algorithms.shortest_paths.weighted import (
 
 from edisgo.flex_opt.costs import line_expansion_costs
 from edisgo.network.grids import LVGrid, MVGrid
-from edisgo.tools.tools import get_downstream_buses
+from edisgo.tools.tools import calculate_apparent_power, get_downstream_buses
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -405,6 +405,8 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
 
     In LV grids lines are only disconnected outside buildings; loads and
     generators in buildings cannot be directly connected to the MV/LV station.
+    House connections, i.e. lines to buses in buildings, are not reinforced
+    either.
 
     In MV grids lines can only be disconnected at LV stations because they
     have switch disconnectors needed to operate the lines as half rings (loads
@@ -513,9 +515,12 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
                 )
             else:
                 share = 1.0
+            # house connections (lines to buses in buildings) are not reinforced
+            in_building = grid.buses_df.in_building.eq(True)
             path_lines = [
                 graph.get_edge_data(bus_0, bus_1)["branch_name"]
                 for bus_0, bus_1 in zip(path[:-1], path[1:])
+                if not (in_building.get(bus_0, False) or in_building.get(bus_1, False))
             ]
             # current through each line at the time step of the voltage issue,
             # all lines are weighted equally if no current is available
@@ -882,7 +887,8 @@ def separate_lv_grid(
       connection will be made.
     * New MV/LV station is connected to the existing MV/LV station.
     * The determined nodes are disconnected from the previous nodes and connected to the
-      new MV/LV station.
+      new MV/LV station. The new line is of the standard type, with as many parallel
+      lines as needed to be at least as strong (`s_nom`) as the line it replaces.
 
     Notes:
 
@@ -1007,7 +1013,7 @@ def separate_lv_grid(
         new_transformer_name[grid_id_ind] = lv_grid_id_new
 
         new_transformer_df.s_nom = standard_transformer.S_nom
-        new_transformer_df.type_info = None
+        new_transformer_df.type_info = standard_transformer.name
         new_transformer_df.r_pu = standard_transformer.r_pu
         new_transformer_df.x_pu = standard_transformer.x_pu
         new_transformer_df.index = ["_".join([str(_) for _ in new_transformer_name])]
@@ -1232,6 +1238,12 @@ def separate_lv_grid(
         lv_standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
             "lv_line"
         ]
+        lv_standard_line_data = edisgo_obj.topology.equipment_data["lv_cables"].loc[
+            lv_standard_line
+        ]
+        s_nom_standard_line = calculate_apparent_power(
+            lv_standard_line_data.U_n, lv_standard_line_data.I_max_th, 1
+        )
 
         # changes on relocated lines to the new LV grid
         # grid_ids
@@ -1250,21 +1262,34 @@ def separate_lv_grid(
                 G, station_node, get_weight, target=node_1_2
             )[node_1_2]
 
+            # predecessor node of node_1_2
+            pred_node = path[path.index(node_1_2) - 1]
+
+            # the line
+            line_removed = G.get_edge_data(node_1_2, pred_node)["branch_name"]
+
+            # the new line carries the load of the line it replaces, so it gets as
+            # many parallel standard lines as needed to be at least as strong (the
+            # small offset keeps e.g. exactly two standard lines from rounding to 3)
+            num_parallel = max(
+                1,
+                math.ceil(
+                    edisgo_obj.topology.lines_df.at[line_removed, "s_nom"]
+                    / s_nom_standard_line
+                    - 1e-9
+                ),
+            )
+
             line_added_lv = edisgo_obj.add_component(
                 comp_type="line",
                 bus0=lv_bus_new,
                 bus1=node_1_2,
                 length=dist,
                 type_info=lv_standard_line,
+                num_parallel=num_parallel,
             )
 
-            lines_changes[line_added_lv] = 1
-
-            # predecessor node of node_1_2
-            pred_node = path[path.index(node_1_2) - 1]
-
-            # the line
-            line_removed = G.get_edge_data(node_1_2, pred_node)["branch_name"]
+            lines_changes[line_added_lv] = num_parallel
 
             edisgo_obj.remove_component(
                 comp_type="line",
