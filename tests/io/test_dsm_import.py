@@ -39,6 +39,23 @@ class TestDSMImport:
         assert (dsm_profiles["p_max"] >= 0.0).all().all()
         assert (dsm_profiles["e_max"] >= 0.0).all().all()
 
+    def test_oedb_reference_year_independent_of_scenario(self):
+        # 'eGon100RE' used to map to year 2045 via the now removed
+        # get_year_based_on_scenario; the resulting time index must instead
+        # be in the configured reference year (default 2011), regardless of
+        # scenario, whenever neither an explicit timeindex nor
+        # TimeSeries.timeindex is set
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        assert edisgo_object.timeseries.timeindex.empty
+
+        dsm_profiles = dsm_import.oedb(
+            edisgo_object, scenario="eGon100RE", engine=pytest.engine
+        )
+        assert dsm_profiles["p_min"].index[0].year == 2011
+        assert dsm_profiles["p_min"].index[0].year != 2045
+
     def test_get_profiles_per_industrial_load(self):
         dsm_profiles = dsm_import.get_profiles_per_industrial_load(
             load_ids=[15388, 241, 1], scenario="eGon2035", engine=pytest.engine

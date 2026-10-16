@@ -20,9 +20,20 @@ from zipfile import ZipFile
 import pandas as pd
 
 # from edisgo import EDisGo
-from edisgo.tools.tools import resample
+from edisgo.tools.tools import align_to_edisgo_timeindex, resample
 
 logger = logging.getLogger(__name__)
+
+# attributes carrying a state of charge, which need one extra trailing time
+# step (the SoC at the end of the last period) when aligned onto a target
+# time index - see align_to_edisgo_timeindex's `extra_step` parameter
+_SOC_ATTRS = frozenset(
+    (
+        "storage_units_soc",
+        "thermal_storage_units_decentral_soc",
+        "thermal_storage_units_central_soc",
+    )
+)
 
 
 class OverlyingGrid:
@@ -195,6 +206,7 @@ class OverlyingGrid:
         data_path,
         dtype=None,
         from_zip_archive=False,
+        edisgo_obj=None,
         **kwargs,
     ):
         """
@@ -210,6 +222,18 @@ class OverlyingGrid:
             Default: None.
         from_zip_archive : bool, optional
             Set True if data is archived in a zip archive. Default: False.
+        edisgo_obj : :class:`~.EDisGo`, optional
+            If given, every loaded attribute is aligned (with a warning in
+            case of a year mismatch) onto
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` of
+            `edisgo_obj` via
+            :func:`~.tools.tools.align_to_edisgo_timeindex` - this covers
+            data read from CSVs written independently of `edisgo_obj` (e.g.
+            by a different run) and thus possibly indexed in a different
+            calendar year. If not given (the default), data is used as-is,
+            which is the right choice when reloading data an `EDisGo`
+            instance previously saved of itself, as it is then guaranteed to
+            already share that instance's own calendar.
 
         """
 
@@ -250,11 +274,54 @@ class OverlyingGrid:
             if isinstance(getattr(self, attr), pd.Series):
                 df = df.squeeze("columns")
 
+            if edisgo_obj is not None and not df.empty:
+                df = align_to_edisgo_timeindex(
+                    edisgo_obj,
+                    df,
+                    name=f"OverlyingGrid.{attr}",
+                    extra_step=attr in _SOC_ATTRS,
+                )
+
             setattr(self, attr, df)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
             zip.close()
+
+    def from_etrago(self, edisgo_obj, overlying_grid_data):
+        """
+        Sets data in object from eTraGo results.
+
+        Parameters
+        ----------
+        edisgo_obj : :class:`~.EDisGo`
+            Every set attribute is aligned (with a warning in case of a year
+            mismatch) onto
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` of
+            `edisgo_obj` via
+            :func:`~.tools.tools.align_to_edisgo_timeindex`, as
+            `overlying_grid_data` may be indexed in a different calendar
+            year (e.g. eTraGo's own scenario year).
+        overlying_grid_data : dict
+            Dictionary of :pandas:`pandas.Series<Series>`/
+            :pandas:`pandas.DataFrame<DataFrame>`, keyed by the attribute
+            names in :attr:`_attributes` (e.g. as returned by
+            ``get_etrago_results_per_bus``). Keys not in :attr:`_attributes`
+            are ignored.
+
+        """
+        for attr in self._attributes:
+            if attr not in overlying_grid_data:
+                continue
+            ts = overlying_grid_data[attr]
+            if ts is not None and not ts.empty:
+                ts = align_to_edisgo_timeindex(
+                    edisgo_obj,
+                    ts,
+                    name=f"OverlyingGrid.{attr}",
+                    extra_step=attr in _SOC_ATTRS,
+                )
+            setattr(self, attr, ts)
 
     def resample(self, method: str = "ffill", freq: str | pd.Timedelta = "15min"):
         """

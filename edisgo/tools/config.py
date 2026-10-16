@@ -276,6 +276,13 @@ class Config:
             if key in demandlib:
                 demandlib[key] = self._parse_time(demandlib[key])
 
+    def _normalize_reference_year(self, config_dict: dict) -> None:
+        if "timeindex" not in config_dict:
+            return
+        timeindex = config_dict["timeindex"]
+        if "reference_year" in timeindex:
+            timeindex["reference_year"] = int(timeindex["reference_year"])
+
     def import_tables_from_oep(
         self, engine: sa.engine.Engine, table_names: list[str], schema_name: str
     ) -> list[sa.Table]:
@@ -405,6 +412,7 @@ class Config:
                     pass
 
         self._normalize_demandlib_times(config_dict)
+        self._normalize_reference_year(config_dict)
         return config_dict
 
     def to_json(self, directory, filename=None):
@@ -466,6 +474,7 @@ class Config:
         config_dict = json.loads(data)
 
         self._normalize_demandlib_times(config_dict)
+        self._normalize_reference_year(config_dict)
 
         return config_dict
 

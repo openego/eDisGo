@@ -219,6 +219,11 @@ class TestHeatPump:
         )
 
         # ################# test with no timeindex to get year from #############
+        # With neither an explicit timeindex nor TimeSeries.timeindex set,
+        # _timeindex_helper_func (Fall c) now indexes by the configured
+        # reference year (default 2011) rather than the scenario year - the
+        # scenario is currently not used to determine the default year for
+        # the oedb import functions (that rework is a later step).
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,
             "oedb",
@@ -226,7 +231,7 @@ class TestHeatPump:
             scenario="eGon2035",
         )
         assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 5)
-        assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2035
+        assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
 
         # ###### test with timeindex to get year from and invalid heat pump name #####
         # reset heat_demand_df

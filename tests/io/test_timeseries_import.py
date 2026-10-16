@@ -16,48 +16,84 @@ class TestTimeseriesImport:
     def setup_class(self):
         self.config = Config(config_path=None)
 
-    def test__timeindex_helper_func(self):
-        # test with timeindex=None and TimeSeries.timeindex not set
+    def test__timeindex_helper_func(self, caplog):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        ind, ind_full = timeseries_import._timeindex_helper_func(edisgo, timeindex=None)
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+
+        # ### Fall c) neither an explicit timeindex nor TimeSeries.timeindex is
+        # set: the full year for the configured reference year (default 2011) is
+        # built and TimeSeries.timeindex is set to it
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            ind, ind_full = timeseries_import._timeindex_helper_func(
+                edisgo, timeindex=None
+            )
+        assert "No timeindex was set" in caplog.text
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="h")
         assert_index_equal(ind, timeindex)
         assert_index_equal(ind_full, timeindex)
+        assert_index_equal(edisgo.timeseries.timeindex, timeindex)
 
-        # test with timeindex=None and TimeSeries.timeindex set
-        edisgo_index = pd.date_range("1/1/2010", periods=5, freq="H")
-        edisgo.set_timeindex(edisgo_index)
+        # ### Fall b) timeindex=None, TimeSeries.timeindex already set (non-leap
+        # year): it is used unchanged and TimeSeries.timeindex is not touched
+        edisgo_index = pd.date_range("1/1/2010", periods=5, freq="h")
+        edisgo.timeseries.timeindex = edisgo_index
+        caplog.clear()
         ind, ind_full = timeseries_import._timeindex_helper_func(edisgo, timeindex=None)
-        timeindex = pd.date_range("1/1/2010", periods=8760, freq="H")
+        timeindex = pd.date_range("1/1/2010", periods=8760, freq="h")
         assert_index_equal(ind, edisgo_index)
         assert_index_equal(ind_full, timeindex)
+        assert_index_equal(edisgo.timeseries.timeindex, edisgo_index)
 
-        # test with given timeindex and leap year
-        given_index = pd.date_range("1/1/2012", periods=5, freq="H")
+        # ### Fall b) TimeSeries.timeindex is set to a leap year: it is shifted
+        # to the reference year, a warning is logged, and TimeSeries.timeindex is
+        # updated to the shifted index.
+        # TimeSeries.timeindex is set directly here (not via EDisGo.set_timeindex,
+        # which by now does its own leap year shifting) to isolate
+        # _timeindex_helper_func's own leap year handling on this path.
+        edisgo_index_leap = pd.date_range("1/1/2020", periods=5, freq="h")
+        edisgo.timeseries.timeindex = edisgo_index_leap
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            ind, ind_full = timeseries_import._timeindex_helper_func(
+                edisgo, timeindex=None
+            )
+        assert "TimeSeries.timeindex is set in leap year 2020" in caplog.text
+        assert len(ind) == 5
+        assert ind[0].year == 2011
+        assert not ind.has_duplicates
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="h")
+        assert_index_equal(ind_full, timeindex)
+        assert_index_equal(edisgo.timeseries.timeindex, ind)
+
+        # ### Fall a) timeindex given, no leap year: used unchanged,
+        # TimeSeries.timeindex is not touched
+        edisgo.timeseries.timeindex = pd.DatetimeIndex([])
+        given_index = pd.date_range("1/1/2013", periods=5, freq="h")
+        caplog.clear()
         ind, ind_full = timeseries_import._timeindex_helper_func(
             edisgo, timeindex=given_index
         )
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
-        assert_index_equal(ind, timeindex)
-        assert_index_equal(ind_full, timeindex)
-
-        # test with given timeindex and leap year and allowing leap year
-        ind, ind_full = timeseries_import._timeindex_helper_func(
-            edisgo, timeindex=given_index, allow_leap_year=True
-        )
-        timeindex = pd.date_range("1/1/2012", periods=8760, freq="H")
+        timeindex = pd.date_range("1/1/2013", periods=8760, freq="h")
         assert_index_equal(ind, given_index)
         assert_index_equal(ind_full, timeindex)
+        assert edisgo.timeseries.timeindex.empty
 
-        # test with given timeindex and no leap year
-        given_index = pd.date_range("1/1/2013", periods=5, freq="H")
-        ind, ind_full = timeseries_import._timeindex_helper_func(
-            edisgo,
-            timeindex=given_index,
-        )
-        timeindex = pd.date_range("1/1/2013", periods=8760, freq="H")
-        assert_index_equal(ind, given_index)
+        # ### Fall a) timeindex given, leap year: shifted to the reference year,
+        # a warning is logged; TimeSeries.timeindex is NOT touched (only Fall b
+        # updates TimeSeries.timeindex)
+        given_index_leap = pd.date_range("1/1/2012", periods=5, freq="h")
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            ind, ind_full = timeseries_import._timeindex_helper_func(
+                edisgo, timeindex=given_index_leap
+            )
+        assert "The given timeindex is set in leap year 2012" in caplog.text
+        assert len(ind) == 5
+        assert ind[0].year == 2011
+        assert not ind.has_duplicates
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="h")
         assert_index_equal(ind_full, timeindex)
+        assert edisgo.timeseries.timeindex.empty
 
     def test_feedin_oedb_legacy(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
@@ -149,9 +185,16 @@ class TestTimeseriesImport:
             edisgo_object, "eGon2035", pytest.engine
         )
         assert df.shape == (8760, 3)
-        assert df.index[0].year == 2035
+        # with neither an explicit timeindex nor TimeSeries.timeindex set,
+        # _timeindex_helper_func (Fall c) indexes by the configured reference
+        # year (default 2011); the scenario only selects which data is loaded,
+        # it no longer determines the calendar year
+        assert df.index[0].year == 2011
 
-        # test for leap year
+        # test for leap year: the given timeindex (a full year, so it includes
+        # 29 February) is shifted to the reference year (default 2011) by
+        # _timeindex_helper_func/shift_timeindex_to_year, dropping the 24
+        # 29-February time steps in the process (2011 is not a leap year)
         with caplog.at_level(logging.WARNING):
             df = timeseries_import.heat_demand_oedb(
                 edisgo_object,
@@ -159,11 +202,32 @@ class TestTimeseriesImport:
                 pytest.engine,
                 timeindex=pd.date_range("1/1/2020", periods=8760, freq="H"),
             )
-        assert "A leap year was given." in caplog.text
-        assert df.shape == (8760, 3)
-        assert df.index[0].year == 2045
+        assert "is set in leap year 2020" in caplog.text
+        assert df.shape == (8736, 3)
+        assert df.index[0].year == 2011
 
         # ToDo add further tests
+
+    def test_heat_demand_oedb_reference_year_independent_of_scenario(self):
+        # 'eGon100RE' used to map to year 2045 via the now removed
+        # get_year_based_on_scenario; the resulting time index must instead
+        # be in the configured reference year (default 2011), regardless of
+        # scenario, whenever neither an explicit timeindex nor
+        # TimeSeries.timeindex is set
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        hp_data_egon = self.setup_egon_heat_pump_data()
+        edisgo_object.topology.loads_df = pd.concat(
+            [edisgo_object.topology.loads_df, hp_data_egon]
+        )
+        assert edisgo_object.timeseries.timeindex.empty
+
+        df = timeseries_import.heat_demand_oedb(
+            edisgo_object, "eGon100RE", pytest.engine
+        )
+        assert df.index[0].year == 2011
+        assert df.index[0].year != 2045
 
     def test_electricity_demand_oedb(self, caplog):
         # test with one load each and without year
@@ -181,7 +245,11 @@ class TestTimeseriesImport:
             ],
         )
         assert df.shape == (8760, 3)
-        assert df.index[0].year == 2035
+        # with neither an explicit timeindex nor TimeSeries.timeindex set,
+        # _timeindex_helper_func (Fall c) indexes by the configured reference
+        # year (default 2011); the scenario only selects which data is loaded,
+        # it no longer determines the calendar year
+        assert df.index[0].year == 2011
 
         # test without CTS and residential and given year
         edisgo_object = EDisGo(
@@ -197,7 +265,10 @@ class TestTimeseriesImport:
         assert df.shape == (4, 1)
         assert df.index[0].year == 2011
 
-        # test for leap year and all loads in the grid
+        # test for leap year and all loads in the grid: the given timeindex is
+        # shifted to the reference year (default 2011) by
+        # _timeindex_helper_func/shift_timeindex_to_year, keeping its original
+        # length (no 29 February involved in this 4-hour window)
         with caplog.at_level(logging.WARNING):
             df = timeseries_import.electricity_demand_oedb(
                 edisgo_object,
@@ -205,9 +276,29 @@ class TestTimeseriesImport:
                 pytest.engine,
                 timeindex=pd.date_range("1/1/2020", periods=4, freq="H"),
             )
-        assert "A leap year was given." in caplog.text
-        assert df.shape == (8760, 2472)
-        assert df.index[0].year == 2045
+        assert "is set in leap year 2020" in caplog.text
+        assert df.shape == (4, 2472)
+        assert df.index[0].year == 2011
+
+    def test_electricity_demand_oedb_reference_year_independent_of_scenario(self):
+        # 'eGon100RE' used to map to year 2045 via the now removed
+        # get_year_based_on_scenario; the resulting time index must instead
+        # be in the configured reference year (default 2011), regardless of
+        # scenario, whenever neither an explicit timeindex nor
+        # TimeSeries.timeindex is set
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        assert edisgo_object.timeseries.timeindex.empty
+
+        df = timeseries_import.electricity_demand_oedb(
+            edisgo_object,
+            "eGon100RE",
+            pytest.engine,
+            load_names=["Load_mvgd_33535_1_industrial"],
+        )
+        assert df.index[0].year == 2011
+        assert df.index[0].year != 2045
 
         # ToDo add further tests to check values
 

@@ -123,6 +123,14 @@ class TestElectromobility:
         assert eta_charging_points == 0.9
 
     def test_get_flexibility_bands(self):
+        # explicitly set the timeindex to SimBEV's own native calendar/range
+        # (start 2011-01-01, 15-min steps, 7 simulated days) so the alignment
+        # get_flexibility_bands now always applies is a no-op here, and the
+        # position-based assertions below (against the unaligned band values)
+        # remain valid
+        self.edisgo_obj.set_timeindex(
+            pd.date_range("2011-01-01", periods=7 * 96, freq="15min")
+        )
         self.edisgo_obj.electromobility.get_flexibility_bands(
             self.edisgo_obj, ["work", "public"]
         )
@@ -217,11 +225,13 @@ class TestElectromobility:
             # must not raise KeyError
             edisgo_obj.electromobility.flexibility_bands[key].loc[short_timeindex]
 
-    def test_get_flexibility_bands_empty_timeindex_is_a_no_op(self):
+    def test_get_flexibility_bands_empty_timeindex_sets_up_reference_year(self):
         """
-        With no timeindex set at all, get_flexibility_bands must return the
-        bands untouched, spanning SimBEV's own native calendar/range - there
-        is nothing to align/trim against yet.
+        With no timeindex set at all, get_flexibility_bands must no longer
+        leave the bands untouched in SimBEV's own native calendar/range.
+        Instead, TimeSeries.timeindex is set up on the configured reference
+        year (via align_to_edisgo_timeindex -> _timeindex_helper_func) and the
+        bands are aligned/trimmed to exactly that full-year, hourly index.
         """
         edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         electromobility_import.import_electromobility_from_dir(
@@ -236,8 +246,14 @@ class TestElectromobility:
             edisgo_obj, ["work", "public"]
         )
 
-        assert len(bands["upper_power"].index) == 7 * 96  # 7 days, 15-min steps
-        assert bands["upper_power"].index[0] == pd.Timestamp("2011-01-01")
+        assert not edisgo_obj.timeseries.timeindex.empty
+        reference_timeindex = edisgo_obj.timeseries.timeindex
+        assert len(reference_timeindex) == 8760
+        assert reference_timeindex[0] == pd.Timestamp("2011-01-01")
+        for key in ("upper_power", "lower_energy", "upper_energy"):
+            assert_index_equal(bands[key].index, reference_timeindex)
+            # only the first 7 days (SimBEV's simulated range) carry data
+            assert bands[key].iloc[7 * 24 :].isna().all().all()
 
     def test_fix_flexibility_bands_rounding_errors(self, caplog):
         # set up test data
@@ -306,8 +322,15 @@ class TestElectromobility:
         times.
 
         """
-        # reset Timeseries object to avoid automatic resampling of flex bands
+        # reset Timeseries object and set it to SimBEV's own native
+        # calendar/range (start 2011-01-01, 15-min steps, 7 simulated days) so
+        # get_flexibility_bands' alignment onto it is a no-op, leaving the
+        # bands at native resolution to avoid automatic resampling of flex
+        # bands - this test exercises resample() explicitly below
         self.edisgo_obj.timeseries = TimeSeries()
+        self.edisgo_obj.set_timeindex(
+            pd.date_range("2011-01-01", periods=7 * 96, freq="15min")
+        )
         self.edisgo_obj.electromobility.get_flexibility_bands(
             self.edisgo_obj, ["work", "public"]
         )
