@@ -27,8 +27,9 @@ from edisgo.run.tasks.flex import (
     task_import_flex,
 )
 from edisgo.run.tasks.io import task_import_overlying_grid_data
-from edisgo.run.tasks.spatial import task_spatial_restore
+from edisgo.run.tasks.spatial import task_spatial_reduce, task_spatial_restore
 from edisgo.run.tasks.timeseries import (
+    _selection_params,
     task_manual_ts,
     task_select_critical_timesteps,
     task_set_timeindex,
@@ -577,6 +578,94 @@ class TestSelectCriticalTimesteps:
             task_select_critical_timesteps(edisgo_obj, ctx, method="residual_load")
 
 
+class TestTimestepSelectionBlock:
+    """The top-level timestep_selection block picks and configures the
+    time-step selection task (its checks are tested in test_validator.py).
+    The edisgo_obj fixture has 3 time steps, so an unchanged length means the
+    task was skipped."""
+
+    def _ctx(self, selection):
+        ctx = RunContext(raw_config={"timestep_selection": selection})
+        # select_critical_timesteps requires active-power time series
+        ctx.flags["timeseries_set"] = True
+        return ctx
+
+    def test_picked_set_timeindex_runs_with_block_params(self, edisgo_obj):
+        ctx = self._ctx(
+            {
+                "task": "set_timeindex",
+                "set_timeindex": {"start": "2011-01-01 00:00", "periods": 2},
+            }
+        )
+        task_set_timeindex(edisgo_obj, ctx)
+        assert len(edisgo_obj.timeseries.timeindex) == 2
+
+    def test_other_task_is_skipped(self, edisgo_obj):
+        # would raise for the unknown method if it ran
+        ctx = self._ctx(
+            {
+                "task": "set_timeindex",
+                "select_critical_timesteps": {"method": "bogus"},
+            }
+        )
+        assert task_select_critical_timesteps(edisgo_obj, ctx) is edisgo_obj
+        assert len(edisgo_obj.timeseries.timeindex) == 3
+
+    def test_picked_select_critical_timesteps_runs_with_block_params(self, edisgo_obj):
+        ctx = self._ctx(
+            {
+                "task": "select_critical_timesteps",
+                "select_critical_timesteps": {"method": "bogus"},
+            }
+        )
+        with pytest.raises(ValueError, match="got 'bogus'"):
+            task_select_critical_timesteps(edisgo_obj, ctx)
+
+    def test_task_none_skips_both(self, edisgo_obj):
+        ctx = self._ctx({"task": "none"})
+        task_set_timeindex(edisgo_obj, ctx)
+        task_select_critical_timesteps(edisgo_obj, ctx)
+        assert len(edisgo_obj.timeseries.timeindex) == 3
+
+    def test_null_block_uses_inline_params(self, edisgo_obj):
+        task_set_timeindex(
+            edisgo_obj, self._ctx(None), start="2011-01-01 00:00", periods=2
+        )
+        assert len(edisgo_obj.timeseries.timeindex) == 2
+
+    def test_extending_config_switches_task_without_mixing_params(self):
+        """Switching spatial_reduction_opf (set_timeindex) to
+        select_critical_timesteps must not pass the preset's set_timeindex
+        parameters to select_critical_timesteps."""
+        cfg = load_config(
+            {
+                "extends": "spatial_reduction_opf",
+                "timestep_selection": {
+                    "task": "select_critical_timesteps",
+                    "select_critical_timesteps": {"method": "power_flow"},
+                },
+            }
+        )
+        validate(cfg)
+        ctx = RunContext(raw_config=cfg)
+        assert _selection_params(ctx, "select_critical_timesteps", {}) == {
+            "method": "power_flow"
+        }
+        assert _selection_params(ctx, "set_timeindex", {}) is None
+
+    @pytest.mark.parametrize(
+        "preset",
+        ["overlying_grid_opf", "overlying_grid_opf_spatial", "spatial_reduction_opf"],
+    )
+    def test_presets_contain_both_tasks_without_step_params(self, preset):
+        cfg = load_config({"extends": preset})
+        validate(cfg)
+        # bare task names, so the timestep_selection block alone configures
+        # them
+        assert "set_timeindex" in cfg["pipeline"]
+        assert "select_critical_timesteps" in cfg["pipeline"]
+
+
 class TestOptimizeTaskDelegation:
     """task_optimize is thin: expand the flexibility selection and call
     edisgo.pm_optimize. The multi-interval split lives in pm_optimize and is
@@ -697,3 +786,11 @@ def test_all_bundled_presets_validate():
     assert presets, "no bundled presets found"
     for path in presets:
         validate(load_config(path))
+
+
+def test_spatial_reduce_with_null_block_is_a_noop():
+    """``spatial_reduction: null`` (e.g. set by a config extending a preset)
+    must behave like an absent block instead of crashing."""
+    sentinel = object()
+    ctx = RunContext(raw_config={"spatial_reduction": None})
+    assert task_spatial_reduce(sentinel, ctx) is sentinel
