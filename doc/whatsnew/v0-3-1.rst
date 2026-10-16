@@ -216,3 +216,7 @@ Changes
   clients held them. :func:`~.tools.session_scope` now uses
   :func:`~.io.db.engine` with ``ssh=False``, which reads the token like the other OEP
   imports (openego/eDisGo#739)
+* OEP connections are closed right after use instead of being kept open in a
+  connection pool. The OEP limits open connections per account to 8, and each process
+  kept at least one pooled connection open per engine, so a few processes with the
+  same token, e.g. parallel CI jobs, failed with ``HTTP 429``
