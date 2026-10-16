@@ -415,6 +415,19 @@ def assure_minimum_potential_charging_parks(
         and reprojected to the grid's coordinate reference system.
 
     """
+    # sort by content so that the result does not depend on the row order of the
+    # input (the database and os.listdir do not guarantee any order)
+    potential_charging_parks_gdf = (
+        potential_charging_parks_gdf.assign(
+            wkt=potential_charging_parks_gdf.geometry.to_wkt()
+        )
+        .sort_values(
+            by=["use_case", "ags", "user_centric_weight", "wkt"],
+            ascending=[True, True, False, True],
+        )
+        .drop(columns="wkt")
+    )
+
     # ensure minimum number of potential charging parks per car
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
@@ -559,6 +572,14 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
             grid friendly weight. Default 0.5.
 
     """
+    # sort by content so that the result does not depend on the row order of the
+    # input (the database does not guarantee any order)
+    edisgo_obj.electromobility.charging_processes_df = (
+        edisgo_obj.electromobility.charging_processes_df.sort_values(
+            by=["car_id", "park_start_timesteps", "park_end_timesteps"]
+        ).reset_index(drop=True)
+    )
+
     distribute_private_charging_demand(edisgo_obj)
 
     distribute_public_charging_demand(edisgo_obj, **kwargs)
