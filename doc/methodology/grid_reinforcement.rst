@@ -14,8 +14,68 @@ applies the measures a German distribution grid operator would typically use
 (parallel cables, bigger/extra transformers, split feeders) until all problems are
 solved — and reports the cost.
 
-How it works
-------------
+Which function to use
+---------------------
+
+There is one reinforcement algorithm,
+:py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`, and two ways of running it
+more robustly. All three use the same checks and the same measures; the robust
+variants only add fallbacks for grids in which the power flow does not converge, and
+:py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid` adds two measures of
+its own.
+
+In the table, *standard* is :meth:`~edisgo.edisgo.EDisGo.reinforce`, *catch* is
+``reinforce(catch_convergence_problems=True)`` and *enhanced* is
+:py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid`.
+
+.. list-table::
+   :header-rows: 1
+
+   * - What is done
+     - standard
+     - catch
+     - enhanced
+   * - Measures for overloading and voltage issues
+     - yes
+     - yes
+     - yes
+   * - Parallel lines when a split diverges
+     - yes
+     - yes
+     - yes
+   * - Converging time steps first, scaling
+     - –
+     - yes
+     - yes
+   * - Level by level, LV grid by LV grid
+     - –
+     - –
+     - yes
+   * - Separation of overloaded LV grids
+     - –
+     - –
+     - yes
+   * - Cost-distorting last resort
+     - –
+     - –
+     - optional
+
+The rows are explained in :ref:`standard-reinforcement` (measures),
+:ref:`feeder-split-weaker-line` (parallel lines when the power flow does not converge
+after a split), :ref:`catch-convergence`, :ref:`enhanced-reinforcement`,
+:ref:`lv-grid-separation` (on by default, ``separate_lv_grids``) and
+:ref:`cost-distorting-mode` (only with ``activate_cost_results_disturbing_mode=True``).
+
+The presets of the run pipeline (``edisgo.run``) call
+:meth:`~edisgo.edisgo.EDisGo.reinforce`, some of them with
+``catch_convergence_problems=True``.
+:py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid` is used neither by
+the run pipeline nor by eGo; it has to be called directly.
+
+.. _standard-reinforcement:
+
+Standard reinforcement: ``reinforce()``
+---------------------------------------
 
 .. only:: html
 
@@ -47,8 +107,9 @@ after that, :class:`~edisgo.flex_opt.exceptions.MaximumIterationError` is raised
 .. only:: html
 
    Click a step to see what is checked and which function applies the measure. The
-   second tab shows the fallback sequence of
-   :py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid` described below.
+   second tab shows the steps of
+   :py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid`, see
+   :ref:`enhanced-reinforcement`.
 
    .. raw:: html
       :file: reinforcement_overview.html
@@ -60,60 +121,11 @@ Useful options of :meth:`~edisgo.edisgo.EDisGo.reinforce`:
 * ``split_voltage_band`` — split the allowed voltage band between the voltage levels
   MV, MV/LV stations and LV (default ``True``; see below).
 * ``reduced_analysis`` — only analyse the most critical time steps to save time.
-* ``catch_convergence_problems=True`` — fall back to
-  :py:func:`~edisgo.flex_opt.reinforce_grid.catch_convergence_reinforce_grid`, which
-  handles non-convergence in stages: it first reinforces using only the converging
-  time steps, then the initially non-converging ones, and only as a last resort scales
-  the time series iteratively (starting from a minimal factor of 0.05 and increasing
-  it, for up to 10 iterations).
-
-Enhanced reinforcement
-----------------------
-
-On very large or heavily overloaded grids even
-``catch_convergence_problems=True`` can fail to find a feasible grid.
-:py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid` is a more robust
-wrapper that reinforces **voltage level by voltage level** and falls back to ever
-more drastic measures until a grid is found on which the power flow converges:
-
-#. **Separate heavily overloaded LV grids** (if ``separate_lv_grids=True``,
-   default). An LV grid whose largest residual apparent power (load minus generation
-   and storage) exceeds ``separation_threshold`` times the nominal apparent power of
-   its MV/LV transformer(s) is split by adding a new MV/LV station (:py:func:`~edisgo.flex_opt.reinforce_grid.run_separate_lv_grids`).
-#. **Reinforce each LV grid on its own.** If a single LV grid does not converge in
-   the power flow, it is split first
-   (:py:func:`~edisgo.flex_opt.reinforce_measures.separate_lv_grid`) and then
-   reinforced.
-#. **Reinforce everything at once.** If that fails, it runs, **in sequence** (each
-   step is attempted regardless of whether the previous one succeeded), the **MV**
-   level only, then **MV + MV/LV stations** (``mode="mvlv"``), then each **LV grid
-   separately** (again splitting any that do not converge).
-#. **Cost-distorting last resort** (only if
-   ``activate_cost_results_disturbing_mode=True``). For LV grids that still cannot be
-   solved, first **all lines are replaced by the standard line type**; if that is
-   still not enough, **all components of the LV grid are aggregated onto the MV/LV
-   station bus**. These measures restore convergence but distort the reported costs:
-   the line replacement is recorded in ``equipment_changes`` and *does* enter the cost
-   calculation, whereas the aggregation leaves no costed trace, so the total is an
-   *underestimate* (a warning is logged and recorded in ``edisgo.results.measures``).
-#. A final full reinforcement is run over the now-feasible grid. Note that the
-   fallback sequence in step 3, the cost-distorting measures in step 4 and this final
-   reinforcement only run if the *"everything at once"* attempt at the start of step 3
-   fails; if it converges right away, the function returns at that point.
-
-Use it when a normal :meth:`~edisgo.edisgo.EDisGo.reinforce` raises convergence or
-iteration errors; for well-behaved grids the standard reinforcement is sufficient.
-
-.. note::
-
-   The MV line reinforcement that splits a feeder with **voltage issues** at an LV
-   station does not insert a switch disconnector at the split point
-   (:py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`), so
-   the resulting half-rings are not switchable in the model. See
-   :ref:`switches-explained` for the role of switch disconnectors in reinforcement.
+* ``catch_convergence_problems=True`` — handle a power flow that does not converge,
+  see :ref:`catch-convergence`.
 
 Identifying problems
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 Constraint checking lives in
 :py:mod:`~edisgo.flex_opt.check_tech_constraints`.
@@ -187,7 +199,7 @@ fixed at 0.9 and 1.1 p.u.
       :file: reinforcement_voltage_band.html
 
 Physics
--------
+~~~~~~~
 
 * **Loading / current.** A line's apparent power must stay below
   :math:`S_\text{allowed} = S_\text{nom}\cdot \text{load factor}`, with the current
@@ -202,12 +214,12 @@ Physics
   by adding transformer capacity.
 
 Reinforcement measures
-----------------------
+~~~~~~~~~~~~~~~~~~~~~~
 
 Measures are implemented in :py:mod:`~edisgo.flex_opt.reinforce_measures`.
 
 Lines due to overloading
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+""""""""""""""""""""""""
 
 :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_overloading` decides per
 line up front, in three cases:
@@ -234,7 +246,7 @@ loop only repeats if the changed impedances create new overloads elsewhere.
       :file: reinforcement_line_overloading.html
 
 Stations due to overloading
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""""""""""""""""""""""""""
 
 :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_hv_mv_station_overloading`
 and :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_mv_lv_station_overloading`
@@ -255,7 +267,7 @@ compare the missing power :math:`S_\text{missing}` with the existing transformer
       :file: reinforcement_station_overloading.html
 
 MV/LV stations due to voltage issues
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+""""""""""""""""""""""""""""""""""""
 
 :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_mv_lv_station_voltage_issues`
 installs a parallel standard transformer at every station whose voltage difference
@@ -265,7 +277,7 @@ parallel transformer lowers the impedance of the station and with it the voltage
 difference across it.
 
 Lines due to voltage issues
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""""""""""""""""""""""""""
 
 :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`
 addresses, per feeder, the critical node **farthest from the station** (by path
@@ -301,7 +313,7 @@ Both measures are rules of thumb; what they cannot do is summarised in
 .. _feeder-split:
 
 Splitting a feeder
-""""""""""""""""""
+^^^^^^^^^^^^^^^^^^
 
 #. **Find the split node.** It is the first node on the path to the critical node at
    or beyond two thirds of the path length. In **LV** grids it is moved back towards
@@ -321,6 +333,14 @@ Splitting a feeder
    power flow is repeated and the voltages are checked again. If it does not converge,
    see :ref:`feeder-split-weaker-line`.
 
+.. note::
+
+   The MV line reinforcement that splits a feeder with **voltage issues** at an LV
+   station does not insert a switch disconnector at the split point
+   (:py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`), so
+   the resulting half-rings are not switchable in the model. See
+   :ref:`switches-explained` for the role of switch disconnectors in reinforcement.
+
 The two thirds come from the distribution grid study of Baden-Württemberg ([BW]_).
 For a uniformly loaded feeder of length :math:`L` that is split at :math:`a` and fed
 again by a new line of the **same type**, the voltage drop at the end of the front
@@ -331,7 +351,7 @@ part is proportional to :math:`a^2/2` and at the end of the rear part to
 .. _feeder-split-weaker-line:
 
 When the split line is weaker than the bypassed path
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 The split line replaces the path from the station to the split node for everything
 behind the split. Usually the old path consists of thinner or older cables, and the
@@ -410,7 +430,7 @@ described in the next section.
 .. _path-reinforcement:
 
 Reinforcing lines on the path to the critical node
-""""""""""""""""""""""""""""""""""""""""""""""""""""
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The split node at two thirds of the path is often the first node of the feeder, for
 example when an earlier iteration split the feeder and installed a long new line from
@@ -477,7 +497,7 @@ earthwork, 20 kEUR/km cable); eDisGo itself runs a power flow after every iterat
 .. _voltage-reinforcement-limits:
 
 Limits of line reinforcement due to voltage issues
-""""""""""""""""""""""""""""""""""""""""""""""""""""
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Both measures follow rules of thumb of grid planning and are corrected by the power
 flow of the next iteration; they are not optimised. This keeps reinforcement fast and
@@ -514,27 +534,97 @@ close to what a grid operator would do, but has limits:
   in the step, up to four parallel lines are added to them before the error is raised,
   even if the power flow does not converge for another reason.
 * **The loading of the split line is not checked when splitting.** An overloaded
-  split line is reinforced in the final step due to overloading (see `How it works`_).
+  split line is reinforced in the final step due to overloading (see
+  :ref:`standard-reinforcement`).
 * **The split line follows the existing route.** Its length, and therefore its cost, is
   the length of the path to the split node; a shorter route is not searched for. In MV
   grids no switch disconnector is inserted at the split node (see the note in
-  `Enhanced reinforcement`_).
+  :ref:`feeder-split`).
 * **Path reinforcement uses a linear estimate.** The voltage difference along the path
   is estimated as :math:`\sum r \cdot I` with the currents of one time step, the one
   with the largest deviation at the critical node, before reinforcement. Reactance and
   the change of the currents by the reinforcement are neglected, and the factor of one
   half on the share is empirical (see :ref:`path-reinforcement`).
 
+.. _catch-convergence:
+
+Non-converging power flow: ``catch_convergence_problems``
+---------------------------------------------------------
+
+With ``catch_convergence_problems=True``, :meth:`~edisgo.edisgo.EDisGo.reinforce`
+runs :py:func:`~edisgo.flex_opt.reinforce_grid.catch_convergence_reinforce_grid`. It
+uses the standard reinforcement unchanged and only reacts when the power flow does not
+converge:
+
+#. **Try the standard reinforcement** with all time steps.
+#. **Reinforce with the converging time steps** only, then try again with the time
+   steps that did not converge at first, as the grid is now stronger.
+#. **Scale the time series** if some time steps still do not converge: load and
+   feed-in are scaled down, starting from a factor of 0.05, the grid is reinforced and
+   the factor is increased step by step until the original time series are reached,
+   in up to 10 iterations.
+
+It only catches a power flow that does not converge. A voltage issue or overload that
+the measures cannot solve still ends with
+:class:`~edisgo.flex_opt.exceptions.MaximumIterationError`.
+
+.. _enhanced-reinforcement:
+
+Enhanced reinforcement: ``enhanced_reinforce_grid()``
+-----------------------------------------------------
+
+On very large or heavily overloaded grids even
+``catch_convergence_problems=True`` can fail to find a feasible grid.
+:py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid` is a more robust
+wrapper that reinforces **voltage level by voltage level** and falls back to ever
+more drastic measures until a grid is found on which the power flow converges:
+
+#. **Separate heavily overloaded LV grids** (if ``separate_lv_grids=True``,
+   default). An LV grid whose largest residual apparent power (load minus generation
+   and storage) exceeds ``separation_threshold`` times the nominal apparent power of
+   its MV/LV transformer(s) is split by adding a new MV/LV station, see
+   :ref:`lv-grid-separation`.
+#. **Reinforce each LV grid on its own.** If a single LV grid does not converge in
+   the power flow, it is separated first (:ref:`lv-grid-separation`) and then
+   reinforced.
+#. **Reinforce everything at once.** If that fails, it runs, **in sequence** (each
+   step is attempted regardless of whether the previous one succeeded), the **MV**
+   level only, then **MV + MV/LV stations** (``mode="mvlv"``), then each **LV grid
+   separately** (again splitting any that do not converge).
+#. **Cost-distorting last resort** (only if
+   ``activate_cost_results_disturbing_mode=True``), see :ref:`cost-distorting-mode`.
+#. A final full reinforcement is run over the now-feasible grid. Note that the
+   fallback sequence in step 3, the cost-distorting measures in step 4 and this final
+   reinforcement only run if the *"everything at once"* attempt at the start of step 3
+   fails; if it converges right away, the function returns at that point.
+
+All calls of :meth:`~edisgo.edisgo.EDisGo.reinforce` inside use
+``catch_convergence_problems=True``, so everything described in
+:ref:`standard-reinforcement` and :ref:`catch-convergence` applies to each of them.
+
+Use it when :meth:`~edisgo.edisgo.EDisGo.reinforce` with
+``catch_convergence_problems=True`` still raises convergence or iteration errors; for
+well-behaved grids the standard reinforcement is sufficient.
+
+Measures used only by ``enhanced_reinforce_grid()``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Two measures are not part of the standard reinforcement and are only applied by
+:py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid`.
+
+.. _lv-grid-separation:
+
 Separating overloaded LV grids
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+""""""""""""""""""""""""""""""
 
 :py:func:`~edisgo.flex_opt.reinforce_measures.separate_lv_grid` splits a heavily
 overloaded LV grid by adding a new MV/LV station at the location of the existing one.
-It is used by :py:func:`~edisgo.flex_opt.reinforce_grid.run_separate_lv_grids`, which
+:meth:`~edisgo.edisgo.EDisGo.reinforce` never does this. It is only used inside
+:py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid`: in its first step
+through :py:func:`~edisgo.flex_opt.reinforce_grid.run_separate_lv_grids`, which
 separates every LV grid whose largest residual apparent power (load minus generation
 and storage) exceeds ``separation_threshold`` (default 2) times the rated power of its
-transformers, and by :py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid`
-for LV grids whose power flow does not converge.
+transformers, and later for every LV grid whose power flow does not converge.
 
 #. **Feeders are treated from the one with the fewest buses to the one with the most.**
    For each feeder the bus at half of the path length to its last bus is found; like the split node above, it
@@ -560,6 +650,19 @@ for LV grids whose power flow does not converge.
 
    .. raw:: html
       :file: reinforcement_lv_separation.html
+
+.. _cost-distorting-mode:
+
+Cost-distorting last resort
+"""""""""""""""""""""""""""
+
+Only with ``activate_cost_results_disturbing_mode=True`` and only for LV grids that
+still cannot be reinforced, :py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid`
+first replaces **all lines of the LV grid by standard lines**. If the grid still cannot
+be reinforced, **all its components are aggregated at the MV/LV station**. Both make
+the power flow converge but distort the result: the replaced lines are part of the
+costs, the aggregation leaves no trace in the costs, so the total is an underestimate.
+A warning is logged and the measure is recorded in ``edisgo.results.measures``.
 
 .. _grid-expansion-costs:
 
