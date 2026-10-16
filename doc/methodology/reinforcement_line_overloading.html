@@ -1,0 +1,82 @@
+<div class="rw" id="rw-lo">
+<div class="rw-row" id="rw-lo-ctl"></div>
+<div class="rw-row" id="rw-lo-ctl2"></div>
+<div class="rw-box"><svg id="rw-lo-svg" role="img" aria-label="Decision of reinforce_lines_overloading"></svg></div>
+<div class="rw-stats" id="rw-lo-stats"></div>
+<p class="rw-note">Equipment data from <code>equipment-parameters_LV_cables.csv</code>, <code>…_MV_cables.csv</code> and <code>…_MV_overhead_lines.csv</code> (20 kV); costs from <code>costs_cables</code> for rural areas. The relative overload is the largest current over the allowed current of all analysed time steps.</p>
+<script>
+(function () {
+  var RW = window.RW, svg = document.getElementById("rw-lo-svg");
+  var LEVELS = {
+    lv: { std: "NAYY 4x1x150", u: 0.4, cable: 9, earth: 51, types: {
+      "NAYY 4x1x150": [0.275, "cable"], "NAYY 4x1x95": [0.215, "cable"], "NAYY 4x1x50": [0.144, "cable"],
+      "NAYY 4x1x240": [0.364, "cable"], "NAYY 4x1x300": [0.419, "cable"] } },
+    mv: { std: "NA2XS2Y 3x1x240", u: 20, cable: 20, earth: 60, types: {
+      "NA2XS2Y 3x1x240": [0.417, "cable"], "NA2XS2Y 3x1x150 RE/25": [0.319, "cable"], "NA2XS(FL)2Y 3x1x300 RM/25": [0.476, "cable"],
+      "48-AL1/8-ST1A": [0.21, "line"], "94-AL1/15-ST1A": [0.35, "line"] } }
+  };
+  var st = { lvl: "lv", type: "NAYY 4x1x95", n: 1, ol: 1.4, len: 0.3 };
+  var ctl = document.getElementById("rw-lo-ctl"), ctl2 = document.getElementById("rw-lo-ctl2"), sel = RW.h("select"), nsel = RW.h("select");
+  sel.id = "rw-lo-type"; nsel.id = "rw-lo-n";
+  ctl.appendChild(RW.seg([{ id: "lv", label: "LV" }, { id: "mv", label: "MV 20 kV" }], st.lvl, function (id) { st.lvl = id; st.type = Object.keys(LEVELS[id].types)[1]; fill(); draw(); }, "Voltage level"));
+  var lt = RW.h("label", "rw-sl", "<span>line</span>"); lt.setAttribute("for", "rw-lo-type"); lt.appendChild(sel); ctl.appendChild(lt);
+  var ln = RW.h("label", "rw-sl", "<span>parallel lines</span>"); ln.setAttribute("for", "rw-lo-n"); ln.appendChild(nsel); ctl.appendChild(ln);
+  [1, 2, 3].forEach(function (k) { var o = RW.h("option", null, k); o.value = k; nsel.appendChild(o); });
+  ctl2.appendChild(RW.slider("rw-lo-ol", "relative overload", 1.05, 4, 0.05, st.ol, function (v) { return RW.f(v * 100, 0) + " %"; }, function (v) { st.ol = v; draw(); }));
+  ctl2.appendChild(RW.slider("rw-lo-len", "length", 0.05, 2, 0.05, st.len, function (v) { return Math.round(v * 1000) + " m"; }, function (v) { st.len = v; draw(); }));
+  function fill() {
+    sel.innerHTML = "";
+    Object.keys(LEVELS[st.lvl].types).forEach(function (t) { var o = RW.h("option", null, t + (t === LEVELS[st.lvl].std ? " (standard)" : "")); o.value = t; if (t === st.type) o.selected = true; sel.appendChild(o); });
+  }
+  sel.onchange = function () { st.type = sel.value; draw(); };
+  nsel.onchange = function () { st.n = +nsel.value; draw(); };
+  function decide() {
+    var L = LEVELS[st.lvl], t = L.types[st.type], std = L.types[L.std];
+    var sOld = Math.sqrt(3) * L.u * t[0] * st.n, need = sOld * st.ol;
+    if (st.type === L.std) {
+      var nn = Math.ceil(st.ol * st.n - 1e-9);
+      return { k: 0, type: L.std, n: nn, added: nn - st.n, sOld: sOld, need: need, why: "already standard type → add parallel standard lines: ⌈" + RW.f(st.ol, 2) + " × " + st.n + "⌉ = " + nn + " in total" };
+    }
+    if (st.n === 1 && t[1] === "cable" && st.ol < 2) return { k: 1, type: st.type, n: 2, added: 1, sOld: sOld, need: need, why: "single cable, overload below 200 % → one parallel line of the same type" };
+    var sStd = Math.sqrt(3) * L.u * std[0], k = Math.ceil(need / sStd - 1e-9);
+    return { k: 2, type: L.std, n: k, added: k, sOld: sOld, need: need, replace: true, why: (t[1] === "line" ? "overhead line" : st.n > 1 ? "several parallel lines" : "overload of 200 % or more") + " → replace by ⌈" + RW.f(need, 3) + " / " + RW.f(sStd, 3) + " MVA⌉ = " + k + " standard lines" };
+  }
+  function draw() {
+    nsel.value = st.n;
+    var L = LEVELS[st.lvl], d = decide();
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var W = 800, H = 190; svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    var Q = [{ x: 20, t: "standard type?" }, { x: 290, t: "single cable and overload < 200 %?" }];
+    var A = [{ x: 20, y: 120, t: "add parallel standard lines", k: 0 }, { x: 290, y: 120, t: "one parallel line, same type", k: 1 }, { x: 560, y: 120, t: "replace by standard lines", k: 2 }];
+    Q.forEach(function (q, i) {
+      var on = d.k >= i;
+      RW.el("rect", { x: q.x, y: 20, width: 230, height: 44, rx: 22, fill: on ? "var(--acc-soft)" : "#fff", stroke: on ? "var(--acc)" : "var(--rule)", "stroke-width": 1.5 }, null, svg);
+      RW.el("text", { x: q.x + 115, y: 47, "text-anchor": "middle", "font-size": 13, "font-weight": 600 }, q.t, svg);
+      RW.el("line", { x1: q.x + 115, y1: 64, x2: q.x + 115, y2: 118, stroke: d.k === i ? "var(--acc)" : "var(--rule)", "stroke-width": 2 }, null, svg);
+      RW.el("text", { x: q.x + 122, y: 96, "class": "rw-sm" }, "yes", svg);
+      RW.el("line", { x1: q.x + 230, y1: 42, x2: q.x + 270, y2: 42, stroke: d.k > i ? "var(--acc)" : "var(--rule)", "stroke-width": 2 }, null, svg);
+      RW.el("text", { x: q.x + 238, y: 36, "class": "rw-sm" }, "no", svg);
+    });
+    RW.el("line", { x1: 560, y1: 42, x2: 675, y2: 42, stroke: d.k === 2 ? "var(--acc)" : "var(--rule)", "stroke-width": 2 }, null, svg);
+    RW.el("line", { x1: 675, y1: 42, x2: 675, y2: 118, stroke: d.k === 2 ? "var(--acc)" : "var(--rule)", "stroke-width": 2 }, null, svg);
+    A.forEach(function (a) {
+      var on = d.k === a.k;
+      RW.el("rect", { x: a.x, y: a.y, width: 230, height: 44, rx: 4, fill: on ? "var(--acc)" : "#fff", stroke: on ? "var(--acc)" : "var(--rule)", "stroke-width": 1.5 }, null, svg);
+      RW.el("text", { x: a.x + 115, y: a.y + 27, "text-anchor": "middle", "font-size": 13, "font-weight": 600, fill: on ? "#fff" : "var(--ink)" }, a.t, svg);
+    });
+    var sNew = Math.sqrt(3) * L.u * L.types[d.type][0] * d.n, loadAfter = d.need / sNew;
+    var c = L.earth * st.len + L.cable * st.len * d.added;
+    RW.stats(document.getElementById("rw-lo-stats"), [
+      ["before", st.n + "× " + st.type, "bad"],
+      ["after", d.n + "× " + d.type, "ok"],
+      ["loading after", RW.f(loadAfter * 100, 0) + " %", loadAfter <= 1 + 1e-9 ? "ok" : "bad"],
+      ["lines added", String(d.added), ""],
+      ["costs", RW.f(c, 1) + " kEUR", ""]
+    ]);
+    var note = document.getElementById("rw-lo-why") || (function () { var p = RW.h("p", "rw-detail"); p.id = "rw-lo-why"; document.getElementById("rw-lo-stats").after(p); return p; })();
+    note.innerHTML = d.why + ". Costs: earthwork once (" + RW.f(L.earth * st.len, 1) + " kEUR) plus " + d.added + " × cable (" + RW.f(L.cable * st.len, 1) + " kEUR each).";
+  }
+  fill(); draw();
+})();
+</script>
+</div>

@@ -214,6 +214,10 @@ Changes
   line, even where the replaced line was e.g. two parallel standard lines, so the
   separation could create a new overload. The new MV/LV transformer now has the type
   of the standard transformer instead of ``None`` in ``type_info`` (from openego/eDisGo#391)
+* Rewrote the grid reinforcement methodology page with interactive examples for the
+  order of the reinforcement steps, the split voltage band, line and station
+  overloading, the iterations of the line reinforcement due to voltage issues in LV
+  feeders, the separation of LV grids and the grid expansion costs
 * Stopped grid reinforcement aborting with ``ValueError: Power flow analysis did not
   converge`` after splitting a feeder due to voltage issues.
   :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` connects the

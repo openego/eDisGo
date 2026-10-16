@@ -17,6 +17,11 @@ solved — and reports the cost.
 How it works
 ------------
 
+.. only:: html
+
+   .. raw:: html
+      :file: reinforcement_base.html
+
 Reinforcement is orchestrated by
 :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid` (exposed as
 :meth:`~edisgo.edisgo.EDisGo.reinforce`). It runs the following measures in order:
@@ -36,7 +41,17 @@ Reinforcement is orchestrated by
 
 Overloading is usually fixed in a single step. Voltage issues can only be solved
 **iteratively**: after each measure a power flow is run and the voltages are
-re-checked, up to ``max_while_iterations`` times (default 20).
+re-checked, up to ``max_while_iterations`` times (default 20). If an issue remains
+after that, :class:`~edisgo.flex_opt.exceptions.MaximumIterationError` is raised.
+
+.. only:: html
+
+   Click a step to see what is checked and which function applies the measure. The
+   second tab shows the fallback sequence of
+   :py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid` described below.
+
+   .. raw:: html
+      :file: reinforcement_overview.html
 
 Useful options of :meth:`~edisgo.edisgo.EDisGo.reinforce`:
 
@@ -134,6 +149,40 @@ deviation is already close to the limit.
 :py:func:`~edisgo.flex_opt.check_tech_constraints.voltage_deviation_from_allowed_voltage_limits`
 returns the absolute deviations.
 
+With the default settings the voltage drop in the load case is split as follows; the
+voltage rise in the feed-in case is split the same way (5 % MV, 1.5 % MV/LV station,
+3.5 % LV):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Level
+     - Allowed drop
+     - Relative to
+   * - MV buses
+     - 1.5 %
+     - HV/MV station
+   * - MV/LV stations
+     - 2 %
+     - station, MV side
+   * - LV buses
+     - 6.5 %
+     - station, LV side
+   * - all, without split
+     - 10 %
+     - 1 p.u.
+
+The values are ``mv_max_v_drop``, ``mv_lv_station_max_v_drop``, ``lv_max_v_drop`` and
+``mv_lv_max_v_drop``; the HV/MV station voltage includes ``hv_mv_trafo_offset``.
+
+.. only:: html
+
+   Move the sliders to set the voltage drop in each level and switch between both
+   modes. The shaded areas are below the allowed voltage.
+
+   .. raw:: html
+      :file: reinforcement_voltage_band.html
+
 Physics
 -------
 
@@ -158,26 +207,56 @@ Lines due to overloading
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_overloading` decides per
-line up front, in three cases: lines that are already of standard type get as many
-additional parallel standard lines as needed; single-circuit **cables** with a
-relative overload below 2 get one parallel line of the **same** type; all other lines
-are **replaced** by as many parallel standard lines as needed.
+line up front, in three cases:
+
+#. Lines that are already of **standard type** get as many additional parallel
+   standard lines as needed: :math:`\lceil \text{overload} \cdot n \rceil` lines in
+   total for :math:`n` existing lines.
+#. Single-circuit **cables** with a relative overload below 2 get **one parallel line
+   of the same type**, which doubles their capacity.
+#. All other lines, i.e. overhead lines, lines with several systems and cables with
+   an overload of 2 or more, are **replaced** by
+   :math:`\lceil S_\text{nom,old} \cdot \text{overload} / S_\text{nom,standard} \rceil`
+   parallel standard lines.
+
+The relative overload is the largest ratio of current to allowed current over all
+analysed time steps. One step solves the overload of the analysed time steps; the
+loop only repeats if the changed impedances create new overloads elsewhere.
+
+.. only:: html
+
+   Choose a line and an overload to see which case applies, the result and its cost.
+
+   .. raw:: html
+      :file: reinforcement_line_overloading.html
 
 Stations due to overloading
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_hv_mv_station_overloading`
 and :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_mv_lv_station_overloading`
-add a parallel transformer of the existing type (the smallest one that solves the
-problem if several exist); otherwise the existing transformers are **replaced** by as
-many standard transformers as needed to cover the previous plus the missing capacity.
+compare the missing power :math:`S_\text{missing}` with the existing transformers:
+
+* If the largest existing transformer is at least :math:`S_\text{missing}`, a copy of
+  the **smallest existing transformer that covers** :math:`S_\text{missing}` is added.
+* Otherwise, all existing transformers are **replaced** by
+  :math:`\lceil (S_\text{missing} + \sum S_\text{nom}) / S_\text{nom,standard} \rceil`
+  standard transformers (``hv_mv_transformer``, ``mv_lv_transformer``).
+
+.. only:: html
+
+   .. raw:: html
+      :file: reinforcement_station_overloading.html
 
 MV/LV stations due to voltage issues
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_mv_lv_station_voltage_issues`
-installs a parallel standard transformer, re-runs the power flow and repeats until
-the voltage is within limits or the iteration limit is reached.
+installs a parallel standard transformer at every station whose voltage difference
+between primary and secondary side exceeds the allowed value, re-runs the power flow
+and repeats until the voltage is within limits or the iteration limit is reached. A
+parallel transformer lowers the impedance of the station and with it the voltage
+difference across it.
 
 Lines due to voltage issues
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -193,8 +272,23 @@ measure affects the whole feeder. There are two measures:
   station, so there is nothing to split, the **lines on the path** to the critical
   node are reinforced (:ref:`path-reinforcement`).
 
+In LV grids, the feeder is only split outside buildings, and **house connections**,
+the lines to buses in buildings, are never reinforced due to voltage issues. House
+connections often do not belong to the grid operator, and as short lines they would
+otherwise look like the cheapest measure.
+
 Both measures are rules of thumb; what they cannot do is summarised in
 :ref:`voltage-reinforcement-limits`.
+
+.. only:: html
+
+   The example below runs the iterations on three small LV feeders. Choose a feeder,
+   change the load and step through the iterations. It uses a simplified model
+   (resistance only, :math:`\cos\varphi = 1`); the two sections after it explain each
+   measure with a full power flow.
+
+   .. raw:: html
+      :file: reinforcement_lv_voltage.html
 
 .. _feeder-split:
 
@@ -315,7 +409,8 @@ example when an earlier iteration split the feeder and installed a long new line
 the station. Then no line can be split and the lines on the path from the station to
 the critical node are reinforced. In every iteration of the grid reinforcement, the
 helper ``_reinforce_lines_on_path`` in
-:py:mod:`~edisgo.flex_opt.reinforce_measures` does the following:
+:py:mod:`~edisgo.flex_opt.reinforce_measures` does the following for all lines on the
+path except house connections:
 
 #. **Estimate how much needs to be removed.** The voltage deviation at the critical
    node is divided by the voltage difference between station and critical node:
@@ -380,6 +475,10 @@ Both measures follow rules of thumb of grid planning and are corrected by the po
 flow of the next iteration; they are not optimised. This keeps reinforcement fast and
 close to what a grid operator would do, but has limits:
 
+* **Splitting is not compared with other measures.** If the node at two thirds can be
+  split, the feeder is split, even where replacing a single short, thin cable on the
+  path would be much cheaper (see the example "one thin cable" above and
+  openego/eDisGo#781).
 * **The split node only depends on the path length.** Loads and line types are not
   considered. With unevenly distributed loads, or in grids reduced by the
   :ref:`spatial complexity reduction <complexity-reduction>` with few buses per
@@ -418,7 +517,36 @@ Separating overloaded LV grids
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :py:func:`~edisgo.flex_opt.reinforce_measures.separate_lv_grid` splits a heavily
-overloaded LV grid by adding a new MV/LV station, redistributing the load.
+overloaded LV grid by adding a new MV/LV station at the location of the existing one.
+It is used by :py:func:`~edisgo.flex_opt.reinforce_grid.run_separate_lv_grids`, which
+separates every LV grid whose largest residual apparent power (load minus generation
+and storage) exceeds ``separation_threshold`` (default 2) times the rated power of its
+transformers, and by :py:func:`~edisgo.flex_opt.reinforce_grid.enhanced_reinforce_grid`
+for LV grids whose power flow does not converge.
+
+#. **Feeders are treated from the shortest to the longest.** For each feeder the bus
+   at half of the path length to its last bus is found; like the split node above, it
+   is moved towards the station until it lies outside a building.
+#. **The rear half moves to the new grid.** The line ending at that bus is removed, and
+   the bus and everything behind it are connected to the new station by a new line of
+   the length of the old path. The new line is of the standard type, with as many
+   parallel lines as needed to be at least as strong (:math:`S_\text{nom}`) as the line
+   it replaces, so the separation does not create a weaker connection.
+#. **Feeders that are too short.** If the bus at half the length is the first bus of
+   the feeder, the feeder cannot be split. Then every second such feeder moves to the
+   new grid as a whole.
+#. **Transformers.** The new station gets standard transformers (``mv_lv_transformer``)
+   until its rated power is at least that of the old station. The old station keeps
+   its transformers.
+
+.. only:: html
+
+   Increase the load until the grid exceeds twice the rated power of its 400 kVA
+   transformer, and change the cable type of the feeders to see how strong the new
+   lines to the new station become.
+
+   .. raw:: html
+      :file: reinforcement_lv_separation.html
 
 .. _grid-expansion-costs:
 
@@ -433,6 +561,24 @@ line. Costs are distinguished only by voltage level, not by equipment type, and 
 lines additionally by whether they run in a **rural** (≤ 500 inhabitants/km², lower
 earthwork cost) or **urban** area ([DENA]_). Unit costs come from
 :ref:`config_grid_expansion`.
+
+For a line, the earthwork is paid **once**, however many cables are laid, and every
+added cable costs the cable price:
+
+.. math::
+
+   C_\text{line} = (c_\text{incl. earthwork} - c_\text{cable}) \cdot l
+   + c_\text{cable} \cdot l \cdot q
+
+with the line length :math:`l` and the number :math:`q` of added cables. Transformers
+cost a fixed amount each (``costs_transformers``: 10 kEUR for MV/LV, 1000 kEUR for
+HV/MV), independent of their size. Lines that were added and removed again during the
+reinforcement, e.g. when a feeder is split again later, are not counted twice.
+
+.. only:: html
+
+   .. raw:: html
+      :file: reinforcement_costs.html
 
 References
 ----------

@@ -1,0 +1,69 @@
+<div class="rw" id="rw-lvv">
+<div class="rw-row" id="rw-lvv-ctl"></div>
+<div class="rw-box"><svg id="rw-lvv-net" role="img" aria-label="LV feeder"></svg></div>
+<div class="rw-legend">
+  <span><i style="border-color:var(--std)"></i>NAYY 4x1x150 (standard)</span>
+  <span><i style="border-color:var(--thin)"></i>thinner than standard</span>
+  <span><i style="border-color:var(--thick)"></i>thicker than standard</span>
+  <span><i style="border-color:var(--new)"></i>new or reinforced</span>
+  <span><i style="border-color:var(--hc);border-top-style:dashed"></i>house connection (never reinforced due to voltage issues)</span>
+</div>
+<div class="rw-box"><svg id="rw-lvv-prof" role="img" aria-label="Voltage along the feeder"></svg></div>
+<div class="rw-stats" id="rw-lvv-stats"></div>
+<div class="rw-log" id="rw-lvv-log" aria-live="polite"></div>
+<p class="rw-note">Simplified model: resistance only, cos&nbsp;φ = 1, load case, 6.5 % allowed drop, rural costs (60 kEUR/km incl. earthwork, 9 kEUR/km per additional cable). The selection logic follows <code>reinforce_lines_voltage_issues</code>; eDisGo runs a full power flow after every iteration.</p>
+<script>
+(function () {
+  var RW = window.RW, T = function (x) { return "NAYY 4x1x" + x; };
+  var NETS = {
+    even: { label: "evenly loaded feeder", scale: [0.6, 2, 1.3], g: RW.feeder([1, 2, 3, 4, 5, 6].map(function (i) { return { id: "B" + i, type: T(150), len: 0.08, load: 25 }; })),
+      text: "Six standard cables, 25 kW per house. The farthest house is H6; the first bus at two thirds of its path is B5, which is connected to the station by a new 400 m standard line." },
+    long: { label: "long first line", scale: [0.7, 1.3, 1], g: RW.feeder([
+        { id: "B1", type: T(240), len: 1.0, load: 5 }, { id: "B2", type: T(50), len: 0.15, load: 10 },
+        { id: "B3", type: T(50), len: 0.15, load: 10 }, { id: "B4", type: T(50), len: 0.12, load: 35, hc: { type: T(35), len: 0.05 } }]),
+      text: "The first line is 1 km long, so the bus at two thirds is B1, which is already connected to the station: no split is possible. The lines on the path are reinforced by the largest reduction of r·I per cost. The 50 m house connection to H4 would be the cheapest measure, but house connections are not reinforced." },
+    thin: { label: "one thin cable", scale: [0.8, 1.4, 1], g: RW.feeder([
+        { id: "B1", type: T(150), len: 0.1, load: 20 }, { id: "B2", type: T(150), len: 0.1, load: 20 }, { id: "B3", type: T(35), len: 0.1, load: 20 },
+        { id: "B4", type: T(150), len: 0.1, load: 20 }, { id: "B5", type: T(150), len: 0.1, load: 20 }]),
+      text: "A single 100 m NAYY 4x1x35 causes the voltage issue. eDisGo still splits at two thirds and installs a 400 m line (24 kEUR); replacing the thin cable would cost 6 kEUR. Choosing the cheaper of both measures is tracked in issue openego/eDisGo#781." }
+  };
+  var cur = "long", scale = NETS[cur].scale[2], step = null, res;
+  var ctl = document.getElementById("rw-lvv-ctl"), slWrap = RW.h("span");
+  ctl.appendChild(RW.seg(Object.keys(NETS).map(function (k) { return { id: k, label: NETS[k].label }; }), cur, function (id) { cur = id; scale = NETS[id].scale[2]; step = null; mkSlider(); run(); }, "Example feeder"));
+  ctl.appendChild(slWrap);
+  var stp = RW.h("span", "rw-row"); stp.style.margin = "0";
+  stp.innerHTML = '<button type="button" class="rw-btn" data-d="-1" aria-label="Previous iteration">‹</button><b class="rw-pos" style="min-width:7em;text-align:center"></b><button type="button" class="rw-btn" data-d="1" aria-label="Next iteration">›</button>';
+  ctl.appendChild(stp);
+  [].forEach.call(stp.querySelectorAll("button"), function (b) { b.onclick = function () { step += +b.dataset.d; render(); }; });
+  function mkSlider() {
+    slWrap.innerHTML = ""; var s = NETS[cur].scale;
+    slWrap.appendChild(RW.slider("rw-lvv-sl", "load", s[0], s[1], 0.05, scale, function (v) { return "× " + RW.f(v, 2); }, function (v) { scale = v; step = null; run(); }));
+  }
+  function run() { res = RW.reinforceVoltage(NETS[cur].g, scale); if (step == null) step = res.states.length - 1; render(); }
+  function render() {
+    step = Math.max(0, Math.min(res.states.length - 1, step));
+    var g0 = NETS[cur].g, s = res.states[step], f0 = RW.flow(g0, scale), f1 = RW.flow(s.g, scale), hl = {};
+    (s.log || []).forEach(function (x) { if (x.line) hl[x.line] = 1; });
+    RW.drawFeeder(document.getElementById("rw-lvv-net"), s.g, g0, f1, hl);
+    var worst = null; Object.keys(g0.nodes).forEach(function (id) { if (g0.nodes[id].inb && (!worst || f0.v[id] < f0.v[worst])) worst = id; });
+    RW.drawProfile(document.getElementById("rw-lvv-prof"), g0, RW.pathTo(g0, worst), f0, f1);
+    var vmin = Math.min.apply(null, Object.keys(f1.v).map(function (k) { return f1.v[k]; })), ok = vmin >= RW.VMIN - 1e-9;
+    stp.querySelector(".rw-pos").textContent = "iteration " + step + " / " + (res.states.length - 1);
+    stp.querySelector('[data-d="-1"]').disabled = step === 0; stp.querySelector('[data-d="1"]').disabled = step === res.states.length - 1;
+    RW.stats(document.getElementById("rw-lvv-stats"), [
+      ["lowest voltage", RW.f(vmin, 3) + " p.u.", ok ? "ok" : "bad"],
+      ["voltage band", ok ? "kept" : (step === res.states.length - 1 && res.maxed ? "MaximumIterationError" : "violated"), ok ? "ok" : "bad"],
+      ["costs so far", RW.f(s.cost || 0, 1) + " kEUR", ""]
+    ]);
+    var html = '<div class="it">' + NETS[cur].text + "</div>";
+    res.states.slice(1).forEach(function (x, i) {
+      html += '<div class="it">iteration ' + (i + 1) + " · lowest voltage before: " + RW.f(x.vmin, 3) + " p.u.</div>";
+      x.log.forEach(function (m) { html += '<div class="m ' + (m.info ? "info " : "") + (i + 1 === step ? "cur" : "") + '">' + m.what + (m.cost ? ' <span style="color:var(--muted)">[' + RW.f(m.cost, 1) + "]</span>" : "") + "</div>"; });
+    });
+    if (res.states.length === 1) html += '<div class="it">No voltage issue at this load.</div>';
+    document.getElementById("rw-lvv-log").innerHTML = html;
+  }
+  mkSlider(); run();
+})();
+</script>
+</div>
