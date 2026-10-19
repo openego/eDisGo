@@ -185,6 +185,30 @@ Changes
   exactly for hourly steps and gives the full daily loss for a daily one. This only
   takes effect together with the ``time_elapsed`` fix of openego/eDisGo#693, without
   which a sub-hourly step still arrives as 0 (openego/eDisGo#697)
+* Added the runner config block ``timestep_selection``. It picks which time-step
+  selection task (``set_timeindex`` or ``select_critical_timesteps``) runs and holds
+  each task's parameters, so a config extending a preset can change the preset's
+  selection (openego/eGo#222)::
+
+      timestep_selection:
+        task: select_critical_timesteps   # or set_timeindex, or none
+        select_critical_timesteps: {method: power_flow}
+
+  The presets ``overlying_grid_opf``, ``overlying_grid_opf_spatial`` and
+  ``spatial_reduction_opf`` use it with unchanged results.
+  **Breaking:** a config that extends one of these presets and gives parameters on
+  its own ``set_timeindex`` / ``select_critical_timesteps`` step (e.g.
+  ``- set_timeindex: {start: ...}``) now fails validation. Move the parameters to
+  ``timestep_selection.<task>`` or set ``timestep_selection: null``
+* The runner validator now rejects, before the run: unknown step parameters, invalid
+  ``set_timeindex`` / ``select_critical_timesteps`` parameters (e.g. ``timestamps``
+  with a range, ``periods`` with ``end``), and a ``spatial_reduction`` block that is
+  not a mapping or is enabled without a ``spatial_reduce`` step
+* Fixed ``apply_charging_strategy`` filling the gaps of a non-contiguous time index:
+  it resamples the time series to the frequency of the charging processes and back,
+  which covered the whole range from the first to the last time step. A time index of
+  e.g. two separate weeks became one long interval, so a later OPF ran over months
+  instead of two weeks
 * Connected the legacy OEP imports (``oedb_legacy`` generators, ``feedin_oedb_legacy``,
   the legacy weather cells and grid district polygon) with the OEP token. They used an
   anonymous ``egoio`` connection, and the OEP limits all anonymous clients together to
