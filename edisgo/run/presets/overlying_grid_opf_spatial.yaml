@@ -1,18 +1,18 @@
 # overlying_grid_opf_spatial — overlying_grid_opf PLUS spatial complexity
 # reduction. This is the "full" use case: it does BOTH complexity reductions
-#   * temporal — select_critical_timesteps reduces the year to the most
-#     critical intervals (as in overlying_grid_opf), and
+#   * temporal — by default select_critical_timesteps reduces the year to
+#     the most critical intervals (as in overlying_grid_opf), and
 #   * spatial  — spatial_reduce / spatial_restore bracket the optimize step,
 #     so the OPF runs on a spatially reduced grid while reinforcement still
 #     runs on the full topology.
 #
-# ego passes eTraGo results via run_edisgo(config, overlying_grid_data=...)
-# with `overlying_grid.source: etrago`; standalone users can set
-# `source: csv` and point `path` at a CSV directory (see overlying_grid_opf).
+# eTraGo results are passed via run_edisgo(config, overlying_grid_data=...)
+# with `overlying_grid.source: etrago`; without them, set `source: csv` and
+# point `path` at a CSV directory (see overlying_grid_opf).
 #
 # Both reductions are togglable: spatial via `spatial_reduction.enabled`
-# (spatial_reduce/spatial_restore no-op when false), temporal via the method
-# of select_critical_timesteps.
+# (spatial_reduce/spatial_restore no-op when false), temporal via
+# `timestep_selection.task`.
 
 scenario: eGon2035
 
@@ -23,8 +23,7 @@ overlying_grid:
   source: etrago  # "etrago" (overlying_grid_data kwarg) or "csv" (path below)
   # path: /path/to/overlying_grid_csvs   # required when source: csv
 
-# Top-level block read by the spatial_reduce / spatial_restore tasks via
-# ctx.raw_config. eGo can inject this the same way it injects overlying_grid.
+# Top-level block read by the spatial_reduce / spatial_restore tasks.
 spatial_reduction:
   enabled: true            # set false to no-op the spatial bracket
   mode: kmeansdijkstra     # clustering mode for spatial_complexity_reduction
@@ -33,9 +32,16 @@ spatial_reduction:
   reduction_factor_not_focused: False
   aggregation_mode: false  # start with false; true enables load/generator merging
 
+# Picks the time-step selection task that runs; documented in the module
+# docstring of edisgo/run/tasks/timeseries.py.
+timestep_selection:
+  task: select_critical_timesteps
+  select_critical_timesteps: {method: residual_load}
+
 pipeline:
   - setup_grid
   - import_generators
+  - set_timeindex                                         # runs if picked by timestep_selection
   - import_flex:
       electromobility: {charging_strategy: null}
   - oedb_ts:
@@ -47,7 +53,7 @@ pipeline:
   # merge each district heating area's PtH units and subtract the overlying
   # grid's other heat feed-in from its demand; no-op without district heating
   - aggregate_district_heating
-  - select_critical_timesteps: {method: residual_load}   # TEMPORAL reduction
+  - select_critical_timesteps                             # TEMPORAL: runs if picked by timestep_selection
   - reactive_power
   - spatial_reduce                                        # SPATIAL: stash full grid, reduce
   - optimize: {method: soc, opf_version: 3}               #          OPF on reduced grid
