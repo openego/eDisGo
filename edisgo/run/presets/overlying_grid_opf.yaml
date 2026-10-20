@@ -1,11 +1,12 @@
-# overlying_grid_opf — OPF with overlying-grid requirements (the ego path):
+# overlying_grid_opf — OPF with overlying-grid requirements:
 # import flexibilities, load real egon_data time series, set
-# overlying-grid requirements (e.g. eTraGo results), automatically
-# reduce the year to the most critical time intervals, then run a
+# overlying-grid requirements (e.g. eTraGo results), by default
+# automatically reduce the year to the most critical time intervals
+# (select_critical_timesteps), then run a
 # powermodels OPF (opf_version 3 = with high-voltage requirements;
 # falls back to 2 if no overlying-grid data is present).
 #
-# ego passes eTraGo results via
+# eTraGo results are passed via
 #   run_edisgo(config, overlying_grid_data=...)
 # with `overlying_grid.source: etrago` (as below). Standalone users can
 # set `source: csv` and point `path` at a CSV directory instead.
@@ -19,9 +20,16 @@ overlying_grid:
   source: etrago  # "etrago" (overlying_grid_data kwarg) or "csv" (path below)
   # path: /path/to/overlying_grid_csvs   # required when source: csv
 
+# Picks the time-step selection task that runs; documented in the module
+# docstring of edisgo/run/tasks/timeseries.py.
+timestep_selection:
+  task: select_critical_timesteps
+  select_critical_timesteps: {method: residual_load}
+
 pipeline:
   - setup_grid
   - import_generators
+  - set_timeindex                                         # runs if picked by timestep_selection
   - import_flex:
       electromobility: {charging_strategy: null}
   - oedb_ts:
@@ -33,7 +41,7 @@ pipeline:
   # merge each district heating area's PtH units and subtract the overlying
   # grid's other heat feed-in from its demand; no-op without district heating
   - aggregate_district_heating
-  - select_critical_timesteps: {method: residual_load}
+  - select_critical_timesteps                             # runs if picked by timestep_selection
   - reactive_power
   - optimize: {method: soc, opf_version: 3}
   - reinforce: {catch_convergence_problems: true}
