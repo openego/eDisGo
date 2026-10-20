@@ -26,6 +26,7 @@ import pandas as pd
 
 from sqlalchemy.engine.base import Engine
 
+from edisgo.flex_opt.battery_storage_operation import apply_reference_operation
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
 from edisgo.flex_opt.heat_pump_operation import (
@@ -2345,6 +2346,75 @@ class EDisGo:
 
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
+
+    def apply_home_storage_operating_strategy(
+        self, strategy="reference", storage_units_names=None, **kwargs
+    ):
+        """
+        Applies operating strategy to set active power time series of home storages.
+
+        Storage units, PV plants and loads need to be assigned to buildings via the
+        column `building_id`, e.g. using :attr:`~.edisgo.EDisGo.import_home_batteries`
+        and :attr:`~.edisgo.EDisGo.import_generators`, and active power time series of
+        PV plants and loads need to be set.
+
+        The active power time series of each storage unit are written to
+        :attr:`~.network.timeseries.TimeSeries.storage_units_active_power`. Reactive
+        power time series are set up using
+        :attr:`~.edisgo.EDisGo.set_time_series_reactive_power_control` with default
+        values.
+
+        Parameters
+        ----------
+        strategy : str
+            Defines the operating strategy to apply. The following strategies are valid:
+
+            * 'reference'
+
+                The home storage unit is charged when the PV feed-in is higher than
+                the electricity demand of the building and discharged when the
+                demand is higher than the PV feed-in. See
+                :func:`~.flex_opt.battery_storage_operation.apply_reference_operation`
+                for more information.
+
+            Default: 'reference'.
+
+        storage_units_names : list(str) or None
+            Defines for which storage units to apply operating strategy. If None, all
+            storage units in :attr:`~.network.topology.Topology.storage_units_df`
+            that have a building ID are used. Default: None.
+
+        Other Parameters
+        -----------------
+        soe_init : float
+            Initial state of energy of storage units in MWh. Default: 0 MWh.
+        freq : float or None
+            Frequency of time series in hours. If None, it is derived from
+            :attr:`~.network.timeseries.TimeSeries.timeindex`. Default: None.
+        efficiency_store : float
+            Efficiency in case of charging. Only used for storage units where
+            `efficiency_store` is not set in
+            :attr:`~.network.topology.Topology.storage_units_df`. Default: 0.95.
+        efficiency_dispatch : float
+            Efficiency in case of discharging. Only used for storage units where
+            `efficiency_dispatch` is not set in
+            :attr:`~.network.topology.Topology.storage_units_df`. Default: 0.95.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with time index and state of energy in MWh of each storage unit
+            in columns.
+
+        """
+        if strategy == "reference":
+            return apply_reference_operation(
+                self, storage_units_names=storage_units_names, **kwargs
+            )
+        raise ValueError(
+            f"Operating strategy '{strategy}' for home storage units is not valid. "
+            f"Valid options are: 'reference'."
+        )
 
     def import_dsm(self, scenario: str, engine: Engine = None, timeindex=None):
         """

@@ -26,7 +26,27 @@ Reference operation
 :py:func:`~edisgo.flex_opt.battery_storage_operation.apply_reference_operation`
 implements a **self-consumption** strategy for home batteries: charge when local
 generation exceeds demand, discharge when demand exceeds generation, exchanging power
-with the grid only when the battery is full or empty.
+with the grid only when the battery is full or empty. It is applied with
+:meth:`~edisgo.edisgo.EDisGo.apply_home_storage_operating_strategy`.
+
+Storage units are matched to PV plants and loads via their ``building_id``. By
+default, storage units without a building, e.g. large-scale storage, are skipped, and
+a home battery in a building without PV plant or load gets a time series of zero.
+Home batteries imported from the eGon database do not come with efficiencies, so
+missing ``efficiency_store`` / ``efficiency_dispatch`` values default to 0.95 each
+(about 90 % round-trip efficiency). They can be changed with the parameters of the
+same name. The time step length :math:`\Delta t` is derived from the time index.
+
+.. code-block:: python
+
+    edisgo.import_generators(generator_scenario="eGon2035")
+    edisgo.import_home_batteries(scenario="eGon2035")
+    edisgo.set_time_series_active_power_predefined(
+        fluctuating_generators_ts="oedb",
+        conventional_loads_ts="oedb",
+        scenario="eGon2035",
+    )
+    soe_df = edisgo.apply_home_storage_operating_strategy()
 
 The state of energy evolves as
 
@@ -48,15 +68,16 @@ Storage units passed to :meth:`~edisgo.edisgo.EDisGo.pm_optimize` via
 subject to their state-of-energy dynamics and capacity limits. (The OPF models the
 battery losses with a resistance-based model rather than the
 ``efficiency_store``/``efficiency_dispatch`` factors of the reference operation —
-see :ref:`flexibility-opf`.) Storage units **not** marked flexible keep the
-self-consumption reference operation.
+see :ref:`flexibility-opf`.) Storage units **not** marked flexible keep the time
+series set before, e.g. by
+:meth:`~edisgo.edisgo.EDisGo.apply_home_storage_operating_strategy`.
 
 .. note::
 
    Storage time series are not generated automatically. For a time-series study you
    must either provide a series (e.g. via
-   :meth:`~edisgo.edisgo.EDisGo.add_component`), let the OPF schedule the unit, or use
-   a worst-case analysis.
+   :meth:`~edisgo.edisgo.EDisGo.add_component`), apply the reference operation to home
+   batteries, let the OPF schedule the unit, or use a worst-case analysis.
 
 A heuristic that automatically *sizes and places* storage to relieve the grid exists
 but is currently unmaintained — see :ref:`legacy`.
