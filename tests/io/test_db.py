@@ -11,6 +11,8 @@ import textwrap
 
 import pytest
 
+from sqlalchemy.pool import NullPool
+
 from edisgo.io import db
 
 
@@ -54,6 +56,8 @@ class TestEngine:
     def test_explicit_oep(self):
         engine = db.engine(ssh=False)
         assert "oedialect" in str(engine.url)
+        # connections must not stay open on the OEP, which limits them per account
+        assert isinstance(engine.pool, NullPool)
 
     def test_auto_detect_falls_back_to_oep(self, tmp_path, monkeypatch):
         monkeypatch.setenv("EGON_DATA_CONFIG", str(tmp_path / "missing.yaml"))
