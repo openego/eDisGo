@@ -1271,7 +1271,6 @@ class TimeSeries:
                 ts_generators = timeseries_import.feedin_oedb_legacy(
                     edisgo_object,
                     timeindex=timeindex,
-                    engine=engine,
                 )
             else:
                 ts_generators = timeseries_import.feedin_oedb(

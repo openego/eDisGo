@@ -56,7 +56,7 @@ def _query_generator_data_oedb_legacy(
     engine=None,
     query_limit=None,
 ):
-    """Query and prepare conventional and renewable legacy generator data."""
+    """Query raw legacy generator data (conventional power in MW, renewable in kW)."""
 
     srid = edisgo_object.topology.grid_district["srid"]
     scenario_mapping = {
@@ -143,14 +143,11 @@ def _query_generator_data_oedb_legacy(
             ).order_by(orm_re_generators.id)
             if query_limit is not None:
                 filtered_query = filtered_query.limit(query_limit)
-            data = pd.read_sql_query(
+            return pd.read_sql_query(
                 filtered_query.statement,
                 session.bind,
                 index_col="id",
             )
-            data.loc[data["subtype"].isnull(), "subtype"] = "unknown"
-            data.p_nom = pd.to_numeric(data.p_nom) / 1e3
-            return data
 
         return _read_for_voltage_levels([4, 5]), _read_for_voltage_levels([6, 7])
 
@@ -321,14 +318,19 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
                 )
 
     srid = edisgo_object.topology.grid_district["srid"]
-    query_engine = kwargs.pop("engine", None)
+    # Keep the legacy connection even if the caller supplies an eGon engine.
+    kwargs.pop("engine", None)
     generators_conv_mv, generators_res_mv, generators_res_lv = (
         _query_generator_data_oedb_legacy(
             edisgo_object=edisgo_object,
             generator_scenario=generator_scenario,
-            engine=query_engine,
         )
     )
+
+    # Normalize renewable raw data; conventional capacities are already in MW.
+    for data in (generators_res_mv, generators_res_lv):
+        data.loc[data["subtype"].isnull(), "subtype"] = "unknown"
+        data["p_nom"] = pd.to_numeric(data["p_nom"]) / 1e3
 
     # Filter out empty DataFrames before concatenation to avoid FutureWarning
     dfs_to_concat = [
@@ -758,7 +760,7 @@ def _query_generator_data_oedb(
     max_capacity=20,
     query_limit=None,
 ):
-    """Query and prepare PV rooftop, other power-plant and CHP data from OEP."""
+    """Query PV rooftop, other power-plant and CHP data with geometries in grid CRS."""
 
     def _get_egon_power_plants():
         with session_scope_egon_data(engine) as session:
@@ -785,26 +787,6 @@ def _query_generator_data_oedb(
             power_plants_gdf = gpd.read_postgis(
                 sql=query.statement, con=engine, crs=f"EPSG:{srid_table}"
             ).to_crs(srid_edisgo)
-        # rename wind_onshore to wind
-        power_plants_gdf["type"] = power_plants_gdf["type"].str.replace("_onshore", "")
-        # set subtype
-        mapping = {
-            "wind": "wind_onshore",
-            "solar": "solar_ground_mounted",
-        }
-        power_plants_gdf = power_plants_gdf.assign(
-            subtype=power_plants_gdf["type"].map(mapping)
-        )
-        # unwrap source ID
-        if not power_plants_gdf.empty:
-            power_plants_gdf["source_id"] = power_plants_gdf.apply(
-                lambda _: (
-                    list(_["source_id"].values())[0]
-                    if isinstance(_["source_id"], dict)
-                    else None
-                ),
-                axis=1,
-            )
         return power_plants_gdf
 
     def _get_egon_pv_rooftop():
@@ -834,11 +816,6 @@ def _query_generator_data_oedb(
             if query_limit is not None:
                 query = query.limit(query_limit)
             pv_roof_df = pd.read_sql(sql=query.statement, con=engine)
-        # add type and subtype
-        pv_roof_df = pv_roof_df.assign(
-            type="solar",
-            subtype="pv_rooftop",
-        )
         return pv_roof_df
 
     def _get_egon_chp_plants():
@@ -928,6 +905,28 @@ def oedb(
         engine=engine,
         max_capacity=max_capacity,
     )
+
+    # Normalize carrier names before mapping them to eDisGo subtypes.
+    power_plants_gdf["type"] = power_plants_gdf["type"].str.replace("_onshore", "")
+    mapping = {
+        "wind": "wind_onshore",
+        "solar": "solar_ground_mounted",
+    }
+    power_plants_gdf = power_plants_gdf.assign(
+        subtype=power_plants_gdf["type"].map(mapping)
+    )
+    pv_rooftop_df = pv_rooftop_df.assign(type="solar", subtype="pv_rooftop")
+
+    # Extract the source identifier used to match existing power plants.
+    if not power_plants_gdf.empty:
+        power_plants_gdf["source_id"] = power_plants_gdf.apply(
+            lambda _: (
+                list(_["source_id"].values())[0]
+                if isinstance(_["source_id"], dict)
+                else None
+            ),
+            axis=1,
+        )
 
     # determine number of generators and installed capacity in future scenario
     # for validation of grid integration

@@ -138,6 +138,22 @@ function afterwards.
 - Converted the detailed import test to synthetic individual, central and resistive-
   heater data while retaining capacity validation, `import_types` selection,
   technology mapping, co-location and voltage-level integration.
+- Moved `import_types` selection into `oedb` and split retrieval into technology-
+  specific query helpers. Fixed-return mocks no longer implement selection logic.
+  Nine offline cases cover the default, an empty selection and every technology
+  combination; they check both integrated components and omitted query calls.
+- The individual-capacity query and validation run only when individual heat pumps
+  are selected, avoiding an unrelated query and warning for central-only imports.
+- Central query helpers return raw plant and spatial tables. The importer calls
+  `_prepare_central_heat_sources` for CRS conversion, weather/district assignment
+  and location selection (in-grid CHP, heat bus, then HV/MV station).
+  These steps now run with synthetic spatial inputs in the offline import test.
+- New focused offline assertions check reprojection, spatial matches/nonmatches,
+  all location fallbacks and empty input. Before decoupling, the live import test
+  exercised spatial processing indirectly but asserted component counts,
+  capacities and grid integration rather than each spatial result.
+- Building deduplication still resides in the individual query helper and remains
+  outstanding for the heat-pump review point.
 - Separated retrieval of the scenario heat-parameter record from extraction of the
   resistive-heater efficiency dictionary and tested that extraction offline.
 - Added two live query contracts: at most two records per heat-pump technology and
@@ -151,12 +167,25 @@ function afterwards.
 - Converted the high-level import test to one synthetic PV rooftop plant, one other
   power plant and one CHP plant while retaining the real public import and grid
   integration.
+- Moved carrier normalization, subtype assignment (including rooftop PV) and
+  `source_id` extraction into `oedb`, outside the query mock. The offline test now
+  checks raw wind/solar records, missing and non-dictionary source IDs, and an empty
+  power-plant table. The live contract checks only the columns returned by the queries.
 - Replaced the former 677-generator live integration with one bounded contract that
   checks the returned schema and retrieves at most two records from each table.
 - Extracted the conventional, renewable-MV and renewable-LV legacy queries into
   `_query_generator_data_oedb_legacy`, which can use the explicit lazy OEP engine.
 - Converted the three legacy import/time-series tests and the target-capacity test to
   small synthetic generator parks using one shared query mock.
+- The shared legacy data helper includes an MV wind plant (1500 kW) and an MV gas
+  plant (0.7 MW), alongside the LV records. Offline assertions check their import,
+  MV connection and active/reactive power profiles for worst-case and technology-
+  based time series. The normalization test modifies these shared records to test
+  numeric strings and missing subtypes.
+- Legacy query mocks return renewable capacities in kW. Conversion to numeric MW
+  and replacement of missing subtypes with `unknown` run in `oedb_legacy`, outside
+  the mocked helper. An offline regression test verifies both renewable voltage
+  levels, preserved existing subtypes and unchanged conventional capacities in MW.
 - Retained the real public import, generator updates, target-capacity scaling and both
   worst-case and technology-based time-series assignment paths.
 - Added one bounded live contract that returns at most two rows from each legacy query.
@@ -165,8 +194,10 @@ function afterwards.
 
 - Retained separate live contracts for the legacy COSMO-CLM and eGon ERA5
   weather-cell queries.
-- Both contracts now use the explicit lazy `oep_engine` fixture; their names identify
-  the data source and live scope.
+- The eGon ERA5 contract uses the lazy `oep_engine` fixture. The legacy COSMO-CLM
+  contract does not request an engine and uses the legacy `session_scope()`
+  connection instead. Both retain the `oep` marker; their names identify the data
+  source and live scope.
 
 ### `test_timeseries.py`
 

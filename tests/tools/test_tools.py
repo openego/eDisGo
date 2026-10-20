@@ -1,5 +1,7 @@
 import copy
 
+from unittest.mock import MagicMock, Mock
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -431,14 +433,43 @@ class TestTools:
         assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_6) == 6
         assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_7) == 7
 
+    @pytest.mark.parametrize(
+        "supplied_engine", [None, object()], ids=["no-engine", "supplied-engine"]
+    )
+    def test_legacy_weather_cells_ignore_supplied_engine(
+        self, monkeypatch, supplied_engine
+    ):
+        """Legacy weather queries must always use the legacy session."""
+        session = Mock()
+        query = session.query.return_value.filter.return_value
+        query.session = session
+        context = MagicMock()
+        context.__enter__.return_value = session
+        legacy_session = Mock(return_value=context)
+        other_session = Mock(side_effect=AssertionError("Wrong database connection"))
+        read_sql = Mock(return_value=pd.DataFrame({"gid": [1122075]}))
+        monkeypatch.setattr(tools, "session_scope", legacy_session)
+        monkeypatch.setattr(tools, "session_scope_egon_data", other_session)
+        monkeypatch.setattr(tools.pd, "read_sql", read_sql)
+
+        weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
+            self.edisgo, engine=supplied_engine
+        )
+
+        legacy_session.assert_called_once_with()
+        other_session.assert_not_called()
+        read_sql.assert_called_once_with(sql=query.statement, con=session.bind)
+        generator_cells = set(
+            self.edisgo.topology.generators_df.weather_cell_id.dropna()
+        )
+        assert weather_cells == {1122075} | generator_cells
+
     @pytest.mark.oep
     def test_get_weather_cells_intersecting_with_grid_district_legacy_live(
         self,
-        oep_engine,
     ):
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
             self.edisgo,
-            engine=oep_engine,
         )
         assert len(weather_cells) == 4
         assert 1123075 in weather_cells

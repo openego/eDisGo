@@ -83,7 +83,7 @@ def _timeindex_helper_func(
     return timeindex, timeindex_full
 
 
-def feedin_oedb_legacy(edisgo_object, timeindex=None, engine=None):
+def feedin_oedb_legacy(edisgo_object, timeindex=None):
     """
     Import feed-in time series data for wind and solar power plants from the
     `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
@@ -99,8 +99,6 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None, engine=None):
         :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
         If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
         is indexed using the default year 2011 and returned for the whole year.
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
-        Optional database engine. If omitted, the legacy database connection is used.
 
     Returns
     -------
@@ -113,12 +111,10 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None, engine=None):
 
     weather_cell_ids = tools.get_weather_cells_intersecting_with_grid_district(
         edisgo_object,
-        engine=engine,
     )
     feedin_df = _query_feedin_oedb_legacy(
         edisgo_object,
         weather_cell_ids,
-        engine=engine,
     )
 
     # rename wind_onshore to wind

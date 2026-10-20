@@ -268,6 +268,9 @@ class TestElectromobilityImport:
             crs=grid_gdf.crs,
             index=pd.Index([1, 2], name="cp_id"),
         )
+        # Supply different source coordinates so the importer must reproject them.
+        database_data = database_data.to_crs(epsg=3857)
+        assert database_data.crs != grid_gdf.crs
         query_mock = mock_oep_emobility_query(
             "_query_potential_charging_parks_from_oedb",
             database_data,
@@ -280,6 +283,13 @@ class TestElectromobilityImport:
 
         assert len(potential_parks_df) == 2
         assert potential_parks_df.crs == grid_gdf.crs
+        # Check coordinates as well as CRS metadata (relabeling alone is not enough).
+        np.testing.assert_allclose(
+            potential_parks_df.geom.x, point_in_grid.x, rtol=0, atol=1e-8
+        )
+        np.testing.assert_allclose(
+            potential_parks_df.geom.y, point_in_grid.y, rtol=0, atol=1e-8
+        )
         assert (potential_parks_df.ags == 0).all()
         assert all(potential_parks_df.geom.iloc[0].within(grid_gdf.geometry))
         assert all(potential_parks_df.geom.iloc[1].within(grid_gdf.geometry))

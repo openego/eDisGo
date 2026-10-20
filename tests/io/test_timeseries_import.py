@@ -214,7 +214,6 @@ class TestTimeseriesImport:
         feedin = timeseries_import.feedin_oedb_legacy(
             edisgo,
             timeindex=requested_timeindex,
-            engine=None,
         )
 
         assert feedin.shape == (2, 2)
@@ -225,11 +224,8 @@ class TestTimeseriesImport:
         ]
         assert feedin[("solar", 1122074)].tolist() == [0.01, 0.02]
         assert feedin[("wind", 1122074)].tolist() == [0.005, 0.01]
-        query_mock.assert_called_once_with(
-            edisgo,
-            {1122074},
-            engine=None,
-        )
+        weather_cells_mock.assert_called_once_with(edisgo)
+        query_mock.assert_called_once_with(edisgo, {1122074})
 
     @pytest.mark.oep
     def test_feedin_oedb_live(self, oep_engine):

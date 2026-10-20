@@ -1248,9 +1248,13 @@ class TestTimeSeries:
                 cases=["load_case"], df=df, configs=self.edisgo.config
             )
 
+    @pytest.mark.parametrize(
+        "supplied_engine", [None, object()], ids=["no-engine", "supplied-engine"]
+    )
     def test_predefined_fluctuating_generators_by_technology(
         self,
         mock_oep_feedin,
+        supplied_engine,
     ):
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
@@ -1273,7 +1277,7 @@ class TestTimeSeries:
 
         # ############# oedb, all generators (default)
         self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
-            self.edisgo, "oedb"
+            self.edisgo, "oedb", engine=supplied_engine
         )
 
         # check shape
@@ -1300,10 +1304,10 @@ class TestTimeSeries:
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
 
+        # Legacy imports must not receive the caller's general-purpose engine.
         feedin_mock.assert_called_once_with(
             self.edisgo,
             timeindex=None,
-            engine=None,
         )
         comp = "GeneratorFluctuating_8"  # wind, w_id = 1122075
         p_nom = 3.0

@@ -799,6 +799,7 @@ def get_weather_cells_intersecting_with_grid_district(
     edisgo_obj : :class:`~.EDisGo`
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine. Only needed when using new egon_data data.
+        Ignored for legacy grids, which use the legacy database connection.
 
     Returns
     -------
@@ -812,10 +813,7 @@ def get_weather_cells_intersecting_with_grid_district(
 
     if edisgo_obj.legacy_grids is True:
         table = climate.Cosmoclmgrid
-        session_context = (
-            session_scope() if engine is None else session_scope_egon_data(engine)
-        )
-        with session_context as session:
+        with session_scope() as session:
             query = session.query(
                 table.gid,
             ).filter(sql_intersects(table.geom, sql_geom, srid))

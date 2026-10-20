@@ -1444,7 +1444,8 @@ class TestEDisGo:
         """Test the OEDB import branch with synthetic retrieval results."""
 
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_2_path,
+            ding0_grid=pytest.ding0_test_network_3_path,
+            legacy_ding0_grids=False,
         )
 
         charging_processes = pd.DataFrame(
