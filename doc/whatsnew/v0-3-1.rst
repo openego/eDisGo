@@ -256,6 +256,12 @@ Changes
   before the error is raised. Grids whose power flow converges are not affected. The
   methodology docs now describe the feeder split with an interactive example and the
   limits of line reinforcement due to voltage issues (openego/eDisGo#777)
+* Added the option ``choose_cheaper_voltage_measure`` to
+  :meth:`~.EDisGo.reinforce`. If True,
+  :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` only splits a
+  feeder due to voltage issues if the new line is cheaper than reinforcing the lines
+  on the path to the critical node, e.g. replacing a single short, thin cable. The
+  default (False) keeps splitting the feeder whenever possible (openego/eDisGo#781)
 * OEP connections are closed right after use instead of being kept open in a
   connection pool. The OEP limits open connections per account to 8, and each process
   kept at least one pooled connection open per engine, so a few processes with the

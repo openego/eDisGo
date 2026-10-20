@@ -7,6 +7,7 @@ from numpy.testing import assert_array_equal
 from pandas.testing import assert_frame_equal
 
 from edisgo import EDisGo
+from edisgo.flex_opt import reinforce_measures
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import (
     _analyze_after_voltage_reinforcement,
@@ -66,6 +67,30 @@ class TestReinforceGrid:
             num_steps_loading=2,
         )
         assert len(res_reduced.i_res) == 2
+
+    @pytest.mark.parametrize("choose_cheaper", [False, True])
+    def test_reinforce_choose_cheaper_voltage_measure(
+        self, monkeypatch, choose_cheaper
+    ):
+        calls = []
+        reinforce_lines_voltage_issues = (
+            reinforce_measures.reinforce_lines_voltage_issues
+        )
+
+        def record(edisgo_obj, grid, crit_nodes, choose_cheaper_measure=False):
+            calls.append(choose_cheaper_measure)
+            return reinforce_lines_voltage_issues(
+                edisgo_obj, grid, crit_nodes, choose_cheaper_measure
+            )
+
+        monkeypatch.setattr(
+            reinforce_measures, "reinforce_lines_voltage_issues", record
+        )
+        edisgo = copy.deepcopy(self.edisgo)
+        edisgo.timeseries.loads_active_power *= 5
+        edisgo.reinforce(choose_cheaper_voltage_measure=choose_cheaper)
+        assert calls
+        assert set(calls) == {choose_cheaper}
 
     @staticmethod
     def _split(edisgo, grid, lines):
