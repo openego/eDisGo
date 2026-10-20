@@ -182,6 +182,34 @@ class TestImportOverlyingGridData:
         # must simply return without AttributeError
         assert task_import_overlying_grid_data(edisgo_obj, ctx) is edisgo_obj
 
+    def test_etrago_dispatchable_ts_aligned_to_timeindex(self):
+        """
+        eTraGo data is indexed in its weather year (2011), the EDisGo object in
+        the scenario year. The dispatchable generator time series must be
+        shifted onto the EDisGo time index like all other overlying-grid data
+        (regression: it was passed on unaligned, which left the dispatchable
+        generators without time series and the OPF failed on NaN).
+        """
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        timeindex = pd.date_range("2035-01-15", periods=3, freq="h")
+        edisgo.set_timeindex(timeindex)
+        etrago_index = pd.date_range("2011-01-01", periods=8760, freq="h")
+        disp_ts = pd.DataFrame({"gas": 0.5}, index=etrago_index)
+        ctx = self._ctx(
+            {"enabled": True, "source": "etrago"},
+            overlying_grid_data={"dispatchable_generators_active_power": disp_ts},
+        )
+
+        task_import_overlying_grid_data(edisgo, ctx)
+
+        gens = edisgo.topology.generators_df
+        gas_gens = gens.index[gens.type == "gas"]
+        ts = edisgo.timeseries.generators_active_power.loc[:, gas_gens]
+        pd.testing.assert_index_equal(ts.index, timeindex)
+        assert not ts.isna().any().any()
+        expected = 0.5 * gens.loc[gas_gens, "p_nom"]
+        pd.testing.assert_series_equal(ts.iloc[0], expected, check_names=False)
+
     def test_csv_without_path_warns(self, edisgo_obj, caplog):
         ctx = self._ctx({"enabled": True, "source": "csv"})
         result = task_import_overlying_grid_data(edisgo_obj, ctx)
