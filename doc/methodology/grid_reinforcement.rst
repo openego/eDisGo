@@ -322,11 +322,12 @@ Both measures are rules of thumb; what they cannot do is summarised in
 .. only:: html
 
    The example below runs the iterations on three small LV feeders. Choose a feeder,
-   change the load and step through the iterations. It uses a simplified model
-   (resistance only, :math:`\cos\varphi = 1`) and the default configuration values.
-   The log names the measures with the terms *share* and :math:`\sum r \cdot I`, which
-   are explained in :ref:`path-reinforcement`. The next section shows the split with a
-   full power flow.
+   change the load, switch ``choose_cheaper_voltage_measure`` and step through the
+   iterations; the final costs of both settings are shown side by side. It uses a
+   simplified model (resistance only, :math:`\cos\varphi = 1`) and the default
+   configuration values. The log names the measures with the terms *share* and
+   :math:`\sum r \cdot I`, which are explained in :ref:`path-reinforcement`. The next
+   section shows the split with a full power flow.
 
    .. raw:: html
       :file: reinforcement_lv_voltage.html
