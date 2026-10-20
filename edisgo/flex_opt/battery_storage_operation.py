@@ -193,6 +193,41 @@ def apply_reference_operation(
     if storage_units_names is None:
         storage_units_names = edisgo_obj.topology.storage_units_df.index
 
+    if (
+        edisgo_obj.topology.storage_units_df.loc[
+            storage_units_names, "efficiency_store"
+        ]
+        .isna()
+        .all()
+    ):
+        logger.warning(
+            "The efficiency of storage units charge is not specified in the "
+            "storage_units_df. By default, it is set to 95%. To change this behavior, "
+            "first set the 'efficiency_store' parameter in topology.storage_units_df."
+        )
+
+        edisgo_obj.topology.storage_units_df.loc[
+            storage_units_names, "efficiency_store"
+        ] = 0.95
+
+    if (
+        edisgo_obj.topology.storage_units_df.loc[
+            storage_units_names, "efficiency_dispatch"
+        ]
+        .isna()
+        .all()
+    ):
+        logger.warning(
+            "The efficiency of storage units discharge is not specified in the "
+            "storage_units_df. By default, it is set to 95%. To change this behavior, "
+            "first set the 'efficiency_dispatch' parameter in "
+            "topology.storage_units_df."
+        )
+
+        edisgo_obj.topology.storage_units_df.loc[
+            storage_units_names, "efficiency_dispatch"
+        ] = 0.95
+
     storage_units = edisgo_obj.topology.storage_units_df.loc[storage_units_names]
     soe_index = edisgo_obj.timeseries.timeindex
     # Collect per-storage state-of-energy series and concatenate once after the loop
