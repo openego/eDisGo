@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import numpy as np
 import pandas as pd
@@ -191,43 +192,62 @@ class TestElectromobilityImport:
 
         assert edisgo_ids_cp == edisgo_ids_topology
 
-    def test_charging_point_allocation_independent_of_input_order(self, monkeypatch):
+    def test_charging_point_allocation_independent_of_input_order(
+        self, monkeypatch, tmp_path
+    ):
         """
         The allocation must not depend on the row order of the input data, as
         neither the database nor os.listdir guarantee any order.
 
         """
 
-        def allocate():
+        def copy_simbev_dir(name, shuffle):
+            path = tmp_path / name
+            shutil.copytree(self.simbev_path, path)
+            for i, csv in enumerate(sorted(path.rglob("*.csv"))):
+                df = pd.read_csv(csv, index_col=0)
+                if i == 0:
+                    # add a public stop that starts and ends in the same time step as
+                    # the driving rows, so it shares car, park start and park end
+                    # with them
+                    tied = df.loc[df.use_case == "public"].iloc[[0]]
+                    tied = tied.assign(
+                        park_start_timesteps=0,
+                        park_end_timesteps=0,
+                        park_time_timesteps=0,
+                        chargingdemand_kWh=0.0,
+                    )
+                    df = pd.concat([df, tied])
+                if shuffle:
+                    df = df.sample(frac=1, random_state=3)
+                df.reset_index(drop=True).to_csv(csv)
+            return path
+
+        def allocate(simbev_path):
             edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
             electromobility_import.import_electromobility_from_dir(
-                edisgo_obj, self.simbev_path, self.tracbev_path
+                edisgo_obj,
+                simbev_path,
+                self.tracbev_path,
+                mode_parking_times="not_frugal",
             )
             electromobility_import.distribute_charging_demand(edisgo_obj)
             electromobility_import.integrate_charging_parks(edisgo_obj)
             return edisgo_obj
 
-        def shuffled(read_func, reset_index):
-            def wrapper(*args, **kwargs):
-                df = read_func(*args, **kwargs)
-                df = df.sample(frac=1, random_state=3)
-                return df.reset_index(drop=True) if reset_index else df
+        reference = allocate(copy_simbev_dir("reference", shuffle=False))
 
-            return wrapper
+        read_gpkg = electromobility_import.read_gpkg_potential_charging_parks
 
-        reference = allocate()
+        def read_gpkg_shuffled(*args, **kwargs):
+            return read_gpkg(*args, **kwargs).sample(frac=1, random_state=3)
 
-        monkeypatch.setattr(
-            electromobility_import,
-            "read_csvs_charging_processes",
-            shuffled(electromobility_import.read_csvs_charging_processes, True),
-        )
         monkeypatch.setattr(
             electromobility_import,
             "read_gpkg_potential_charging_parks",
-            shuffled(electromobility_import.read_gpkg_potential_charging_parks, False),
+            read_gpkg_shuffled,
         )
-        result = allocate()
+        result = allocate(copy_simbev_dir("shuffled", shuffle=True))
 
         pd.testing.assert_frame_equal(
             result.topology.charging_points_df.sort_index(),

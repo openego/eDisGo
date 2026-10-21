@@ -188,6 +188,36 @@ def import_electromobility_from_dir(
     )
 
 
+def sort_charging_processes(charging_processes_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Sorts charging processes by content and re-indexes them from zero.
+
+    The sort key spans all columns of
+    :attr:`~.network.electromobility.Electromobility.charging_processes_df`, so that
+    the order does not depend on the row order of the input (neither the database nor
+    os.listdir guarantee any order). Using all columns also orders rows sharing car,
+    park start and park end, e.g. the driving rows imported with
+    ``mode_parking_times`` "not_frugal". Rows that still tie are identical in all
+    columns, so their order does not matter.
+
+    Parameters
+    ----------
+    charging_processes_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Charging processes as described in
+        :attr:`~.network.electromobility.Electromobility.charging_processes_df`.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Sorted charging processes with an index starting at zero.
+
+    """
+    first = ["car_id", "park_start_timesteps", "park_end_timesteps"]
+    by = first + [c for c in COLUMNS["charging_processes_df"] if c not in first]
+
+    return charging_processes_df.sort_values(by=by).reset_index(drop=True)
+
+
 def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
     """
     Reads all CSVs in a given path and returns a DataFrame with all
@@ -246,7 +276,9 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
 
     df = df.rename(columns={"location": "destination"})
 
-    df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
+    df = sort_charging_processes(
+        df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
+    )
 
     return pd.merge(
         df,
@@ -548,6 +580,10 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
     """
     Distribute charging demand from SimBEV onto potential charging parks from TracBEV.
 
+    The charging processes are not re-sorted here. The readers return them sorted by
+    :func:`sort_charging_processes`, so that the result does not depend on the row
+    order of the input; a frame set by hand should be sorted the same way.
+
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
@@ -572,14 +608,6 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
             grid friendly weight. Default 0.5.
 
     """
-    # sort by content so that the result does not depend on the row order of the
-    # input (the database does not guarantee any order)
-    edisgo_obj.electromobility.charging_processes_df = (
-        edisgo_obj.electromobility.charging_processes_df.sort_values(
-            by=["car_id", "park_start_timesteps", "park_end_timesteps"]
-        ).reset_index(drop=True)
-    )
-
     distribute_private_charging_demand(edisgo_obj)
 
     distribute_public_charging_demand(edisgo_obj, **kwargs)
@@ -1506,9 +1534,11 @@ def charging_processes_from_oedb(
     if df.park_start_timesteps.min() == 1:
         df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
 
-    return df.assign(
-        ags=0,
-        park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
-        charging_park_id=np.nan,
-        charging_point_id=np.nan,
-    ).astype(DTYPES["charging_processes_df"])
+    return sort_charging_processes(
+        df.assign(
+            ags=0,
+            park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
+            charging_park_id=np.nan,
+            charging_point_id=np.nan,
+        ).astype(DTYPES["charging_processes_df"])
+    )
