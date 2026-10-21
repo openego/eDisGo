@@ -656,6 +656,8 @@ class TestEDisGo:
         )
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 134
+        # house connections are not reinforced due to voltage issues, so there are
+        # no equipment changes for them here
         assert len(results.equipment_changes) == 230
         assert results.v_res.shape == (4, 142)
 
@@ -667,6 +669,8 @@ class TestEDisGo:
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 134
+        # house connections are not reinforced due to voltage issues, so there are
+        # no equipment changes for them here
         assert len(results.equipment_changes) == 218
         assert results.v_res.shape == (4, 142)
 
@@ -689,7 +693,9 @@ class TestEDisGo:
         results = edisgo_obj.results
 
         assert len(results.grid_expansion_costs) == 454
-        assert len(results.equipment_changes) == 892
+        # counts the parallel standard lines to new stations after LV grid separation;
+        # house connections are not reinforced due to voltage issues
+        assert len(results.equipment_changes) == 884
         assert results.v_res.shape == (4, 148)
 
         edisgo_obj = copy.deepcopy(self.edisgo)
