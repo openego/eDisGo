@@ -486,11 +486,11 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         # drop CTS profiles for buildings without a heat pump
         buildings_no_hp = [_ for _ in cts_profiles_df.columns if _ not in building_ids]
         cts_profiles_df = cts_profiles_df.drop(columns=buildings_no_hp)
-        # add residential and CTS profiles
-        individual_heating_df = pd.concat(
-            [residential_profiles_df, cts_profiles_df], axis=1
-        )
-        individual_heating_df = individual_heating_df.T.groupby(level=0).sum().T
+        # add residential and CTS profiles per building; a missing profile counts
+        # as zero, e.g. if there is no residential heat demand at all
+        individual_heating_df = residential_profiles_df.add(
+            cts_profiles_df, fill_value=0
+        ).fillna(0.0)
         # set column names to be heat pump names instead of building IDs
         individual_heating_df = pd.DataFrame(
             {

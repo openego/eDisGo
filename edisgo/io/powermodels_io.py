@@ -1402,19 +1402,10 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
 
     """
-    # add TES with 0 capacity for every flexible hp without TES
-    hp_no_tes = np.setdiff1d(
-        flexible_hps, edisgo_obj.heat_pump.thermal_storage_units_df.index.values
-    )
-    df = pd.DataFrame(index=hp_no_tes, columns=["efficiency", "capacity"], data=0.0)
-    # only concat non-empty frames, as pandas deprecated excluding empty frames when
-    # determining the result dtypes
-    frames = [
-        frame
-        for frame in (edisgo_obj.heat_pump.thermal_storage_units_df, df)
-        if not frame.empty
-    ]
-    heat_storage_df = pd.concat(frames) if frames else df
+    # TES of every flexible hp, with 0 capacity and efficiency for hps without TES
+    heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df.reindex(
+        flexible_hps, columns=["capacity", "efficiency"], fill_value=0.0
+    ).astype(float)
     decentral_hps = np.intersect1d(
         edisgo_obj.topology.loads_df.loc[
             edisgo_obj.topology.loads_df.sector == "individual_heating"
