@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import json
@@ -373,43 +384,38 @@ def assure_minimum_potential_charging_parks(
     **kwargs,
 ) -> gpd.GeoDataFrame:
     """
-    Ensures that there is a minimum number of potential charging parks
-    relative to the number of electric vehicles for each use case (home, work,
-    public, and high-power charging). This function adjusts the potential
-    charging parks by duplicating entries if necessary.
+    Ensures a minimum number of potential charging parks per use case.
+
+    For each use case the number of potential charging parks (grid connection points)
+    must be at least ``gc_to_car_rate`` times the number of cars. If too few are
+    available, existing potential charging parks of the use case (or, if there are
+    none, randomly drawn public ones) are duplicated until the ratio is met.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-        The eDisGo object containing grid and electromobility data.
-    potential_charging_parks_gdf : :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>`
-        A GeoDataFrame containing potential charging park locations
-        and their attributes.
-    **kwargs : dict, optional
-        Additional keyword arguments to specify the grid connection to car
-        rate for different use cases. Expected keys:
-        - 'gc_to_car_rate_home' : float, optional, default 0.5
-        - 'gc_to_car_rate_work' : float, optional, default 0.25
-        - 'gc_to_car_rate_public' : float, optional, default 0.1
-        - 'gc_to_car_rate_hpc' : float, optional, default 0.005
+    potential_charging_parks_gdf : :geopandas:`GeoDataFrame`
+        Potential charging parks to check and, if necessary, extend.
+
+    Other Parameters
+    ----------------
+    gc_to_car_rate_home : float
+        Minimum ratio of home charging parks to cars. Default: 0.5.
+    gc_to_car_rate_work : float
+        Minimum ratio of work charging parks to cars. Default: 0.25.
+    gc_to_car_rate_public : float
+        Minimum ratio of public charging parks to cars. Default: 0.1.
+    gc_to_car_rate_hpc : float
+        Minimum ratio of high-power charging parks to cars. Default: 0.005.
 
     Returns
     -------
-    :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>`
-        A GeoDataFrame with adjusted potential charging park locations,
-        ensuring the minimum required number of parks per use case.
+    :geopandas:`GeoDataFrame`
+        Potential charging parks with the minimum number per use case assured, sorted
+        and reprojected to the grid's coordinate reference system.
 
-    Notes
-    -----
-    - The function may duplicate potential charging park entries if the
-      current number does not meet the required rate relative to the number
-      of cars for each use case.
-    - If no charging parks are available for a use case, a random sample of
-      10% of public charging parks will be duplicated and assigned to the
-      missing use case.
     """
-
-    # Calculate the total number of unique cars
+    # ensure minimum number of potential charging parks per car
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
     # Iterate over each use case to ensure the minimum number of potential charging
@@ -472,8 +478,8 @@ def assure_minimum_potential_charging_parks(
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
                 f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate * 100:.2f}% for use case "
-                f"'{use_case}'. Iteration: {n + 1}."
+                f"connections to cars rate of {gc_to_car_rate * 100:.2f} % for "
+                f"use case {use_case}. Iteration: {n + 1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
@@ -874,14 +880,35 @@ def weighted_random_choice(
     return charging_park_id
 
 
-def distribute_private_charging_demand(edisgo_obj):
+def distribute_private_charging_demand(edisgo_obj: EDisGo) -> None:
     """
     Distributes all private charging processes. Each car gets its own
     private charging point if a charging process takes place.
 
+    Private charging covers the ``work`` and ``home`` use cases. The cars are
+    processed grouped by destination, and for ``home`` additionally by
+    administrative zone (``ags``). For every car a potential charging park is
+    drawn with a weighted random choice; the weights combine static user-centric
+    weights with a capacity-based term that discourages parks to which charging
+    demand has already been assigned, so the draws depend on the running
+    assignment and are inherently sequential.
+
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+
+    Notes
+    -----
+    The drawn charging park and charging point are recorded per
+    ``(car_id, destination)`` and written back to
+    :attr:`~.network.electromobility.Electromobility.charging_processes_df` in a
+    single vectorised step after the loop, rather than once per car. A per-car
+    write-back matches ``car_id`` and ``destination`` against the whole frame for
+    every car, which is ``O(cars x rows)`` and dominates the runtime on large
+    grids; collecting the assignment and applying it once is ``O(rows)``. The
+    nominal charging capacity per car is likewise looked up once via ``groupby``
+    instead of filtering the destination frame for every car. The weighted random
+    draws are unaffected, so the resulting assignment is identical.
 
     """
     try:
@@ -909,6 +936,25 @@ def distribute_private_charging_demand(edisgo_obj):
         dtype=float,
     )
 
+    eta = edisgo_obj.electromobility.eta_charging_points
+    parks_gdf = edisgo_obj.electromobility.potential_charging_parks_gdf
+
+    # The chosen charging park and charging point are recorded per
+    # (car_id, destination) and written back to charging_processes_df in a single
+    # vectorised step after the loop. The previous code wrote inside the loop (via
+    # weighted_random_choice), scanning the whole frame for every car -- O(cars x
+    # rows), the dominant cost on large grids. The stochastic draws are unchanged,
+    # so the resulting assignment is identical.
+    assigned_park_id = {}
+    assigned_point_id = {}
+
+    # NOTE: in the home branch below `charging_park_id` is intentionally not
+    # updated per car; it keeps the value drawn for the last work car. This
+    # reproduces a pre-existing bug in the capacity bookkeeping (home capacity is
+    # booked to a stale charging park) so this performance refactor leaves the
+    # output unchanged. The bug is tracked separately in #679.
+    charging_park_id = None
+
     for destination in private_charging_df.destination.sort_values().unique():
         private_charging_destination_df = private_charging_df.loc[
             private_charging_df.destination == destination
@@ -916,13 +962,16 @@ def distribute_private_charging_demand(edisgo_obj):
 
         use_case = PRIVATE_DESTINATIONS[destination]
 
+        # nominal charging capacity per car (first occurrence), precomputed once
+        # instead of filtering the destination frame for every car
+        capacity_per_car = private_charging_destination_df.groupby("car_id")[
+            "nominal_charging_capacity_kW"
+        ].first()
+
         if use_case == "work":
-            potential_charging_park_indices = (
-                edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
-                    edisgo_obj.electromobility.potential_charging_parks_gdf.use_case
-                    == use_case
-                ].index
-            )
+            potential_charging_park_indices = parks_gdf.loc[
+                parks_gdf.use_case == use_case
+            ].index
 
             for car_id in private_charging_destination_df.car_id.sort_values().unique():
                 weights = combine_weights(
@@ -931,23 +980,14 @@ def distribute_private_charging_demand(edisgo_obj):
                     user_centric_weights_df,
                 )
 
-                charging_park_id = weighted_random_choice(
-                    edisgo_obj,
-                    potential_charging_park_indices,
-                    car_id,
-                    destination,
-                    charging_point_id,
-                    weights,
-                    rng=rng,
+                draw_rng = default_rng(seed=charging_point_id) if rng is None else rng
+                charging_park_id = draw_rng.choice(
+                    a=potential_charging_park_indices, p=weights
                 )
+                assigned_park_id[(car_id, destination)] = charging_park_id
+                assigned_point_id[(car_id, destination)] = charging_point_id
 
-                charging_capacity = (
-                    private_charging_destination_df.loc[
-                        (private_charging_destination_df.car_id == car_id)
-                        & (private_charging_destination_df.destination == "0_work")
-                    ].nominal_charging_capacity_kW.iat[0]
-                    / edisgo_obj.electromobility.eta_charging_points
-                )
+                charging_capacity = capacity_per_car.at[car_id] / eta
 
                 designated_charging_point_capacity_df.at[
                     charging_park_id, "designated_charging_point_capacity"
@@ -961,19 +1001,9 @@ def distribute_private_charging_demand(edisgo_obj):
                     private_charging_destination_df.ags == ags
                 ]
 
-                # fmt: off
-                potential_charging_park_indices = edisgo_obj.electromobility.\
-                    potential_charging_parks_gdf.loc[
-                        (
-                            edisgo_obj.electromobility.potential_charging_parks_gdf.ags
-                            == ags
-                        )
-                        & (
-                            edisgo_obj.electromobility.potential_charging_parks_gdf.
-                            use_case == use_case
-                        )
-                    ].index
-                # fmt: on
+                potential_charging_park_indices = parks_gdf.loc[
+                    (parks_gdf.ags == ags) & (parks_gdf.use_case == use_case)
+                ].index
 
                 for car_id in private_charging_ags_df.car_id.sort_values().unique():
                     weights = combine_weights(
@@ -982,21 +1012,18 @@ def distribute_private_charging_demand(edisgo_obj):
                         user_centric_weights_df,
                     )
 
-                    weighted_random_choice(
-                        edisgo_obj,
-                        potential_charging_park_indices,
-                        car_id,
-                        destination,
-                        charging_point_id,
-                        weights,
-                        rng=rng,
+                    draw_rng = (
+                        default_rng(seed=charging_point_id) if rng is None else rng
                     )
+                    drawn_charging_park_id = draw_rng.choice(
+                        a=potential_charging_park_indices, p=weights
+                    )
+                    assigned_park_id[(car_id, destination)] = drawn_charging_park_id
+                    assigned_point_id[(car_id, destination)] = charging_point_id
 
-                    charging_capacity = private_charging_destination_df.loc[
-                        (private_charging_destination_df.car_id == car_id)
-                        & (private_charging_destination_df.destination == "6_home")
-                    ].nominal_charging_capacity_kW.iat[0]
+                    charging_capacity = capacity_per_car.at[car_id]
 
+                    # booked to the stale charging_park_id (see NOTE above, #679)
                     designated_charging_point_capacity_df.at[
                         charging_park_id, "designated_charging_point_capacity"
                     ] += charging_capacity
@@ -1005,6 +1032,23 @@ def distribute_private_charging_demand(edisgo_obj):
 
         else:
             raise ValueError(f"Destination {destination} is unknown.")
+
+    # write the recorded charging park and point assignment back to
+    # charging_processes_df in one vectorised step
+    charging_processes_df = edisgo_obj.electromobility.charging_processes_df
+    if assigned_park_id:
+        key_index = pd.MultiIndex.from_arrays(
+            [charging_processes_df["car_id"], charging_processes_df["destination"]]
+        )
+        mapped_park_id = pd.Series(assigned_park_id).reindex(key_index)
+        mapped_point_id = pd.Series(assigned_point_id).reindex(key_index)
+        update = mapped_park_id.notna().to_numpy()
+        charging_processes_df.loc[update, "charging_park_id"] = (
+            mapped_park_id.to_numpy()[update]
+        )
+        charging_processes_df.loc[update, "charging_point_id"] = (
+            mapped_point_id.to_numpy()[update]
+        )
 
 
 def distribute_public_charging_demand(edisgo_obj, **kwargs):
@@ -1139,11 +1183,11 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
                 idx, "charging_point_id"
             ] = charging_point_id
 
-            available_charging_points_df.loc[
-                charging_point_id
-            ] = edisgo_obj.electromobility.charging_processes_df.loc[
-                idx, available_charging_points_df.columns
-            ].tolist()
+            available_charging_points_df.loc[charging_point_id] = (
+                edisgo_obj.electromobility.charging_processes_df.loc[
+                    idx, available_charging_points_df.columns
+                ].tolist()
+            )
 
             designated_charging_point_capacity_df.at[
                 charging_park_id, "designated_charging_point_capacity"
@@ -1153,6 +1197,42 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
 def determine_grid_connection_capacity(
     total_charging_point_capacity, lower_limit=0.3, upper_limit=1.0, minimum_factor=0.45
 ):
+    """
+    Scales the total charging-point capacity to a grid connection capacity.
+
+    Applies a simultaneity (diversity) factor: capacities up to ``lower_limit`` are
+    connected in full, capacities of ``upper_limit`` and above are scaled by
+    ``minimum_factor``, and in between the factor is interpolated linearly.
+
+    Parameters
+    ----------
+    total_charging_point_capacity : float
+        Summed nominal capacity of the charging points in MW.
+    lower_limit : float
+        Capacity in MW below which no reduction is applied. Default: 0.3.
+    upper_limit : float
+        Capacity in MW at and above which the full ``minimum_factor`` reduction
+        applies. Default: 1.0.
+    minimum_factor : float
+        Simultaneity factor applied at and above ``upper_limit``. Default: 0.45.
+
+    Returns
+    -------
+    float
+        Required grid connection capacity in MW.
+
+    Notes
+    -----
+    The factor is interpolated linearly but applied *multiplicatively*, so between
+    ``lower_limit`` and ``upper_limit`` the returned capacity is quadratic in
+    ``total_charging_point_capacity`` and therefore **not monotonic**: with the default
+    limits it peaks at an input of about ``0.79 MW`` (output ≈ ``0.486 MW``) before
+    decreasing again to ``minimum_factor * upper_limit`` (``0.45 MW``) at
+    ``upper_limit``. A larger park can thus receive a slightly smaller connection rating
+    in that narrow range, which is likely unintended (see
+    `issue #650 <https://github.com/openego/eDisGo/issues/650>`_).
+
+    """
     if total_charging_point_capacity <= lower_limit:
         return total_charging_point_capacity
     elif total_charging_point_capacity >= upper_limit:
@@ -1279,6 +1359,14 @@ def simbev_config_from_oedb(
         more information.
 
     """
+    df = _query_simbev_config_from_oedb(scenario=scenario, engine=engine)
+
+    return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
+
+
+def _query_simbev_config_from_oedb(scenario: str, engine: Engine):
+    """Query SimBEV metadata from the OEP."""
+
     config = Config()
     (egon_ev_metadata,) = config.import_tables_from_oep(
         engine, ["egon_ev_metadata"], "demand"
@@ -1289,9 +1377,7 @@ def simbev_config_from_oedb(
             egon_ev_metadata.scenario == scenario
         )
 
-        df = pd.read_sql(sql=query.statement, con=query.session.bind)
-
-    return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
+        return pd.read_sql(sql=query.statement, con=query.session.bind)
 
 
 def potential_charging_parks_from_oedb(
@@ -1316,12 +1402,26 @@ def potential_charging_parks_from_oedb(
         for more information.
 
     """
+    crs = edisgo_obj.topology.grid_district["srid"]
+    gdf = _query_potential_charging_parks_from_oedb(
+        edisgo_obj=edisgo_obj,
+        engine=engine,
+    )
+
+    return gdf.to_crs(crs).assign(ags=0)
+
+
+def _query_potential_charging_parks_from_oedb(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    limit: int | None = None,
+):
+    """Query potential charging parks from the OEP."""
+
     config = Config()
     (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
         engine, ["egon_emob_charging_infrastructure"], "grid"
     )
-
-    crs = edisgo_obj.topology.grid_district["srid"]
 
     with session_scope_egon_data(engine) as session:
         srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
@@ -1332,16 +1432,16 @@ def potential_charging_parks_from_oedb(
             egon_emob_charging_infrastructure.weight.label("user_centric_weight"),
             egon_emob_charging_infrastructure.geometry.label("geom"),
         ).filter(egon_emob_charging_infrastructure.mv_grid_id == edisgo_obj.topology.id)
+        if limit is not None:
+            query = query.limit(limit)
 
-        gdf = gpd.read_postgis(
+        return gpd.read_postgis(
             sql=query.statement,
             con=query.session.bind,
             geom_col="geom",
             crs=f"EPSG:{srid}",
             index_col="cp_id",
-        ).to_crs(crs)
-
-    return gdf.assign(ags=0)
+        )
 
 
 def charging_processes_from_oedb(
@@ -1374,42 +1474,12 @@ def charging_processes_from_oedb(
         more information.
 
     """
-    config = Config()
-    egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
-        engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
+    pool, ev_trips_df = _query_charging_processes_from_oedb(
+        edisgo_obj=edisgo_obj,
+        engine=engine,
+        scenario=scenario,
+        mode_parking_times=kwargs.get("mode_parking_times", "frugal"),
     )
-
-    # get EV pool in grid
-    scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}
-    with session_scope_egon_data(engine) as session:
-        query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
-            egon_ev_mv_grid_district.scenario == scenario,
-            egon_ev_mv_grid_district.scenario_variation == scenario_variation[scenario],
-            egon_ev_mv_grid_district.bus_id == edisgo_obj.topology.id,
-        )
-
-        pool = Counter(pd.read_sql(sql=query.statement, con=engine).egon_ev_pool_ev_id)
-
-    # get charging processes for each EV ID
-    with session_scope_egon_data(engine) as session:
-        query = session.query(
-            egon_ev_trip.egon_ev_pool_ev_id.label("car_id"),
-            egon_ev_trip.use_case,
-            egon_ev_trip.location.label("destination"),
-            egon_ev_trip.charging_capacity_nominal.label(
-                "nominal_charging_capacity_kW"
-            ),
-            egon_ev_trip.charging_capacity_grid.label("grid_charging_capacity_kW"),
-            egon_ev_trip.charging_demand.label("chargingdemand_kWh"),
-            egon_ev_trip.park_start.label("park_start_timesteps"),
-            egon_ev_trip.park_end.label("park_end_timesteps"),
-        ).filter(
-            egon_ev_trip.scenario == scenario,
-            egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
-        )
-        if kwargs.get("mode_parking_times", "frugal") == "frugal":
-            query = query.filter(egon_ev_trip.charging_demand > 0)
-        ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
 
     # duplicate EVs that were chosen more than once from EV pool
     df_list = []
@@ -1434,3 +1504,56 @@ def charging_processes_from_oedb(
         charging_park_id=np.nan,
         charging_point_id=np.nan,
     ).astype(DTYPES["charging_processes_df"])
+
+
+def _query_charging_processes_from_oedb(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    scenario: str,
+    mode_parking_times: str | None = "frugal",
+    pool_limit: int | None = None,
+    trip_limit: int | None = None,
+):
+    """Query the EV pool and its charging processes from the OEP."""
+
+    config = Config()
+    egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
+        engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
+    )
+
+    scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}
+    with session_scope_egon_data(engine) as session:
+        query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
+            egon_ev_mv_grid_district.scenario == scenario,
+            egon_ev_mv_grid_district.scenario_variation == scenario_variation[scenario],
+            egon_ev_mv_grid_district.bus_id == edisgo_obj.topology.id,
+        )
+        if pool_limit is not None:
+            query = query.limit(pool_limit)
+
+        pool = Counter(pd.read_sql(sql=query.statement, con=engine).egon_ev_pool_ev_id)
+
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_ev_trip.egon_ev_pool_ev_id.label("car_id"),
+            egon_ev_trip.use_case,
+            egon_ev_trip.location.label("destination"),
+            egon_ev_trip.charging_capacity_nominal.label(
+                "nominal_charging_capacity_kW"
+            ),
+            egon_ev_trip.charging_capacity_grid.label("grid_charging_capacity_kW"),
+            egon_ev_trip.charging_demand.label("chargingdemand_kWh"),
+            egon_ev_trip.park_start.label("park_start_timesteps"),
+            egon_ev_trip.park_end.label("park_end_timesteps"),
+        ).filter(
+            egon_ev_trip.scenario == scenario,
+            egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
+        )
+        if mode_parking_times == "frugal":
+            query = query.filter(egon_ev_trip.charging_demand > 0)
+        if trip_limit is not None:
+            query = query.limit(trip_limit)
+
+        ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
+
+    return pool, ev_trips_df

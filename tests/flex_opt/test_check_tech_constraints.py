@@ -457,9 +457,9 @@ class TestCheckTechConstraints:
         self.edisgo.results.v_res.at[
             self.timesteps[2], "BusBar_MVGrid_1_LVGrid_6_LV"
         ] = 1.14
-        self.edisgo.results.v_res.at[
-            self.timesteps[2], "Bus_BranchTee_LVGrid_6_1"
-        ] = 1.18
+        self.edisgo.results.v_res.at[self.timesteps[2], "Bus_BranchTee_LVGrid_6_1"] = (
+            1.18
+        )
         voltage_issues = check_tech_constraints.voltage_issues(
             self.edisgo, voltage_level="lv"
         )

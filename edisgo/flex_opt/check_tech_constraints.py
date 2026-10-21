@@ -1,9 +1,27 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+from __future__ import annotations
+
 import logging
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
 from edisgo.network.grids import LVGrid, MVGrid
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +66,7 @@ def mv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
 
     if not crit_lines.empty:
         logger.debug(
-            "==> {} line(s) in MV network has/have load issues.".format(
-                crit_lines.shape[0]
-            )
+            f"==> {crit_lines.shape[0]} line(s) in MV network has/have load issues."
         )
     else:
         logger.debug("==> No line load issues in MV network.")
@@ -101,9 +117,7 @@ def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False, lv_grid_id=None
 
     if not crit_lines.empty:
         logger.debug(
-            "==> {} line(s) in LV networks has/have load issues.".format(
-                crit_lines.shape[0]
-            )
+            f"==> {crit_lines.shape[0]} line(s) in LV networks has/have load issues."
         )
     else:
         logger.debug("==> No line load issues in LV networks.")
@@ -164,8 +178,8 @@ def _line_max_relative_overload(
         lines = mv_grid.lines_df.index
     else:
         raise ValueError(
-            "{} is not a valid option for input variable 'voltage_level'. "
-            "Try 'mv' or 'lv'.".format(voltage_level)
+            f"{voltage_level} is not a valid option for input variable 'voltage_level'. "
+            "Try 'mv' or 'lv'."
         )
 
     # calculate relative line load and keep maximum over-load of each line
@@ -273,9 +287,9 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level, n_minus_one=Fal
         lines_df = mv_grid.lines_df
     else:
         raise ValueError(
-            "{} is not a valid option for input variable 'voltage_level' in "
+            f"{voltage_level} is not a valid option for input variable 'voltage_level' in "
             "function lines_allowed_load_voltage_level. Try 'mv' or "
-            "'lv'.".format(voltage_level)
+            "'lv'."
         )
 
     allowed_load_per_case = {}
@@ -413,7 +427,9 @@ def hv_mv_station_max_overload(edisgo_obj):
     return crit_stations
 
 
-def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None):
+def mv_lv_station_max_overload(
+    edisgo_obj: EDisGo, lv_grid_id: str | int | None = None
+) -> pd.DataFrame:
     """
     Checks for over-loading of MV/LV stations.
 
@@ -442,24 +458,25 @@ def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None):
     section 'grid_expansion_load_factors'.
 
     """
-    crit_stations = pd.DataFrame(dtype=float)
-
     if lv_grid_id is not None:
         lv_grids = [edisgo_obj.topology.get_lv_grid(lv_grid_id)]
     else:
         lv_grids = list(edisgo_obj.topology.lv_grids)
-    for lv_grid in lv_grids:
-        crit_stations = pd.concat(
-            [
-                crit_stations,
-                _station_max_overload(edisgo_obj, lv_grid),
-            ]
-        )
+
+    # collect per-grid results and concatenate once to avoid O(n^2) growth
+    crit_stations_list = [
+        _station_max_overload(edisgo_obj, lv_grid) for lv_grid in lv_grids
+    ]
+    crit_stations_list = [df for df in crit_stations_list if not df.empty]
+    if crit_stations_list:
+        crit_stations = pd.concat(crit_stations_list)
+    else:
+        # preserve previous empty-result behaviour (empty float DataFrame)
+        crit_stations = pd.DataFrame(dtype=float)
+
     if not crit_stations.empty:
         logger.debug(
-            "==> {} MV/LV station(s) has/have load issues.".format(
-                crit_stations.shape[0]
-            )
+            f"==> {crit_stations.shape[0]} MV/LV station(s) has/have load issues."
         )
     else:
         logger.debug("==> No MV/LV station load issues.")
@@ -629,7 +646,9 @@ def _station_allowed_load(edisgo_obj, grid):
     )
 
 
-def stations_allowed_load(edisgo_obj, grids=None):
+def stations_allowed_load(
+    edisgo_obj: EDisGo, grids: list | None = None
+) -> pd.DataFrame:
     """
     Returns allowed loading of specified grids stations to the overlying voltage level
     per time step in MVA.
@@ -658,15 +677,19 @@ def stations_allowed_load(edisgo_obj, grids=None):
     if grids is None:
         grids = edisgo_obj.topology.grids
 
-    allowed_loading = pd.DataFrame()
-    for grid in grids:
-        allowed_loading = pd.concat(
-            [allowed_loading, _station_allowed_load(edisgo_obj, grid)], axis=1
-        )
+    # collect per-grid results and concatenate once to avoid O(n^2) growth
+    allowed_loading_list = [_station_allowed_load(edisgo_obj, grid) for grid in grids]
+    if allowed_loading_list:
+        allowed_loading = pd.concat(allowed_loading_list, axis=1)
+    else:
+        # preserve previous empty-result behaviour (empty DataFrame)
+        allowed_loading = pd.DataFrame()
     return allowed_loading
 
 
-def stations_relative_load(edisgo_obj, grids=None):
+def stations_relative_load(
+    edisgo_obj: EDisGo, grids: list | None = None
+) -> pd.DataFrame:
     """
     Returns relative loading of specified grids stations to the overlying voltage level
     per time step in p.u..
@@ -701,13 +724,21 @@ def stations_relative_load(edisgo_obj, grids=None):
     allowed_loading = stations_allowed_load(edisgo_obj, grids)
 
     # get loading from power flow results
-    loading = pd.DataFrame()
+    # collect per-grid results and concatenate once to avoid O(n^2) growth
+    loading_list = []
     for grid in grids:
-        # check that grid was included in power flow analysis
+        # check that grid was included in power flow analysis; on exception just
+        # skip appending that grid, exactly as before
         try:
-            loading = pd.concat([loading, _station_load(edisgo_obj, grid)], axis=1)
+            loading_list.append(_station_load(edisgo_obj, grid))
         except Exception:
             pass
+
+    if loading_list:
+        loading = pd.concat(loading_list, axis=1)
+    else:
+        # preserve previous empty-result behaviour (empty DataFrame)
+        loading = pd.DataFrame()
 
     return loading / allowed_loading.loc[loading.index, loading.columns]
 
@@ -819,9 +850,9 @@ def voltage_issues(edisgo_obj, voltage_level, split_voltage_band=True, lv_grid_i
             buses = edisgo_obj.topology.mv_grid.buses_df.index
         else:
             raise ValueError(
-                "{} is not a valid option for input variable 'voltage_level' in "
+                f"{voltage_level} is not a valid option for input variable 'voltage_level' in "
                 "function voltage_issue. Possible options are 'mv', 'mv_lv', 'lv', "
-                "or None.".format(voltage_level)
+                "or None."
             )
     else:
         mv_issues = voltage_issues(
@@ -1033,7 +1064,9 @@ def _mv_allowed_voltage_limits(edisgo_obj):
     return upper_limit, lower_limit
 
 
-def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
+def _lv_allowed_voltage_limits(
+    edisgo_obj: EDisGo, lv_grids: list | None = None, mode: str | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Calculates allowed lower and upper voltage limits for either buses or transformers
     in given LV grids.
@@ -1091,13 +1124,13 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         upper_limits_df = (
             voltage_base
             + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_max_v_rise".format(config_string)
+                f"{config_string}_max_v_rise"
             ]
         )
         lower_limits_df = (
             voltage_base
             - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_max_v_drop".format(config_string)
+                f"{config_string}_max_v_drop"
             ]
         )
     else:
@@ -1120,31 +1153,42 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         upper_limits_df_tmp = (
             voltage_base
             + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_max_v_rise".format(config_string)
+                f"{config_string}_max_v_rise"
             ]
         )
         lower_limits_df_tmp = (
             voltage_base
             - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_max_v_drop".format(config_string)
+                f"{config_string}_max_v_drop"
             ]
         )
 
         # rename columns to secondary side
+        # collect per-station frames and concatenate once (axis=1) to avoid
+        # O(n^2) growth of the wide result frame over all LV stations
+        upper_tmp_list = []
         for colname, values in upper_limits_df_tmp.items():
-            tmp = pd.DataFrame(
-                data=np.tile(values, (len(buses_dict[colname]), 1)).T,
-                columns=buses_dict[colname],
-                index=values.index,
+            upper_tmp_list.append(
+                pd.DataFrame(
+                    data=np.tile(values, (len(buses_dict[colname]), 1)).T,
+                    columns=buses_dict[colname],
+                    index=values.index,
+                )
             )
-            upper_limits_df = pd.concat([upper_limits_df, tmp], axis=1)
+        if upper_tmp_list:
+            upper_limits_df = pd.concat(upper_tmp_list, axis=1)
+
+        lower_tmp_list = []
         for colname, values in lower_limits_df_tmp.items():
-            tmp = pd.DataFrame(
-                data=np.tile(values, (len(buses_dict[colname]), 1)).T,
-                columns=buses_dict[colname],
-                index=values.index,
+            lower_tmp_list.append(
+                pd.DataFrame(
+                    data=np.tile(values, (len(buses_dict[colname]), 1)).T,
+                    columns=buses_dict[colname],
+                    index=values.index,
+                )
             )
-            lower_limits_df = pd.concat([lower_limits_df, tmp], axis=1)
+        if lower_tmp_list:
+            lower_limits_df = pd.concat(lower_tmp_list, axis=1)
 
     return upper_limits_df, lower_limits_df
 

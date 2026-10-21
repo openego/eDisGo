@@ -5,7 +5,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+    # Same Python version as the Read the Docs build (.readthedocs.yml)
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
     - name: Install dependencies
       run: |
         sudo apt install pandoc

@@ -1,4 +1,13 @@
-""
+"""
+Instantiate and solve an eDisGo OPF model.
+
+Builds a model of type `model_type` from the network `data` using `build_method`
+(e.g. `build_mn_opf_bf_flex`), optimises it with the given JuMP `optimizer`
+(Gurobi or Ipopt), and returns the tuple `(result, pm)`, where `result` is the
+PowerModels solution dict and `pm` is the constructed model object. The keyword
+arguments mirror PowerModels' `solve_model`/`instantiate_model` (`ref_extensions`,
+`solution_processors`, `relax_integrality`, `multinetwork`, `multiconductor`).
+"""
 function solve_model(data::Dict{String,<:Any}, model_type::Type, optimizer, build_method;
         ref_extensions=[], solution_processors=[], relax_integrality=false,
         multinetwork=false, multiconductor=false, kwargs...)
@@ -13,6 +22,11 @@ function solve_model(data::Dict{String,<:Any}, model_type::Type, optimizer, buil
     return result, pm
 end
 
+"""
+Instantiate an eDisGo OPF model without solving it — a thin wrapper around
+`InfrastructureModels.instantiate_model` with eDisGo's `ref_add_core!` reference
+extension and the global keys. Used internally by `solve_model`.
+"""
 function instantiate_model(data::Dict{String,<:Any}, model_type::Type, build_method; kwargs...)
     return InfrastructureModels.instantiate_model(data, model_type, build_method, eDisGo_OPF.ref_add_core!, _pm_global_keys, pm_it_sym; kwargs...)
 end

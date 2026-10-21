@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 """
 This module provides tools to convert eDisGo representation of the network
 topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA network
@@ -645,7 +656,9 @@ def _append_lv_components(
                         (
                             True
                             if (comps.type.isin(flucts)).all()
-                            else False if ~comps.type.isin(flucts).any() else "Mixed"
+                            else False
+                            if ~comps.type.isin(flucts).any()
+                            else "Mixed"
                         )
                     ],
                 },

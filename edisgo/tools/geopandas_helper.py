@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import os
@@ -158,7 +169,10 @@ class GeoPandasGridContainer:
 
         def plot(self):
             """
-            TODO: Implement plotting functions as needed
+            Plot the grid container.
+
+            .. note:: Not yet implemented; currently raises
+                :class:`NotImplementedError`.
             """
             raise NotImplementedError
 

@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import copy
@@ -53,7 +64,10 @@ from edisgo.opf.results.opf_result_class import OPFResults
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
-from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
+from edisgo.tools.spatial_complexity_reduction import (
+    apply_reduced_results_to_full_grid,
+    spatial_complexity_reduction,
+)
 from edisgo.tools.tools import (
     determine_grid_integration_voltage_level,
     get_path_length_to_station,
@@ -557,10 +571,28 @@ class EDisGo:
             :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
             If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
             is indexed using a default year and set for the whole year.
+            In this case, the EDisGo TimeSeries timeindex is automatically set to
+            the selected default year so that imported data is linked to a valid
+            time index.
 
         """
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
-        if self.timeseries.timeindex.empty:
+        if self.timeseries.timeindex.empty and kwargs.get("timeindex", None) is None:
+            if conventional_loads_ts == "oedb":
+                default_year = tools.get_year_based_on_scenario(kwargs.get("scenario"))
+                if default_year is None:
+                    default_year = 2011
+            else:
+                default_year = 2011
+            self.timeseries.timeindex = pd.date_range(
+                f"1/1/{default_year}", periods=8760, freq="H"
+            )
+            logger.warning(
+                "No timeindex was set. TimeSeries.timeindex is automatically "
+                f"set to the default year {default_year} to match imported "
+                "time series."
+            )
+        elif self.timeseries.timeindex.empty:
             logger.warning(
                 "When setting time series using predefined profiles it is better to "
                 "set a time index as all data in TimeSeries class is indexed by the"
@@ -982,12 +1014,12 @@ class EDisGo:
             keyword arguments.
 
         """
-        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
         if self.legacy_grids is True:
             generators_import.oedb_legacy(
                 edisgo_object=self, generator_scenario=generator_scenario, **kwargs
             )
         else:
+            engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
             generators_import.oedb(
                 edisgo_object=self,
                 engine=engine,
@@ -1130,16 +1162,14 @@ class EDisGo:
             if raise_not_converged and len(timesteps_not_converged) > 0:
                 raise ValueError(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: "
+                    f"{timesteps_not_converged}."
                 )
             elif len(timesteps_not_converged) > 0:
                 logger.warning(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: "
+                    f"{timesteps_not_converged}."
                 )
             return timesteps_converged, timesteps_not_converged
 
@@ -1181,9 +1211,7 @@ class EDisGo:
                 pypsa_network = _scale_timeseries(pypsa_network_copy, fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
-                logger.info(
-                    "Current fraction in iterative process: {}.".format(fraction)
-                )
+                logger.info(f"Current fraction in iterative process: {fraction}.")
                 # get converged and not converged time steps
                 timesteps_converged, timesteps_not_converged = _check_convergence()
         else:
@@ -1218,7 +1246,7 @@ class EDisGo:
         If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
         True input for `timesteps_pfa` is overwritten and therefore ignored.
 
-        See :ref:`features-in-detail` for more information on how network
+        See :ref:`grid-reinforcement` for more information on how network
         reinforcement is conducted.
 
         Parameters
@@ -1698,8 +1726,7 @@ class EDisGo:
         if voltage_level not in supported_voltage_levels:
             if p is None:
                 raise ValueError(
-                    "Neither appropriate voltage level nor nominal power "
-                    "were supplied."
+                    "Neither appropriate voltage level nor nominal power were supplied."
                 )
             # determine voltage level manually from nominal power
             voltage_level = determine_grid_integration_voltage_level(self, p)
@@ -1855,9 +1882,7 @@ class EDisGo:
                                 naming.format("_".join(k))
                                 if isinstance(k, tuple)
                                 else naming.format(k)
-                            ): getattr(self.timeseries, attribute)
-                            .loc[:, v]
-                            .sum(axis=1)
+                            ): getattr(self.timeseries, attribute).loc[:, v].sum(axis=1)
                         }
                     )
                     for k, v in groups.items()
@@ -2082,7 +2107,7 @@ class EDisGo:
         :attr:`~.edisgo.EDisGo.import_electromobility`.
 
         It is assumed that only 'private' charging processes at 'home' or at 'work' can
-        be flexibilized. 'public' charging processes will always be 'dumb'.
+        be flexibilized. 'public' and 'hpc' charging processes will always be 'dumb'.
 
         The charging time series at each charging parks are written to
         :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
@@ -2145,7 +2170,9 @@ class EDisGo:
             self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs
         )
 
-    def import_heat_pumps(self, scenario, engine, timeindex=None, import_types=None):
+    def import_heat_pumps(
+        self, scenario, engine=None, timeindex=None, import_types=None
+    ):
         """
         Gets heat pump data for specified scenario from oedb and integrates the heat
         pumps into the grid.
@@ -2203,8 +2230,9 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve heat pump data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to set COP and heat demand data. Leap years
             can currently not be handled. In case the given
@@ -2221,6 +2249,7 @@ class EDisGo:
             "central_resistive_heaters". If None, all are imported.
 
         """
+        engine = engine if engine is not None else egon_engine()
         # set up year to index data by
         # first try to get index from time index
         if timeindex is None:
@@ -2317,13 +2346,14 @@ class EDisGo:
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
-    def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
+    def import_dsm(self, scenario: str, engine: Engine = None, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
         `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
-        Profiles comprise minimum and maximum load increase in MW as well as maximum
-        energy pre- and postponing in MWh. The data is written to the
+        Profiles comprise the maximum load decrease (``p_min``) and maximum load
+        increase (``p_max``) in MW as well as the maximum energy preponing (``e_min``)
+        and postponing (``e_max``) in MWh. The data is written to the
         :class:`~.network.dsm.DSM` object.
 
         Currently, the only supported data source is scenario data generated
@@ -2332,12 +2362,12 @@ class EDisGo:
 
         Parameters
         ----------
-        edisgo_object : :class:`~.EDisGo`
         scenario : str
             Scenario for which to retrieve DSM data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to get data. Leap years can currently not be
             handled. In case the given timeindex contains a leap year, the data will be
@@ -2349,6 +2379,7 @@ class EDisGo:
             is indexed using the default year and returned for the whole year.
 
         """
+        engine = engine if engine is not None else egon_engine()
         dsm_profiles = dsm_import.oedb(
             edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
         )
@@ -2360,7 +2391,7 @@ class EDisGo:
     def import_home_batteries(
         self,
         scenario: str,
-        engine: Engine,
+        engine: Engine = None,
     ):
         """
         Gets home battery data for specified scenario and integrates the batteries into
@@ -2388,10 +2419,12 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve home battery data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
 
         """
+        engine = engine if engine is not None else egon_engine()
         home_batteries_oedb(
             edisgo_obj=self,
             scenario=scenario,
@@ -2434,14 +2467,12 @@ class EDisGo:
         try:
             if self.results.v_res is None:
                 logger.warning(
-                    "Voltages from power flow "
-                    "analysis must be available to plot them."
+                    "Voltages from power flow analysis must be available to plot them."
                 )
                 return
         except AttributeError:
             logger.warning(
-                "Results must be available to plot voltages. "
-                "Please analyze grid first."
+                "Results must be available to plot voltages. Please analyze grid first."
             )
             return
         except ValueError:
@@ -2646,8 +2677,8 @@ class EDisGo:
         if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
             raise RuntimeError(
                 "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results "
-                "are generated."
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
             )
         # Resolve LV grids (index-based resolution)
         lv_grids_a = list(self.topology.mv_grid.lv_grids)
@@ -2816,8 +2847,8 @@ class EDisGo:
 
     def plot_voltage_over_dist_mv(self, mv_id, other, save_as=False, return_data=False):
         """
-        Plot MV voltage over distance to the HV/MV transformer, comparing two
-        EDisGo objects.
+        Plot MV voltage over distance to the HV/MV transformer,
+        comparing two EDisGo objects.
 
         Parameters
         ----------
@@ -2839,8 +2870,8 @@ class EDisGo:
         if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
             raise RuntimeError(
                 "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results "
-                "are generated."
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
             )
         mv_a = self.topology.mv_grid
         mv_b = other.topology.mv_grid
@@ -2893,15 +2924,14 @@ class EDisGo:
         if dist_a.isna().any():
             try:
                 mv_graph = mv_a.graph
+                # Compute all path lengths from source at once using BFS instead
+                # of one shortest_path call per bus.
+                path_lengths_a = nx.single_source_shortest_path_length(
+                    mv_graph, source=source_a
+                )
                 for bus in mv_buses_a:
                     if pd.isna(dist_a.loc[bus]):
-                        try:
-                            path = nx.shortest_path(
-                                mv_graph, source=source_a, target=bus
-                            )
-                            dist_a.loc[bus] = len(path) - 1  # number of edges
-                        except (nx.NetworkXNoPath, nx.NodeNotFound):
-                            dist_a.loc[bus] = 0
+                        dist_a.loc[bus] = path_lengths_a.get(bus, 0)
             except Exception:
                 # Fallback: set all NaN values to 0
                 dist_a = dist_a.fillna(0)
@@ -2909,15 +2939,14 @@ class EDisGo:
         if dist_b.isna().any():
             try:
                 mv_graph = mv_b.graph
+                # Compute all path lengths from source at once using BFS instead
+                # of one shortest_path call per bus.
+                path_lengths_b = nx.single_source_shortest_path_length(
+                    mv_graph, source=source_b
+                )
                 for bus in mv_buses_b:
                     if pd.isna(dist_b.loc[bus]):
-                        try:
-                            path = nx.shortest_path(
-                                mv_graph, source=source_b, target=bus
-                            )
-                            dist_b.loc[bus] = len(path) - 1  # number of edges
-                        except (nx.NetworkXNoPath, nx.NodeNotFound):
-                            dist_b.loc[bus] = 0
+                        dist_b.loc[bus] = path_lengths_b.get(bus, 0)
             except Exception:
                 # Fallback: set all NaN values to 0
                 dist_b = dist_b.fillna(0)
@@ -3525,6 +3554,65 @@ class EDisGo:
         )
         return edisgo_obj, busmap_df, linemap_df
 
+    def map_reduced_results_to_full_grid(
+        self,
+        reduced_grid: EDisGo,
+        flexible_cps: list | None = None,
+        flexible_hps: list | None = None,
+        flexible_loads: list | None = None,
+        flexible_storage_units: list | None = None,
+    ) -> EDisGo:
+        """
+        Writes optimized flexible-component dispatch from a spatially-reduced
+        grid back onto this (full) grid.
+
+        Counterpart to :meth:`spatial_complexity_reduction`: where that
+        method shrinks this grid for a faster OPF, this method maps the OPF's
+        active-power results from ``reduced_grid`` back onto ``self`` so
+        reinforcement can run on the full topology. Only components the OPF
+        actually rewrites are touched — flexible charging points, heat pumps,
+        DSM loads, and storage units. Inflexible loads/generators are
+        untouched, since the OPF never changed their series and ``self``
+        already holds the correct values for them.
+
+        See
+        :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
+        for the full matching/disaggregation rules and the reactive-power
+        recompute this method triggers as a side effect.
+
+        Parameters
+        ----------
+        reduced_grid : :class:`~.EDisGo`
+            The spatially-reduced EDisGo instance the OPF ran on. Supplies
+            the optimized active-power series and, if aggregated, the
+            ``old_name`` provenance for disaggregation.
+        flexible_cps : list of str, optional
+            Names of flexible charging points in ``reduced_grid`` to map
+            back.
+        flexible_hps : list of str, optional
+            Names of flexible heat-pump loads in ``reduced_grid`` to map
+            back.
+        flexible_loads : list of str, optional
+            Names of flexible DSM loads in ``reduced_grid`` to map back.
+        flexible_storage_units : list of str, optional
+            Names of flexible storage units in ``reduced_grid`` to map back.
+
+        Returns
+        -------
+        :class:`~.EDisGo`
+            ``self``, with active power written for the given flexible
+            components and reactive power recomputed.
+
+        """
+        return apply_reduced_results_to_full_grid(
+            full_grid=self,
+            reduced_grid=reduced_grid,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+        )
+
     def check_integrity(self):
         """
         Method to check the integrity of the EDisGo object.
@@ -3652,10 +3740,9 @@ class EDisGo:
             if comparison.any():
                 logger.warning(
                     "Heat demand is higher than rated heatpump power"
-                    " of heatpumps: {}. Demand can not be covered if no sufficient"
-                    " heat storage capacities are available.".format(
-                        comparison.index[comparison.values].values
-                    )
+                    f" of heatpumps: {comparison.index[comparison.values].values}."
+                    " Demand can not be covered if no sufficient"
+                    " heat storage capacities are available."
                 )
 
         logging.info("Integrity check finished. Please pay attention to warnings.")

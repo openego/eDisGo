@@ -1,10 +1,13 @@
-"""
-This module provides tools to convert eDisGo representation of the network
-topology and timeseries to PowerModels network data format and to retrieve results from
-PowerModels OPF in PowerModels network data format to eDisGo representation.
-Call :func:`to_powermodels` to retrieve the PowerModels network container and
-:func:`from_powermodels` to write OPF results to edisgo object.
-"""
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 import json
 import logging
@@ -21,6 +24,81 @@ from edisgo.flex_opt.costs import line_expansion_costs
 from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
 logger = logging.getLogger(__name__)
+
+
+# Overlying-grid attributes the HV requirements (opf_version 3 and 4) are built
+# from. The SOC attributes are not listed: they are aligned onto the active time
+# index with align_series_to_timeindex, which reindexes (NaN) instead of reading
+# positionally, so a shorter or year-shifted index does not mis-align them.
+_HV_REQUIREMENT_ATTRIBUTES = (
+    "renewables_curtailment",
+    "storage_units_active_power",
+    "electromobility_active_power",
+    "heat_pump_decentral_active_power",
+    "heat_pump_central_active_power",
+    "dsm_active_power",
+)
+
+
+def _check_overlying_grid_covers_timeindex(edisgo_object):
+    """
+    Check that the overlying-grid requirements cover the active time index.
+
+    The HV requirements are read off the
+    :class:`~.network.overlying_grid.OverlyingGrid` attributes positionally
+    (``.iloc[0]`` for the scalar target, ``.tolist()`` for the per-time-step
+    series), so a requirement series that does not cover
+    :attr:`~.network.timeseries.TimeSeries.timeindex` is silently mis-read
+    rather than raising: the values of the wrong time steps are handed to the
+    optimization. This happens when the active time index is narrowed without
+    narrowing the overlying grid with it — see
+    :func:`~.opf.powermodels_opf._narrow_flex_inputs`.
+
+    A series that spans MORE than the active time index is rejected too, and is
+    in fact the case this guards against in practice: the positional reads take
+    the first row and the whole list, so a wider series silently hands the
+    optimization the values of time steps it is not solving for.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+
+    Raises
+    ------
+    ValueError
+        If a non-empty overlying-grid requirement series does not match the
+        active time index exactly.
+
+    """
+    timeindex = edisgo_object.timeseries.timeindex
+    if timeindex is None or len(timeindex) == 0:
+        return
+    mismatched = {}
+    for attr in _HV_REQUIREMENT_ATTRIBUTES:
+        series = getattr(edisgo_object.overlying_grid, attr, None)
+        if series is None or series.empty:
+            # An absent requirement is handled downstream: _build_hv_requirements
+            # raises IndexError and to_powermodels falls back to opf_version 2.
+            continue
+        n_missing = len(timeindex.difference(series.index))
+        n_extra = len(series.index.difference(timeindex))
+        if n_missing > 0 or n_extra > 0:
+            mismatched[attr] = (n_missing, n_extra)
+    if mismatched:
+        raise ValueError(
+            "Overlying grid requirements do not cover the time index the "
+            "optimization runs on. Mismatched time steps per attribute "
+            "(missing, additional): "
+            + ", ".join(
+                f"{attr} ({n_missing}, {n_extra})"
+                for attr, (n_missing, n_extra) in mismatched.items()
+            )
+            + f". The active time index has {len(timeindex)} time steps "
+            f"({timeindex[0]}..{timeindex[-1]}). The overlying grid requirements "
+            "are read positionally, so they must be reduced to exactly this time "
+            "index, e.g. with "
+            "edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex()."
+        )
 
 
 def to_powermodels(
@@ -88,7 +166,7 @@ def to_powermodels(
         ("storage", flexible_storage_units, "Storage units"),
     ]:
         if (flex not in opf_flex) & (len(loads) != 0):
-            logger.info("{} will be optimized.".format(text))
+            logger.info(f"{text} will be optimized.")
             opf_flex.append(flex)
     hv_flex_dict = dict()
     # Sorts buses such that bus0 is always the upstream bus
@@ -112,9 +190,9 @@ def to_powermodels(
     # build PowerModels structure
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps
-    pm["name"] = "ding0_{}_t_{}".format(edisgo_object.topology.id, timesteps)
-    pm["time_elapsed"] = int(
-        (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
+    pm["name"] = f"ding0_{edisgo_object.topology.id}_t_{timesteps}"
+    pm["time_elapsed"] = _get_time_elapsed_in_hours(
+        psa_net.snapshots
     )  # length of timesteps in hours
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
@@ -167,7 +245,16 @@ def to_powermodels(
     else:
         logger.warning("No loads found in network.")
     if (opf_version == 3) | (opf_version == 4):
-        if edisgo_object.overlying_grid.heat_pump_central_active_power.isna().iloc[0]:
+        _check_overlying_grid_covers_timeindex(edisgo_object)
+        # An entirely empty overlying grid is handled by the IndexError fallback
+        # below (opf_version 3/4 -> 2). Guard the emptiness check itself, which
+        # would otherwise raise that IndexError here, before the try block.
+        if (
+            not edisgo_object.overlying_grid.heat_pump_central_active_power.empty
+            and edisgo_object.overlying_grid.heat_pump_central_active_power.isna().iloc[
+                0
+            ]
+        ):
             edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
         hv_flex_dict = {
             "curt": edisgo_object.overlying_grid.renewables_curtailment.round(20)
@@ -241,8 +328,10 @@ def from_powermodels(
     ----------
     edisgo_object : :class:`~.EDisGo`
     pm_results : dict or str
-        Dictionary or path to json file that contains all optimization results in
-        PowerModels network data format.
+        Dictionary or path to a json file that contains all optimization results in
+        PowerModels network data format. If a path is given, the file is expected to
+        contain a JSON-encoded string (i.e. the JSON object serialized as a string),
+        as it is read via ``json.loads(json.load(f))``.
     hv_flex_dict : dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying grid component of edisgo object.
@@ -250,10 +339,10 @@ def from_powermodels(
         Base value of apparent power for per unit system.
         Default: 1 MVA.
     """
-    if type(pm_results) == str:
+    if isinstance(pm_results, str):
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
-    elif type(pm_results) == dict:
+    elif isinstance(pm_results, dict):
         pm = pm_results
     else:
         raise ValueError(
@@ -306,17 +395,20 @@ def from_powermodels(
             ]
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
         if (flex == "gen_nd") & (pm["nw"]["1"]["opf_version"] in [3, 4]):
-            edisgo_object.timeseries._generators_active_power.loc[:, names] = (
+            ti = edisgo_object.timeseries.timeindex
+            edisgo_object.timeseries._generators_active_power.loc[ti, names] = (
                 edisgo_object.timeseries.generators_active_power.loc[:, names].values
                 - results[names].values
             )
         elif flex in ["heatpumps", "electromobility"]:
-            edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
+            ti = edisgo_object.timeseries.timeindex
+            edisgo_object.timeseries._loads_active_power.loc[ti, names] = results[
                 names
             ].values
         elif flex == "dsm":
-            edisgo_object.timeseries._loads_active_power.loc[:, names] = (
-                edisgo_object.timeseries._loads_active_power.loc[:, names].values
+            ti = edisgo_object.timeseries.timeindex
+            edisgo_object.timeseries._loads_active_power.loc[ti, names] = (
+                edisgo_object.timeseries._loads_active_power.loc[ti, names].values
                 + results[names].values
             )
         elif flex == "storage":
@@ -328,8 +420,9 @@ def from_powermodels(
                         data=results[names].values,
                     )
                 else:
+                    ti = edisgo_object.timeseries.timeindex
                     edisgo_object.timeseries._storage_units_active_power.loc[
-                        :, names
+                        ti, names
                     ] = results[names].values
             except AttributeError:
                 setattr(
@@ -361,13 +454,35 @@ def from_powermodels(
         # calculate relative error
         df2 = deepcopy(df)
         for flex in df2.columns:
-            abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
-            rel_error = [
-                abs_error[i] / hv_flex_dict[flex].iloc[i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
-                else 0
-                for i in range(len(abs_error))
-            ]
+            # Align the requirement to df2's timesteps so the element-wise error
+            # compares matching rows. Since _narrow_flex_inputs narrows the
+            # overlying grid to the interval before each solve, hv_flex_dict is
+            # already built on df2's index and this is a no-op; it is kept as a
+            # guard for callers that build hv_flex_dict on a wider index (which
+            # previously made a multi-interval run raise a 168-vs-336 broadcast
+            # error here).
+            flex_req = hv_flex_dict[flex]
+            if isinstance(flex_req, (pd.Series, pd.DataFrame)):
+                try:
+                    flex_req = flex_req.loc[df2.index]
+                except KeyError:
+                    pass
+            if isinstance(flex_req, pd.Series):
+                abs_error = abs(df2[flex].values - flex_req.values)
+                rel_error = [
+                    abs_error[i] / flex_req.iloc[i]
+                    if ((abs_error > 0.01)[i] & (flex_req.iloc[i] != 0))
+                    else 0
+                    for i in range(len(abs_error))
+                ]
+            else:
+                abs_error = abs(df2[flex].values - flex_req.sum(axis=1).values)
+                rel_error = [
+                    abs_error[i] / flex_req.sum(axis=1).iloc[i]
+                    if ((abs_error > 0.01)[i] & (flex_req.sum(axis=1).iloc[i] != 0))
+                    else 0
+                    for i in range(len(abs_error))
+                ]
             df2[flex] = rel_error
         # write results to edisgo object
         edisgo_object.opf_results.overlying_grid = pd.DataFrame(
@@ -387,9 +502,7 @@ def from_powermodels(
                 edisgo_object.opf_results.overlying_grid["Highest relative error"][flex]
                 > 0.05
             ).any():
-                logger.warning(
-                    "Highest relative error of {} variable exceeds 5%.".format(flex)
-                )
+                logger.warning(f"Highest relative error of {flex} variable exceeds 5%.")
 
     # save slack generator variable to edisgo object
     df = pd.DataFrame(index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"])
@@ -707,13 +820,17 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_g = max(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.p_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     0.0,
                 ]
             )
             q_g = min(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.q_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     0.0,
                 ]
             )
@@ -785,8 +902,8 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             # only modify r, x and l values if min value is too small
             branches[par] = val.clip(lower=min_value)
             logger.warning(
-                "Min value of {} is too small. Lowest {}% of {} values will be set "
-                "to {} {}".format(text, 100 * quant, text, min_value, unit)
+                f"Min value of {text} is too small. Lowest {100 * quant}% of "
+                f"{text} values will be set to {min_value} {unit}"
             )
 
     for branch_i in np.arange(len(branches.index)):
@@ -841,9 +958,9 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
 
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
-            "br_r": (0.017 * s_base / (psa_net.buses.v_nom.iloc[idx_bus - 1] ** 2)).round(
-                10
-            ),
+            "br_r": (
+                0.017 * s_base / (psa_net.buses.v_nom.iloc[idx_bus - 1] ** 2)
+            ).round(10),
             "r": 0.017,
             "br_x": 0,
             "f_bus": idx_bus,
@@ -931,8 +1048,8 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "charging_point")
         else:
             logger.warning(
-                "No type specified for load {}. Power factor and sign will"
-                "be set for conventional load.".format(loads_df.index[load_i])
+                f"No type specified for load {loads_df.index[load_i]}. "
+                "Power factor and sign will be set for conventional load."
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "conventional_load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
@@ -958,13 +1075,17 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_d = -min(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.p_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     np.float64(0.0),
                 ]
             )
             q_d = -max(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.q_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     np.float64(0.0),
                 ]
             )
@@ -1005,9 +1126,18 @@ def _build_battery_storage(
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     if not edisgo_obj.overlying_grid.storage_units_soc.empty:
+        # Align the SOC series (which may use another year) onto the edisgo
+        # time index plus one end-of-period step. Uses reindex, so a missing
+        # step yields NaN instead of a KeyError.
+        from edisgo.tools.tools import align_series_to_timeindex
+
+        soc_aligned = align_series_to_timeindex(
+            edisgo_obj.overlying_grid.storage_units_soc,
+            edisgo_obj.timeseries.timeindex,
+            extra_step=True,
+        )
         data = pd.concat(
-            [edisgo_obj.overlying_grid.storage_units_soc]
-            * len(edisgo_obj.topology.storage_units_df),
+            [soc_aligned] * len(edisgo_obj.topology.storage_units_df),
             axis=1,
         ).values
     else:
@@ -1026,6 +1156,18 @@ def _build_battery_storage(
         )
         * edisgo_obj.topology.storage_units_df.p_nom
         * edisgo_obj.topology.storage_units_df.max_hours
+    )
+
+    # The end-of-period SoC step (timeindex[-1] + freq) is only used as the OPF
+    # boundary (soc_end) and is not an optimized time step. When the time index
+    # is a reduced, non-contiguous selection, that step can fall in a gap and be
+    # missing from the source SoC series (which only carried a trailing step for
+    # the very last interval), leaving it NaN. A NaN boundary makes the Julia OPF
+    # fail with "Inf - Inf". Forward-fill (then back-fill) so the boundary takes
+    # the interval's last valid SoC — a harmless approximation for a throwaway
+    # scaffolding step.
+    edisgo_obj.overlying_grid.storage_units_soc = (
+        edisgo_obj.overlying_grid.storage_units_soc.ffill().bfill()
     )
 
     for stor_i in np.arange(len(flexible_storage_units)):
@@ -1049,9 +1191,13 @@ def _build_battery_storage(
             "pf": pf,
             "sign": sign,
             "virtual_branch": str(stor_i + len(branches.index) + 1),
-            "ps": psa_net.storage_units.p_set.loc[flexible_storage_units[stor_i]].round(20)
+            "ps": psa_net.storage_units.p_set.loc[flexible_storage_units[stor_i]].round(
+                20
+            )
             / s_base,
-            "qs": psa_net.storage_units.q_set.loc[flexible_storage_units[stor_i]].round(20)
+            "qs": psa_net.storage_units.q_set.loc[flexible_storage_units[stor_i]].round(
+                20
+            )
             / s_base,
             "pmax": psa_net.storage_units.p_nom.loc[
                 flexible_storage_units[stor_i]
@@ -1209,11 +1355,10 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     comparison = (heat_df2[hp_p_nom.index] > hp_cop * hp_p_nom.squeeze()).any()
     if comparison.any():
         logger.warning(
-            "Heat demand is higher than rated heatpump power"
-            " of heatpumps: {}. Demand can not be covered if no sufficient"
-            " heat storage capacities are available.".format(
-                comparison.index[comparison.values].values
-            )
+            "Heat demand is higher than rated heatpump power of heatpumps: "
+            f"{comparison.index[comparison.values].values}. "
+            "Demand can not be covered if no sufficient heat storage "
+            "capacities are available."
         )
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus.iloc[hp_i])
@@ -1320,6 +1465,12 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
     )
     edisgo_obj.overlying_grid.heat_storage_units_soc = pd.concat(
         [df_decentral, df_central], axis=1
+    )
+    # Fill the end-of-period boundary SoC step (see storage note above) so a
+    # reduced, non-contiguous time index does not leave a NaN boundary that
+    # breaks the Julia OPF.
+    edisgo_obj.overlying_grid.heat_storage_units_soc = (
+        edisgo_obj.overlying_grid.heat_storage_units_soc.ffill().bfill()
     )
 
     heat_storage_df = heat_storage_df.loc[flexible_hps]
@@ -1580,11 +1731,18 @@ def _build_hv_requirements(
     )
 
     for i in np.arange(len(opf_flex)):
-        pm["HV_requirements"][str(i + 1)] = {
-            "P": hv_flex_dict[opf_flex[i]].iloc[0],
-            "name": opf_flex[i],
-            "count": count,
-        }
+        if isinstance(hv_flex_dict[opf_flex[i]], pd.DataFrame):
+            pm["HV_requirements"][str(i + 1)] = {
+                "P": hv_flex_dict[opf_flex[i]].sum(axis=1).iloc[0],
+                "name": opf_flex[i],
+                "count": count,
+            }
+        else:
+            pm["HV_requirements"][str(i + 1)] = {
+                "P": hv_flex_dict[opf_flex[i]].iloc[0],
+                "name": opf_flex[i],
+                "count": count,
+            }
 
 
 def _build_timeseries(
@@ -1704,24 +1862,28 @@ def _build_component_timeseries(
         retrieved from overlying grid component of edisgo object.
     """
     pm_comp = dict()
-    solar_gens = edisgo_obj.topology.generators_df.index[
-        edisgo_obj.topology.generators_df.type == "solar"
-    ]
-    wind_gens = edisgo_obj.topology.generators_df.index[
-        edisgo_obj.topology.generators_df.type == "wind"
-    ]
-    disp_gens = edisgo_obj.topology.generators_df.index[
-        (edisgo_obj.topology.generators_df.type != "wind")
-        & (edisgo_obj.topology.generators_df.type != "solar")
-    ]
+    # The generator-type masks and the inflexible-component lists below are
+    # loop-invariant across the per-component ``_mapping`` calls in each branch,
+    # so they are computed once here instead of on every call.
+    gen_type = edisgo_obj.topology.generators_df.type
+    gen_index = edisgo_obj.topology.generators_df.index
+    solar_gens = gen_index[gen_type == "solar"]
+    wind_gens = gen_index[gen_type == "wind"]
+    disp_gens = gen_index[(gen_type != "wind") & (gen_type != "solar")]
     if flexible_storage_units is not None:
+        # Use a set for O(1) membership tests; list order (which determines the
+        # resulting column order) is preserved by iterating storage_units.index.
+        flex_storage_set = set(flexible_storage_units)
         inflexible_storage_units = [
             storage
             for storage in psa_net.storage_units.index
-            if storage not in list(flexible_storage_units)
+            if storage not in flex_storage_set
         ]
     flex_loads = np.concatenate((flexible_hps, flexible_cps))
-    inflexible_loads = [_ for _ in psa_net.loads.index if _ not in flex_loads]
+    # Membership set mirrors the values in ``flex_loads`` (string component
+    # names); iteration order over ``loads.index`` is preserved.
+    flex_loads_set = set(flex_loads)
+    inflexible_loads = [_ for _ in psa_net.loads.index if _ not in flex_loads_set]
     if kind == "gen":
         p_set2 = (psa_net.generators_t.p_set[disp_gens]).round(20)
         q_set2 = (psa_net.generators_t.q_set[disp_gens]).round(20)
@@ -1910,11 +2072,52 @@ def _build_component_timeseries(
 
     if (kind == "HV_requirements") & (pm["opf_version"] in [3, 4]):
         for i in np.arange(len(opf_flex)):
-            pm_comp[(str(i + 1))] = {
-                "P": hv_flex_dict[opf_flex[i]].round(20).tolist(),
-            }
+            if isinstance(hv_flex_dict[opf_flex[i]], pd.DataFrame):
+                pm_comp[(str(i + 1))] = {
+                    "P": hv_flex_dict[opf_flex[i]].sum(axis=1).round(20).tolist(),
+                }
+            else:
+                pm_comp[(str(i + 1))] = {
+                    "P": hv_flex_dict[opf_flex[i]].round(20).tolist(),
+                }
 
     pm["time_series"][kind] = pm_comp
+
+
+def _get_time_elapsed_in_hours(snapshots):
+    """
+    Calculate time elapsed in hours between two consecutive snapshots.
+
+    Parameters
+    ----------
+    snapshots : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        DatetimeIndex of snapshots.
+
+    Returns
+    -------
+    float
+        Time elapsed in hours between two consecutive snapshots.
+    """
+    if len(snapshots) < 2:
+        raise ValueError(
+            "At least two snapshots are required to determine time_elapsed "
+            "for the PowerModels OPF."
+        )
+
+    snapshot_deltas = snapshots.to_series().diff().dropna()
+
+    if not (snapshot_deltas == snapshot_deltas.iloc[0]).all():
+        raise ValueError(
+            "PowerModels OPF requires equidistant snapshots because "
+            "inter-timestep couplings use one global time_elapsed value."
+        )
+
+    time_elapsed = snapshot_deltas.iloc[0].total_seconds() / 3600
+
+    if time_elapsed <= 0:
+        raise ValueError("Snapshot time step must be positive.")
+
+    return time_elapsed
 
 
 def _mapping(
@@ -1956,61 +2159,113 @@ def _mapping(
     flexible_storage_units : :numpy:`numpy.ndarray<ndarray>` or None
         Array containing all flexible storage units.
     """
-    solar_gens = edisgo_obj.topology.generators_df.index[
-        edisgo_obj.topology.generators_df.type == "solar"
-    ]
-    wind_gens = edisgo_obj.topology.generators_df.index[
-        edisgo_obj.topology.generators_df.type == "wind"
-    ]
-    disp_gens = edisgo_obj.topology.generators_df.index[
-        (edisgo_obj.topology.generators_df.type != "wind")
-        & (edisgo_obj.topology.generators_df.type != "solar")
-    ]
+    # ``_mapping`` is called from within per-component loops at ~22 sites. For a
+    # given ``kind`` the underlying index that ``name`` is looked up in depends
+    # only on ``psa_net``/``edisgo_obj`` and the (build-constant) flexible
+    # arrays, none of which change during a single ``to_powermodels`` build.
+    # We therefore build that index once per ``kind`` and cache it on
+    # ``psa_net``, then resolve the position with ``Index.get_loc`` (O(1)) rather
+    # than the original full linear scan (O(n) per call -> O(n^2) overall).
+    index = _mapping_index(
+        psa_net,
+        edisgo_obj,
+        kind,
+        flexible_cps=flexible_cps,
+        flexible_hps=flexible_hps,
+        flexible_loads=flexible_loads,
+        flexible_storage_units=flexible_storage_units,
+    )
+    # ``get_loc`` returns the 0-based position; the original code returned the
+    # 1-based position (``+ 1``). The index is unique for every supported kind,
+    # so ``get_loc`` returns a single integer (identical to the old scan).
+    return index.get_loc(name) + 1
+
+
+def _mapping_index(
+    psa_net,
+    edisgo_obj,
+    kind: str,
+    flexible_cps=None,
+    flexible_hps=None,
+    flexible_loads=None,
+    flexible_storage_units=None,
+) -> pd.Index:
+    """
+    Return (and cache) the component index that :func:`_mapping` looks names up
+    in for the given ``kind``.
+
+    The returned index is byte-identical (same labels in the same order) to
+    ``df.index`` of the original :func:`_mapping` implementation. Results are
+    memoized per ``kind`` on ``psa_net`` to avoid rebuilding the masks and
+    concatenated frames on every call.
+    """
+    cache = getattr(psa_net, "_edisgo_mapping_index_cache", None)
+    if cache is None:
+        cache = {}
+        psa_net._edisgo_mapping_index_cache = cache
+    cached = cache.get(kind)
+    if cached is not None:
+        return cached
+
     if flexible_storage_units is not None:
+        flex_storage_set = set(flexible_storage_units)
         inflexible_storage_units = [
             storage
             for storage in psa_net.storage_units.index
-            if storage not in list(flexible_storage_units)
+            if storage not in flex_storage_set
         ]
     else:
         inflexible_storage_units = None
+
     if kind == "bus":
-        df = psa_net.buses
+        index = psa_net.buses.index
     elif kind == "gen":
+        gen_type = edisgo_obj.topology.generators_df.type
+        gen_idx = edisgo_obj.topology.generators_df.index
+        disp_gens = gen_idx[(gen_type != "wind") & (gen_type != "solar")]
         df2 = psa_net.generators.loc[disp_gens]
-        df = pd.concat([df2, psa_net.storage_units.loc[inflexible_storage_units]])
+        index = pd.concat(
+            [df2, psa_net.storage_units.loc[inflexible_storage_units]]
+        ).index
     elif kind == "gen_nd":
-        df = psa_net.generators.loc[
+        gen_type = edisgo_obj.topology.generators_df.type
+        gen_idx = edisgo_obj.topology.generators_df.index
+        solar_gens = gen_idx[gen_type == "solar"]
+        wind_gens = gen_idx[gen_type == "wind"]
+        index = psa_net.generators.loc[
             np.concatenate((solar_gens.values, wind_gens.values))
-        ]
+        ].index
     elif kind == "gen_slack":
-        df = psa_net.generators.loc[(psa_net.generators.index.str.contains("slack"))]
+        index = psa_net.generators.loc[
+            (psa_net.generators.index.str.contains("slack"))
+        ].index
     elif kind == "storage":
-        df = psa_net.storage_units.loc[flexible_storage_units]
+        index = psa_net.storage_units.loc[flexible_storage_units].index
     elif kind == "load":
         flex_loads = np.concatenate((flexible_hps, flexible_cps))
         if len(flex_loads) == 0:
-            df = pd.concat(
+            index = pd.concat(
                 [psa_net.loads, psa_net.storage_units.loc[inflexible_storage_units]]
-            )
+            ).index
         else:
-            df = pd.concat(
+            index = pd.concat(
                 [
                     psa_net.loads.drop(flex_loads),
                     psa_net.storage_units.loc[inflexible_storage_units],
                 ]
-            )
+            ).index
     elif kind == "electromobility":
-        df = psa_net.loads.loc[flexible_cps]
+        index = psa_net.loads.loc[flexible_cps].index
     elif (kind == "heatpumps") | (kind == "heat_storage"):
-        df = psa_net.loads.loc[flexible_hps]
+        index = psa_net.loads.loc[flexible_hps].index
     elif kind == "dsm":
-        df = psa_net.loads.loc[flexible_loads]
+        index = psa_net.loads.loc[flexible_loads].index
     else:
-        df = pd.DataFrame()
-        logging.warning("Mapping for '{}' not implemented.".format(kind))
-    idx = df.reset_index()[df.index == name].index[0] + 1
-    return idx
+        index = pd.DataFrame().index
+        logging.warning(f"Mapping for '{kind}' not implemented.")
+
+    cache[kind] = index
+    return index
 
 
 def aggregate_parallel_transformers(psa_net):
@@ -2062,8 +2317,8 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
 
     """
     grid_level = pm["bus"][str(idx_bus)]["grid_level"]
-    pf = edisgo_obj.config["reactive_power_factor"]["{}_{}".format(grid_level, kind)]
-    sign = edisgo_obj.config["reactive_power_mode"]["{}_{}".format(grid_level, kind)]
+    pf = edisgo_obj.config["reactive_power_factor"][f"{grid_level}_{kind}"]
+    sign = edisgo_obj.config["reactive_power_mode"][f"{grid_level}_{kind}"]
     if kind in ["generator", "storage_unit"]:
         if sign == "inductive":
             sign = -1

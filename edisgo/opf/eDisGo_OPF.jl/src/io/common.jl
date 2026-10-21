@@ -1,3 +1,10 @@
+"""
+Validate and normalise the parsed PowerModels network data before the OPF is
+built: runs the connectivity / status / limit checks, converts everything to
+per-unit (`make_per_unit!`), corrects transformer / voltage-angle / thermal /
+current limits and branch directions, checks storage / switch / voltage setpoints,
+and simplifies the cost terms. Called by `parse_json` when validation is enabled.
+"""
 function correct_network_data!(data::Dict{String,<:Any})
     check_conductors(data)
     check_connectivity(data)

@@ -1,6 +1,6 @@
 import pandas as pd
 import pytest
-import numpy as np
+
 from edisgo.edisgo import EDisGo
 from edisgo.flex_opt.charging_strategies import charging_strategy
 
@@ -97,12 +97,27 @@ class TestChargingStrategy:
         charging_strategy(self.edisgo_obj, strategy="dumb")
         assert ts._loads_active_power.index.freqstr == "15T"
 
+    def test_charging_strategy_keeps_non_contiguous_time_index(self):
+        """
+        Resampling to the charging processes' frequency and back must not fill
+        the gap of a non-contiguous time index.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=24, freq="H").append(
+            pd.date_range("1/5/2011", periods=24, freq="H")
+        )
+        self.edisgo_obj.set_timeindex(timeindex)
+        charging_strategy(self.edisgo_obj, strategy="dumb")
+
+        ts = self.edisgo_obj.timeseries
+        assert ts.timeindex.equals(timeindex)
+        assert ts.charging_points_active_power(self.edisgo_obj).index.equals(timeindex)
+
     def test_charging_strategy_with_subset_of_parks(self):
         """
         Charging strategies can be applied to different subsets of charging parks
         without overwriting each other's results.
         """
-        #edisgo = self.edisgo_obj
+        # edisgo = self.edisgo_obj
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         edisgo = self.edisgo_obj
         edisgo.set_timeindex(timeindex)
@@ -141,7 +156,6 @@ class TestChargingStrategy:
         ts_a_after_first = loads_after_first[edisgo_id_a].copy()
         ts_b_after_first = loads_after_first[edisgo_id_b].copy()
 
-        
         # park B should be unchanged by a call that only targets park A
         pd.testing.assert_series_equal(ts_b_before, ts_b_after_first, check_names=True)
 
@@ -155,8 +169,7 @@ class TestChargingStrategy:
         ts_a_after_second = loads_after_second[edisgo_id_a].copy()
         ts_b_after_second = loads_after_second[edisgo_id_b].copy()
 
-        
         # park A must not be changed by the second call that targets only park B
         pd.testing.assert_series_equal(
             ts_a_after_first, ts_a_after_second, check_names=True
-        )    
+        )

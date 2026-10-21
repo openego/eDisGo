@@ -37,7 +37,15 @@ function constraint_power_balance_bf(pm::AbstractBFModelEdisgo, i::Int; nw::Int=
     constraint_power_balance(pm, nw, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf)
 end
 
-""
+"""
+Apply the branch-flow voltage-magnitude-difference equation for branch `i` in
+network `nw`.
+
+Relates the squared voltage magnitudes at the two ends of the branch to the
+active/reactive power flows and the squared current magnitude (Eq. (3.5) of the
+eDisGo OPF formulation). Virtual storage branches are skipped, as they do not
+represent a physical line.
+"""
 function constraint_voltage_magnitude_difference_radial(pm::AbstractBFModelEdisgo, i::Int; nw::Int=nw_id_default)
     branch = PowerModels.ref(pm, nw, :branch, i)
     f_bus = branch["f_bus"]
@@ -53,6 +61,12 @@ function constraint_voltage_magnitude_difference_radial(pm::AbstractBFModelEdisg
     end
 end
 
+"""
+First-time-step storage state constraint for unit `i` of type `kind` (`"storage"`,
+`"heat_storage"` or `"dsm"`) in network `nw`. Looks up the unit's parameters
+(initial energy, charge/discharge efficiency, standing loss, elapsed time) and
+forwards to `constraint_store_state_initial` — Eq. (3.9)/(3.22)/(3.32).
+"""
 function constraint_store_state(pm::AbstractBFModelEdisgo, i::Int; nw::Int=nw_id_default, kind::String)
     storage = PowerModels.ref(pm, nw, Symbol(kind), i)
 
@@ -72,7 +86,16 @@ function constraint_store_state(pm::AbstractBFModelEdisgo, i::Int; nw::Int=nw_id
     constraint_store_state_initial(pm, nw, i, storage["energy"], storage["charge_efficiency"], storage["discharge_efficiency"], time_elapsed, kind, p_loss)
 end
 
-""
+"""
+Couple the state of charge of storage unit `i` of type `kind` between two
+consecutive time steps (networks `nw_1` and `nw_2`).
+
+`kind` is one of `"storage"` (battery), `"heat_storage"` or `"dsm"`. Links the
+stored energy in `nw_2` to that in `nw_1` via the (dis)charging power and the
+elapsed time (Eq. (3.10), (3.23), (3.33) of the eDisGo OPF formulation; heat
+storage additionally accounts for standing losses). If the unit is inactive in
+`nw_1`, the initial-state constraint is applied from `nw_2`'s data instead.
+"""
 function constraint_store_state(pm::AbstractBFModelEdisgo, i::Int, nw_1::Int, nw_2::Int, kind::String)
     storage = PowerModels.ref(pm, nw_2, Symbol(kind), i)
 
@@ -98,6 +121,12 @@ function constraint_store_state(pm::AbstractBFModelEdisgo, i::Int, nw_1::Int, nw
     end
 end
 
+"""
+Template for the current/power/voltage coupling constraint: forwards to the
+formulation-specific method for network `nw` — the convex second-order-cone
+inequality (`AbstractSOCBFModelEdisgo`) or the exact nonlinear equality
+(`AbstractNCBFModelEdisgo`).
+"""
 function constraint_model_current(pm::AbstractPowerModel; nw::Int=nw_id_default)
     eDisGo_OPF.constraint_model_current(pm, nw)
 end

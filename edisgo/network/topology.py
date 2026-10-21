@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -171,10 +182,8 @@ class Topology:
             config = {}
             for voltage_level, eq_list in equipment.items():
                 for i in eq_list:
-                    config["equipment_{}_parameters_{}".format(voltage_level, i)] = (
-                        "equipment-parameters_{}_{}.csv".format(
-                            voltage_level.upper(), i
-                        )
+                    config[f"equipment_{voltage_level}_parameters_{i}"] = (
+                        f"equipment-parameters_{voltage_level.upper()}_{i}.csv"
                     )
         else:
             equipment_dir = config["system_dirs"]["equipment_dir"]
@@ -186,9 +195,9 @@ class Topology:
         for voltage_level, eq_list in equipment.items():
             for i in eq_list:
                 equipment_parameters = config[
-                    "equipment_{}_parameters_{}".format(voltage_level, i)
+                    f"equipment_{voltage_level}_parameters_{i}"
                 ]
-                data["{}_{}".format(voltage_level, i)] = pd.read_csv(
+                data[f"{voltage_level}_{i}"] = pd.read_csv(
                     os.path.join(package_path, equipment_dir, equipment_parameters),
                     comment="#",
                     index_col="name",
@@ -252,7 +261,7 @@ class Topology:
                 a charging process can be flexibilised, as it is assumed that only
                 charging processes at private charging points ('home' and 'work') can
                 be flexibilised (see function
-                :attr:`~.flex_opt.charging_strategies.charging_strategy`).
+                :func:`~.flex_opt.charging_strategies.charging_strategy`).
                 It is further used when charging points are integrated into the grid,
                 as e.g. 'home' charging points are allocated to a household (see
                 function :attr:`~.network.topology.Topology.connect_to_lv`).
@@ -503,6 +512,10 @@ class Topology:
             r : float
                 Resistance of line (or in case of multiple parallel lines
                 total resistance of lines) in Ohm.
+
+            b : float
+                Shunt susceptance of line (or in case of multiple parallel lines
+                total shunt susceptance of lines) in Siemens.
 
             s_nom : float
                 Apparent power which can pass through the line (or in case of
@@ -1006,7 +1019,7 @@ class Topology:
         # check if bus is part of topology
         if bus_name not in self.buses_df.index:
             logger.warning(
-                "Bus of name {} not in Topology. Cannot be removed.".format(bus_name)
+                f"Bus of name {bus_name} not in Topology. Cannot be removed."
             )
             return False
 
@@ -1048,8 +1061,7 @@ class Topology:
         # check if line is part of topology
         if line_name not in self.lines_df.index:
             logger.warning(
-                "Line of name {} not in Topology. Cannot be "
-                "removed.".format(line_name)
+                f"Line of name {line_name} not in Topology. Cannot be removed."
             )
             return False
 
@@ -1104,8 +1116,7 @@ class Topology:
             bus_s = self.buses_df.loc[bus]
         except KeyError:
             raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus)
+                f"Specified bus {bus} is not valid as it is not defined in buses_df."
             )
 
         # generate load name and check uniqueness
@@ -1206,8 +1217,7 @@ class Topology:
             bus_s = self.buses_df.loc[bus]
         except KeyError:
             raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus)
+                f"Specified bus {bus} is not valid as it is not defined in buses_df."
             )
 
         # generate generator name and check uniqueness
@@ -1389,13 +1399,11 @@ class Topology:
         # check if buses exist
         if bus0 not in self.buses_df.index:
             raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus0)
+                f"Specified bus {bus0} is not valid as it is not defined in buses_df."
             )
         if bus1 not in self.buses_df.index:
             raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus1)
+                f"Specified bus {bus1} is not valid as it is not defined in buses_df."
             )
 
         # check if line between given buses already exists
@@ -1444,10 +1452,10 @@ class Topology:
             )
 
         # generate line name and check uniqueness
-        line_name = "Line_{}_{}".format(bus0, bus1)
+        line_name = f"Line_{bus0}_{bus1}"
         while line_name in self.lines_df.index:
             random.seed(a=line_name)
-            line_name = "Line_{}_{}_{}".format(bus0, bus1, random.randint(10**8, 10**9))
+            line_name = f"Line_{bus0}_{bus1}_{random.randint(10**8, 10**9)}"
 
         # check if all necessary data is now available
         if b is None:
@@ -1883,7 +1891,7 @@ class Topology:
 
         if comp_type == "generator":
             if comp_data["generator_id"] is not None:
-                bus = f'Bus_Generator_{comp_data["generator_id"]}'
+                bus = f"Bus_Generator_{comp_data['generator_id']}"
             else:
                 bus = f"Bus_Generator_{len(self.generators_df)}"
         elif comp_type == "charging_point":
@@ -2261,12 +2269,7 @@ class Topology:
                     generator_id = int(comp_data["generator_id"].split("_")[-1])
                     random.seed(a=generator_id)
             elif comp_type == "storage_unit":
-                random.seed(
-                    a="{}_{}".format(
-                        power,
-                        len(lv_grid.storage_units_df),
-                    )
-                )
+                random.seed(a=f"{power}_{len(lv_grid.storage_units_df)}")
             else:
                 random.seed(
                     a="{}_{}_{}".format(
@@ -2985,8 +2988,9 @@ class Topology:
         -------
         :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
-            where lines are represented by edges in the graph, and buses and
-            transformers are represented by nodes.
+            where lines and transformers are represented by edges in the graph
+            and buses are represented by nodes. Transformer edges have a length
+            of zero.
 
         """
         return networkx_helper.translate_df_to_graph(

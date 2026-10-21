@@ -6,6 +6,7 @@ dependencies:
   - python >= 3.9, <= 3.11
   - pip
   - pandas >= 1.4, < 2.2.0
+  - scipy < 1.18.0
   - conda-forge::fiona
   - conda-forge::geopy
   - conda-forge::geopandas

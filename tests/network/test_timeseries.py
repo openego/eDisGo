@@ -4,6 +4,7 @@ import os
 import shutil
 
 from math import acos, tan
+from unittest.mock import Mock
 
 import numpy as np
 import pandas as pd
@@ -12,8 +13,21 @@ import pytest
 from pandas.testing import assert_frame_equal, assert_index_equal, assert_series_equal
 
 from edisgo import EDisGo
+from edisgo.io import timeseries_import
 from edisgo.network import timeseries
 from edisgo.tools.tools import assign_voltage_level_to_component
+
+
+@pytest.fixture
+def mock_oep_feedin(monkeypatch):
+    """Replace one OEP feed-in importer with a synthetic profile DataFrame."""
+
+    def install_mock(function_name, profiles):
+        feedin_mock = Mock(return_value=profiles)
+        monkeypatch.setattr(timeseries_import, function_name, feedin_mock)
+        return feedin_mock
+
+    return install_mock
 
 
 class TestTimeSeries:
@@ -37,8 +51,8 @@ class TestTimeSeries:
                     pd.DataFrame(index=index_3),
                 )
             assert (
-                "Timeindex and {} have deviating indices. "
-                "Empty dataframe will be returned.".format(attribute) in caplog.text
+                f"Timeindex and {attribute} have deviating indices. "
+                "Empty dataframe will be returned." in caplog.text
             )
 
     def test_set_active_power_manual(self):
@@ -739,9 +753,9 @@ class TestTimeSeries:
 
     def test_worst_case_conventional_load(self):
         # connect one load to MV
-        self.edisgo.topology._loads_df.at[
-            "Load_agricultural_LVGrid_1_1", "bus"
-        ] = "Bus_BranchTee_MVGrid_1_2"
+        self.edisgo.topology._loads_df.at["Load_agricultural_LVGrid_1_1", "bus"] = (
+            "Bus_BranchTee_MVGrid_1_2"
+        )
 
         # ######### check both feed-in and load case
         df = assign_voltage_level_to_component(
@@ -1234,14 +1248,36 @@ class TestTimeSeries:
                 cases=["load_case"], df=df, configs=self.edisgo.config
             )
 
-    @pytest.mark.slow
-    def test_predefined_fluctuating_generators_by_technology(self):
+    @pytest.mark.parametrize(
+        "supplied_engine", [None, object()], ids=["no-engine", "supplied-engine"]
+    )
+    def test_predefined_fluctuating_generators_by_technology(
+        self,
+        mock_oep_feedin,
+        supplied_engine,
+    ):
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
 
+        profile_columns = pd.MultiIndex.from_product(
+            [
+                ["solar", "wind"],
+                [1122074, 1122075, 1122076, 1123075],
+            ],
+            names=["type", "weather_cell_id"],
+        )
+        oedb_profiles = pd.DataFrame(
+            0.0,
+            index=timeindex,
+            columns=profile_columns,
+        )
+        oedb_profiles.loc[:, ("wind", 1122075)] = [0.0029929, 0.009521]
+        oedb_profiles.loc[:, ("solar", 1122075)] = [0.07824, 0.11216]
+        feedin_mock = mock_oep_feedin("feedin_oedb_legacy", oedb_profiles)
+
         # ############# oedb, all generators (default)
         self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
-            self.edisgo, "oedb"
+            self.edisgo, "oedb", engine=supplied_engine
         )
 
         # check shape
@@ -1267,6 +1303,12 @@ class TestTimeSeries:
             index=timeindex,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+
+        # Legacy imports must not receive the caller's general-purpose engine.
+        feedin_mock.assert_called_once_with(
+            self.edisgo,
+            timeindex=None,
+        )
         comp = "GeneratorFluctuating_8"  # wind, w_id = 1122075
         p_nom = 3.0
         exp = pd.Series(
@@ -1403,16 +1445,37 @@ class TestTimeSeries:
         )
         # fmt: on
 
-    def test_predefined_fluctuating_generators_by_technology_oedb(self):
+    def test_predefined_fluctuating_generators_by_technology_oedb(
+        self,
+        mock_oep_feedin,
+    ):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         edisgo_object.timeseries.timeindex = timeindex
 
+        profile_columns = pd.MultiIndex.from_product(
+            [
+                ["solar", "wind"],
+                [11051, 11052],
+            ],
+            names=["type", "weather_cell_id"],
+        )
+        oedb_profiles = pd.DataFrame(
+            0.0,
+            index=timeindex,
+            columns=profile_columns,
+        )
+        oedb_profiles.loc[:, ("solar", 11052)] = [0.548044, 0.568356]
+        oedb_profiles.loc[:, ("solar", 11051)] = [0.505049, 0.555396]
+        feedin_mock = mock_oep_feedin("feedin_oedb", oedb_profiles)
+
         # ############# oedb, all generators (default)
         edisgo_object.timeseries.predefined_fluctuating_generators_by_technology(
-            edisgo_object, "oedb", engine=pytest.engine
+            edisgo_object,
+            "oedb",
+            engine=None,
         )
 
         # check shape
@@ -1439,6 +1502,12 @@ class TestTimeSeries:
             index=timeindex,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+
+        feedin_mock.assert_called_once_with(
+            edisgo_object,
+            engine=None,
+            timeindex=None,
+        )
         # solar, w_id = 11051
         comp = "Generator_mvgd_33535_lvgd_1164120002_pv_rooftop_324"
         p_nom = 0.0033
@@ -1491,9 +1560,9 @@ class TestTimeSeries:
 
         # ############# all generators (default), with "gas" and "other"
         # overwrite type of generator GeneratorFluctuating_2
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_2", "type"
-        ] = "coal"
+        self.edisgo.topology._generators_df.at["GeneratorFluctuating_2", "type"] = (
+            "coal"
+        )
         gens_p = pd.DataFrame(
             data={
                 "other": [5, 6],
@@ -1808,9 +1877,9 @@ class TestTimeSeries:
             == "The annual consumption of some loads is missing. Please provide"
         )
         # Restore the original 'annual_consumption' values
-        self.edisgo.topology.loads_df[
-            "annual_consumption"
-        ] = original_annual_consumption
+        self.edisgo.topology.loads_df["annual_consumption"] = (
+            original_annual_consumption
+        )
 
     def test_predefined_charging_points_by_use_case(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
@@ -2165,6 +2234,17 @@ class TestTimeSeries:
 
         shutil.rmtree(save_dir)
 
+        # test that worst-case mappings are saved as well
+        self.edisgo.timeseries.timeindex_worst_cases = pd.Series(
+            data=timeindex,
+            index=["load_case_mv", "load_case_lv"],
+        )
+        self.edisgo.timeseries.to_csv(save_dir)
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert "timeindex_worst_cases.csv" in files_in_timeseries_dir
+
+        shutil.rmtree(save_dir)
+
         # test with reduce memory True, to_type = float16 and saving TimeSeriesRaw
         self.edisgo.timeseries.to_csv(
             save_dir, reduce_memory=True, to_type="float16", time_series_raw=True
@@ -2174,7 +2254,8 @@ class TestTimeSeries:
             self.edisgo.timeseries.generators_reactive_power.dtypes == "float16"
         ).all()
         files_in_timeseries_dir = os.listdir(save_dir)
-        assert len(files_in_timeseries_dir) == 3
+        assert len(files_in_timeseries_dir) == 4
+        assert "timeindex_worst_cases.csv" in files_in_timeseries_dir
         files_in_timeseries_raw_dir = os.listdir(
             os.path.join(save_dir, "time_series_raw")
         )
@@ -2212,6 +2293,10 @@ class TestTimeSeries:
         # fmt: on
 
         # write to csv
+        self.edisgo.timeseries.timeindex_worst_cases = pd.Series(
+            data=timeindex,
+            index=["load_case_mv", "load_case_lv"],
+        )
         save_dir = os.path.join(os.getcwd(), "timeseries_csv")
         self.edisgo.timeseries.to_csv(save_dir, time_series_raw=True)
 
@@ -2236,6 +2321,16 @@ class TestTimeSeries:
             fluctuating_generators_active_power_by_technology.empty
         )
         # fmt: on
+
+        assert_series_equal(
+            self.edisgo.timeseries.timeindex_worst_cases,
+            pd.Series(
+                data=timeindex,
+                index=["load_case_mv", "load_case_lv"],
+                name="timeindex_worst_cases",
+            ),
+            check_dtype=False,
+        )
 
         self.edisgo.timeseries.from_csv(save_dir, time_series_raw=True)
 
@@ -2290,7 +2385,7 @@ class TestTimeSeries:
                 ts_tmp.iloc[0, 0] = np.NaN
                 setattr(self.edisgo.timeseries, attr, ts_tmp)
                 self.edisgo.timeseries.check_integrity()
-                assert "There are null values in {}".format(attr) in caplog.text
+                assert f"There are null values in {attr}" in caplog.text
                 caplog.clear()
                 ts_tmp.iloc[0, 0] = 0
                 setattr(self.edisgo.timeseries, attr, ts_tmp)
@@ -2303,9 +2398,7 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
                 assert (
-                    "{} has duplicated indices: {}".format(
-                        attr, ts_tmp.iloc[0:2].index.values
-                    )
+                    f"{attr} has duplicated indices: {ts_tmp.iloc[0:2].index.values}"
                     in caplog.text
                 )
                 caplog.clear()
@@ -2315,10 +2408,8 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
                 assert (
-                    "{} has duplicated columns: {}".format(
-                        attr, ts_tmp.iloc[:, 0:2].columns.values
-                    )
-                    in caplog.text
+                    f"{attr} has duplicated columns: "
+                    f"{ts_tmp.iloc[:, 0:2].columns.values}" in caplog.text
                 )
                 caplog.clear()
                 setattr(self.edisgo.timeseries, attr, ts_tmp)

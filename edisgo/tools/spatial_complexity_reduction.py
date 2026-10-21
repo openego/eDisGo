@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import copy
@@ -131,8 +142,8 @@ def rename_virtual_buses(
             ):
                 pairs.append([node, node.lstrip("virtual_")])
 
-    logger.debug("Pairs: {}".format(pairs))
-    logger.debug("Length pairs: {}".format(len(pairs)))
+    logger.debug(f"Pairs: {pairs}")
+    logger.debug(f"Length pairs: {len(pairs)}")
     if len(pairs) > 0:
         logger.debug("Rename virtual buses")
         for feeder_virtual, feeder_non_virtual in pairs:
@@ -397,7 +408,7 @@ def make_busmap_grid(
         Default: "kmeansdijkstra".
     reduction_factor : float
         Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
-    preserve_trafo_bus_coordinates : True
+    preserve_trafo_bus_coordinates : bool
         If True, transformers have the same coordinates after the clustering, else
         the transformer coordinates are changed by the clustering. Default: True.
 
@@ -472,11 +483,13 @@ def make_busmap_grid(
 
     grid_list = _make_grid_list(edisgo_obj, grid=grid)
 
-    busmap_df = pd.DataFrame()
+    # Collect per-grid busmaps in a list and concat once after the loop instead
+    # of growing the DataFrame on every iteration.
+    busmap_df_list: list[pd.DataFrame] = []
     # Cluster every grid
     for grid in grid_list:
         v_grid = grid.nominal_voltage
-        logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
+        logger.debug(f"Make busmap for grid: {grid}, v_nom={v_grid}")
 
         buses_df = grid.buses_df
         graph = grid.graph
@@ -488,7 +501,7 @@ def make_busmap_grid(
         number_of_distinct_nodes = buses_df.groupby(by=["x", "y"]).first().shape[0]
         logger.debug("Number_of_distinct_nodes = " + str(number_of_distinct_nodes))
         n_clusters = math.ceil(number_of_distinct_nodes * reduction_factor)
-        logger.debug("n_clusters = {}".format(n_clusters))
+        logger.debug(f"n_clusters = {n_clusters}")
         # Cluster with kmeans
         kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
 
@@ -574,7 +587,9 @@ def make_busmap_grid(
             transform_coordinates_back, axis="columns"
         )
 
-        busmap_df = pd.concat([busmap_df, partial_busmap_df])
+        busmap_df_list.append(partial_busmap_df)
+
+    busmap_df = pd.concat(busmap_df_list) if busmap_df_list else pd.DataFrame()
 
     return busmap_df
 
@@ -691,7 +706,9 @@ def make_busmap_feeders(
     )
 
     grid_list = _make_grid_list(edisgo_obj, grid=grid)
-    busmap_df = pd.DataFrame()
+    # Collect per-grid busmaps in a list and concat once after the loop instead
+    # of growing the DataFrame on every iteration.
+    busmap_df_list: list[pd.DataFrame] = []
     mvgd_id = edisgo_obj.topology.mv_grid.id
 
     if reduction_factor_not_focused is False:
@@ -705,30 +722,30 @@ def make_busmap_feeders(
     for grid in grid_list:
         grid_id = grid.id
         v_grid = grid.nominal_voltage
-        logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
+        logger.debug(f"Make busmap for grid: {grid}, v_nom={v_grid}")
 
         graph_root = grid.graph
         transformer_node = grid.transformers_df.bus1.values[0]
         transformer_coordinates = grid.buses_df.loc[
             transformer_node, ["x", "y"]
         ].tolist()
-        logger.debug("Transformer node: {}".format(transformer_node))
+        logger.debug(f"Transformer node: {transformer_node}")
 
         neighbors = list(nx.neighbors(graph_root, transformer_node))
         neighbors.sort()
-        logger.debug(
-            "Transformer has {} neighbors: {}".format(len(neighbors), neighbors)
-        )
+        logger.debug(f"Transformer has {len(neighbors)} neighbors: {neighbors}")
 
         graph_without_transformer = copy.deepcopy(graph_root)
         graph_without_transformer.remove_node(transformer_node)
 
         partial_busmap_df = pd.DataFrame(index=grid.buses_df.index)
         partial_busmap_df.index.name = "old_bus"
-        for index in partial_busmap_df.index.tolist():
-            partial_busmap_df.loc[index, "new_bus"] = index
-            coordinates = grid.buses_df.loc[index, ["x", "y"]].values
-            partial_busmap_df.loc[index, ["new_x", "new_y"]] = coordinates
+        # Vectorised initialisation: new_bus is the bus itself, new_x/new_y are
+        # its coordinates (equivalent to the former per-bus loop).
+        partial_busmap_df["new_bus"] = partial_busmap_df.index
+        partial_busmap_df[["new_x", "new_y"]] = grid.buses_df.loc[
+            partial_busmap_df.index, ["x", "y"]
+        ].values
 
         number_of_feeder = 0
         feeder_graphs = list(nx.connected_components(graph_without_transformer))
@@ -754,7 +771,7 @@ def make_busmap_feeders(
             )
             logger.debug("Number_of_distinct_nodes = " + str(number_of_distinct_nodes))
             n_clusters = math.ceil(selected_reduction_factor * number_of_distinct_nodes)
-            logger.debug("n_clusters = {}".format(n_clusters))
+            logger.debug(f"n_clusters = {n_clusters}")
 
             # Aggregate to transformer bus if there are no clusters
             if n_clusters == 0:
@@ -827,8 +844,9 @@ def make_busmap_feeders(
                 partial_busmap_df, transformer_node
             )
 
-        busmap_df = pd.concat([busmap_df, partial_busmap_df])
+        busmap_df_list.append(partial_busmap_df)
 
+    busmap_df = pd.concat(busmap_df_list) if busmap_df_list else pd.DataFrame()
     busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
     busmap_df.sort_index(inplace=True)
     return busmap_df
@@ -955,7 +973,9 @@ def make_busmap_main_feeders(
         )
 
     grid_list = _make_grid_list(edisgo_obj, grid=grid)
-    busmap_df = pd.DataFrame()
+    # Collect per-grid busmaps in a list and concat once after the loop instead
+    # of growing the DataFrame on every iteration.
+    busmap_df_list: list[pd.DataFrame] = []
     mvgd_id = edisgo_obj.topology.mv_grid.id
 
     if reduction_factor_not_focused is False:
@@ -969,20 +989,18 @@ def make_busmap_main_feeders(
     for grid in grid_list:
         grid_id = grid.id
         v_grid = grid.nominal_voltage
-        logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
+        logger.debug(f"Make busmap for grid: {grid}, v_nom={v_grid}")
 
         graph_root = grid.graph
         transformer_node = grid.transformers_df.bus1.values[0]
         transformer_coordinates = grid.buses_df.loc[
             transformer_node, ["x", "y"]
         ].tolist()
-        logger.debug("Transformer node: {}".format(transformer_node))
+        logger.debug(f"Transformer node: {transformer_node}")
 
         neighbors = list(nx.neighbors(graph_root, transformer_node))
         neighbors.sort()
-        logger.debug(
-            "Transformer has {} neighbors: {}".format(len(neighbors), neighbors)
-        )
+        logger.debug(f"Transformer has {len(neighbors)} neighbors: {neighbors}")
 
         graph_without_transformer = copy.deepcopy(graph_root)
         graph_without_transformer.remove_node(transformer_node)
@@ -1027,10 +1045,12 @@ def make_busmap_main_feeders(
                 not_main_nodes.append(node)
         partial_busmap_df = pd.DataFrame(index=grid.buses_df.index)
         partial_busmap_df.index.name = "old_bus"
-        for index in partial_busmap_df.index.tolist():
-            partial_busmap_df.loc[index, "new_bus"] = index
-            coordinates = grid.buses_df.loc[index, ["x", "y"]].values
-            partial_busmap_df.loc[index, ["new_x", "new_y"]] = coordinates
+        # Vectorised initialisation: new_bus is the bus itself, new_x/new_y are
+        # its coordinates (equivalent to the former per-bus loop).
+        partial_busmap_df["new_bus"] = partial_busmap_df.index
+        partial_busmap_df[["new_x", "new_y"]] = grid.buses_df.loc[
+            partial_busmap_df.index, ["x", "y"]
+        ].values
 
         graph_cleaned = copy.deepcopy(graph_root)
         graph_cleaned.remove_nodes_from(not_main_nodes)
@@ -1161,7 +1181,7 @@ def make_busmap_main_feeders(
                 n_clusters = math.ceil(
                     selected_reduction_factor * number_of_distinct_nodes
                 )
-                logger.debug("n_clusters = {}".format(n_clusters))
+                logger.debug(f"n_clusters = {n_clusters}")
 
                 # Aggregate to transformer bus if there are no clusters
                 if n_clusters == 0:
@@ -1241,8 +1261,9 @@ def make_busmap_main_feeders(
                 partial_busmap_df, transformer_node
             )
 
-        busmap_df = pd.concat([busmap_df, partial_busmap_df])
+        busmap_df_list.append(partial_busmap_df)
 
+    busmap_df = pd.concat(busmap_df_list) if busmap_df_list else pd.DataFrame()
     if mode != "aggregate_to_main_feeder":
         busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
 
@@ -1519,8 +1540,13 @@ def apply_busmap(
         else:
             kind = df["kind"].values[0]
 
+        # The per-km values describe one system of the given type, so a line
+        # standing for ``num_parallel`` systems contributes that many of them to
+        # the parallel sum.
+        parallel_systems = df["num_parallel"].astype(float).values
+
         x_sum = 0
-        for line_type in df["type_info"].values:
+        for line_type, n_parallel in zip(df["type_info"].values, parallel_systems):
             try:
                 x_line = line_data_df.loc[line_data_df.U_n.isin([v_nom])].loc[
                     line_type, "L_per_km"
@@ -1528,12 +1554,12 @@ def apply_busmap(
             except KeyError:
                 x_line = line_data_df.loc[line_type, "L_per_km"]
                 logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
-            x_sum = x_sum + 1 / x_line
+            x_sum = x_sum + n_parallel / x_line
         x_sum = 1 / x_sum
         x = length * 2 * math.pi * 50 * x_sum / 1000
 
         r_sum = 0
-        for line_type in df["type_info"].values:
+        for line_type, n_parallel in zip(df["type_info"].values, parallel_systems):
             try:
                 r_line = line_data_df.loc[line_data_df.U_n.isin([v_nom])].loc[
                     line_type, "R_per_km"
@@ -1542,7 +1568,7 @@ def apply_busmap(
                 r_line = line_data_df.loc[line_type, "R_per_km"]
                 logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
 
-            r_sum = r_sum + 1 / r_line
+            r_sum = r_sum + n_parallel / r_line
         r_sum = 1 / r_sum
         r = length * r_sum
 
@@ -1756,7 +1782,7 @@ def apply_busmap(
                 )
 
         if len(switches_to_drop) > 0:
-            logger.warning("Drop unused switches: {}".format(switches_to_drop))
+            logger.warning(f"Drop unused switches: {switches_to_drop}")
             switches_df = switches_df.drop(switches_to_drop)
 
         # apply busmap
@@ -1895,6 +1921,237 @@ def spatial_complexity_reduction(
     return busmap_df, linemap_df
 
 
+def apply_reduced_results_to_full_grid(
+    full_grid: EDisGo,
+    reduced_grid: EDisGo,
+    *,
+    flexible_cps: list | None = None,
+    flexible_hps: list | None = None,
+    flexible_loads: list | None = None,
+    flexible_storage_units: list | None = None,
+) -> EDisGo:
+    """
+    Write optimized flexible-component dispatch from a spatially-reduced grid
+    back onto the full grid.
+
+    Counterpart to :func:`spatial_complexity_reduction`: where that function
+    shrinks a grid for a faster OPF, this function maps the OPF's active-power
+    results back onto the pre-reduction grid so reinforcement can run on the
+    full topology. Only components the OPF actually rewrites are touched —
+    flexible charging points, heat pumps, DSM loads, and storage units.
+    Inflexible loads/generators are untouched: the OPF never changed their
+    series, so ``full_grid`` already holds the correct values for them.
+
+    ``full_grid`` and ``reduced_grid`` are matched by name for storage units
+    (never aggregated by :func:`spatial_complexity_reduction`, so their names
+    are unchanged) and, for the other three flexibility types, by the
+    ``old_name`` column that :func:`spatial_complexity_reduction` writes onto
+    ``reduced_grid.topology.loads_df`` when ``aggregation_mode=True``. A
+    member listed in ``old_name`` is a load whose active-power series was
+    merged into one representative row; when ``aggregation_mode=False`` (or a
+    given member was not merged), ``old_name`` is absent and the member's own
+    name is used directly — i.e. a plain by-name write-back.
+
+    For a merged representative, the representative's optimized series is
+    disaggregated onto its ``old_name`` members **per time step**, weighted by
+    each member's own pre-OPF flexibility envelope (a known input, never the
+    optimized result):
+
+    * charging points — ``upper_power(t)`` from
+      ``electromobility.flexibility_bands`` (a charging point with no
+      connected vehicle has ``upper_power(t) == 0``, so it receives none of
+      the representative's dispatch that time step);
+    * heat pumps — ``min(heat_demand(t) / cop(t), p_set)``, i.e. the
+      electrical-equivalent heat demand capped at the heat pump's own rated
+      power, mirroring how a charging point's ``upper_power(t)`` is already a
+      capped bound rather than raw uncapped demand;
+    * DSM loads — ``p_max(t)`` from :attr:`~.network.dsm.DSM.p_max`.
+
+    Weights always sum back to the representative's value exactly at every
+    time step; a time step where every member's weight is 0 falls back to an
+    equal split.
+
+    Reactive power is not read from ``reduced_grid``. After writing active
+    power, this function calls
+    :meth:`~.EDisGo.set_time_series_reactive_power_control` on ``full_grid``
+    with its defaults, mirroring how the OPF itself derives reactive power
+    for the components it just optimized (see
+    :func:`~.io.powermodels_io.from_powermodels`) — reactive power is always
+    a function of whatever active power is currently set, regardless of
+    whether that active power came from a default, worst case, or the OPF.
+
+    Parameters
+    ----------
+    full_grid : :class:`~.EDisGo`
+        The pre-reduction EDisGo instance to write dispatch onto, modified in
+        place. Must contain every component named in ``flexible_cps`` /
+        ``flexible_hps`` / ``flexible_loads`` / ``flexible_storage_units`` and
+        (for merged components) every name listed in ``reduced_grid``'s
+        ``old_name`` columns.
+    reduced_grid : :class:`~.EDisGo`
+        The spatially-reduced EDisGo instance the OPF ran on. Supplies the
+        optimized active-power series and, if aggregated, the ``old_name``
+        provenance.
+    flexible_cps : list of str, optional
+        Names of flexible charging points in ``reduced_grid`` to map back.
+    flexible_hps : list of str, optional
+        Names of flexible heat-pump loads in ``reduced_grid`` to map back.
+    flexible_loads : list of str, optional
+        Names of flexible DSM loads in ``reduced_grid`` to map back.
+    flexible_storage_units : list of str, optional
+        Names of flexible storage units in ``reduced_grid`` to map back.
+
+    Returns
+    -------
+    :class:`~.EDisGo`
+        ``full_grid``, with active power written for the given flexible
+        components and reactive power recomputed.
+
+    """
+    # NOTE: "x or []" is unsafe here - callers may pass a numpy array (e.g.
+    # task_optimize derives flexible_loads as
+    # edisgo.dsm.p_min.columns.values), and "array or []" raises
+    # ValueError ("truth value of an array... is ambiguous") for any array
+    # with more than one element. "is None" is the correct emptiness check
+    # for an optional list-like argument.
+    flexible_cps = list(flexible_cps) if flexible_cps is not None else []
+    flexible_hps = list(flexible_hps) if flexible_hps is not None else []
+    flexible_loads = list(flexible_loads) if flexible_loads is not None else []
+    flexible_storage_units = (
+        list(flexible_storage_units) if flexible_storage_units is not None else []
+    )
+
+    def _require_full_timeindex(envelope: DataFrame, envelope_name: str) -> None:
+        """Raise a clear error if ``envelope`` doesn't cover the full grid's
+        active time index, instead of a bare ``KeyError`` deep inside a
+        ``.loc`` lookup.
+
+        This can only happen if ``full_grid``'s flexibility-band/DSM/heat-pump
+        attributes were never trimmed to the same time index as
+        ``full_grid.timeseries.timeindex`` - i.e. if the pre-reduction stash
+        was taken before the run's time index was finalized.
+        """
+        ti = full_grid.timeseries.timeindex
+        missing = ti.difference(envelope.index)
+        if len(missing) > 0:
+            raise ValueError(
+                f"apply_reduced_results_to_full_grid: full_grid's "
+                f"{envelope_name} does not cover {len(missing)} of "
+                f"full_grid.timeseries.timeindex's time steps (e.g. "
+                f"{missing[0]!r}). This usually means the full-grid stash "
+                f"was taken before the time index was finalized - run "
+                f"the time-step selection (set_timeindex or "
+                f"select_critical_timesteps) before spatial_reduce."
+            )
+
+    def _old_name_map(loads_df: DataFrame, names: list) -> dict:
+        """Map each representative name in ``names`` to its member names.
+
+        A name absent from ``old_name`` (not merged, or
+        ``aggregation_mode=False``) maps to itself.
+        """
+        name_map = {}
+        for name in names:
+            old_name = loads_df.at[name, "old_name"] if "old_name" in loads_df else None
+            name_map[name] = old_name if isinstance(old_name, list) else [name]
+        return name_map
+
+    def _write_by_name(active_power: DataFrame, names: list, target: DataFrame) -> None:
+        ti = full_grid.timeseries.timeindex
+        target.loc[ti, names] = active_power.loc[ti, names].values
+
+    def _disaggregate(
+        active_power: DataFrame,
+        name_map: dict,
+        envelope: DataFrame,
+        target: DataFrame,
+    ) -> None:
+        """Split each representative's series onto its members per time step.
+
+        ``envelope`` holds each member's pre-OPF flexibility envelope
+        (columns = member names, index = time index); members missing from
+        ``envelope`` are treated as having an all-zero envelope (equal-split
+        fallback).
+        """
+        ti = full_grid.timeseries.timeindex
+        for representative, members in name_map.items():
+            if len(members) == 1 and members[0] == representative:
+                target.loc[ti, representative] = active_power.loc[ti, representative]
+                continue
+            weights = pd.DataFrame(index=ti, columns=members, dtype=float)
+            for member in members:
+                weights[member] = (
+                    envelope.loc[ti, member] if member in envelope.columns else 0.0
+                )
+            weight_sum = weights.sum(axis="columns")
+            zero_envelope = weight_sum == 0
+            shares = weights.div(weight_sum.replace(0, np.nan), axis="index")
+            shares.loc[zero_envelope, :] = 1.0 / len(members)
+            representative_power = active_power.loc[ti, representative]
+            for member in members:
+                target.loc[ti, member] = shares[member] * representative_power
+
+    reduced_loads_df = reduced_grid.topology.loads_df
+    full_loads_df = full_grid.topology.loads_df
+
+    # Always routed through _disaggregate (never the by-name fast path): under
+    # aggregation_mode=True, spatial_complexity_reduction renames EVERY group's
+    # representative row, including singleton groups (a bus with exactly one
+    # flexible load of a given type/sector) - so a representative's own name
+    # can differ from its single old_name member's name. _disaggregate already
+    # handles that case correctly (a singleton's one weight, whether zero or
+    # not, always resolves its share to the representative's full value), so
+    # there is no correct case left for a by-name fast path to shortcut.
+    if flexible_cps:
+        name_map = _old_name_map(reduced_loads_df, flexible_cps)
+        envelope = reduced_grid.electromobility.flexibility_bands["upper_power"]
+        _require_full_timeindex(envelope, "electromobility.flexibility_bands")
+        _disaggregate(
+            reduced_grid.timeseries.loads_active_power,
+            name_map,
+            envelope,
+            full_grid.timeseries._loads_active_power,
+        )
+
+    if flexible_hps:
+        name_map = _old_name_map(reduced_loads_df, flexible_hps)
+        members_flat = [m for members in name_map.values() for m in members]
+        heat_demand = full_grid.heat_pump.heat_demand_df[members_flat]
+        cop = full_grid.heat_pump.cop_df[members_flat]
+        p_set = full_loads_df.p_set[members_flat]
+        envelope = (heat_demand / cop).clip(upper=p_set, axis="columns")
+        _require_full_timeindex(envelope, "heat_pump.heat_demand_df/cop_df")
+        _disaggregate(
+            reduced_grid.timeseries.loads_active_power,
+            name_map,
+            envelope,
+            full_grid.timeseries._loads_active_power,
+        )
+
+    if flexible_loads:
+        name_map = _old_name_map(reduced_loads_df, flexible_loads)
+        _require_full_timeindex(full_grid.dsm.p_max, "dsm.p_max")
+        _disaggregate(
+            reduced_grid.timeseries.loads_active_power,
+            name_map,
+            full_grid.dsm.p_max,
+            full_grid.timeseries._loads_active_power,
+        )
+
+    if flexible_storage_units:
+        # Storage units are never aggregated by spatial_complexity_reduction
+        # (only bus-relabeled), so this is always a plain by-name write-back.
+        _write_by_name(
+            reduced_grid.timeseries.storage_units_active_power,
+            flexible_storage_units,
+            full_grid.timeseries._storage_units_active_power,
+        )
+
+    full_grid.set_time_series_reactive_power_control()
+
+    return full_grid
+
+
 def compare_voltage(
     edisgo_unreduced: EDisGo,
     edisgo_reduced: EDisGo,
@@ -1972,7 +2229,7 @@ def compare_voltage(
     )
     logger.debug(
         "Root-mean-square error between voltages in unreduced and reduced "
-        "EDisGo object is: rms = {:.2%}".format(rms)
+        f"EDisGo object is: rms = {rms:.2%}"
     )
     return voltages_df, rms
 
@@ -2044,6 +2301,6 @@ def compare_apparent_power(
     )
     logger.debug(
         "Root-mean-square error between apparent power in unreduced and reduced "
-        "EDisGo object is: rms = {:.2}".format(rms)
+        f"EDisGo object is: rms = {rms:.2}"
     )
     return s_df, rms

@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -81,8 +92,8 @@ class Grid(ABC):
         -------
         :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
-            where lines are represented by edges in the graph, and buses and
-            transformers are represented by nodes.
+            where lines are represented by edges in the graph and buses are
+            represented by nodes. Transformers are not included.
 
         """
         return translate_df_to_graph(self.buses_df, self.lines_df)

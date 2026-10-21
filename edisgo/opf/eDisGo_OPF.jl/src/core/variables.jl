@@ -1,4 +1,8 @@
-""
+"""
+Create the branch power-flow variables for the radial branch-flow model: both the
+active (`p`) and reactive (`q`) flow on every branch. Wrapper around
+`variable_branch_power_real_radial` and `variable_branch_power_imaginary_radial`.
+"""
 function variable_branch_power_radial(pm::AbstractPowerModel; kwargs...)
     variable_branch_power_real_radial(pm; kwargs...)
     variable_branch_power_imaginary_radial(pm; kwargs...)
@@ -75,6 +79,10 @@ function variable_branch_power_imaginary_radial(pm::AbstractPowerModel; nw::Int=
     report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :qf, PowerModels.ref(pm, nw, :arcs_from), q)
 end
 
+"""
+Variable `w[i]` for each non-storage bus `i`: the squared voltage magnitude
+(`= V²`), bounded by `vmin²`/`vmax²`.
+"""
 function variable_bus_voltage_magnitude_sqr(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     busses = [i for i in PowerModels.ids(pm, nw, :bus) if !(PowerModels.ref(pm, nw, :bus)[i]["storage"])]
     w = PowerModels.var(pm, nw)[:w] = JuMP.@variable(pm.model,
@@ -95,6 +103,11 @@ function variable_bus_voltage_magnitude_sqr(pm::AbstractPowerModel; nw::Int=nw_i
     report && PowerModels.sol_component_value(pm, nw, :bus, :w, busses, w)
 end
 
+"""
+Create the maximum-line-loading variable `ll` (wrapper around
+`variable_line_loading_max`), used by the line-loading-minimising objectives
+(`opf_version` 1 and 3).
+"""
 function variable_max_line_loading(pm::AbstractPowerModel; kwargs...)
     variable_line_loading_max(pm; kwargs...)
 end
@@ -160,7 +173,10 @@ function variable_battery_storage(pm::AbstractPowerModel; kwargs...)
     PowerModels.variable_storage_energy(pm; kwargs...)
 end
 
-""
+"""
+Variable `ps[i]` for `i` in `storage`: the active power of each battery storage
+unit (charging/discharging), bounded by the unit's `pmin` and `pmax`.
+"""
 function variable_battery_storage_power_real(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     ps = PowerModels.var(pm, nw)[:ps] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :storage)], base_name="$(nw)_ps",
@@ -177,7 +193,11 @@ function variable_battery_storage_power_real(pm::AbstractPowerModel; nw::Int=nw_
     report && PowerModels.sol_component_value(pm, nw, :storage, :ps, PowerModels.ids(pm, nw, :storage), ps)
 end
 
-""
+"""
+Variable `qs[i]` for `i` in `storage`: the reactive power of each battery storage
+unit, bounded by the unit's `qmin` and `qmax`. (Optional; by default reactive
+storage power is derived from the power factor in the power-balance constraint.)
+"""
 function variable_battery_storage_power_imaginary(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     qs = PowerModels.var(pm, nw)[:qs] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :storage)], base_name="$(nw)_qs",
@@ -204,7 +224,10 @@ function variable_dsm_storage_power(pm::AbstractPowerModel; kwargs...)
     eDisGo_OPF.variable_dsm_storage_energy(pm; kwargs...)
 end
 
-""
+"""
+Variable `pdsm[i]` for `i` in `dsm`: the demand-side-management load-shift power
+of each DSM unit, bounded by `p_min`/`p_max`.
+"""
 function variable_dsm_storage_power_real(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     pdsm = PowerModels.var(pm, nw)[:pdsm] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :dsm)], base_name="$(nw)_pdsm",
@@ -222,7 +245,10 @@ function variable_dsm_storage_power_real(pm::AbstractPowerModel; nw::Int=nw_id_d
     report && PowerModels.sol_component_value(pm, nw, :dsm, :pdsm, PowerModels.ids(pm, nw, :dsm), pdsm)
 end
 
-""
+"""
+Variable `qdsm[i]` for `i` in `dsm`: the reactive power of each DSM unit, bounded
+by `q_min`/`q_max`. (Optional; by default derived from the power factor.)
+"""
 function variable_dsm_storage_power_imaginary(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     qdsm = PowerModels.var(pm, nw)[:qdsm] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :dsm)], base_name="$(nw)_qdsm",
@@ -237,7 +263,11 @@ function variable_dsm_storage_power_imaginary(pm::AbstractPowerModel; nw::Int=nw
     report && PowerModels.sol_component_value(pm, nw, :dsm, :qdsm, PowerModels.ids(pm, nw, :dsm), qdsm)
 end
 
-""
+"""
+Variable `dsme[i]` for `i` in `dsm`: the accumulated shifted energy of each DSM
+unit, bounded by `e_min`/`e_max`. Coupled to `pdsm` over time by the DSM storage
+constraints.
+"""
 function variable_dsm_storage_energy(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     dsme = PowerModels.var(pm, nw)[:dsme] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :dsm)], base_name="$(nw)_dsme",
@@ -255,15 +285,16 @@ function variable_dsm_storage_energy(pm::AbstractPowerModel; nw::Int=nw_id_defau
     report && PowerModels.sol_component_value(pm, nw, :dsm, :dsme, PowerModels.ids(pm, nw, :dsm), dsme)
 end
 
-""
-
 "variables for modeling heat storage units, includes grid injection and internal variables"
 function variable_heat_storage(pm::AbstractPowerModel; kwargs...)
     eDisGo_OPF.variable_heat_storage_power(pm; kwargs...)
     eDisGo_OPF.variable_heat_storage_energy(pm; kwargs...)
 end
 
-""
+"""
+Variable `phs[i]` for `i` in `heat_storage`: the (dis)charging thermal power of
+each heat storage unit, bounded by ±`capacity`.
+"""
 function variable_heat_storage_power(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     phs = PowerModels.var(pm, nw)[:phs] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :heat_storage)], base_name="$(nw)_phs",
@@ -279,7 +310,10 @@ function variable_heat_storage_power(pm::AbstractPowerModel; nw::Int=nw_id_defau
     report && PowerModels.sol_component_value(pm, nw, :heat_storage, :phs, PowerModels.ids(pm, nw, :heat_storage), phs)
 end
 
-""
+"""
+Variable `hse[i]` for `i` in `heat_storage`: the stored thermal energy (state of
+charge) of each heat storage unit, between 0 and its `capacity`.
+"""
 function variable_heat_storage_energy(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     hse = PowerModels.var(pm, nw)[:hse] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :heat_storage)], base_name="$(nw)_hse",
@@ -296,14 +330,16 @@ function variable_heat_storage_energy(pm::AbstractPowerModel; nw::Int=nw_id_defa
     report && PowerModels.sol_component_value(pm, nw, :heat_storage, :hse, PowerModels.ids(pm, nw, :heat_storage), hse)
 end
 
-""
-
 "variables for modeling heat pumps, includes grid injection and internal variables"
 function variable_heat_pump_power(pm::AbstractPowerModel; kwargs...)
     eDisGo_OPF.variable_heat_pump_power_real(pm; kwargs...)
     # eDisGo_OPF.variable_heat_pump_power_imaginary(pm; kwargs...)
 end
 
+"""
+Variable `php[i]` for `i` in `heatpumps`: the electrical power drawn by each heat
+pump, bounded by `p_min`/`p_max`.
+"""
 function variable_heat_pump_power_real(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     php = PowerModels.var(pm, nw)[:php] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :heatpumps)], base_name="$(nw)_php",
@@ -321,6 +357,10 @@ function variable_heat_pump_power_real(pm::AbstractPowerModel; nw::Int=nw_id_def
     report && PowerModels.sol_component_value(pm, nw, :heatpumps, :php, PowerModels.ids(pm, nw, :heatpumps), php)
 end
 
+"""
+Variable `qhp[i]` for `i` in `heatpumps`: the reactive power of each heat pump,
+bounded by `q_min`/`q_max`. (Optional; by default derived from the power factor.)
+"""
 function variable_heat_pump_power_imaginary(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     qhp = PowerModels.var(pm, nw)[:qhp] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :heatpumps)], base_name="$(nw)_qhp",
@@ -343,7 +383,10 @@ function variable_cp_power(pm::AbstractPowerModel; kwargs...)
     eDisGo_OPF.variable_cp_energy(pm; kwargs...)
 end
 
-""
+"""
+Variable `pcp[i]` for `i` in `electromobility`: the charging power of each charging
+park, bounded by `p_min`/`p_max`.
+"""
 function variable_cp_power_real(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     pcp = PowerModels.var(pm, nw)[:pcp] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_pcp",
@@ -361,7 +404,11 @@ function variable_cp_power_real(pm::AbstractPowerModel; nw::Int=nw_id_default, b
     report && PowerModels.sol_component_value(pm, nw, :electromobility, :pcp, PowerModels.ids(pm, nw, :electromobility), pcp)
 end
 
-""
+"""
+Variable `qcp[i]` for `i` in `electromobility`: the reactive power of each charging
+park, bounded by `q_min`/`q_max`. (Optional; by default derived from the power
+factor.)
+"""
 function variable_cp_power_imaginary(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     qcp = PowerModels.var(pm, nw)[:qcp] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_qcp",
@@ -377,7 +424,11 @@ function variable_cp_power_imaginary(pm::AbstractPowerModel; nw::Int=nw_id_defau
     report && PowerModels.sol_component_value(pm, nw, :electromobility, :qcp, PowerModels.ids(pm, nw, :electromobility), qcp)
 end
 
-""
+"""
+Variable `cpe[i]` for `i` in `electromobility`: the accumulated charged energy of
+each charging park, bounded by `e_min`/`e_max` (the flexibility band). Coupled to
+`pcp` over time by the charging-point constraints.
+"""
 function variable_cp_energy(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     cpe = PowerModels.var(pm, nw)[:cpe] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_cpe",
@@ -403,6 +454,11 @@ function variable_slack_grid_restrictions(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_ev_slack(pm; kwargs...)
 end
 
+"""
+Create the heat-pump / heat-storage operation slack variables (wrapper around
+`variable_hs_slack` and `variable_hp2_slack`), which keep the heat-pump energy
+balance feasible at a penalty.
+"""
 function variable_slack_heat_pump_storage(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_hs_slack(pm; kwargs...)
     eDisGo_OPF.variable_hp2_slack(pm; kwargs...)
@@ -491,6 +547,10 @@ function variable_slack_gen(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_slack_gen_imaginary(pm; kwargs...)
 end
 
+"""
+Variable `pgs[i]` for `i` in `gen_slack`: the active power of each slack generator
+(the substation / feed-in node), left unbounded.
+"""
 function variable_slack_gen_real(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, report::Bool=true)
     pgs = PowerModels.var(pm, nw)[:pgs] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :gen_slack)], base_name="$(nw)_pgs"
@@ -498,6 +558,10 @@ function variable_slack_gen_real(pm::AbstractBFModelEdisgo; nw::Int=nw_id_defaul
     report && PowerModels.sol_component_value(pm, nw, :gen_slack, :pgs, PowerModels.ids(pm, nw, :gen_slack), pgs)
 end
 
+"""
+Variable `qgs[i]` for `i` in `gen_slack`: the reactive power of each slack
+generator (the substation / feed-in node), left unbounded.
+"""
 function variable_slack_gen_imaginary(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, report::Bool=true)
     qgs = PowerModels.var(pm, nw)[:qgs] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :gen_slack)], base_name="$(nw)_qgs"
@@ -512,7 +576,11 @@ function variable_slack_HV_requirements(pm::AbstractPowerModel; kwargs...)
     # eDisGo_OPF.variable_slack_HV_requirements_imaginary(pm; kwargs...)
 end
 
-""
+"""
+Variable `phvs[i]` for `i` in `HV_requirements`: the active-power slack on each
+overlying-grid (HV) flexibility requirement, allowing the dispatch requested by the
+higher voltage level to be missed at a penalty (`opf_version` 3 and 4).
+"""
 function variable_slack_HV_requirements_real(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     phvs = PowerModels.var(pm, nw)[:phvs] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :HV_requirements)], base_name="$(nw)_phvs",
@@ -524,7 +592,10 @@ function variable_slack_HV_requirements_real(pm::AbstractPowerModel; nw::Int=nw_
 
 end
 
-""
+"""
+Variable `qhvs[i]` for `i` in `HV_requirements`: the reactive-power counterpart of
+`phvs`. (Optional; not used by default.)
+"""
 function variable_slack_HV_requirements_imaginary(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     qhvs = PowerModels.var(pm, nw)[:qhvs] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :HV_requirements)], base_name="$(nw)_qhvs",
@@ -533,5 +604,3 @@ function variable_slack_HV_requirements_imaginary(pm::AbstractPowerModel; nw::In
     report && PowerModels.sol_component_value(pm, nw, :HV_requirements, :qhvs, PowerModels.ids(pm, nw, :HV_requirements), qhvs)
 
 end
-
-""

@@ -1,17 +1,21 @@
-"""
-Replacement functions for deprecated materialized views (mviews) in eDisGo/oedb.
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
-This module provides functions to replace the deprecated mviews by directly querying
-the underlying base tables with appropriate filters. The filter logic is extracted
-from the original mview definitions in mviews_definitions.sql.
+from typing import Literal, Optional
 
-Author: Generated for mviews replacement
-Date: 2025-12-17
-"""
+from typing import Literal
 
 import pandas as pd
+
 from sqlalchemy import text
-from typing import Optional, Literal
 
 
 class MviewsReplacement:
@@ -38,9 +42,9 @@ class MviewsReplacement:
         self,
         scenario: str,
         version: Optional[str] = None,
-        preversion: str = 'v0.3.0',
-        schema: Literal['model_draft', 'data'] = 'data',
-        table_name: str = 'ego_dp_conv_powerplant'
+        preversion: str = "v0.3.0",
+        schema: Literal["model_draft", "data"] = "data",
+        table_name: str = "ego_dp_conv_powerplant",
     ) -> pd.DataFrame:
         """
         Load conventional power plant data (replaces ego_dp_conv_powerplant_*_mview).
@@ -71,10 +75,10 @@ class MviewsReplacement:
         """
         # Set default versions based on scenario
         if version is None:
-            if scenario in ['NEP 2035', 'eGo 100']:
-                version_list = ['v0.4.2', 'v0.4.4', 'v0.4.5']
+            if scenario in ["NEP 2035", "eGo 100"]:
+                version_list = ["v0.4.2", "v0.4.4", "v0.4.5"]
             else:
-                version_list = ['v0.4.5']
+                version_list = ["v0.4.5"]
         else:
             version_list = [version] if isinstance(version, str) else version
 
@@ -82,7 +86,7 @@ class MviewsReplacement:
         version_filter = "', '".join(version_list)
 
         # Base query - selecting all columns from the table
-        if scenario == 'eGo 100':
+        if scenario == "eGo 100":
             # Special case for eGo 100: only pumped storage from NEP 2035
             query = f"""
             SELECT DISTINCT
@@ -104,7 +108,7 @@ class MviewsReplacement:
                 AND preversion = '{preversion}'
                 AND version IN ('{version_filter}')
             """
-        elif scenario == 'NEP 2035':
+        elif scenario == "NEP 2035":
             # NEP 2035: exclude hydro plants, filter by shutdown date
             query = f"""
             SELECT DISTINCT
@@ -132,7 +136,7 @@ class MviewsReplacement:
                 shutdown, status, fuel, technology, type, eeg, chp, capacity,
                 capacity_uba, chp_capacity_uba, efficiency_data, efficiency_estimate,
                 network_node, voltage, network_operator, name_uba, lat, lon, comment,
-                geom, voltage_level, subst_id, otg_id, un_id, la_id, scenario, flag, nuts
+                geom, voltage_level, subst_id, otg_id, un_id, la_id, scenario, flag, nuts  # noqa: E501
             FROM {schema}.{table_name}
             WHERE scenario = '{scenario}'
                 AND capacity > 0
@@ -147,9 +151,9 @@ class MviewsReplacement:
         self,
         scenario: str,
         version: Optional[str] = None,
-        preversion: str = 'v0.3.0',
-        schema: Literal['model_draft', 'data'] = 'data',
-        table_name: str = 'ego_dp_res_powerplant'
+        preversion: str = "v0.3.0",
+        schema: Literal["model_draft", "data"] = "data",
+        table_name: str = "ego_dp_res_powerplant",
     ) -> pd.DataFrame:
         """
         Load renewable power plant data (replaces ego_dp_res_powerplant_*_mview).
@@ -180,24 +184,24 @@ class MviewsReplacement:
         """
         # Set default versions based on scenario
         if version is None:
-            if scenario == 'Status Quo':
-                version_list = ['v0.4.4', 'v0.4.5']
+            if scenario == "Status Quo":
+                version_list = ["v0.4.4", "v0.4.5"]
             else:
-                version_list = ['v0.4.5']
+                version_list = ["v0.4.5"]
         else:
             version_list = [version] if isinstance(version, str) else version
 
         version_filter = "', '".join(version_list)
 
         # Base query with duplicate filtering logic from the mview
-        if table_name == 'ego_dp_res_powerplant':
+        if table_name == "ego_dp_res_powerplant":
             # For ego_dp_res_powerplant: complex duplicate filtering
             id_column = "id || version"
         else:
             # For ego_dp_supply_res_powerplant: simpler duplicate filtering
             id_column = "id"
 
-        if scenario == 'Status Quo':
+        if scenario == "Status Quo":
             # Status Quo scenario: only solar and wind (excluding offshore)
             query = f"""
             WITH filtered_data AS (
@@ -254,9 +258,9 @@ class MviewsReplacement:
 
     def get_loadarea(
         self,
-        version: str = 'v0.4.5',
-        schema: Literal['model_draft', 'data'] = 'data',
-        table_name: str = 'ego_dp_loadarea'
+        version: str = "v0.4.5",
+        schema: Literal["model_draft", "data"] = "data",
+        table_name: str = "ego_dp_loadarea",
     ) -> pd.DataFrame:
         """
         Load load area data (replaces ego_dp_loadarea_*_mview).
@@ -302,9 +306,9 @@ class MviewsReplacement:
 
     def get_mv_griddistrict(
         self,
-        version: str = 'v0.4.5',
-        schema: Literal['model_draft', 'data'] = 'data',
-        table_name: str = 'ego_dp_mv_griddistrict'
+        version: str = "v0.4.5",
+        schema: Literal["model_draft", "data"] = "data",
+        table_name: str = "ego_dp_mv_griddistrict",
     ) -> pd.DataFrame:
         """
         Load MV grid district data (replaces ego_dp_mv_griddistrict_*_mview).
@@ -340,7 +344,7 @@ class MviewsReplacement:
         mview_name: str,
         scenario: Optional[str] = None,
         version: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ) -> pd.DataFrame:
         """
         Generic mview replacement loader based on mview name.
@@ -372,105 +376,98 @@ class MviewsReplacement:
         Examples
         --------
         >>> replacer = MviewsReplacement(engine)
-        >>> data = replacer.load_mview_replacement('ego_dp_conv_powerplant_nep2035_mview')
-        >>> data = replacer.load_mview_replacement('ego_supply_res_powerplant_ego100_mview')
+        >>> data = replacer.load_mview_replacement(
+        ...     'ego_dp_conv_powerplant_nep2035_mview')
+        >>> data = replacer.load_mview_replacement(
+        ...     'ego_supply_res_powerplant_ego100_mview')
         """
         # Remove 'mviews.' prefix if present
-        mview_name = mview_name.replace('mviews.', '')
+        mview_name = mview_name.replace("mviews.", "")
 
         # Determine schema from mview name
-        if mview_name.startswith('ego_supply_'):
-            schema = kwargs.get('schema', 'data')
-            base_prefix = 'ego_dp_supply_'
-        else:
-            schema = kwargs.get('schema', 'data')
-            base_prefix = 'ego_dp_'
+        schema = kwargs.get("schema", "data")
 
         # Parse conventional power plants
-        if 'conv_powerplant' in mview_name:
+        if "conv_powerplant" in mview_name:
             # Extract scenario from name if not provided
             if scenario is None:
-                if 'ego100' in mview_name or 'ego_100' in mview_name:
-                    scenario = 'eGo 100'
-                elif 'nep2035' in mview_name:
-                    scenario = 'NEP 2035'
-                elif 'sq' in mview_name or 'status' in mview_name:
-                    scenario = 'Status Quo'
+                if "ego100" in mview_name or "ego_100" in mview_name:
+                    scenario = "eGo 100"
+                elif "nep2035" in mview_name:
+                    scenario = "NEP 2035"
+                elif "sq" in mview_name or "status" in mview_name:
+                    scenario = "Status Quo"
                 else:
-                    raise ValueError(f"Cannot determine scenario from mview name: {mview_name}")
+                    raise ValueError(
+                        f"Cannot determine scenario from mview name: {mview_name}"
+                    )
 
             # Determine table name
-            if mview_name.startswith('ego_supply_'):
-                table_name = 'ego_dp_supply_conv_powerplant'
+            if mview_name.startswith("ego_supply_"):
+                table_name = "ego_dp_supply_conv_powerplant"
             else:
-                table_name = 'ego_dp_conv_powerplant'
+                table_name = "ego_dp_conv_powerplant"
 
             return self.get_conv_powerplant(
                 scenario=scenario,
                 version=version,
                 schema=schema,
                 table_name=table_name,
-                **kwargs
+                **kwargs,
             )
 
         # Parse renewable power plants
-        elif 'res_powerplant' in mview_name:
+        elif "res_powerplant" in mview_name:
             if scenario is None:
-                if 'ego100' in mview_name or 'ego_100' in mview_name:
-                    scenario = 'eGo 100'
-                elif 'nep2035' in mview_name:
-                    scenario = 'NEP 2035'
-                elif 'sq' in mview_name or 'status' in mview_name:
-                    scenario = 'Status Quo'
+                if "ego100" in mview_name or "ego_100" in mview_name:
+                    scenario = "eGo 100"
+                elif "nep2035" in mview_name:
+                    scenario = "NEP 2035"
+                elif "sq" in mview_name or "status" in mview_name:
+                    scenario = "Status Quo"
                 else:
-                    raise ValueError(f"Cannot determine scenario from mview name: {mview_name}")
+                    raise ValueError(
+                        f"Cannot determine scenario from mview name: {mview_name}"
+                    )
 
             # Determine table name
-            if mview_name.startswith('ego_supply_'):
-                table_name = 'ego_dp_supply_res_powerplant'
+            if mview_name.startswith("ego_supply_"):
+                table_name = "ego_dp_supply_res_powerplant"
             else:
-                table_name = 'ego_dp_res_powerplant'
+                table_name = "ego_dp_res_powerplant"
 
             return self.get_res_powerplant(
                 scenario=scenario,
                 version=version,
                 schema=schema,
                 table_name=table_name,
-                **kwargs
+                **kwargs,
             )
 
         # Parse load areas
-        elif 'loadarea' in mview_name:
+        elif "loadarea" in mview_name:
             # Extract version from name if not provided
             if version is None:
-                if 'v0_4_5' in mview_name or 'v0.4.5' in mview_name:
-                    version = 'v0.4.5'
-                elif 'v0_4_3' in mview_name or 'v0.4.3' in mview_name:
-                    version = 'v0.4.3'
+                if "v0_4_5" in mview_name or "v0.4.5" in mview_name:
+                    version = "v0.4.5"
+                elif "v0_4_3" in mview_name or "v0.4.3" in mview_name:
+                    version = "v0.4.3"
                 else:
-                    version = 'v0.4.5'  # default
+                    version = "v0.4.5"  # default
 
-            return self.get_loadarea(
-                version=version,
-                schema=schema,
-                **kwargs
-            )
+            return self.get_loadarea(version=version, schema=schema, **kwargs)
 
         # Parse MV grid districts
-        elif 'mv_griddistrict' in mview_name:
+        elif "mv_griddistrict" in mview_name:
             if version is None:
-                if 'v0_4_5' in mview_name or 'v0.4.5' in mview_name:
-                    version = 'v0.4.5'
-                elif 'v0_4_3' in mview_name or 'v0.4.3' in mview_name:
-                    version = 'v0.4.3'
+                if "v0_4_5" in mview_name or "v0.4.5" in mview_name:
+                    version = "v0.4.5"
+                elif "v0_4_3" in mview_name or "v0.4.3" in mview_name:
+                    version = "v0.4.3"
                 else:
-                    version = 'v0.4.5'  # default
+                    version = "v0.4.5"  # default
 
-            return self.get_mv_griddistrict(
-                version=version,
-                schema=schema,
-                **kwargs
-            )
+            return self.get_mv_griddistrict(version=version, schema=schema, **kwargs)
 
         else:
             raise ValueError(f"Unsupported mview name pattern: {mview_name}")

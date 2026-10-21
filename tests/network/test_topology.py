@@ -283,10 +283,7 @@ class TestTopology:
         assert self.topology.loads_df.loc[name, "p_set"] == 3
 
         # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not defined in "
-            "buses_df."
-        )
+        msg = "Specified bus Unknown_bus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_load(
                 load_id=8,
@@ -326,10 +323,7 @@ class TestTopology:
         assert self.topology.charging_points_df.at[name, "p_set"] == 0.5
 
         # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not defined in "
-            "buses_df."
-        )
+        msg = "Specified bus Unknown_bus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_load(bus="Unknown_bus", p_set=0.5, sector="work")
 
@@ -364,10 +358,7 @@ class TestTopology:
         assert self.topology.generators_df.at[name, "p_nom"] == 0.5
 
         # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not defined in "
-            "buses_df."
-        )
+        msg = "Specified bus Unknown_bus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_generator(
                 bus="Unknown_bus", p_nom=0.5, generator_type="solar"
@@ -398,10 +389,7 @@ class TestTopology:
         assert self.topology.storage_units_df.at[name, "control"] == "PQ"
 
         # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not "
-            "defined in buses_df."
-        )
+        msg = "Specified bus Unknown_bus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_storage_unit(bus="Unknown_bus", p_nom=1, control="PQ")
 
@@ -1848,11 +1836,11 @@ class TestTopologyWithEdisgoObject:
         }
         # check duplicate node
         for comp, name in comps_dict.items():
-            new_comp = getattr(self.edisgo.topology, "_{}_df".format(comp)).loc[name]
-            comps = getattr(self.edisgo.topology, "_{}_df".format(comp))
+            new_comp = getattr(self.edisgo.topology, f"_{comp}_df").loc[name]
+            comps = getattr(self.edisgo.topology, f"_{comp}_df")
             setattr(
                 self.edisgo.topology,
-                "_{}_df".format(comp),
+                f"_{comp}_df",
                 pd.concat([comps, new_comp.to_frame().T]),
             )  # comps.append(new_comp))
             self.edisgo.topology.check_integrity()
@@ -1863,36 +1851,34 @@ class TestTopologyWithEdisgoObject:
             caplog.clear()
 
             # reset dataframe
-            setattr(self.edisgo.topology, "_{}_df".format(comp), comps)
+            setattr(self.edisgo.topology, f"_{comp}_df", comps)
             self.edisgo.topology.check_integrity()
 
         # check not connected generator and load
         for nodal_component in ["loads", "generators"]:
-            comps = getattr(self.edisgo.topology, "_{}_df".format(nodal_component))
+            comps = getattr(self.edisgo.topology, f"_{nodal_component}_df")
             new_comp = comps.loc[comps_dict[nodal_component]]
             new_comp.name = "new_nodal_component"
             new_comp.bus = "Non_existent_bus_" + nodal_component
             setattr(
                 self.edisgo.topology,
-                "_{}_df".format(nodal_component),
+                f"_{nodal_component}_df",
                 pd.concat([comps, new_comp.to_frame().T]),
             )
             self.edisgo.topology.check_integrity()
             assert (
-                "The following {} have buses which are not defined: {}.".format(
-                    nodal_component, new_comp.name
-                )
-                in caplog.text
+                f"The following {nodal_component} have buses which "
+                f"are not defined: {new_comp.name}." in caplog.text
             )
             caplog.clear()
             # reset dataframe
-            setattr(self.edisgo.topology, "_{}_df".format(nodal_component), comps)
+            setattr(self.edisgo.topology, f"_{nodal_component}_df", comps)
             self.edisgo.topology.check_integrity()
 
         # check branch components
         i = 0
         for branch_component in ["lines", "transformers"]:
-            comps = getattr(self.edisgo.topology, "_{}_df".format(branch_component))
+            comps = getattr(self.edisgo.topology, f"_{branch_component}_df")
             new_comp = comps.loc[comps_dict[branch_component]]
             new_comp.name = "new_branch_component"
             setattr(
@@ -1902,19 +1888,17 @@ class TestTopologyWithEdisgoObject:
             )
             setattr(
                 self.edisgo.topology,
-                "_{}_df".format(branch_component),
+                f"_{branch_component}_df",
                 pd.concat([comps, new_comp.to_frame().T]),
             )
             self.edisgo.topology.check_integrity()
             assert (
-                "The following {} have bus{} which are not defined: {}.".format(
-                    branch_component, i, new_comp.name
-                )
-                in caplog.text
+                f"The following {branch_component} have "
+                f"bus{i} which are not defined: {new_comp.name}." in caplog.text
             )
             caplog.clear()
             # reset dataframe
-            setattr(self.edisgo.topology, "_{}_df".format(branch_component), comps)
+            setattr(self.edisgo.topology, f"_{branch_component}_df", comps)
             self.edisgo.topology.check_integrity()
             i += 1
 
@@ -1928,10 +1912,8 @@ class TestTopologyWithEdisgoObject:
             self.edisgo.topology.switches_df = new_comps
             self.edisgo.topology.check_integrity()
             assert (
-                "The following switches have {} which are not defined: {}.".format(
-                    attr, new_comp.name
-                )
-                in caplog.text
+                f"The following switches have {attr} which "
+                f"are not defined: {new_comp.name}." in caplog.text
             )
             caplog.clear()
             self.edisgo.topology.switches_df = comps
@@ -1944,7 +1926,7 @@ class TestTopologyWithEdisgoObject:
             [self.edisgo.topology.buses_df, bus.to_frame().T]
         )
         self.edisgo.topology.check_integrity()
-        assert "The following buses are isolated: {}.".format(bus.name) in caplog.text
+        assert f"The following buses are isolated: {bus.name}." in caplog.text
         assert "The network has isolated nodes or edges." in caplog.text
         caplog.clear()
 
@@ -1956,7 +1938,10 @@ class TestTopologyWithEdisgoObject:
         self.edisgo.topology.check_integrity()
         assert "There are lines with very large line lengths" in caplog.text
         assert "There are lines with very short line lengths" in caplog.text
-        assert "Very small values for impedance of lines" and line in caplog.text
+        assert (
+            "Very small values for impedance of lines" in caplog.text
+            and line in caplog.text
+        )
         caplog.clear()
 
     def test_find_meshes(self, caplog: pytest.LogCaptureFixture):
