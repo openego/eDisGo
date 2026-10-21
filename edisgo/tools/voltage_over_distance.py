@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 # edisgo/tools/voltage_over_distance.py
 
 from __future__ import annotations
@@ -73,7 +84,8 @@ def _infer_load_and_feedin_timesteps(
     ):
         raise RuntimeError(
             "Cannot infer worst-case timesteps: voltage results are empty and "
-            "timeseries.loads_active_power / generators_active_power are missing or empty."
+            "timeseries.loads_active_power / generators_active_power "
+            "are missing or empty."
         )
 
     loads_sum = loads_p.sum(axis=1)
@@ -208,7 +220,10 @@ def make_voltage_over_distance_figure(
                 mode="markers",
                 name=label,
                 customdata=np.stack([sub["bus"]], axis=-1),
-                hovertemplate="bus=%{customdata[0]}<br>path=%{x}<br>v=%{y:.4f} p.u.<extra></extra>",
+                hovertemplate=(
+                    "bus=%{customdata[0]}<br>path=%{x}"
+                    "<br>v=%{y:.4f} p.u.<extra></extra>"
+                ),
             )
         )
     fig.update_layout(

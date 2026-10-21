@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import numpy as np
 import pandas as pd
 
@@ -143,7 +154,6 @@ def aggregate_fluct_generators(psa_network):
     gen_df = psa_network.generators.copy()
     gen_t_dict = psa_network.generators_t.copy()
     gen_buses = np.unique(gen_df.bus)
-    gen_aggr_df_all = pd.DataFrame(columns=gen_df.columns)
     for gen_bus in gen_buses:
         gens = gen_df[gen_df.bus == gen_bus]
         n_gens = len(gens)
@@ -178,12 +188,6 @@ def aggregate_fluct_generators(psa_network):
                         "fluctuating": [True],
                     },
                     index=[gen_name],
-                )
-                gen_aggr_df_all = pd.concat(
-                    [
-                        gen_aggr_df_all,
-                        gen_aggr_df,
-                    ]
                 )
                 # drop aggregated generators and add new generator to generator
                 # dataframe

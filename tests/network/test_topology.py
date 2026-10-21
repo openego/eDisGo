@@ -18,7 +18,6 @@ from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.network.topology import Topology
 from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
-pytestmark = pytest.mark.fast
 logger = logging.getLogger(__name__)
 
 
@@ -934,7 +933,7 @@ class TestTopologyWithEdisgoObject:
 
     """
 
-    @pytest.yield_fixture(autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
@@ -1838,8 +1837,8 @@ class TestTopologyWithEdisgoObject:
             )
             self.edisgo.topology.check_integrity()
             assert (
-                f"The following {nodal_component} have buses which are not defined: "
-                f"{new_comp.name}." in caplog.text
+                f"The following {nodal_component} have buses which "
+                f"are not defined: {new_comp.name}." in caplog.text
             )
             caplog.clear()
             # reset dataframe
@@ -1864,8 +1863,8 @@ class TestTopologyWithEdisgoObject:
             )
             self.edisgo.topology.check_integrity()
             assert (
-                f"The following {branch_component} have bus{i} which are not defined: "
-                f"{new_comp.name}." in caplog.text
+                f"The following {branch_component} have "
+                f"bus{i} which are not defined: {new_comp.name}." in caplog.text
             )
             caplog.clear()
             # reset dataframe
@@ -1883,8 +1882,8 @@ class TestTopologyWithEdisgoObject:
             self.edisgo.topology.switches_df = new_comps
             self.edisgo.topology.check_integrity()
             assert (
-                f"The following switches have {attr} which are not defined: "
-                f"{new_comp.name}." in caplog.text
+                f"The following switches have {attr} which "
+                f"are not defined: {new_comp.name}." in caplog.text
             )
             caplog.clear()
             self.edisgo.topology.switches_df = comps
@@ -1909,7 +1908,10 @@ class TestTopologyWithEdisgoObject:
         self.edisgo.topology.check_integrity()
         assert "There are lines with very large line lengths" in caplog.text
         assert "There are lines with very short line lengths" in caplog.text
-        assert "Very small values for impedance of lines" and line in caplog.text
+        assert (
+            "Very small values for impedance of lines" in caplog.text
+            and line in caplog.text
+        )
         caplog.clear()
 
     def test_find_meshes(self, caplog: pytest.LogCaptureFixture):

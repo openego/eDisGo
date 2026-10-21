@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -13,7 +24,7 @@ from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
-from edisgo.tools import session_scope
+from edisgo.tools import legacy_oep_table, session_scope
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus, proj2equidistant
 from edisgo.tools.tools import (
@@ -24,7 +35,6 @@ from edisgo.tools.tools import (
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
-    from egoio.db_tables import model_draft, supply
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
 
@@ -39,13 +49,128 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _query_generator_data_oedb_legacy(
+    edisgo_object,
+    generator_scenario,
+    engine=None,
+    query_limit=None,
+):
+    """Query raw legacy generator data (conventional power in MW, renewable in kW)."""
+
+    srid = edisgo_object.topology.grid_district["srid"]
+    scenario_mapping = {
+        "nep2035": "NEP 2035",
+        "ego100": "eGo 100",
+        "status_quo": "Status Quo",
+        "sq": "Status Quo",
+    }
+    scenario_name = scenario_mapping.get(generator_scenario.lower(), generator_scenario)
+
+    oedb_data_source = edisgo_object.config["data_source"]["oedb_data_source"]
+    if oedb_data_source == "model_draft":
+        # base tables without the _mview suffix
+        orm_conv_generators = legacy_oep_table(
+            "model_draft", "ego_dp_supply_conv_powerplant"
+        )
+        orm_re_generators = legacy_oep_table(
+            "model_draft", "ego_dp_supply_res_powerplant"
+        )
+        orm_conv_generators_version = build_conv_scenario_filter(
+            orm_conv_generators, scenario_name, version=None
+        )
+        orm_re_generators_version = build_res_scenario_filter(
+            orm_re_generators, scenario_name, version=None
+        )
+    elif oedb_data_source == "versioned":
+        data_version = edisgo_object.config["versioned"]["version"]
+        # base tables without the _mview suffix
+        orm_conv_generators = legacy_oep_table("supply", "ego_dp_conv_powerplant")
+        orm_re_generators = legacy_oep_table("supply", "ego_dp_res_powerplant")
+        orm_conv_generators_version = build_conv_scenario_filter(
+            orm_conv_generators, scenario_name, version=data_version
+        )
+        orm_re_generators_version = build_res_scenario_filter(
+            orm_re_generators, scenario_name, version=data_version
+        )
+    else:
+        raise ValueError(f"Unsupported OEP data source: {oedb_data_source}")
+
+    def _import_conv_generators(session):
+        query = (
+            session.query(
+                orm_conv_generators.id,
+                orm_conv_generators.id.label("generator_id"),
+                orm_conv_generators.subst_id,
+                orm_conv_generators.la_id,
+                orm_conv_generators.capacity.label("p_nom"),
+                orm_conv_generators.voltage_level,
+                orm_conv_generators.fuel.label("generator_type"),
+                func.ST_AsText(func.ST_Transform(orm_conv_generators.geom, srid)).label(
+                    "geom"
+                ),
+            )
+            .filter(orm_conv_generators.subst_id == edisgo_object.topology.mv_grid.id)
+            .filter(orm_conv_generators.voltage_level.in_([4, 5]))
+            .filter(orm_conv_generators_version)
+            .order_by(orm_conv_generators.id)
+        )
+        if query_limit is not None:
+            query = query.limit(query_limit)
+        return pd.read_sql_query(query.statement, session.bind, index_col="id")
+
+    def _import_res_generators(session):
+        query = (
+            session.query(
+                orm_re_generators.id,
+                orm_re_generators.id.label("generator_id"),
+                orm_re_generators.subst_id,
+                orm_re_generators.la_id,
+                orm_re_generators.mvlv_subst_id,
+                orm_re_generators.electrical_capacity.label("p_nom"),
+                orm_re_generators.generation_type.label("generator_type"),
+                orm_re_generators.generation_subtype.label("subtype"),
+                orm_re_generators.voltage_level,
+                orm_re_generators.w_id.label("weather_cell_id"),
+                func.ST_AsText(
+                    func.ST_Transform(orm_re_generators.rea_geom_new, srid)
+                ).label("geom"),
+                func.ST_AsText(func.ST_Transform(orm_re_generators.geom, srid)).label(
+                    "geom_em"
+                ),
+            )
+            .filter(orm_re_generators.subst_id == edisgo_object.topology.mv_grid.id)
+            .filter(orm_re_generators_version)
+        )
+
+        def _read_for_voltage_levels(voltage_levels):
+            filtered_query = query.filter(
+                orm_re_generators.voltage_level.in_(voltage_levels)
+            ).order_by(orm_re_generators.id)
+            if query_limit is not None:
+                filtered_query = filtered_query.limit(query_limit)
+            return pd.read_sql_query(
+                filtered_query.statement,
+                session.bind,
+                index_col="id",
+            )
+
+        return _read_for_voltage_levels([4, 5]), _read_for_voltage_levels([6, 7])
+
+    session_context = (
+        session_scope() if engine is None else session_scope_egon_data(engine)
+    )
+    with session_context as session:
+        generators_conv_mv = _import_conv_generators(session)
+        generators_res_mv, generators_res_lv = _import_res_generators(session)
+
+    return generators_conv_mv, generators_res_mv, generators_res_lv
+
+
 def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     """
     Gets generator park for specified scenario from oedb and integrates generators into
     the grid.
 
-    The importer uses SQLAlchemy ORM objects. These are defined in
-    `ego.io <https://github.com/openego/ego.io/tree/dev/egoio/db_tables/>`_.
     The data is imported from the tables
     `conventional power plants <https://openenergyplatform.org/database/\
     tables/ego_dp_conv_powerplant>`_ and
@@ -70,7 +195,8 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     edisgo_object : :class:`~.EDisGo`
     generator_scenario : str
         Scenario for which to retrieve generator data. Possible options
-        are 'nep2035' and 'ego100'.
+        are 'nep2035', 'ego100' and 'status_quo' (or its alias 'sq'). The input is
+        case-insensitive.
 
     Other Parameters
     ----------------
@@ -104,115 +230,10 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     allowed_number_of_comp_per_lv_bus : int
         Specifies, how many generators are at most allowed to be placed at
         the same LV bus. Default: 2.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+        Optional database engine. If omitted, the legacy default connection is used.
 
     """
-
-    def _import_conv_generators(session):
-        """
-        Import data for conventional generators from oedb.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            Dataframe containing data on all conventional MV generators.
-            You can find a full list of columns in
-            :func:`edisgo.io.import_data.update_grids`.
-
-        """
-        # build query
-        generators_sqla = (
-            session.query(
-                orm_conv_generators.id,
-                orm_conv_generators.id.label("generator_id"),
-                orm_conv_generators.subst_id,
-                orm_conv_generators.la_id,
-                orm_conv_generators.capacity.label("p_nom"),
-                orm_conv_generators.voltage_level,
-                orm_conv_generators.fuel.label("generator_type"),
-                func.ST_AsText(func.ST_Transform(orm_conv_generators.geom, srid)).label(
-                    "geom"
-                ),
-            )
-            .filter(orm_conv_generators.subst_id == edisgo_object.topology.mv_grid.id)
-            .filter(orm_conv_generators.voltage_level.in_([4, 5]))
-            .filter(orm_conv_generators_version)
-        )
-
-        return pd.read_sql_query(
-            generators_sqla.statement, session.bind, index_col="id"
-        )
-
-    def _import_res_generators(session):
-        """
-        Import data for renewable generators from oedb.
-
-        Returns
-        -------
-        (:pandas:`pandas.DataFrame<DataFrame>`,
-         :pandas:`pandas.DataFrame<DataFrame>`)
-            Dataframe containing data on all renewable MV and LV generators.
-            You can find a full list of columns in
-            :func:`edisgo.io.import_data.update_grids`.
-
-        Notes
-        -----
-        If subtype is not specified it is set to 'unknown'.
-
-        """
-
-        # build basic query
-        generators_sqla = (
-            session.query(
-                orm_re_generators.id,
-                orm_re_generators.id.label("generator_id"),
-                orm_re_generators.subst_id,
-                orm_re_generators.la_id,
-                orm_re_generators.mvlv_subst_id,
-                orm_re_generators.electrical_capacity.label("p_nom"),
-                orm_re_generators.generation_type.label("generator_type"),
-                orm_re_generators.generation_subtype.label("subtype"),
-                orm_re_generators.voltage_level,
-                orm_re_generators.w_id.label("weather_cell_id"),
-                func.ST_AsText(
-                    func.ST_Transform(orm_re_generators.rea_geom_new, srid)
-                ).label("geom"),
-                func.ST_AsText(func.ST_Transform(orm_re_generators.geom, srid)).label(
-                    "geom_em"
-                ),
-            )
-            .filter(orm_re_generators.subst_id == edisgo_object.topology.mv_grid.id)
-            .filter(orm_re_generators_version)
-        )
-
-        # extend basic query for MV generators and read data from db
-        generators_mv_sqla = generators_sqla.filter(
-            orm_re_generators.voltage_level.in_([4, 5])
-        )
-        gens_mv = pd.read_sql_query(
-            generators_mv_sqla.statement, session.bind, index_col="id"
-        )
-
-        # define generators with unknown subtype as 'unknown'
-        gens_mv.loc[gens_mv["subtype"].isnull(), "subtype"] = "unknown"
-
-        # convert capacity from kW to MW
-        gens_mv.p_nom = pd.to_numeric(gens_mv.p_nom) / 1e3
-
-        # extend basic query for LV generators and read data from db
-        generators_lv_sqla = generators_sqla.filter(
-            orm_re_generators.voltage_level.in_([6, 7])
-        )
-        gens_lv = pd.read_sql_query(
-            generators_lv_sqla.statement, session.bind, index_col="id"
-        )
-
-        # define generators with unknown subtype as 'unknown'
-        gens_lv.loc[gens_lv["subtype"].isnull(), "subtype"] = "unknown"
-
-        # convert capacity from kW to MW
-        gens_lv.p_nom = pd.to_numeric(gens_lv.p_nom) / 1e3
-
-        return gens_mv, gens_lv
 
     def _validate_generation():
         """
@@ -299,50 +320,20 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
                     "datasets."
                 )
 
-    oedb_data_source = edisgo_object.config["data_source"]["oedb_data_source"]
     srid = edisgo_object.topology.grid_district["srid"]
-
-    # Map generator_scenario to full scenario names for mview filter logic
-    scenario_mapping = {
-        "nep2035": "NEP 2035",
-        "ego100": "eGo 100",
-        "status_quo": "Status Quo",
-        "sq": "Status Quo",
-    }
-    scenario_name = scenario_mapping.get(generator_scenario.lower(), generator_scenario)
-
-    if oedb_data_source == "model_draft":
-        # Use base tables from model_draft schema (CamelCase ORM names, without _mview suffix)
-        orm_conv_generators = model_draft.__getattribute__("EgoDpSupplyConvPowerplant")
-        orm_re_generators = model_draft.__getattribute__("EgoDpSupplyResPowerplant")
-
-        # Build scenario filters that replicate mview logic
-        orm_conv_generators_version = build_conv_scenario_filter(
-            orm_conv_generators, scenario_name, version=None
+    # Keep the legacy connection even if the caller supplies an eGon engine.
+    kwargs.pop("engine", None)
+    generators_conv_mv, generators_res_mv, generators_res_lv = (
+        _query_generator_data_oedb_legacy(
+            edisgo_object=edisgo_object,
+            generator_scenario=generator_scenario,
         )
-        orm_re_generators_version = build_res_scenario_filter(
-            orm_re_generators, scenario_name, version=None
-        )
+    )
 
-    elif oedb_data_source == "versioned":
-        data_version = edisgo_object.config["versioned"]["version"]
-
-        # Use base tables from supply schema (CamelCase ORM names, without _mview suffix)
-        orm_conv_generators = supply.__getattribute__("EgoDpConvPowerplant")
-        orm_re_generators = supply.__getattribute__("EgoDpResPowerplant")
-
-        # Build scenario filters that replicate mview logic with version
-        orm_conv_generators_version = build_conv_scenario_filter(
-            orm_conv_generators, scenario_name, version=data_version
-        )
-        orm_re_generators_version = build_res_scenario_filter(
-            orm_re_generators, scenario_name, version=data_version
-        )
-
-    # get conventional and renewable generators
-    with session_scope() as session:
-        generators_conv_mv = _import_conv_generators(session)
-        generators_res_mv, generators_res_lv = _import_res_generators(session)
+    # Normalize renewable raw data; conventional capacities are already in MW.
+    for data in (generators_res_mv, generators_res_lv):
+        data.loc[data["subtype"].isnull(), "subtype"] = "unknown"
+        data["p_nom"] = pd.to_numeric(data["p_nom"]) / 1e3
 
     # Filter out empty DataFrames before concatenation to avoid FutureWarning
     dfs_to_concat = [
@@ -351,7 +342,7 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     if dfs_to_concat:
         generators_mv = pd.concat(dfs_to_concat)
     else:
-        generators_mv = pd.DataFrame()
+        generators_mv = pd.DataFrame(columns=generators_res_mv.columns)
 
     # validate that imported generators are located inside the grid district
     _validate_sample_geno_location()
@@ -460,8 +451,8 @@ def _update_grids(
             # set geom to EnergyMap's geom, if available
             if generator_data.geom_em:
                 logger.debug(
-                    f"Generator {generator_data.name} has no geom entry, EnergyMap's geom "
-                    "entry will be used."
+                    f"Generator {generator_data.name} has no geom entry, "
+                    "EnergyMap's geom entry will be used."
                 )
                 return generator_data.geom_em
         return None
@@ -542,8 +533,8 @@ def _update_grids(
         log_geno_count = len(gens_to_update_cap)
         log_geno_cap = gens_to_update_cap["cap_diff"].sum()
         logger.debug(
-            f"Capacities of {log_geno_count} of {len(gens_to_update)} existing generators updated "
-            f"({round(log_geno_cap, 1)} MW)."
+            f"Capacities of {log_geno_count} of {len(gens_to_update)} existing "
+            f"generators updated ({round(log_geno_cap, 1)} MW)."
         )
 
     # ==================================================
@@ -562,7 +553,8 @@ def _update_grids(
         log_geno_cap = decommissioned_gens.p_nom.sum()
         log_geno_count = len(decommissioned_gens)
         logger.debug(
-            f"{log_geno_count} decommissioned generators removed ({round(log_geno_cap, 1)} MW)."
+            f"{log_geno_count} decommissioned generators removed "
+            f"({round(log_geno_cap, 1)} MW)."
         )
 
     # ===================================
@@ -683,7 +675,8 @@ def _update_grids(
     log_geno_count = len(new_gens_mv)
     log_geno_cap = new_gens_mv["p_nom"].sum()
     logger.debug(
-        f"{log_geno_count} of {number_new_gens} new MV generators added ({round(log_geno_cap, 1)} MW)."
+        f"{log_geno_count} of {number_new_gens} new MV generators added "
+        f"({round(log_geno_cap, 1)} MW)."
     )
 
     # ====================================
@@ -758,81 +751,19 @@ def _update_grids(
         # warn if there are more generators than loads in LV grid
         if lv_gens_voltage_level_7 > lv_loads * 2:
             logger.debug(
-                f"There are {lv_gens_voltage_level_7} generators (voltage level 7) but only {lv_loads} "
-                f"loads in LV grid {lv_grid.id}."
+                f"There are {lv_gens_voltage_level_7} generators (voltage level 7) "
+                f"but only {lv_loads} loads in LV grid {lv_grid.id}."
             )
 
 
-def oedb(
+def _query_generator_data_oedb(
     edisgo_object: EDisGo,
     scenario: str,
     engine: Engine,
     max_capacity=20,
+    query_limit=None,
 ):
-    """
-    Gets generator park for specified scenario from oedb and integrates generators into
-    the grid.
-
-    The data is imported from the tables supply.egon_chp_plants,
-    supply.egon_power_plants and supply.egon_power_plants_pv_roof_building.
-
-    For the grid integration it is distinguished between PV rooftop plants and all
-    other power plants.
-    For PV rooftop the following steps are conducted:
-
-    * Removes decommissioned PV rooftop plants (plants whose source ID cannot
-      be matched to a source ID of an existing plant).
-    * Updates existing PV rooftop plants. The following two cases are distinguished:
-
-      * Nominal power increases: It is checked, if plant needs to be connected to a
-        higher voltage level and if that is the case, the existing plant is removed from
-        the grid and the new one integrated based on the geolocation.
-      * Nominal power decreases: Nominal power of existing plant is overwritten.
-    * Integrates new PV rooftop plants at corresponding building ID. If the plant needs
-      to be connected to a higher voltage level than the building, it is integrated
-      based on the geolocation.
-
-    For all other power plants the following steps are conducted:
-
-    * Removes decommissioned power and CHP plants (all plants that do not have a source
-      ID or whose source ID can not be matched to a new plant and are not of subtype
-      pv_rooftop, as these are handled in a separate function)
-    * Updates existing power plants (plants whose source ID
-      can be matched; solar, wind and CHP plants never have a source ID in
-      the future scenarios and are therefore never updated). The following two cases
-      are distinguished:
-
-      * Nominal power increases: It is checked, if plant needs to be connected to a
-        higher voltage level and if that is the case, the existing plant is removed from
-        the grid and the new one integrated based on the geolocation.
-      * Nominal power decreases: Nominal power of existing plant is overwritten.
-    * Integrates new power and CHP plants based on the geolocation.
-
-    Parameters
-    ----------
-    edisgo_object : :class:`~.EDisGo`
-    scenario : str
-        Scenario for which to retrieve generator data. Possible options
-        are "eGon2035" and "eGon100RE".
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
-    max_capacity : float
-        Maximum capacity in MW of power plants to retrieve from database. In general,
-        the generators that are retrieved from the database are selected based on the
-        voltage level they are in. In some cases, the voltage level is not correct as
-        it was wrongly set in the MaStR dataset. To avoid having unrealistically large
-        generators in the grids, an upper limit is also set. Per default this is 20 MW.
-
-    Notes
-    ------
-    Note, that PV rooftop plants are queried using the building IDs not the MV grid ID
-    as in egon_data buildings are mapped to a grid based on the
-    zensus cell they are in whereas in ding0 buildings are mapped to a grid based on
-    the geolocation. As it can happen that buildings lie outside an MV grid but within
-    a zensus cell that is assigned to that MV grid, they are mapped differently in
-    egon_data and ding0, and it is therefore better to query using the building IDs.
-
-    """
+    """Query PV rooftop, other power-plant and CHP data with geometries in grid CRS."""
 
     def _get_egon_power_plants():
         with session_scope_egon_data(engine) as session:
@@ -854,29 +785,11 @@ def oedb(
                 )
                 .order_by(egon_power_plants.id)
             )
+            if query_limit is not None:
+                query = query.limit(query_limit)
             power_plants_gdf = gpd.read_postgis(
                 sql=query.statement, con=engine, crs=f"EPSG:{srid_table}"
             ).to_crs(srid_edisgo)
-        # rename wind_onshore to wind
-        power_plants_gdf["type"] = power_plants_gdf["type"].str.replace("_onshore", "")
-        # set subtype
-        mapping = {
-            "wind": "wind_onshore",
-            "solar": "solar_ground_mounted",
-        }
-        power_plants_gdf = power_plants_gdf.assign(
-            subtype=power_plants_gdf["type"].map(mapping)
-        )
-        # unwrap source ID
-        if not power_plants_gdf.empty:
-            power_plants_gdf["source_id"] = power_plants_gdf.apply(
-                lambda _: (
-                    list(_["source_id"].values())[0]
-                    if isinstance(_["source_id"], dict)
-                    else None
-                ),
-                axis=1,
-            )
         return power_plants_gdf
 
     def _get_egon_pv_rooftop():
@@ -903,12 +816,9 @@ def oedb(
                 )
                 .order_by(egon_power_plants_pv_roof_building.index)
             )
+            if query_limit is not None:
+                query = query.limit(query_limit)
             pv_roof_df = pd.read_sql(sql=query.statement, con=engine)
-        # add type and subtype
-        pv_roof_df = pv_roof_df.assign(
-            type="solar",
-            subtype="pv_rooftop",
-        )
         return pv_roof_df
 
     def _get_egon_chp_plants():
@@ -933,6 +843,8 @@ def oedb(
                 )
                 .order_by(egon_chp_plants.id)
             )
+            if query_limit is not None:
+                query = query.limit(query_limit)
             chp_gdf = gpd.read_postgis(
                 sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid_table}"
             ).to_crs(srid_edisgo)
@@ -954,6 +866,70 @@ def oedb(
     pv_rooftop_df = _get_egon_pv_rooftop()
     power_plants_gdf = _get_egon_power_plants()
     chp_gdf = _get_egon_chp_plants()
+
+    return pv_rooftop_df, power_plants_gdf, chp_gdf
+
+
+def oedb(
+    edisgo_object: EDisGo,
+    scenario: str,
+    engine: Engine,
+    max_capacity=20,
+):
+    """Retrieve an eGon generator park from OEP and integrate it into the grid.
+
+    Data is imported from ``supply.egon_chp_plants``,
+    ``supply.egon_power_plants`` and
+    ``supply.egon_power_plants_pv_roof_building``. PV rooftop plants are matched
+    through building and source IDs. Decommissioned plants are removed, existing
+    plants are updated, and new plants are integrated at their building or by
+    geolocation. Other power plants and CHP plants are matched through source IDs or
+    integrated by geolocation in the same way.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    scenario : str
+        Scenario to retrieve. Supported values are ``"eGon2035"`` and
+        ``"eGon100RE"``.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+    max_capacity : float
+        Maximum capacity in MW of power plants to retrieve. Defaults to 20 MW.
+
+    Notes
+    -----
+    PV rooftop plants are queried by building ID because building-to-grid mappings in
+    eGon data and ding0 can differ at grid-district boundaries.
+    """
+    pv_rooftop_df, power_plants_gdf, chp_gdf = _query_generator_data_oedb(
+        edisgo_object=edisgo_object,
+        scenario=scenario,
+        engine=engine,
+        max_capacity=max_capacity,
+    )
+
+    # Normalize carrier names before mapping them to eDisGo subtypes.
+    power_plants_gdf["type"] = power_plants_gdf["type"].str.replace("_onshore", "")
+    mapping = {
+        "wind": "wind_onshore",
+        "solar": "solar_ground_mounted",
+    }
+    power_plants_gdf = power_plants_gdf.assign(
+        subtype=power_plants_gdf["type"].map(mapping)
+    )
+    pv_rooftop_df = pv_rooftop_df.assign(type="solar", subtype="pv_rooftop")
+
+    # Extract the source identifier used to match existing power plants.
+    if not power_plants_gdf.empty:
+        power_plants_gdf["source_id"] = power_plants_gdf.apply(
+            lambda _: (
+                list(_["source_id"].values())[0]
+                if isinstance(_["source_id"], dict)
+                else None
+            ),
+            axis=1,
+        )
 
     # determine number of generators and installed capacity in future scenario
     # for validation of grid integration
@@ -1014,24 +990,9 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
                 MaStR ID of the PV plant.
 
     """
-    # match building ID to existing solar generators
-    loads_df = edisgo_object.topology.loads_df
-    busses_building_id = (
-        loads_df[loads_df.type == "conventional_load"]
-        .drop_duplicates(subset=["building_id"])
-        .set_index("bus")
-        .loc[:, ["building_id"]]
-    )
     gens_df = edisgo_object.topology.generators_df[
         edisgo_object.topology.generators_df.subtype == "pv_rooftop"
     ].copy()
-    gens_df_building_id = gens_df.loc[:, ["bus"]].join(
-        busses_building_id, how="left", on="bus"
-    )
-    # using update to make sure to not overwrite existing building ID information
-    if "building_id" not in gens_df.columns:
-        gens_df["building_id"] = None
-    gens_df.update(gens_df_building_id, overwrite=False)
 
     # remove decommissioned PV rooftop plants
     gens_decommissioned = gens_df[
@@ -1153,7 +1114,7 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
     ----------
     edisgo_object : :class:`~.EDisGo`
     pv_rooftop_df : :pandas:`pandas.DataFrame<DataFrame>`
-        See :attr:`~.io.generators_import._integrate_pv_rooftop` for more information.
+        See :func:`~.io.generators_import._integrate_pv_rooftop` for more information.
 
     Returns
     -------
@@ -1220,12 +1181,18 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
     edisgo_object.topology.generators_df = pd.concat(
         [edisgo_object.topology.generators_df, pv_rooftop_small.loc[:, cols]]
     )
-    integrated_plants = pv_rooftop_small.index
+    # accumulate integrated plant names in a plain list (built into an Index once at
+    # the end) to avoid O(n^2) per-iteration Index.append below
+    integrated_plants_list = list(pv_rooftop_small.index)
 
     # integrate larger PV rooftop plants - if load is already connected to
     # higher voltage level it can be integrated at same bus, otherwise it is
     # integrated based on geolocation
-    integrated_plants_own_grid_conn = pd.Index([])
+    integrated_plants_own_grid_conn_list = []
+    # collect same-bus rows and concat them into generators_df once after the loop to
+    # avoid O(n^2) per-iteration pd.concat (rows are independent additions, so batching
+    # keeps the same resulting frame and row order)
+    same_bus_rows = []
     for pv_pp in pv_rooftop_large.index:
         # check if building is already connected to a voltage level equal to or
         # higher than the voltage level the PV plant should be connected to
@@ -1235,13 +1202,8 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
 
         if voltage_level_pv >= voltage_level_bus:
             # integrate at same bus as load
-            edisgo_object.topology.generators_df = pd.concat(
-                [
-                    edisgo_object.topology.generators_df,
-                    pv_rooftop_large.loc[[pv_pp], cols],
-                ]
-            )
-            integrated_plants = integrated_plants.append(pd.Index([pv_pp]))
+            same_bus_rows.append(pv_rooftop_large.loc[[pv_pp], cols])
+            integrated_plants_list.append(pv_pp)
         else:
             # integrate based on geolocation
             pv_pp_name = edisgo_object.integrate_component_based_on_geolocation(
@@ -1260,10 +1222,16 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
                 weather_cell_id=pv_rooftop_large.at[pv_pp, "weather_cell_id"],
                 source_id=pv_rooftop_large.at[pv_pp, "source_id"],
             )
-            integrated_plants = integrated_plants.append(pd.Index([pv_pp_name]))
-            integrated_plants_own_grid_conn = integrated_plants_own_grid_conn.append(
-                pd.Index([pv_pp_name])
-            )
+            integrated_plants_list.append(pv_pp_name)
+            integrated_plants_own_grid_conn_list.append(pv_pp_name)
+
+    # concat all collected same-bus rows in one operation (O(n) instead of O(n^2))
+    if same_bus_rows:
+        edisgo_object.topology.generators_df = pd.concat(
+            [edisgo_object.topology.generators_df, *same_bus_rows]
+        )
+    integrated_plants = pd.Index(integrated_plants_list)
+    integrated_plants_own_grid_conn = pd.Index(integrated_plants_own_grid_conn_list)
 
     # check if all PV plants were integrated
     if not len(pv_rooftop_df) == len(integrated_plants):

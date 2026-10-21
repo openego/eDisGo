@@ -339,3 +339,366 @@ class TestPowerModelsOPF:
                 )
             )
         )
+
+
+class TestContiguousIntervals:
+    def test_contiguous_index_is_one_interval(self):
+        from edisgo.opf.powermodels_opf import _contiguous_intervals
+
+        ti = pd.date_range("2035-01-01", periods=48, freq="h")
+        result = _contiguous_intervals(ti)
+        assert len(result) == 1 and result[0].equals(ti)
+
+    def test_two_disconnected_intervals(self):
+        from edisgo.opf.powermodels_opf import _contiguous_intervals
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        result = _contiguous_intervals(a.union(b))
+        assert len(result) == 2
+        assert result[0].equals(a) and result[1].equals(b)
+
+    def test_freq_restored_on_freqless_index(self):
+        from edisgo.opf.powermodels_opf import _contiguous_intervals
+
+        idx = pd.DatetimeIndex(pd.date_range("2035-01-01", periods=48, freq="h").values)
+        assert idx.freq is None
+        result = _contiguous_intervals(idx)
+        assert len(result) == 1 and result[0].freq is not None
+
+    def test_single_and_empty(self):
+        from edisgo.opf.powermodels_opf import _contiguous_intervals
+
+        assert len(_contiguous_intervals(pd.date_range("2035-01-01", periods=1))) == 1
+        assert _contiguous_intervals(pd.DatetimeIndex([])) == []
+
+
+class TestMergeOpfTimeFrames:
+    @staticmethod
+    def _empty_snapshot(opf, slack_generator_t):
+        return {
+            "slack_generator_t": slack_generator_t,
+            "hv_requirement_slacks_t": pd.DataFrame(),
+            "lines_t": {k: pd.DataFrame() for k in opf.lines_t._attributes()},
+            "heat_storage_t": {
+                k: pd.DataFrame() for k in opf.heat_storage_t._attributes()
+            },
+            "grid_slacks_t": {
+                k: pd.DataFrame() for k in opf.grid_slacks_t._attributes()
+            },
+            "battery_storage_t": {
+                k: pd.DataFrame() for k in opf.battery_storage_t._attributes()
+            },
+        }
+
+    def test_flat_frame_concatenated_and_sorted(self):
+        from edisgo.opf.powermodels_opf import _merge_opf_time_frames
+        from edisgo.opf.results.opf_result_class import OPFResults
+
+        opf = OPFResults()
+        a = pd.DataFrame({"x": [1.0]}, index=pd.date_range("2035-01-01", periods=1))
+        b = pd.DataFrame({"x": [2.0]}, index=pd.date_range("2035-07-01", periods=1))
+        _merge_opf_time_frames(
+            opf, [self._empty_snapshot(opf, a), self._empty_snapshot(opf, b)]
+        )
+        assert len(opf.slack_generator_t) == 2
+        assert list(opf.slack_generator_t["x"]) == [1.0, 2.0]
+
+
+class TestPmOptimizeIntervalSplit:
+    """pm_optimize's multi-interval split, with the single-interval OPF stubbed
+    (no Julia/DB). Patches powermodels_opf._pm_optimize_single."""
+
+    @pytest.fixture
+    def edisgo_obj(self):
+        e = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        e.set_timeindex(pd.date_range("2035-01-01", periods=24, freq="h"))
+        return e
+
+    def test_single_interval_calls_once_with_freq(self, edisgo_obj, monkeypatch):
+        import edisgo.opf.powermodels_opf as pmo
+
+        ti = pd.DatetimeIndex(pd.date_range("2035-01-01", periods=24, freq="h").values)
+        assert ti.freq is None
+        edisgo_obj.set_timeindex(ti)
+        seen = []
+        monkeypatch.setattr(
+            pmo,
+            "_pm_optimize_single",
+            lambda e, **kw: seen.append(e.timeseries.timeindex.freq),
+        )
+        pmo.pm_optimize(edisgo_obj)
+        assert seen == [pd.tseries.frequencies.to_offset("h")]
+
+    def test_two_intervals_run_separately_and_restore(self, edisgo_obj, monkeypatch):
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        seen = []
+
+        def fake_single(e, **kw):
+            seen.append(e.timeseries.timeindex)
+            e.opf_results.status = "OPTIMAL"
+            e.opf_results.solver = "Gurobi"
+            e.opf_results.solution_time = 1.0
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+        assert len(seen) == 2 and seen[0].equals(a) and seen[1].equals(b)
+        assert edisgo_obj.timeseries.timeindex.equals(full)
+        assert len(edisgo_obj.opf_results.interval_results) == 2
+        assert edisgo_obj.opf_results.solution_time == 2.0
+        assert edisgo_obj.opf_results.status == "OPTIMAL"
+
+    def test_overlying_grid_state_restored(self, edisgo_obj, monkeypatch):
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        edisgo_obj.overlying_grid.storage_units_soc = pd.Series(1.0, index=full)
+        seen_types = []
+
+        def fake_single(e, **kw):
+            og = e.overlying_grid
+            seen_types.append(type(og.storage_units_soc).__name__)
+            og.storage_units_soc = pd.DataFrame(
+                0.0, index=e.timeseries.timeindex, columns=["s1"]
+            )
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+        assert seen_types == ["Series", "Series"]
+        assert isinstance(edisgo_obj.overlying_grid.storage_units_soc, pd.Series)
+
+    def test_reactive_power_restored(self, edisgo_obj, monkeypatch):
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        gen = edisgo_obj.topology.generators_df.index[0]
+        edisgo_obj.timeseries._generators_reactive_power = pd.DataFrame(
+            0.0, index=full, columns=[gen]
+        )
+        seen_ok = []
+
+        def fake_single(e, **kw):
+            ti = e.timeseries.timeindex
+            q = e.timeseries.generators_reactive_power
+            seen_ok.append(not q.empty and q.index.equals(ti))
+            e.timeseries._generators_reactive_power = pd.DataFrame(
+                0.0, index=ti, columns=[gen]
+            )
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+        assert seen_ok == [True, True]
+        assert edisgo_obj.timeseries._generators_reactive_power.index.equals(full)
+
+    def test_infeasible_interval_stores_report_and_raises(
+        self, edisgo_obj, monkeypatch
+    ):
+        import edisgo.opf.powermodels_opf as pmo
+
+        from edisgo.flex_opt.exceptions import InfeasibleModelError
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+
+        def fake_single(e, **kw):
+            if e.timeseries.timeindex[0] == a[0]:
+                e.opf_results.status = "OPTIMAL"
+                e.opf_results.solution_time = 1.0
+            else:
+                raise InfeasibleModelError("stub")
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        with pytest.raises(InfeasibleModelError):
+            pmo.pm_optimize(edisgo_obj)
+        report = edisgo_obj.opf_results.interval_results
+        assert len(report) == 2
+        assert report[0]["status"] == "OPTIMAL"
+        assert report[1]["status"] == "infeasible"
+        assert edisgo_obj.timeseries.timeindex.equals(full)
+
+    def test_flex_inputs_narrowed_per_interval(self, edisgo_obj, monkeypatch):
+        """Each interval's OPF must see its OWN overlying-grid requirements.
+
+        Regression test for openego/eDisGo#762: set_timeindex only narrows
+        TimeSeries.timeindex, so the overlying grid kept the full reduced index
+        and to_powermodels read the first interval's values for every interval.
+        """
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        # distinguishable values per interval: 1.0 in week 1, 9.0 in week 2
+        values = [1.0] * len(a) + [9.0] * len(b)
+        edisgo_obj.overlying_grid.electromobility_active_power = pd.Series(
+            values, index=full
+        )
+        edisgo_obj.overlying_grid.dsm_active_power = pd.Series(values, index=full)
+        seen = []
+
+        def fake_single(e, **kw):
+            og = e.overlying_grid
+            seen.append(
+                {
+                    "cp_values": sorted(og.electromobility_active_power.unique()),
+                    "cp_len": len(og.electromobility_active_power),
+                    "dsm_values": sorted(og.dsm_active_power.unique()),
+                }
+            )
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+
+        assert len(seen) == 2
+        # each interval sees only its own value, over its own length
+        assert seen[0]["cp_values"] == [1.0]
+        assert seen[1]["cp_values"] == [9.0]
+        assert seen[0]["cp_len"] == len(a)
+        assert seen[1]["cp_len"] == len(b)
+        assert seen[0]["dsm_values"] == [1.0]
+        assert seen[1]["dsm_values"] == [9.0]
+        # and the full reduced index is restored afterwards
+        assert edisgo_obj.overlying_grid.electromobility_active_power.index.equals(full)
+        assert edisgo_obj.timeseries.timeindex.equals(full)
+
+    def test_dsm_and_heat_pump_narrowed_and_restored(self, edisgo_obj, monkeypatch):
+        """DSM and heat-pump inputs are narrowed per interval and restored."""
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        values = [1.0] * len(a) + [9.0] * len(b)
+        edisgo_obj.dsm.p_max = pd.DataFrame({"load1": values}, index=full)
+        edisgo_obj.heat_pump.cop_df = pd.DataFrame({"hp1": values}, index=full)
+        seen = []
+
+        def fake_single(e, **kw):
+            seen.append(
+                {
+                    "dsm": sorted(e.dsm.p_max["load1"].unique()),
+                    "dsm_len": len(e.dsm.p_max),
+                    "cop": sorted(e.heat_pump.cop_df["hp1"].unique()),
+                    "cop_len": len(e.heat_pump.cop_df),
+                }
+            )
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+
+        assert len(seen) == 2
+        assert seen[0]["dsm"] == [1.0] and seen[1]["dsm"] == [9.0]
+        assert seen[0]["cop"] == [1.0] and seen[1]["cop"] == [9.0]
+        assert seen[0]["dsm_len"] == len(a) and seen[1]["dsm_len"] == len(b)
+        assert seen[0]["cop_len"] == len(a) and seen[1]["cop_len"] == len(b)
+        # restored to the full reduced index
+        assert edisgo_obj.dsm.p_max.index.equals(full)
+        assert edisgo_obj.heat_pump.cop_df.index.equals(full)
+
+
+class TestHeatStorageStandingLoss:
+    """
+    The standing loss of a thermal storage has to scale with the time step.
+
+    ``p_loss`` is a loss per DAY (``powermodels_io._build_heat_storage``: 4 % of
+    SOC per day for individual heating), so the decay between two time steps is
+    ``(1 - p_loss) ** (time_elapsed / 24)``. The exponent used to be a fixed
+    ``1/24``, which is only correct at hourly resolution (openego/eDisGo#697).
+
+    The test runs the OPF on a 15-minute index and checks the energy balance the
+    solver enforced, which is possible because both variables of the constraint
+    are written back: ``heat_storage_t.e`` is ``hse`` and ``heat_storage_t.p`` is
+    ``phs``. It also asserts that the fixed exponent does NOT satisfy the same
+    balance, so the test fails if the old formula comes back.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        cls.edisgo.set_time_series_worst_case_analysis()
+        cls.hp = "Heat_Pump_standing_loss"
+        cls.edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector="individual_heating",
+            load_id=1,
+            ts_active_power=pd.Series(
+                index=cls.edisgo.timeseries.timeindex, data=[0.5, 0.5, 0.5, 0.5]
+            ),
+            ts_reactive_power="default",
+            bus=cls.edisgo.topology.buses_df.index[27],
+            p_set=3,
+        )
+        hp_name = cls.edisgo.topology.loads_df[
+            cls.edisgo.topology.loads_df.type == "heat_pump"
+        ].index[-1]
+        cls.hp = hp_name
+        cls.edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={hp_name: [5.0, 6.0, 5.0, 6.0]},
+            index=cls.edisgo.timeseries.timeindex,
+        )
+        cls.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            data={hp_name: [1.0, 2.0, 2.0, 1.0]},
+            index=cls.edisgo.timeseries.timeindex,
+        )
+        cls.edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
+            data={"capacity": [8.0], "efficiency": [1.0]}, index=[hp_name]
+        )
+        cls.edisgo.apply_heat_pump_operating_strategy()
+        # 15-minute steps, so time_elapsed is 0.25 and the daily loss rate has to
+        # be raised to 0.25/24 instead of 1/24
+        cls.edisgo.resample_timeseries(freq="15min")
+
+    @pytest.mark.runonlinux
+    def test_standing_loss_uses_the_elapsed_time(self):
+        time_elapsed = (
+            self.edisgo.timeseries.timeindex[1] - self.edisgo.timeseries.timeindex[0]
+        ).total_seconds() / 3600
+        assert time_elapsed == pytest.approx(0.25)
+
+        pm_optimize(
+            self.edisgo,
+            opf_version=2,
+            silence_moi=True,
+            method="nc",
+            flexible_hps=np.array([self.hp]),
+        )
+        assert self.edisgo.opf_results.status in ("LOCALLY_SOLVED", "OPTIMAL")
+
+        e = self.edisgo.opf_results.heat_storage_t.e[self.hp]
+        p = self.edisgo.opf_results.heat_storage_t.p[self.hp]
+        assert len(e) == len(self.edisgo.timeseries.timeindex)
+        # the storage has to be charged for the decay to be observable at all;
+        # on an empty storage both exponents give the same (zero) result
+        assert e.max() > 0.1
+
+        p_loss = 0.04
+        decay = (1 - p_loss) ** (time_elapsed / 24)
+        decay_fixed = (1 - p_loss) ** (1 / 24)  # the exponent before #697
+
+        expected = e.values[:-1] * decay - time_elapsed * p.values[1:]
+        assert np.allclose(e.values[1:], expected, atol=1e-6)
+
+        # the balance must NOT hold with the fixed exponent, otherwise this test
+        # would pass against the old formula as well
+        wrong = e.values[:-1] * decay_fixed - time_elapsed * p.values[1:]
+        assert not np.allclose(e.values[1:], wrong, atol=1e-6)

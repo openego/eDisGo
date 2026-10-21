@@ -1,17 +1,21 @@
- name: "Docs link check"
- on: [pull_request]
+name: "Docs link check"
+on: [push]
 
- jobs:
-   build:
-     runs-on: ubuntu-latest
-     steps:
-     - uses: actions/checkout@v6
-     - name: Install dependencies
-       run: |
-         sudo apt install pandoc
-         python -m pip install --upgrade pip
-         pip install -r rtd_requirements.txt
-     - name: Check doc links
-       run: |
-         sphinx-build . -b linkcheck -d _build/doctrees _build/html
-       working-directory: ./doc
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    # Same Python version as the Read the Docs build (.readthedocs.yml)
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+    - name: Install dependencies
+      run: |
+        sudo apt install pandoc
+        python -m pip install --upgrade pip
+        pip install -r rtd_requirements.txt
+    - name: Check doc links
+      run: |
+        sphinx-build . -b linkcheck -d _build/doctrees _build/html
+      working-directory: ./doc

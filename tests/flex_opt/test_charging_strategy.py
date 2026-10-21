@@ -99,6 +99,21 @@ class TestChargingStrategy:
         charging_strategy(self.edisgo_obj, strategy="dumb")
         assert ts._loads_active_power.index.freqstr == "15T"
 
+    def test_charging_strategy_keeps_non_contiguous_time_index(self):
+        """
+        Resampling to the charging processes' frequency and back must not fill
+        the gap of a non-contiguous time index.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=24, freq="H").append(
+            pd.date_range("1/5/2011", periods=24, freq="H")
+        )
+        self.edisgo_obj.set_timeindex(timeindex)
+        charging_strategy(self.edisgo_obj, strategy="dumb")
+
+        ts = self.edisgo_obj.timeseries
+        assert ts.timeindex.equals(timeindex)
+        assert ts.charging_points_active_power(self.edisgo_obj).index.equals(timeindex)
+
     def test_charging_strategy_with_subset_of_parks(self):
         """
         Charging strategies can be applied to different subsets of charging parks

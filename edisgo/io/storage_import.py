@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -49,6 +60,27 @@ def home_batteries_oedb(
         units.
 
     """
+    batteries_df = _query_home_batteries_oedb(
+        engine=engine,
+        scenario=scenario,
+        building_ids=edisgo_obj.topology.loads_df.building_id.dropna().unique(),
+        upper_power_limit=edisgo_obj.config["grid_connection"][
+            "upper_limit_voltage_level_4"
+        ],
+    )
+
+    return _home_batteries_grid_integration(edisgo_obj, batteries_df)
+
+
+def _query_home_batteries_oedb(
+    engine: Engine,
+    scenario: str,
+    building_ids,
+    upper_power_limit: float,
+    limit: int | None = None,
+):
+    """Query home batteries for selected buildings from the OEP."""
+
     config = Config()
     (egon_home_batteries,) = config.import_tables_from_oep(
         engine, ["egon_home_batteries"], "supply"
@@ -63,17 +95,15 @@ def home_batteries_oedb(
             )
             .filter(
                 egon_home_batteries.scenario == scenario,
-                egon_home_batteries.building_id.in_(
-                    edisgo_obj.topology.loads_df.building_id.unique()
-                ),
-                egon_home_batteries.p_nom
-                <= edisgo_obj.config["grid_connection"]["upper_limit_voltage_level_4"],
+                egon_home_batteries.building_id.in_(building_ids),
+                egon_home_batteries.p_nom <= upper_power_limit,
             )
             .order_by(egon_home_batteries.index)
         )
-        batteries_df = pd.read_sql(sql=query.statement, con=engine, index_col=None)
+        if limit is not None:
+            query = query.limit(limit)
 
-    return _home_batteries_grid_integration(edisgo_obj, batteries_df)
+        return pd.read_sql(sql=query.statement, con=engine, index_col=None)
 
 
 def _home_batteries_grid_integration(edisgo_obj, batteries_df):
@@ -121,12 +151,18 @@ def _home_batteries_grid_integration(edisgo_obj, batteries_df):
         edisgo_obj.topology.storage_units_df = pd.concat(
             [edisgo_obj.topology.storage_units_df, batteries_small]
         )
-        int_bats = batteries_small.index
+        # accumulate integrated battery names in a plain list (built into an Index
+        # once at the end) to avoid O(n^2) per-iteration Index.append below
+        int_bats_list: list = list(batteries_small.index)
 
         # integrate larger batteries - if generator/load is already connected to
         # higher voltage level it can be integrated at same bus, otherwise it is
         # integrated based on geolocation
-        int_bats_own_grid_conn = pd.Index([])
+        int_bats_own_grid_conn_list: list = []
+        # collect same-bus rows and concat them into storage_units_df once after the
+        # loop to avoid O(n^2) per-iteration pd.concat (rows are independent additions,
+        # so batching keeps the same resulting frame and row order)
+        same_bus_rows: list = []
         for bat in batteries_large.index:
             # check if building is already connected to a voltage level equal to or
             # higher than the voltage level the battery should be connected to
@@ -138,13 +174,8 @@ def _home_batteries_grid_integration(edisgo_obj, batteries_df):
 
             if voltage_level_bat >= voltage_level_bus:
                 # integrate at same bus as generator/load
-                edisgo_obj.topology.storage_units_df = pd.concat(
-                    [
-                        edisgo_obj.topology.storage_units_df,
-                        batteries_large.loc[[bat], :],
-                    ]
-                )
-                int_bats = int_bats.append(pd.Index([bat]))
+                same_bus_rows.append(batteries_large.loc[[bat], :])
+                int_bats_list.append(bat)
             else:
                 # integrate based on geolocation
                 bat_name = edisgo_obj.integrate_component_based_on_geolocation(
@@ -160,8 +191,16 @@ def _home_batteries_grid_integration(edisgo_obj, batteries_df):
                     building_id=batteries_large.at[bat, "building_id"],
                     type="home_storage",
                 )
-                int_bats = int_bats.append(pd.Index([bat_name]))
-                int_bats_own_grid_conn = int_bats_own_grid_conn.append(pd.Index([bat]))
+                int_bats_list.append(bat_name)
+                int_bats_own_grid_conn_list.append(bat)
+
+        # concat all collected same-bus rows in one operation (O(n) instead of O(n^2))
+        if same_bus_rows:
+            edisgo_obj.topology.storage_units_df = pd.concat(
+                [edisgo_obj.topology.storage_units_df, *same_bus_rows]
+            )
+        int_bats = pd.Index(int_bats_list)
+        int_bats_own_grid_conn = pd.Index(int_bats_own_grid_conn_list)
         return int_bats, int_bats_own_grid_conn
 
     # add further information needed in storage_units_df

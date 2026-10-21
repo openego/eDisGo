@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pandas.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_index_equal
 
 from edisgo.edisgo import EDisGo
 from edisgo.io import electromobility_import
@@ -76,8 +76,8 @@ class TestElectromobility:
         charging_processes_df = self.edisgo_obj.electromobility.charging_processes_df
         assert len(charging_processes_df) == 48
         assert isinstance(charging_processes_df, pd.DataFrame)
-        assert charging_processes_df.at[45, "park_end_timesteps"] == 232
-        assert charging_processes_df.at[216, "charging_park_id"] == 1466
+        assert charging_processes_df.at[45, "park_end_timesteps"] == 655
+        assert charging_processes_df.at[45, "charging_park_id"] == 1391
 
     def test_potential_charging_parks_gdf(self):
         potential_charging_parks_gdf = (
@@ -103,7 +103,7 @@ class TestElectromobility:
         )
         assert (
             integrated_charging_parks_df.at[1466, "edisgo_id"]
-            == "Charging_Point_LVGrid_362451_public_1"
+            == "Charging_Point_LVGrid_170174_public_1"
         )
         assert (
             integrated_charging_parks_df.at[1602, "edisgo_id"]
@@ -153,7 +153,7 @@ class TestElectromobility:
         # check charging demand
         for cp in [
             "Charging_Point_LVGrid_131957_public_1",
-            "Charging_Point_LVGrid_362451_public_1",
+            "Charging_Point_LVGrid_170174_public_1",
             "Charging_Point_LVGrid_136124_work_1",
         ]:
             charging_park_id = integrated_charging_parks.loc[
@@ -184,6 +184,60 @@ class TestElectromobility:
             "upper_energy"
         ].index
         assert (flex_bands_index[1] - flex_bands_index[0]) == pd.Timedelta("1H")
+
+    def test_get_flexibility_bands_scopes_to_mismatched_timeindex(self):
+        """
+        Regression test for eDisGo#703: get_flexibility_bands used to build
+        bands spanning SimBEV's own native calendar/range only, with no
+        alignment to edisgo.timeseries.timeindex - indexing the bands by a
+        timeindex in a different year (SimBEV's start_date here is 2011)
+        and/or a shorter window than SimBEV's simulated range raised
+        KeyError. The bands must now be year-aligned and trimmed to exactly
+        that timeindex.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+
+        assert edisgo_obj.electromobility.simbev_config_df.start_date.values[
+            0
+        ] == np.datetime64("2011-01-01")
+        short_timeindex = pd.date_range("2035-01-15", periods=24, freq="h")
+        edisgo_obj.set_timeindex(short_timeindex)
+
+        bands = edisgo_obj.electromobility.get_flexibility_bands(
+            edisgo_obj, ["work", "public"]
+        )
+
+        for key in ("upper_power", "lower_energy", "upper_energy"):
+            assert_index_equal(bands[key].index, short_timeindex)
+            # must not raise KeyError
+            edisgo_obj.electromobility.flexibility_bands[key].loc[short_timeindex]
+
+    def test_get_flexibility_bands_empty_timeindex_is_a_no_op(self):
+        """
+        With no timeindex set at all, get_flexibility_bands must return the
+        bands untouched, spanning SimBEV's own native calendar/range - there
+        is nothing to align/trim against yet.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+
+        assert edisgo_obj.timeseries.timeindex.empty
+
+        bands = edisgo_obj.electromobility.get_flexibility_bands(
+            edisgo_obj, ["work", "public"]
+        )
+
+        assert len(bands["upper_power"].index) == 7 * 96  # 7 days, 15-min steps
+        assert bands["upper_power"].index[0] == pd.Timestamp("2011-01-01")
 
     def test_fix_flexibility_bands_rounding_errors(self, caplog):
         # set up test data

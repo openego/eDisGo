@@ -11,7 +11,7 @@ pytestmark = pytest.mark.fast
 
 
 class TestDSM:
-    @pytest.yield_fixture(autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_dsm_test_data(self):
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.p_max = pd.DataFrame(

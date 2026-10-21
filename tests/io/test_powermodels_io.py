@@ -4,6 +4,7 @@ import pytest
 
 from edisgo import EDisGo
 from edisgo.io import powermodels_io
+from edisgo.io.powermodels_io import _get_time_elapsed_in_hours
 from edisgo.tools.tools import aggregate_district_heating_components
 
 
@@ -329,3 +330,159 @@ class TestPowermodelsIO:
                 )
                 assert pf == 1
                 assert sign == 1
+
+
+class TestOverlyingGridTimeindexAlignment:
+    """to_powermodels must read the overlying-grid requirements for the ACTIVE
+    time index, not positionally off a wider one.
+
+    Regression tests for openego/eDisGo#762.
+    """
+
+    @pytest.fixture
+    def edisgo_obj(self):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        return edisgo
+
+    @staticmethod
+    def _set_overlying_grid(edisgo, index, values):
+        for attr in [
+            "renewables_curtailment",
+            "storage_units_active_power",
+            "electromobility_active_power",
+            "heat_pump_decentral_active_power",
+            "heat_pump_central_active_power",
+            "dsm_active_power",
+        ]:
+            setattr(edisgo.overlying_grid, attr, pd.Series(values, index=index))
+
+    def test_hv_requirements_use_active_timeindex(self, edisgo_obj):
+        """With the overlying grid narrowed to the active index, the scalar
+        target and the per-time-step series belong to that interval."""
+        a = edisgo_obj.timeseries.timeindex[:2]
+        b = edisgo_obj.timeseries.timeindex[2:]
+        full = a.union(b)
+        # 1.0 over the first interval, 9.0 over the second
+        self._set_overlying_grid(edisgo_obj, full, [1.0] * len(a) + [9.0] * len(b))
+        # narrow BOTH the active index and the overlying grid to interval 2,
+        # as _narrow_flex_inputs does per interval
+        edisgo_obj.set_timeindex(b)
+        self._set_overlying_grid(edisgo_obj, b, [9.0] * len(b))
+
+        pm, hv_flex_dict = powermodels_io.to_powermodels(edisgo_obj, opf_version=3)
+
+        # the scalar target for network 1 is interval 2's first value, not
+        # interval 1's
+        assert pm["HV_requirements"]["1"]["P"] == pytest.approx(9.0)
+        # and the per-time-step series covers only interval 2
+        assert len(pm["time_series"]["HV_requirements"]["1"]["P"]) == len(b)
+        assert pm["time_series"]["HV_requirements"]["1"]["P"] == [9.0] * len(b)
+
+    def test_raises_when_overlying_grid_does_not_cover_timeindex(self, edisgo_obj):
+        """A requirement series that misses time steps of the active index
+        raises instead of being read positionally."""
+        full = edisgo_obj.timeseries.timeindex
+        # overlying grid covers only the first two steps ...
+        self._set_overlying_grid(edisgo_obj, full[:2], [1.0, 1.0])
+        # ... while the optimization runs on all four
+        with pytest.raises(ValueError, match="do not cover the time index"):
+            powermodels_io.to_powermodels(edisgo_obj, opf_version=3)
+
+    def test_error_names_attributes_and_missing_steps(self, edisgo_obj):
+        """The error message names the offending attribute and step count."""
+        full = edisgo_obj.timeseries.timeindex
+        self._set_overlying_grid(edisgo_obj, full, [1.0] * len(full))
+        # shorten a single attribute
+        edisgo_obj.overlying_grid.electromobility_active_power = pd.Series(
+            [1.0], index=full[:1]
+        )
+        with pytest.raises(ValueError) as exc:
+            powermodels_io.to_powermodels(edisgo_obj, opf_version=3)
+        assert "electromobility_active_power" in str(exc.value)
+        # (missing, additional) for that attribute
+        assert f"({len(full) - 1}, 0)" in str(exc.value)
+
+    def test_raises_when_overlying_grid_is_wider_than_timeindex(self, edisgo_obj):
+        """The reported failure mode: the active index is narrowed to one
+        interval but the overlying grid still spans all of them, so the
+        positional reads take the wrong interval's values."""
+        full = edisgo_obj.timeseries.timeindex
+        a, b = full[:2], full[2:]
+        self._set_overlying_grid(edisgo_obj, full, [1.0] * len(a) + [9.0] * len(b))
+        # narrow the active index only -- the overlying grid stays wide
+        edisgo_obj.set_timeindex(b)
+        with pytest.raises(ValueError, match="do not cover the time index"):
+            powermodels_io.to_powermodels(edisgo_obj, opf_version=3)
+
+    def test_empty_overlying_grid_still_falls_back(self, edisgo_obj):
+        """An absent overlying grid is not a coverage error — it keeps the
+        existing fallback to opf_version 2."""
+        pm, hv_flex_dict = powermodels_io.to_powermodels(edisgo_obj, opf_version=3)
+        assert pm["opf_version"] == 2
+
+    def test_no_check_for_opf_version_below_three(self, edisgo_obj):
+        """opf_version 1 and 2 do not use HV requirements, so a short
+        overlying-grid series is irrelevant and must not raise."""
+        full = edisgo_obj.timeseries.timeindex
+        self._set_overlying_grid(edisgo_obj, full[:1], [1.0])
+        pm, hv_flex_dict = powermodels_io.to_powermodels(edisgo_obj, opf_version=2)
+        assert pm["opf_version"] == 2
+
+
+# test _get_time_elapsed_in_hours for inter-timestep couplings in
+# Julia to simulate
+# 1) timesteps <1h, 1h, 2h, >24h and
+# 2) whether too few, non-equidistant or
+#    negative timestamps raise an error
+def _snapshots(*timestamps):
+    return pd.to_datetime(timestamps)
+
+
+# 1) test various snapshot intervals and expected time elapsed in hours
+@pytest.mark.parametrize(
+    ("snapshots", "expected"),
+    [
+        (pd.date_range("2035-01-01", periods=3, freq="15min"), 0.25),
+        (pd.date_range("2035-01-01", periods=3, freq="h"), 1.0),
+        (pd.date_range("2035-01-01", periods=3, freq="2h"), 2.0),
+        (_snapshots("2035-01-01 00:00", "2035-01-02 01:00"), 25.0),
+    ],
+)
+# test expected time elapsed in hours for above defined snapshot intervals
+def test_get_time_elapsed_in_hours(snapshots, expected):
+    assert _get_time_elapsed_in_hours(snapshots) == pytest.approx(expected)
+
+
+# 2) test three other cases:
+# 1. not enough snapshots (1 snapshot)
+# 2. non-equidistant snapshots (15min, 1h, 1h 15min)
+# 3. negative time elapsed (snapshots in reverse order)
+@pytest.mark.parametrize(
+    ("snapshots", "error_message"),
+    [
+        (
+            _snapshots("2035-01-01 00:00"),
+            "At least two snapshots",
+        ),
+        (
+            _snapshots(
+                "2035-01-01 00:00",
+                "2035-01-01 00:15",
+                "2035-01-01 01:15",
+            ),
+            "equidistant",
+        ),
+        (
+            _snapshots(
+                "2035-01-01 01:00",
+                "2035-01-01 00:00",
+            ),
+            "positive",
+        ),
+    ],
+)
+# test that ValueError is raised for the above three cases
+def test_get_time_elapsed_in_hours_raises(snapshots, error_message):
+    with pytest.raises(ValueError, match=error_message):
+        _get_time_elapsed_in_hours(snapshots)

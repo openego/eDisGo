@@ -1,12 +1,13 @@
-"""
-Helper functions to build scenario filters that replicate mview logic.
-
-These functions create SQLAlchemy filter conditions that match the original
-materialized view definitions, allowing direct queries on base tables.
-
-Author: Generated for mviews replacement
-Date: 2025-12-17
-"""
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 
 def build_conv_scenario_filter(orm_table, scenario, version=None, preversion="v0.3.0"):
@@ -55,7 +56,8 @@ def build_conv_scenario_filter(orm_table, scenario, version=None, preversion="v0
             [
                 orm_table.scenario == "NEP 2035",
                 orm_table.fuel == "pumped_storage",
-                (orm_table.shutdown == None) | (orm_table.shutdown >= 2049),
+                (orm_table.shutdown == None)  # noqa: E711
+                | (orm_table.shutdown >= 2049),
             ]
         )
     elif scenario == "NEP 2035":
@@ -67,7 +69,8 @@ def build_conv_scenario_filter(orm_table, scenario, version=None, preversion="v0
                 orm_table.fuel != "hydro",
                 orm_table.fuel != "run_of_river",
                 orm_table.fuel != "reservoir",
-                (orm_table.shutdown == None) | (orm_table.shutdown >= 2034),
+                (orm_table.shutdown == None)  # noqa: E711
+                | (orm_table.shutdown >= 2034),
             ]
         )
     else:

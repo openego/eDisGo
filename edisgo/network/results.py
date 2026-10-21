@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import logging
 import os
 
@@ -98,7 +109,7 @@ class Results:
         The given active power for each line / transformer is the
         active power at the line ending / transformer side with the higher
         apparent power determined from active powers :math:`p_0` and
-        :math:`p_1` and reactive powers :math:`q_0` and :math:`q_0` at the
+        :math:`p_1` and reactive powers :math:`q_0` and :math:`q_1` at the
         line endings / transformer sides:
 
         .. math::
@@ -138,7 +149,7 @@ class Results:
     @property
     def pfa_q(self):
         r"""
-        Active power over components in Mvar from last power flow analysis.
+        Reactive power over components in Mvar from last power flow analysis.
 
         The given reactive power over each line / transformer is the
         reactive power at the line ending / transformer side with the higher
@@ -752,7 +763,7 @@ class Results:
         * 'grid_losses' : Attribute :py:attr:`~grid_losses` is saved to
           `grid_losses.csv`.
         * 'pfa_slack' : Attribute :py:attr:`~pfa_slack` is saved to
-          `pfa_slack.csv`.
+          `slack_results.csv`.
         * 'pfa_v_mag_pu_seed' : Attribute :py:attr:`~pfa_v_mag_pu_seed` is
           saved to `pfa_v_mag_pu_seed.csv`, if `save_seed` is set to True.
         * 'pfa_v_ang_seed' : Attribute :py:attr:`~pfa_v_ang_seed` is

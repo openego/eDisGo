@@ -1,3 +1,9 @@
+"""
+Seed warm-start values on a (single-network) data dict: copy each flexibility's
+optimised power/energy results into the corresponding `*_start` fields, so a
+subsequent non-convex (Ipopt) solve can be warm-started from a previous solution.
+Used in the SOC → NC `warm_start` workflow.
+"""
 function set_ac_bf_start_values!(network::Dict{String,<:Any})
 
     for (i,gen) in network["gen_nd"]
@@ -47,7 +53,14 @@ function correct_bus_types!(data::Dict{String,<:Any})
     apply_pm!(eDisGo_OPF._correct_bus_types!, data)
 end
 
-""
+"""
+Internal worker for `correct_bus_types!`, operating on a single (non-multinetwork)
+PowerModels data dict.
+
+Demotes PV buses (type 2) without an active generator to PQ (type 1), validates
+the slack bus (type 3), and — if no slack bus is found — promotes the bus of the
+largest generator to slack. See `correct_bus_types!` for the public entry point.
+"""
 function _correct_bus_types!(pm_data::Dict{String,<:Any})
     bus_gens = Dict(bus["index"] => [] for (i,bus) in pm_data["bus"])
 
