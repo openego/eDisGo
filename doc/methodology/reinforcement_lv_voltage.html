@@ -1,0 +1,227 @@
+<div class="rw" id="rw-lvv">
+<div class="rw-row" id="rw-lvv-ctl"></div>
+<div class="rw-box"><svg id="rw-lvv-net" role="img" aria-label="LV feeder"></svg></div>
+<div class="rw-legend">
+  <span><i style="border-color:var(--std)"></i>NAYY 4x1x150 (standard)</span>
+  <span><i style="border-color:var(--thin)"></i>thinner than standard</span>
+  <span><i style="border-color:var(--thick)"></i>thicker than standard</span>
+  <span><i style="border-color:var(--new)"></i>new or reinforced</span>
+  <span><i style="border-color:var(--hc);border-top-style:dashed"></i>house connection (never reinforced due to voltage issues)</span>
+</div>
+<div class="rw-box"><svg id="rw-lvv-prof" role="img" aria-label="Voltage along the feeder"></svg></div>
+<div class="rw-stats" id="rw-lvv-stats"></div>
+<div class="rw-log" id="rw-lvv-log" aria-live="polite"></div>
+<p class="rw-note">Simplified model: resistance only, cos&nbsp;φ = 1, load case, 6.5 % allowed drop, rural costs (60 kEUR/km incl. earthwork, 9 kEUR/km per additional cable). The selection logic follows <code>reinforce_lines_voltage_issues</code>; eDisGo runs a full power flow after every iteration.</p>
+<script>
+(function () {
+  var RW = window.RW, T = function (x) { return "NAYY 4x1x" + x; };
+  // Simplified radial power flow and the selection logic of reinforce_lines_voltage_issues.
+  // cos phi = 1, resistance only, voltage 1.0 p.u. at the station; eDisGo itself runs a
+  // Newton-Raphson power flow with PyPSA.
+  var SIM = (function () {
+  var el = RW.el, f = RW.f;
+  var LV = RW.DATA.lvCables, STD = RW.DATA.lvStd, C = RW.DATA.costs.lv;
+  var COST = { cable: C.cable, earthRural: C.rural - C.cable };   // kEUR/km
+  var U = 400, VMIN = 1 - 0.065;                             // lv_max_v_drop
+  function R(l) { return LV[l.type][0] * l.len / l.n; }
+  function Imax(l) { return LV[l.type][1] * 1000 * l.n; }
+  function short(t) { return t.replace("NAYY 4x1x", ""); }
+  function clone(g) { return JSON.parse(JSON.stringify(g)); }
+
+  // network: { root, nodes: { id: { parent, line: {type, len [km], n, hc}, load [kW], inb, row } } }
+  function kids(g) { var k = {}; for (var id in g.nodes) { var p = g.nodes[id].parent; if (p) (k[p] = k[p] || []).push(id); } return k; }
+  function flow(g, scale) {
+    var k = kids(g), P = {}, v = {}, I = {};
+    (function down(id) { var p = (g.nodes[id].load || 0) * 1000 * scale; (k[id] || []).forEach(function (c) { p += down(c); }); P[id] = p; return p; })(g.root);
+    (function walk(id, vp) { v[id] = vp; (k[id] || []).forEach(function (c) { I[c] = P[c] / (Math.sqrt(3) * U); walk(c, vp - P[c] * R(g.nodes[c].line) / (U * U)); }); })(g.root, 1);
+    return { P: P, v: v, I: I };
+  }
+  function pathTo(g, id) { var p = []; for (var n = id; n; n = g.nodes[n].parent) p.unshift(n); return p; }
+  function plen(g, id) { var s = 0; for (var n = id; g.nodes[n].parent; n = g.nodes[n].parent) s += g.nodes[n].line.len; return s; }
+  function crit(g, fl) { return Object.keys(g.nodes).filter(function (id) { return fl.v[id] < VMIN - 1e-9; }); }
+  function feederOf(g, id) { return pathTo(g, id)[1]; }
+  function cost(l, touched, id) { return COST.cable * l.len + (touched[id] ? 0 : COST.earthRural * l.len); }
+
+  // one iteration of reinforce_lines_voltage_issues for one feeder
+  function treatFeeder(g, fl, feeder, touched, log) {
+    var cs = crit(g, fl).filter(function (id) { return feederOf(g, id) === feeder; });
+    var far = cs[0]; cs.forEach(function (c) { if (plen(g, c) > plen(g, far)) far = c; });
+    var path = pathTo(g, far), Lp = plen(g, far), total = 0;
+    var d = path.filter(function (n) { return plen(g, n) >= 2 / 3 * Lp - 1e-12; })[0];
+    while (g.nodes[d].inb) d = path[path.indexOf(d) - 1];
+    if (d !== path[1]) {
+      var len = +plen(g, d).toFixed(3), n = g.nodes[d];
+      n.parent = g.root; n.line = { type: STD, len: len, n: 1, hc: false, split: true };
+      touched[d] = true; total = (COST.cable + COST.earthRural) * len;
+      log.push({ what: "split at " + d + ": new line station → " + d + " (" + Math.round(len * 1000) + " m, 1× " + short(STD) + ")", cost: total, line: d });
+      return total;
+    }
+    // node at two thirds is the feeder representative: reinforce lines on the path
+    var vdiff = 1 - fl.v[far], dev = VMIN - fl.v[far], share = Math.min(1, dev / vdiff);
+    var lines = path.slice(1).filter(function (id) { return !g.nodes[id].line.hc; });
+    function rI() { return lines.reduce(function (s, id) { return s + R(g.nodes[id].line) * fl.I[id]; }, 0); }
+    var start = rI(), target = start * (1 - share / 2), guard = 0;
+    log.push({ info: true, what: d + " is directly connected to the station, no split possible. share = " + f(dev * 100) + " % / " + f(vdiff * 100) + " % = " + f(share) + ", reduce Σ r·I from " + f(start) + " V to " + f(target) + " V" });
+    while (rI() > target + 1e-12 && guard++ < 60) {
+      var best = null;
+      lines.forEach(function (id) {
+        var l = g.nodes[id].line, r = R(l), rs = LV[STD][0] * l.len, rep = l.type !== STD && rs < r;
+        var red = (rep ? r - rs : r / (l.n + 1)) * fl.I[id], c = cost(l, touched, id);
+        if (red > 0 && (!best || red / c > best.eff)) best = { id: id, rep: rep, red: red, c: c, eff: red / c };
+      });
+      if (!best) break;
+      var l2 = g.nodes[best.id].line, old = l2.n + "× " + short(l2.type);
+      if (best.rep) { l2.type = STD; l2.n = 1; } else l2.n += 1;
+      touched[best.id] = true; total += best.c;
+      log.push({ what: best.id + ": " + old + " → " + l2.n + "× " + short(l2.type) + ", −" + f(best.red) + " V for " + f(best.c, 1) + " kEUR", cost: best.c, line: best.id });
+    }
+    return total;
+  }
+  function reinforceVoltage(g0, scale, maxIter) {
+    var g = clone(g0), touched = {}, states = [{ g: g0, cost: 0, log: [] }], c = 0;
+    for (var it = 1; it <= (maxIter || 20); it++) {
+      var fl = flow(g, scale), cs = crit(g, fl);
+      if (!cs.length) return { states: states, ok: true };
+      var log = [], fs = [];
+      cs.forEach(function (x) { var fd = feederOf(g, x); if (fs.indexOf(fd) < 0) fs.push(fd); });
+      fs.forEach(function (fd) { c += treatFeeder(g, fl, fd, touched, log); });
+      states.push({ g: clone(g), cost: c, log: log, vmin: Math.min.apply(null, Object.keys(fl.v).map(function (k) { return fl.v[k]; })) });
+    }
+    var fe = flow(g, scale);
+    return { states: states, ok: !crit(g, fe).length, maxed: true };
+  }
+
+  // feeder builder: list of {id, type, len, n, load, hc, parent, branch, row}
+  function feeder(spec) {
+    var g = { root: "S", nodes: { S: { parent: null, load: 0, row: 0 } } }, prev = "S";
+    spec.forEach(function (s) {
+      var row = s.row != null ? s.row : (s.branch ? 1 : 0);
+      g.nodes[s.id] = { parent: s.parent || prev, line: { type: s.type, len: s.len, n: s.n || 1, hc: false }, load: 0, row: row };
+      if (s.load) {
+        var hc = s.hc || { type: "NAYY 4x1x35", len: 0.02 };
+        g.nodes["H" + s.id.slice(1)] = { parent: s.id, line: { type: hc.type, len: hc.len, n: 1, hc: true }, load: s.load, inb: true, row: row };
+      }
+      if (!s.branch) prev = s.id;
+    });
+    return g;
+  }
+
+  // draw a feeder: layout from the original network g0, state g, voltages fl
+  function drawFeeder(svg, g, g0, fl, hl) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var W = 800, x0 = 76, maxL = 0, rows = {};
+    Object.keys(g0.nodes).forEach(function (id) { var n = g0.nodes[id]; rows[n.row || 0] = 1; if (!n.inb && id !== g0.root) maxL = Math.max(maxL, plen(g0, id)); });
+    var y0 = rows[1] ? 126 : 76, H = rows[1] ? 210 : 160, sx = (W - x0 - 40) / maxL, pos = {};
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    pos[g0.root] = { x: x0 - 30, y: y0 };
+    Object.keys(g0.nodes).forEach(function (id) { var n = g0.nodes[id]; if (id !== g0.root && !n.inb) pos[id] = { x: x0 + plen(g0, id) * sx, y: n.row === 1 ? y0 - 80 : y0 }; });
+    Object.keys(g0.nodes).forEach(function (id) { var n = g0.nodes[id]; if (n.inb) pos[id] = { x: pos[n.parent].x, y: pos[n.parent].y + (n.row === 1 ? 34 : 46) }; });
+    Object.keys(g.nodes).forEach(function (id) {
+      var n = g.nodes[id]; if (!n.parent) return;
+      var l = n.line, o = g0.nodes[id], changed = !o || o.parent !== n.parent || o.line.type !== l.type || o.line.n !== l.n;
+      var col = changed ? "var(--new)" : l.hc ? "var(--hc)" : l.type === STD ? "var(--std)" : LV[l.type][0] > LV[STD][0] ? "var(--thin)" : "var(--thick)";
+      var a = pos[n.parent], b = pos[id], w = Math.min(2.4 + 1.8 * (l.n - 1), 11), mid;
+      if (l.split) {
+        var lift = -(46 + Math.min(30, (b.x - a.x) * 0.06));
+        el("path", { d: "M" + (a.x + 12) + "," + a.y + " C" + (a.x + 70) + "," + (a.y + lift) + " " + (b.x - 50) + "," + (b.y + lift) + " " + b.x + "," + b.y, fill: "none", stroke: col, "stroke-width": w, "stroke-linecap": "round" }, null, svg);
+        mid = { x: (a.x + b.x) / 2, y: a.y + lift * 0.75 };
+      } else {
+        var ax = n.parent === g.root ? a.x + 12 : a.x;
+        el("line", { x1: ax, y1: a.y, x2: b.x, y2: b.y, stroke: col, "stroke-width": w, "stroke-linecap": "round", "stroke-dasharray": l.hc ? "4 3" : null }, null, svg);
+        mid = { x: (ax + b.x) / 2, y: (a.y + b.y) / 2 };
+      }
+      var lab = (l.n > 1 ? l.n + "×" : "") + short(l.type);
+      if (l.hc) el("text", { x: b.x + 6, y: (a.y + b.y) / 2 + 2, "class": "rw-sm" }, lab, svg);
+      else el("text", { x: mid.x, y: mid.y - 8, "font-size": 11, "text-anchor": "middle" }, lab, svg);
+      if (hl && hl[id]) el("circle", { cx: mid.x, cy: l.hc ? (a.y + b.y) / 2 : mid.y, r: 10, fill: "none", stroke: "var(--acc)", "stroke-width": 1.6 }, null, svg);
+    });
+    var S = pos[g.root];
+    el("rect", { x: S.x - 11, y: S.y - 15, width: 23, height: 30, rx: 2, fill: "#fff", stroke: "var(--ink)", "stroke-width": 1.5 }, null, svg);
+    el("text", { x: S.x + 1, y: S.y + 30, "class": "rw-sm", "text-anchor": "middle" }, "station", svg);
+    Object.keys(g.nodes).forEach(function (id) {
+      if (id === g.root) return;
+      var n = g.nodes[id], p = pos[id], bad = fl.v[id] < VMIN - 1e-9;
+      if (n.inb) {
+        el("rect", { x: p.x - 7, y: p.y - 6, width: 14, height: 12, fill: bad ? "var(--bad)" : "#fff", stroke: bad ? "var(--bad)" : "var(--ink)", "stroke-width": 1.2 }, null, svg);
+        el("text", { x: p.x, y: p.y + 20, "font-size": 10, "text-anchor": "middle", fill: bad ? "var(--bad)" : "var(--muted)" }, f(fl.v[id], 3), svg);
+      } else {
+        el("circle", { cx: p.x, cy: p.y, r: 4.5, fill: bad ? "var(--bad)" : "#fff", stroke: "var(--ink)", "stroke-width": 1.2 }, null, svg);
+        el("text", { x: p.x + 6, y: p.y + 15, "class": "rw-sm" }, id, svg);
+      }
+    });
+  }
+  // voltage along the path to `target`, before (dashed) and now
+  function drawProfile(svg, g0, path, f0, f1, vmin) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var W = 800, H = 214, L = 52, Rr = 16, T = 28, B = 28;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    var xs = path.map(function (id) { return plen(g0, id); }), mx = xs[xs.length - 1] || 1;
+    var lo = Math.min(vmin || 0.92, Math.min.apply(null, path.map(function (id) { return Math.min(f0.v[id], f1.v[id]); })) - 0.005);
+    lo = Math.floor(lo * 100) / 100;
+    function X(x) { return L + x / mx * (W - L - Rr); }
+    function Y(v) { return T + (1 - v) / (1 - lo) * (H - T - B); }
+    for (var v = 1; v >= lo - 1e-9; v -= 0.02) { el("line", { x1: L, x2: W - Rr, y1: Y(v), y2: Y(v), stroke: "var(--grid)" }, null, svg); el("text", { x: L - 6, y: Y(v) + 4, "text-anchor": "end", "class": "rw-sm" }, f(v, 2), svg); }
+    var st = mx > 1 ? 0.2 : 0.1;
+    for (var x = 0; x <= mx + 1e-9; x += st) el("text", { x: X(x), y: H - 8, "text-anchor": "middle", "class": "rw-sm" }, Math.round(x * 1000) + " m", svg);
+    el("rect", { x: L, y: Y(VMIN), width: W - L - Rr, height: Math.max(0, Y(lo) - Y(VMIN)), fill: "var(--bad-soft)" }, null, svg);
+    el("line", { x1: L, x2: W - Rr, y1: Y(VMIN), y2: Y(VMIN), stroke: "var(--bad)", "stroke-dasharray": "5 3" }, null, svg);
+    el("text", { x: L + 6, y: Y(VMIN) + 14, "font-size": 11, fill: "var(--bad)" }, "allowed 0.935 p.u. (6.5 % drop)", svg);
+    function poly(fl, a) { a.points = path.map(function (id, i) { return X(xs[i]) + "," + Y(fl.v[id]); }).join(" "); a.fill = "none"; el("polyline", a, null, svg); }
+    poly(f0, { stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "4 4" });
+    poly(f1, { stroke: "var(--acc)", "stroke-width": 2.5 });
+    el("text", { x: L, y: 14, "class": "rw-sm" }, "voltage on the path to the weakest house · dashed: before reinforcement", svg);
+  }
+  return { VMIN: VMIN, flow: flow, pathTo: pathTo, reinforceVoltage: reinforceVoltage, feeder: feeder, drawFeeder: drawFeeder, drawProfile: drawProfile };
+  })();
+  var NETS = {
+    even: { label: "evenly loaded feeder", scale: [0.6, 2, 1.3], g: SIM.feeder([1, 2, 3, 4, 5, 6].map(function (i) { return { id: "B" + i, type: T(150), len: 0.08, load: 25 }; })),
+      text: "Six standard cables, 25 kW per house. The farthest house hangs at B6; the first bus at two thirds of its path is B5, which is connected to the station by a new 400 m standard line." },
+    long: { label: "long first line", scale: [0.7, 1.3, 1], g: SIM.feeder([
+        { id: "B1", type: T(240), len: 1.0, load: 5 }, { id: "B2", type: T(50), len: 0.15, load: 10 },
+        { id: "B3", type: T(50), len: 0.15, load: 10 }, { id: "B4", type: T(50), len: 0.12, load: 35, hc: { type: T(35), len: 0.05 } }]),
+      text: "The first line is 1 km long, so the bus at two thirds is B1, which is already connected to the station: no split is possible. The lines on the path are reinforced by the largest reduction of r·I per cost. The 50 m house connection at B4 would be the cheapest measure, but house connections are not reinforced." },
+    thin: { label: "one thin cable", scale: [0.8, 1.4, 1], g: SIM.feeder([
+        { id: "B1", type: T(150), len: 0.1, load: 20 }, { id: "B2", type: T(150), len: 0.1, load: 20 }, { id: "B3", type: T(35), len: 0.1, load: 20 },
+        { id: "B4", type: T(150), len: 0.1, load: 20 }, { id: "B5", type: T(150), len: 0.1, load: 20 }]),
+      text: "A single 100 m NAYY 4x1x35 causes the voltage issue. eDisGo still splits at two thirds and installs a 400 m line (24 kEUR); replacing the thin cable would cost 6 kEUR. Choosing the cheaper of both measures is tracked in issue openego/eDisGo#781." }
+  };
+  var cur = "long", scale = NETS[cur].scale[2], step = null, res;
+  var ctl = document.getElementById("rw-lvv-ctl"), slWrap = RW.h("span");
+  ctl.appendChild(RW.seg(Object.keys(NETS).map(function (k) { return { id: k, label: NETS[k].label }; }), cur, function (id) { cur = id; scale = NETS[id].scale[2]; step = null; mkSlider(); run(); }, "Example feeder"));
+  ctl.appendChild(slWrap);
+  var stp = RW.h("span", "rw-row"); stp.style.margin = "0";
+  stp.innerHTML = '<button type="button" class="rw-btn" data-d="-1" aria-label="Previous iteration">‹</button><b class="rw-pos" style="min-width:7em;text-align:center"></b><button type="button" class="rw-btn" data-d="1" aria-label="Next iteration">›</button>';
+  ctl.appendChild(stp);
+  [].forEach.call(stp.querySelectorAll("button"), function (b) { b.onclick = function () { step += +b.dataset.d; render(); }; });
+  function mkSlider() {
+    slWrap.innerHTML = ""; var s = NETS[cur].scale;
+    slWrap.appendChild(RW.slider("rw-lvv-sl", "load", s[0], s[1], 0.05, scale, function (v) { return "× " + RW.f(v, 2); }, function (v) { scale = v; step = null; run(); }));
+  }
+  function run() { res = SIM.reinforceVoltage(NETS[cur].g, scale); if (step == null) step = res.states.length - 1; render(); }
+  function render() {
+    step = Math.max(0, Math.min(res.states.length - 1, step));
+    var g0 = NETS[cur].g, s = res.states[step], f0 = SIM.flow(g0, scale), f1 = SIM.flow(s.g, scale), hl = {};
+    (s.log || []).forEach(function (x) { if (x.line) hl[x.line] = 1; });
+    SIM.drawFeeder(document.getElementById("rw-lvv-net"), s.g, g0, f1, hl);
+    var worst = null; Object.keys(g0.nodes).forEach(function (id) { if (g0.nodes[id].inb && (!worst || f0.v[id] < f0.v[worst])) worst = id; });
+    SIM.drawProfile(document.getElementById("rw-lvv-prof"), g0, SIM.pathTo(g0, worst), f0, f1);
+    var vmin = Math.min.apply(null, Object.keys(f1.v).map(function (k) { return f1.v[k]; })), ok = vmin >= SIM.VMIN - 1e-9;
+    stp.querySelector(".rw-pos").textContent = "iteration " + step + " / " + (res.states.length - 1);
+    stp.querySelector('[data-d="-1"]').disabled = step === 0; stp.querySelector('[data-d="1"]').disabled = step === res.states.length - 1;
+    RW.stats(document.getElementById("rw-lvv-stats"), [
+      ["lowest voltage", RW.f(vmin, 3) + " p.u.", ok ? "ok" : "bad"],
+      ["voltage band", ok ? "kept" : (step === res.states.length - 1 && res.maxed ? "MaximumIterationError" : "violated"), ok ? "ok" : "bad"],
+      ["costs so far", RW.f(s.cost || 0, 1) + " kEUR", ""]
+    ]);
+    var html = '<div class="it">' + NETS[cur].text + "</div>";
+    res.states.slice(1).forEach(function (x, i) {
+      html += '<div class="it">iteration ' + (i + 1) + " · lowest voltage before: " + RW.f(x.vmin, 3) + " p.u.</div>";
+      x.log.forEach(function (m) { html += '<div class="m ' + (m.info ? "info " : "") + (i + 1 === step ? "cur" : "") + '">' + m.what + (m.cost ? ' <span style="color:var(--muted)">[' + RW.f(m.cost, 1) + "]</span>" : "") + "</div>"; });
+    });
+    if (res.states.length === 1) html += '<div class="it">No voltage issue at this load.</div>';
+    document.getElementById("rw-lvv-log").innerHTML = html;
+  }
+  mkSlider(); run();
+})();
+</script>
+</div>

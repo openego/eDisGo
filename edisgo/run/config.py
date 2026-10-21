@@ -25,12 +25,13 @@ handles two concerns in a fixed order:
 
 A config is a flat, single ``pipeline:`` list plus supplementary
 top-level sections (``scenario``, ``grid``, ``database``,
-``flexibilities``, ``overlying_grid``, ``results``). Multi-phase
+``flexibilities``, ``overlying_grid``, ``timestep_selection``,
+``spatial_reduction``, ``results``). Multi-phase
 workflows are separate runner calls; a run can pick up a previously
 saved grid via the ``load_from_base`` task.
 
-Only :func:`load_config` is public. Everything else is implementation
-detail.
+Only :func:`load_config` and :func:`deep_merge` are public. Everything
+else is implementation detail.
 """
 
 from __future__ import annotations
@@ -173,7 +174,7 @@ def _resolve_extends(cfg: dict, base_dir: Path) -> dict:
         raise FileNotFoundError(f"extends: file not found: {ext_path}")
     parent = _read_file(ext_path)
     parent = _resolve_extends(parent, ext_path.parent)
-    return _deep_merge(parent, cfg)
+    return deep_merge(parent, cfg)
 
 
 def _preset_path(name: str) -> Path | None:
@@ -209,7 +210,7 @@ def _preset_path(name: str) -> Path | None:
     return None
 
 
-def _deep_merge(base: dict, override: dict) -> dict:
+def deep_merge(base: dict, override: dict) -> dict:
     """
     Recursively merge two dicts, with ``override`` winning on conflicts.
 
@@ -234,7 +235,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
     out = copy.deepcopy(base) if base else {}
     for key, val in (override or {}).items():
         if key in out and isinstance(out[key], dict) and isinstance(val, dict):
-            out[key] = _deep_merge(out[key], val)
+            out[key] = deep_merge(out[key], val)
         else:
             out[key] = copy.deepcopy(val)
     return out

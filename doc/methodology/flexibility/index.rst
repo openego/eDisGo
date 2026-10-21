@@ -92,7 +92,7 @@ is based on:
    Verteilnetzen basierend auf einem AC-Lastflussmodell* (in German), master's thesis,
    Technische Universität Berlin (in cooperation with the Reiner Lemoine Institut),
    2023.
-   `PDF <https://reiner-lemoine-institut.de/wp-content/uploads/2023/09/2023_MA_Maike_Held_Netzdienlich_optimaler_Einsatz_von_Flexibilitaeten.pdf>`__
+   `Publication page <https://reiner-lemoine-institut.de/publikation/masterarbeit-netzdienlich-optimaler-einsatz-von-flexibilitaeten-in-radialen-verteilnetzen-basierend-auf-einem-ac-lastflussmodell-held-2023/>`__
 
 which is the recommended reference for readers who want the complete derivation.
 

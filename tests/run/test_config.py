@@ -11,7 +11,7 @@ import json
 import pytest
 import yaml
 
-from edisgo.run.config import _deep_merge, load_config
+from edisgo.run.config import deep_merge, load_config
 
 
 def _write(tmp_path, name, data):
@@ -126,7 +126,7 @@ def test_deep_merge_nested():
     """Nested dicts must be merged key-by-key, child wins on conflict."""
     base = {"a": {"b": 1, "c": 2}, "d": 4}
     over = {"a": {"b": 99, "e": 5}}
-    merged = _deep_merge(base, over)
+    merged = deep_merge(base, over)
     assert merged == {"a": {"b": 99, "c": 2, "e": 5}, "d": 4}
 
 
