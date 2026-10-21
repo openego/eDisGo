@@ -266,3 +266,9 @@ Changes
   connection pool. The OEP limits open connections per account to 8, and each process
   kept at least one pooled connection open per engine, so a few processes with the
   same token, e.g. parallel CI jobs, failed with ``HTTP 429``
+* With ``overlying_grid.source: etrago``, ``import_overlying_grid_data`` now shifts the
+  dispatchable generator time series from eTraGo onto the EDisGo time index, like all
+  other overlying-grid data. eTraGo data is indexed in its weather year (2011) and
+  EDisGo in the scenario year, so the dispatchable generators had no values for any
+  time step. Their power was ``NaN``, and the OPF failed with ``The constant in the
+  affine expression is NaN`` (openego/eDisGo#787)

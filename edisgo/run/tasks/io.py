@@ -314,7 +314,7 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
         pot_ts = overlying_grid_data.get("renewables_potential")
         if disp_ts is not None and not disp_ts.empty:
             edisgo.set_time_series_active_power_predefined(
-                dispatchable_generators_ts=disp_ts,
+                dispatchable_generators_ts=_to_edisgo_timeindex(disp_ts),
             )
         if pot_ts is not None and not pot_ts.empty:
             edisgo.set_time_series_active_power_predefined(
