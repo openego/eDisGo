@@ -1,4 +1,4 @@
-dash < 4.4.0
+dash < 4.5.0
 demandlib < 0.3.0
 geopy >= 2.4.1, < 2.5.0
 jupyter_dash < 0.5.0
