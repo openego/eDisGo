@@ -1431,7 +1431,7 @@ class TestEDisGo:
         )
         assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
 
-        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 3
+        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 2
 
         # fmt: off
         assert set(
