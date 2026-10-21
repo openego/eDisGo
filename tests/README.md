@@ -66,8 +66,9 @@ def test_oep_import(oep_engine):
     result = import_from_oep(engine=oep_engine)
 ```
 
-Do not commit an OEP token. See the contributing documentation for local token
-configuration.
+Do not commit an OEP token. Live OEP tests read it from `edisgo/config/OEP_TOKEN.txt`
+or the `OEP_TOKEN` environment variable, see "OEP token" in
+`doc/userguide/data_sources.rst`.
 
 ## OEP test inventory and local data
 

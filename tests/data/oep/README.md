@@ -1,7 +1,8 @@
 # OEP test support
 
-This directory collects documentation and, where necessary, small local datasets for
-decoupling the regular test suite from the live Open Energy Platform (OEP).
+This directory documents how the regular test suite was decoupled from the live Open
+Energy Platform (OEP). It contains no local datasets: offline tests build their
+minimal synthetic inputs directly in the test modules.
 
 The detailed list of affected tests, tables, columns, data volumes and planned
 treatments is maintained in
@@ -228,27 +229,3 @@ function afterwards.
 
 Focused runs of the implemented offline tests pass. The slow and non-slow groups of
 the retained live contracts have also been executed successfully against the OEP.
-
-## Remaining work
-
-1. Push the branch after committing the changes:
-
-   ```bash
-   git push
-   ```
-
-   This automatically starts all four matrix entries in parallel. The three basic
-   entries run offline; the coverage entry runs all tests, including the live OEP
-   contracts, and uploads the result to Coveralls.
-
-2. Check the GitHub Actions result:
-
-   - all Linux and Windows jobs pass without an OEP token;
-   - the Python 3.12 coverage entry passes without a pytest marker filter;
-   - only the coverage entry receives the OEP token and accesses the live OEP;
-   - the coverage result is successfully uploaded to Coveralls.
-
-3. Compare the new branch result in Coveralls with the `dev` baseline. Investigate
-   unexplained coverage losses in transformation, calculation and integration code.
-
-4. Perform the final code review and open the pull request.

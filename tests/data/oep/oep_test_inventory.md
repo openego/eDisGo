@@ -1,6 +1,6 @@
 # OEP-dependent test inventory
 
-This is a static inventory of tests that currently reach the live OEP, directly or through a higher-level eDisGo function. It is based on commit `1d2b5de9af1d1636c0456ce17f5698e08957301e` and contains **38 tests**.
+This is a static inventory of the **38 tests** that reached the live OEP, directly or through a higher-level eDisGo function, at commit `1d2b5de9af1d1636c0456ce17f5698e08957301e`, before the test suite was decoupled. The `Status` column records how each test is treated now.
 
 `Test Type` is the directory below `tests/`; `root` means that the test file is directly in `tests/`.
 
