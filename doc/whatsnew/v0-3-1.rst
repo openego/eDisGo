@@ -226,3 +226,11 @@ Changes
   EDisGo in the scenario year, so the dispatchable generators had no values for any
   time step. Their power was ``NaN``, and the OPF failed with ``The constant in the
   affine expression is NaN`` (openego/eDisGo#787)
+* Removed the dependency on ``egoio``. The legacy OEP imports (``oedb_legacy``
+  generators, ``feedin_oedb_legacy``, the legacy weather cells and grid district
+  polygon) only used it for the ORM definitions of their tables. These are now
+  reflected from the OEP with ``saio`` via :func:`~.tools.legacy_oep_table`.
+  ``oedialect`` and ``psycopg2-binary``, which came in through ``egoio`` before, are
+  now direct dependencies. ``res_feedin_data`` in ``config_db_tables.cfg`` now names
+  the table (``ego_renewable_feedin``); the former value ``EgoRenewableFeedin`` is
+  still accepted

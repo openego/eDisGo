@@ -38,7 +38,6 @@ requirements = [
     "dash < 4.4.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
-    "egoio >= 0.4.7, < 0.5.0",
     "geoalchemy2 < 0.7.0",
     "geopandas >= 0.12.0, < 1.2.0",
     "geopy >= 2.0.0, < 2.5.0",
@@ -50,9 +49,11 @@ requirements = [
     # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
     # sqlalchemy leads to new errors.. should be fixed at some point
     "numpy ==1.26.4",
+    "oedialect < 0.2.0",
     "pandas >= 1.4.0, < 2.2.0",
     "paramiko < 4.0",
     "plotly < 6.0",
+    "psycopg2-binary < 2.10.0",
     "pydot < 4.1.0",
     "pypower < 5.2.0",
     "pyproj >= 3.0.0, < 3.8.0",

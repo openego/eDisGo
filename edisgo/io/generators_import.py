@@ -24,7 +24,7 @@ from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
-from edisgo.tools import session_scope
+from edisgo.tools import legacy_oep_table, session_scope
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus, proj2equidistant
 from edisgo.tools.tools import (
@@ -35,7 +35,6 @@ from edisgo.tools.tools import (
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
-    from egoio.db_tables import model_draft, supply
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
 
@@ -69,8 +68,13 @@ def _query_generator_data_oedb_legacy(
 
     oedb_data_source = edisgo_object.config["data_source"]["oedb_data_source"]
     if oedb_data_source == "model_draft":
-        orm_conv_generators = model_draft.__getattribute__("EgoDpSupplyConvPowerplant")
-        orm_re_generators = model_draft.__getattribute__("EgoDpSupplyResPowerplant")
+        # base tables without the _mview suffix
+        orm_conv_generators = legacy_oep_table(
+            "model_draft", "ego_dp_supply_conv_powerplant"
+        )
+        orm_re_generators = legacy_oep_table(
+            "model_draft", "ego_dp_supply_res_powerplant"
+        )
         orm_conv_generators_version = build_conv_scenario_filter(
             orm_conv_generators, scenario_name, version=None
         )
@@ -79,8 +83,9 @@ def _query_generator_data_oedb_legacy(
         )
     elif oedb_data_source == "versioned":
         data_version = edisgo_object.config["versioned"]["version"]
-        orm_conv_generators = supply.__getattribute__("EgoDpConvPowerplant")
-        orm_re_generators = supply.__getattribute__("EgoDpResPowerplant")
+        # base tables without the _mview suffix
+        orm_conv_generators = legacy_oep_table("supply", "ego_dp_conv_powerplant")
+        orm_re_generators = legacy_oep_table("supply", "ego_dp_res_powerplant")
         orm_conv_generators_version = build_conv_scenario_filter(
             orm_conv_generators, scenario_name, version=data_version
         )
@@ -166,8 +171,6 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     Gets generator park for specified scenario from oedb and integrates generators into
     the grid.
 
-    The importer uses SQLAlchemy ORM objects. These are defined in
-    `ego.io <https://github.com/openego/ego.io/tree/dev/egoio/db_tables/>`_.
     The data is imported from the tables
     `conventional power plants <https://openenergyplatform.org/database/\
     tables/ego_dp_conv_powerplant>`_ and
