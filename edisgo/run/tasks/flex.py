@@ -428,6 +428,89 @@ def task_apply_heat_pump_strategy(
     return edisgo
 
 
+@register_task(
+    "aggregate_district_heating",
+    requires={"overlying_grid"},
+    ts_altering=True,
+)
+def task_aggregate_district_heating(edisgo, ctx):
+    """
+    Aggregate the power-to-heat units of each district heating area and
+    subtract the overlying grid's other heat feed-in from its heat demand.
+
+    Wraps :func:`~edisgo.tools.tools.aggregate_district_heating_components`.
+    Two things happen per district heating area:
+
+    * ``overlying_grid.feedin_district_heating`` — thermal feed-in from other
+      sources such as solar or geothermal — is subtracted from the heat demand,
+      so the power-to-heat units only have to cover the remainder;
+    * the heat pump and the resistive heater of the area are merged into a
+      single component, with the rated power added up and the COP weighted by
+      each component's contribution. The resistive heater is removed from the
+      topology and its time series dropped.
+
+    Without this step the overlying grid's ``feedin_district_heating`` has no
+    consumer at all and the district heating demand is overstated by the other
+    heat sources' contribution (openego/eGo#202).
+
+    Run this AFTER ``import_overlying_grid_data`` (which supplies the feed-in
+    and normalises its district heating column labels) and BEFORE
+    ``optimize``. It is a no-op with an info-log when the grid has no district
+    heating.
+
+    Declares ``requires={"overlying_grid"}`` so the validator rejects a pipeline
+    that puts this task before ``import_overlying_grid_data``. That ordering used
+    to pass validation and then silently take the "no feed-in" branch below --
+    reintroducing openego/eGo#202 without any error.
+
+    Registered as ``ts_altering`` because it drops the resistive heater's
+    active and reactive power series and re-applies the heat-pump operating
+    strategy to the merged component: the reactive power of that component has
+    to be recomputed afterwards, so the validator rejects a pipeline that puts
+    this task after ``reactive_power``.
+
+    Parameters
+    ----------
+    edisgo : edisgo.EDisGo
+        EDisGo instance to modify in place.
+    ctx : RunContext
+        Run context.
+
+    Returns
+    -------
+    edisgo.EDisGo
+        The modified EDisGo instance.
+
+    """
+    from edisgo.tools.tools import aggregate_district_heating_components
+
+    loads_df = edisgo.topology.loads_df
+    if "district_heating_id" not in loads_df.columns or (
+        loads_df.district_heating_id.dropna().empty
+    ):
+        ctx.logger.info(
+            "Skipping 'aggregate_district_heating': grid has no district heating."
+        )
+        return edisgo
+
+    feedin = edisgo.overlying_grid.feedin_district_heating
+    if feedin is None or feedin.empty:
+        ctx.logger.info(
+            "aggregate_district_heating: no feedin_district_heating in the "
+            "overlying grid — aggregating the power-to-heat units without "
+            "subtracting other heat sources."
+        )
+    n_before = len(edisgo.topology.loads_df)
+    aggregate_district_heating_components(edisgo, feedin_district_heating=feedin)
+    n_after = len(edisgo.topology.loads_df)
+    ctx.logger.info(
+        f"aggregate_district_heating: merged the power-to-heat units of "
+        f"{int(loads_df.district_heating_id.dropna().nunique())} district heating "
+        f"area(s); {n_before - n_after} load(s) removed."
+    )
+    return edisgo
+
+
 @register_task("import_generators")
 def task_import_generators(edisgo, ctx, *, generator_scenario=None):
     """
