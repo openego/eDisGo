@@ -21,10 +21,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 import yaml
 
 from geoalchemy2.types import Geometry
+from psycopg2.extensions import AsIs, register_adapter
 from sqlalchemy import create_engine, func
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import sessionmaker
@@ -38,6 +40,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# psycopg2 cannot pass numpy integers as query parameters, e.g. IDs taken from a
+# DataFrame, to the egon-data database. egoio registered this adapter on import
+# before eDisGo dropped it.
+register_adapter(np.int64, AsIs)
+
 
 def _close_ssh_tunnel(server):
     """Best-effort stop of an SSH tunnel (used as an atexit cleanup)."""
@@ -45,6 +52,7 @@ def _close_ssh_tunnel(server):
         server.stop()
     except Exception:  # pragma: no cover - cleanup at interpreter shutdown
         pass
+
 
 #: Default location of the egon-data SSH tunnel configuration file. Used when
 #: no explicit config path is passed and the connection mode is not forced.
