@@ -530,3 +530,175 @@ class TestPmOptimizeIntervalSplit:
         assert report[0]["status"] == "OPTIMAL"
         assert report[1]["status"] == "infeasible"
         assert edisgo_obj.timeseries.timeindex.equals(full)
+
+    def test_flex_inputs_narrowed_per_interval(self, edisgo_obj, monkeypatch):
+        """Each interval's OPF must see its OWN overlying-grid requirements.
+
+        Regression test for openego/eDisGo#762: set_timeindex only narrows
+        TimeSeries.timeindex, so the overlying grid kept the full reduced index
+        and to_powermodels read the first interval's values for every interval.
+        """
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        # distinguishable values per interval: 1.0 in week 1, 9.0 in week 2
+        values = [1.0] * len(a) + [9.0] * len(b)
+        edisgo_obj.overlying_grid.electromobility_active_power = pd.Series(
+            values, index=full
+        )
+        edisgo_obj.overlying_grid.dsm_active_power = pd.Series(values, index=full)
+        seen = []
+
+        def fake_single(e, **kw):
+            og = e.overlying_grid
+            seen.append(
+                {
+                    "cp_values": sorted(og.electromobility_active_power.unique()),
+                    "cp_len": len(og.electromobility_active_power),
+                    "dsm_values": sorted(og.dsm_active_power.unique()),
+                }
+            )
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+
+        assert len(seen) == 2
+        # each interval sees only its own value, over its own length
+        assert seen[0]["cp_values"] == [1.0]
+        assert seen[1]["cp_values"] == [9.0]
+        assert seen[0]["cp_len"] == len(a)
+        assert seen[1]["cp_len"] == len(b)
+        assert seen[0]["dsm_values"] == [1.0]
+        assert seen[1]["dsm_values"] == [9.0]
+        # and the full reduced index is restored afterwards
+        assert edisgo_obj.overlying_grid.electromobility_active_power.index.equals(full)
+        assert edisgo_obj.timeseries.timeindex.equals(full)
+
+    def test_dsm_and_heat_pump_narrowed_and_restored(self, edisgo_obj, monkeypatch):
+        """DSM and heat-pump inputs are narrowed per interval and restored."""
+        import edisgo.opf.powermodels_opf as pmo
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        full = a.union(b)
+        edisgo_obj.set_timeindex(full)
+        values = [1.0] * len(a) + [9.0] * len(b)
+        edisgo_obj.dsm.p_max = pd.DataFrame({"load1": values}, index=full)
+        edisgo_obj.heat_pump.cop_df = pd.DataFrame({"hp1": values}, index=full)
+        seen = []
+
+        def fake_single(e, **kw):
+            seen.append(
+                {
+                    "dsm": sorted(e.dsm.p_max["load1"].unique()),
+                    "dsm_len": len(e.dsm.p_max),
+                    "cop": sorted(e.heat_pump.cop_df["hp1"].unique()),
+                    "cop_len": len(e.heat_pump.cop_df),
+                }
+            )
+            e.opf_results.status = "OPTIMAL"
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        pmo.pm_optimize(edisgo_obj)
+
+        assert len(seen) == 2
+        assert seen[0]["dsm"] == [1.0] and seen[1]["dsm"] == [9.0]
+        assert seen[0]["cop"] == [1.0] and seen[1]["cop"] == [9.0]
+        assert seen[0]["dsm_len"] == len(a) and seen[1]["dsm_len"] == len(b)
+        assert seen[0]["cop_len"] == len(a) and seen[1]["cop_len"] == len(b)
+        # restored to the full reduced index
+        assert edisgo_obj.dsm.p_max.index.equals(full)
+        assert edisgo_obj.heat_pump.cop_df.index.equals(full)
+
+
+class TestHeatStorageStandingLoss:
+    """
+    The standing loss of a thermal storage has to scale with the time step.
+
+    ``p_loss`` is a loss per DAY (``powermodels_io._build_heat_storage``: 4 % of
+    SOC per day for individual heating), so the decay between two time steps is
+    ``(1 - p_loss) ** (time_elapsed / 24)``. The exponent used to be a fixed
+    ``1/24``, which is only correct at hourly resolution (openego/eDisGo#697).
+
+    The test runs the OPF on a 15-minute index and checks the energy balance the
+    solver enforced, which is possible because both variables of the constraint
+    are written back: ``heat_storage_t.e`` is ``hse`` and ``heat_storage_t.p`` is
+    ``phs``. It also asserts that the fixed exponent does NOT satisfy the same
+    balance, so the test fails if the old formula comes back.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        cls.edisgo.set_time_series_worst_case_analysis()
+        cls.hp = "Heat_Pump_standing_loss"
+        cls.edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector="individual_heating",
+            load_id=1,
+            ts_active_power=pd.Series(
+                index=cls.edisgo.timeseries.timeindex, data=[0.5, 0.5, 0.5, 0.5]
+            ),
+            ts_reactive_power="default",
+            bus=cls.edisgo.topology.buses_df.index[27],
+            p_set=3,
+        )
+        hp_name = cls.edisgo.topology.loads_df[
+            cls.edisgo.topology.loads_df.type == "heat_pump"
+        ].index[-1]
+        cls.hp = hp_name
+        cls.edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={hp_name: [5.0, 6.0, 5.0, 6.0]},
+            index=cls.edisgo.timeseries.timeindex,
+        )
+        cls.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            data={hp_name: [1.0, 2.0, 2.0, 1.0]},
+            index=cls.edisgo.timeseries.timeindex,
+        )
+        cls.edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
+            data={"capacity": [8.0], "efficiency": [1.0]}, index=[hp_name]
+        )
+        cls.edisgo.apply_heat_pump_operating_strategy()
+        # 15-minute steps, so time_elapsed is 0.25 and the daily loss rate has to
+        # be raised to 0.25/24 instead of 1/24
+        cls.edisgo.resample_timeseries(freq="15min")
+
+    @pytest.mark.runonlinux
+    def test_standing_loss_uses_the_elapsed_time(self):
+        time_elapsed = (
+            self.edisgo.timeseries.timeindex[1] - self.edisgo.timeseries.timeindex[0]
+        ).total_seconds() / 3600
+        assert time_elapsed == pytest.approx(0.25)
+
+        pm_optimize(
+            self.edisgo,
+            opf_version=2,
+            silence_moi=True,
+            method="nc",
+            flexible_hps=np.array([self.hp]),
+        )
+        assert self.edisgo.opf_results.status in ("LOCALLY_SOLVED", "OPTIMAL")
+
+        e = self.edisgo.opf_results.heat_storage_t.e[self.hp]
+        p = self.edisgo.opf_results.heat_storage_t.p[self.hp]
+        assert len(e) == len(self.edisgo.timeseries.timeindex)
+        # the storage has to be charged for the decay to be observable at all;
+        # on an empty storage both exponents give the same (zero) result
+        assert e.max() > 0.1
+
+        p_loss = 0.04
+        decay = (1 - p_loss) ** (time_elapsed / 24)
+        decay_fixed = (1 - p_loss) ** (1 / 24)  # the exponent before #697
+
+        expected = e.values[:-1] * decay - time_elapsed * p.values[1:]
+        assert np.allclose(e.values[1:], expected, atol=1e-6)
+
+        # the balance must NOT hold with the fixed exponent, otherwise this test
+        # would pass against the old formula as well
+        wrong = e.values[:-1] * decay_fixed - time_elapsed * p.values[1:]
+        assert not np.allclose(e.values[1:], wrong, atol=1e-6)

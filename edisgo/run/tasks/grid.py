@@ -171,7 +171,7 @@ def load_saved_edisgo(
     return edisgo
 
 
-@register_task("load_from_base", provides={"grid"})
+@register_task("load_from_base", provides={"grid", "overlying_grid"})
 def task_load_from_base(
     edisgo,
     ctx,
@@ -246,5 +246,12 @@ def task_load_from_base(
         import_dsm=import_dsm,
         import_overlying_grid=import_overlying_grid,
     )
+    if import_overlying_grid:
+        # Same normalisation import_overlying_grid_data applies: a saved grid
+        # carries whatever labels were written, and every consumer looks the
+        # district heating ID up as the string of an integer.
+        from edisgo.run.tasks.io import normalise_district_heating_labels
+
+        normalise_district_heating_labels(edisgo.overlying_grid, ctx.logger)
     ctx.flags["grid_loaded"] = True
     return edisgo

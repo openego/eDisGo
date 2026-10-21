@@ -98,7 +98,7 @@ charging points passed as flexible and keeps the rest as fixed load).
       distribution grids due to the increasing grid integration of electric vehicles"),
       master's thesis, Hochschule für Technik und Wirtschaft Berlin (in cooperation
       with the Reiner Lemoine Institut), 2021.
-      `PDF <https://reiner-lemoine-institut.de/wp-content/uploads/2021/09/2021-04-25_Helfenbein_Masterarbeit.pdf>`__
+      `Publication page <https://reiner-lemoine-institut.de/publikation/analyse-des-einflussesnetzdienlicher-ladestrategien-auf-verteilnetze-aufgrund-der-zunehmenden-netzintegration-von-elektrofahrzeugen-helfenbein-2021/>`__
 
    It evaluates the preventive ``"reduced"`` strategy (reduced charging power) and the
    active ``"residual"`` strategy (charging steered by the medium-voltage residual
