@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import datetime
 import logging
-import os
 
 import numpy as np
 import pandas as pd
@@ -25,11 +24,8 @@ from sqlalchemy.engine.base import Engine
 from workalendar.europe import Germany
 
 from edisgo.io.db import session_scope_egon_data
-from edisgo.tools import session_scope, tools
+from edisgo.tools import legacy_oep_table, session_scope, tools
 from edisgo.tools.config import Config
-
-if "READTHEDOCS" not in os.environ:
-    from egoio.db_tables import model_draft, supply
 
 logger = logging.getLogger(__name__)
 
@@ -126,13 +122,20 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
             session.bind,
         )
 
+    # config files copied before egoio was dropped still name the egoio ORM class
+    # instead of the table
+    egoio_class_names = {"EgoRenewableFeedin": "ego_renewable_feedin"}
     if edisgo_object.config["data_source"]["oedb_data_source"] == "model_draft":
         orm_feedin_name = edisgo_object.config["model_draft"]["res_feedin_data"]
-        orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+        orm_feedin = legacy_oep_table(
+            "model_draft", egoio_class_names.get(orm_feedin_name, orm_feedin_name)
+        )
         orm_feedin_version = 1 == 1
     else:
         orm_feedin_name = edisgo_object.config["versioned"]["res_feedin_data"]
-        orm_feedin = supply.__getattribute__(orm_feedin_name)
+        orm_feedin = legacy_oep_table(
+            "supply", egoio_class_names.get(orm_feedin_name, orm_feedin_name)
+        )
         orm_feedin_version = (
             orm_feedin.version == edisgo_object.config["versioned"]["version"]
         )
