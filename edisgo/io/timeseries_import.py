@@ -490,9 +490,7 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         individual_heating_df = pd.concat(
             [residential_profiles_df, cts_profiles_df], axis=1
         )
-        individual_heating_df = (
-            individual_heating_df.T.groupby(level=0).sum().T
-        )
+        individual_heating_df = individual_heating_df.T.groupby(level=0).sum().T
         # set column names to be heat pump names instead of building IDs
         individual_heating_df = pd.DataFrame(
             {

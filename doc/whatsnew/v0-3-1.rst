@@ -291,3 +291,10 @@ Changes
   now direct dependencies. ``res_feedin_data`` in ``config_db_tables.cfg`` now names
   the table (``ego_renewable_feedin``); the former value ``EgoRenewableFeedin`` is
   still accepted
+* Removed ``FutureWarning`` and ``UserWarning`` messages of pandas and geopandas from
+  the heat pump, heat demand and OPF heat storage code, without changing results. The
+  unused centroids of the district heating areas are no longer calculated. In grids in
+  a geographic CRS, the 1000 m limit of the join of central heat pumps and resistive
+  heaters with district heating areas is in degrees and therefore practically no
+  limit; this is unchanged, only the geopandas warning about it is silenced
+  (openego/eDisGo#634)
