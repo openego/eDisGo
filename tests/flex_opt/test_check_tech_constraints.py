@@ -7,8 +7,6 @@ from pandas.testing import assert_frame_equal
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints
 
-pytestmark = pytest.mark.fast
-
 
 class TestCheckTechConstraints:
     @classmethod

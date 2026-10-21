@@ -7,8 +7,6 @@ import pytest
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints, reinforce_measures
 
-pytestmark = pytest.mark.fast
-
 
 class TestReinforceMeasures:
     @classmethod

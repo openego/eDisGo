@@ -14,8 +14,6 @@ from edisgo.flex_opt.reinforce_grid import (
     run_separate_lv_grids,
 )
 
-pytestmark = pytest.mark.fast
-
 
 class TestReinforceGrid:
     """

@@ -3,8 +3,6 @@ import pytest
 from edisgo import EDisGo
 from edisgo.tools import geopandas_helper
 
-pytestmark = pytest.mark.fast
-
 
 class TestGeopandasHelper:
     @classmethod

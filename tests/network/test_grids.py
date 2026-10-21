@@ -6,8 +6,6 @@ from edisgo.network.components import Generator, Load, Switch
 from edisgo.network.grids import LVGrid
 from edisgo.network.topology import Topology
 
-pytestmark = pytest.mark.fast
-
 
 class TestGrids:
     @classmethod

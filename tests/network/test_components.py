@@ -4,8 +4,6 @@ import pytest
 from edisgo import EDisGo
 from edisgo.network.components import Generator, Load, Storage, Switch
 
-pytestmark = pytest.mark.fast
-
 
 class TestComponents:
     # ToDo add tests for PotentialChargingParks
@@ -53,8 +51,7 @@ class TestComponents:
         """Test Generator class getter, setter, methods"""
 
         gen = Generator(id="GeneratorFluctuating_7", edisgo_obj=self.edisgo_obj)
-        # GeneratorFluctuating_7,Bus_GeneratorFluctuating_7,PQ,3,wind,1122075,
-        # wind_wind_onshore
+        # GeneratorFluctuating_7,Bus_GeneratorFluctuating_7,PQ,3,wind,1122075,wind_wind_onshore
         # test getter
         assert gen.id == "GeneratorFluctuating_7"
         assert gen.bus == "Bus_GeneratorFluctuating_7"

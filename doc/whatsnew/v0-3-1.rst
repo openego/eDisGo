@@ -291,3 +291,6 @@ Changes
   now direct dependencies. ``res_feedin_data`` in ``config_db_tables.cfg`` now names
   the table (``ego_renewable_feedin``); the former value ``EgoRenewableFeedin`` is
   still accepted
+* CI runs the full test matrix only for pull requests and pushes to ``dev``. A push to
+  any other branch runs a single quick job (Linux, Python 3.11, without slow, Linux-only
+  and live OEP tests) instead of the four matrix jobs (openego/eDisGo#600)

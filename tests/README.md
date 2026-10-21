@@ -36,6 +36,11 @@ python -m pytest --runslow -m oep
 
 ## CI test separation
 
+A push to a feature branch runs a single quick job on Linux/Python 3.11:
+`pytest -m "not oep"` without `--runslow` and `--runonlinux`. Pull requests and
+pushes to `dev` run the full matrix described below. Open a pull request to get the
+full test suite for a feature branch.
+
 The CI matrix runs four jobs in parallel. Three regular Linux and Windows entries
 run `pytest -m "not oep"` without an OEP token. The Linux/Python 3.12 coverage
 entry runs the complete test suite, including live OEP tests, with the token

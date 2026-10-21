@@ -10,8 +10,6 @@ from edisgo.tools.pseudo_coordinates import (
     make_pseudo_coordinates,
 )
 
-pytestmark = pytest.mark.fast
-
 
 class TestPseudoCoordinates:
     @classmethod

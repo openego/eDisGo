@@ -4,8 +4,6 @@ import pytest
 from edisgo.edisgo import EDisGo
 from edisgo.flex_opt.charging_strategies import charging_strategy
 
-pytestmark = pytest.mark.fast
-
 
 class TestChargingStrategy:
     """
