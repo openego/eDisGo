@@ -45,19 +45,30 @@ Code standards
 Running the tests
 -----------------
 
-Tests use ``pytest``. Some tests are slow, require a local database, or only run on
-Linux; enable them with the corresponding flags:
+Tests use ``pytest``. The regular test suite runs offline. Tests that access the
+live Open Energy Platform (OEP) are marked with ``oep``; exclude them unless you
+want to check the OEP queries:
 
 .. code-block:: bash
 
-    python -m pytest tests/ --runslow --runlocal --runonlinux
+    python -m pytest tests/ -m "not oep"
+
+Live OEP tests need an OEP token, see :ref:`OEP token <oep-token>` in the data
+sources guide. Some tests are slow or only run on Linux; enable them with the
+corresponding flags:
+
+.. code-block:: bash
+
+    python -m pytest tests/ -m "not oep" --runslow --runonlinux
 
 For faster runs you can parallelise with ``-n`` (locally use a small number of
-workers) and re-run flaky database tests:
+workers):
 
 .. code-block:: bash
 
-    python -m pytest tests/ -n 3 --reruns 3 --reruns-delay 5 --runslow --html=report.html
+    python -m pytest tests/ -m "not oep" -n 3 --runslow --html=report.html
+
+See ``tests/README.md`` for the test markers and how to write live OEP tests.
 
 Building the documentation
 --------------------------

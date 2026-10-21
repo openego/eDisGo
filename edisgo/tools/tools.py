@@ -796,6 +796,7 @@ def get_weather_cells_intersecting_with_grid_district(
     edisgo_obj : :class:`~.EDisGo`
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine. Only needed when using new egon_data data.
+        Ignored for legacy grids, which use the legacy database connection.
 
     Returns
     -------
