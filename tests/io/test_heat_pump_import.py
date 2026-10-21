@@ -135,8 +135,10 @@ def test_prepare_central_heat_sources_offline(source_crs):
         Point(100, 100),
         Point(7000, 7000),
     ]
+    # The nearest-area join runs in EPSG:3035 and reprojects back, which shifts the
+    # locations by a few micrometres.
     for actual, location in zip(result.geom, expected):
-        assert actual.distance(location) < 1e-6
+        assert actual.distance(location) < 1e-3
     assert result.crs.to_epsg() == 3857
     assert "centroid" not in data["district_heating_areas"]
 
