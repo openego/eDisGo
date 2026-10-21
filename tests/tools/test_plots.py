@@ -2,7 +2,10 @@ import copy
 
 import pytest
 
+from matplotlib import pyplot as plt
+
 from edisgo import EDisGo
+from edisgo.tools import plots
 from edisgo.tools.plots import chosen_graph, plot_dash_app, plot_plotly
 
 
@@ -121,3 +124,18 @@ class TestPlots:
                 "edisgo_2": self.edisgo_reinforced,
             }
         )
+
+    def test_add_basemap_timeout(self, monkeypatch):
+        # the tile download gets a timeout and a failing download is raised
+        calls = {}
+
+        def bounds2img(*args, timeout=None, **kwargs):
+            calls["timeout"] = timeout
+            raise TimeoutError("tile download timed out")
+
+        monkeypatch.setattr(plots.ctx, "bounds2img", bounds2img)
+        fig, ax = plt.subplots()
+        with pytest.raises(TimeoutError):
+            plots.add_basemap(ax)
+        plt.close(fig)
+        assert calls["timeout"] == 10

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 
@@ -175,14 +176,23 @@ def histogram(data, **kwargs):
         plt.close()
 
 
-def add_basemap(ax, zoom=12):
+def add_basemap(ax, zoom=12, timeout=10):
     """
     Adds map to a plot.
+
+    The map tiles are downloaded from the internet. `timeout` is the time in
+    seconds to wait for each tile before the download fails. contextily
+    versions older than 1.7.1 do not support a timeout and wait without limit.
 
     """
     url = ctx.providers.CartoDB.Positron
     xmin, xmax, ymin, ymax = ax.axis()
-    basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=url)
+    kwargs = {}
+    if "timeout" in inspect.signature(ctx.bounds2img).parameters:
+        kwargs["timeout"] = timeout
+    basemap, extent = ctx.bounds2img(
+        xmin, ymin, xmax, ymax, zoom=zoom, source=url, **kwargs
+    )
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
     # restore original x/y limits
     ax.axis((xmin, xmax, ymin, ymax))
@@ -326,7 +336,10 @@ def mv_grid_topology(
         requires the geopandas package to be installed. Default: True.
     background_map : :obj:`Boolean`
         If True map is drawn in the background. This also requires the
-        contextily package to be installed. Default: True.
+        contextily package to be installed and internet access to download the
+        map tiles. If the download fails, or with contextily 1.7.1 or newer a
+        tile takes longer than 10 seconds, the plot is drawn without the map and
+        a warning is logged. Default: True.
     limits_cb_lines : :obj:`tuple`
         Tuple with limits for colorbar of line color. First entry is the
         minimum and second entry the maximum value. Only needs to be provided

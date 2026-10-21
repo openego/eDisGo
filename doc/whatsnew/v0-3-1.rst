@@ -291,7 +291,14 @@ Changes
   now direct dependencies. ``res_feedin_data`` in ``config_db_tables.cfg`` now names
   the table (``ego_renewable_feedin``); the former value ``EgoRenewableFeedin`` is
   still accepted
-* Fixed simple example notebook: disabled the background map on the MV grid topology
-  plots (fetching map tiles could take tens of minutes or fail without a fast
-  internet connection) and replaced a hardcoded LV grid selection that broke when
-  used with certain grid data `#276 <https://github.com/openego/eDisGo/issues/276>`_
+* The example notebooks ``edisgo_simple_example`` and ``full_workflow_walkthrough``
+  draw their MV grid plots without a background map. Downloading the map tiles could
+  take tens of minutes or fail without a good internet connection. The simple example
+  explains how to switch the map back on with ``background_map=True``. The graph of
+  an LV grid is now drawn for the LV grid selected earlier in the notebook instead of
+  a second one picked by position (openego/eDisGo#276)
+* :func:`~.tools.plots.add_basemap` waits at most 10 seconds for each map tile
+  (``timeout`` parameter, needs contextily 1.7.1 or newer). Before, a slow or missing
+  internet connection blocked MV grid plots with ``background_map=True`` without
+  limit. A failed download is logged as a warning and the plot is drawn without the
+  map, as before
