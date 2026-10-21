@@ -34,11 +34,9 @@ class TestPypsaIO:
         # ToDo: Check further things and parameter options
 
     def test_to_pypsa_line_b_column_consistent_across_modes(self):
-        # the full-grid path (mode=None) and the per-grid paths (mode="mv" and
-        # mode="lv") used to select different Line columns from lines_df, with
-        # the per-grid paths silently dropping "b" (see GitHub issue #654).
-        # Since "b" is always zero in eDisGo grids today, that regressed
-        # silently, so set a distinguishing non-zero value here to catch it.
+        # every export mode must pass the line shunt susceptance "b" to PyPSA;
+        # "b" is zero in the ding0 test grid, so set non-zero values to make the
+        # check meaningful
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
         timeindex = self.edisgo.timeseries.timeindex
@@ -57,11 +55,15 @@ class TestPypsaIO:
         pypsa_network_lv = pypsa_io.to_pypsa(
             self.edisgo, timesteps=timeindex, mode="lv", lv_grid_id=lv_grid.id
         )
+        pypsa_network_mvlv = pypsa_io.to_pypsa(
+            self.edisgo, timesteps=timeindex, mode="mvlv"
+        )
 
         assert pypsa_network_full.lines.loc[mv_line, "b"] == 1.234e-5
         assert pypsa_network_full.lines.loc[lv_line, "b"] == 5.678e-5
         assert pypsa_network_mv.lines.loc[mv_line, "b"] == 1.234e-5
         assert pypsa_network_lv.lines.loc[lv_line, "b"] == 5.678e-5
+        assert pypsa_network_mvlv.lines.loc[mv_line, "b"] == 1.234e-5
 
     def test_append_lv_components(self):
         lv_components = {

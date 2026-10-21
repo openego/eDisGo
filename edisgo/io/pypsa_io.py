@@ -106,22 +106,10 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         buses_df = edisgo_object.topology.buses_df.loc[:, ["v_nom"]]
         slack_df = _set_slack(edisgo_object.topology.mv_grid)
 
-        components = {
-            "Load": edisgo_object.topology.loads_df.loc[:, ["bus", "p_set"]],
-            "Generator": edisgo_object.topology.generators_df.loc[
-                :, ["bus", "control", "p_nom"]
-            ],
-            "StorageUnit": edisgo_object.topology.storage_units_df.loc[
-                :, ["bus", "control", "p_nom", "max_hours"]
-            ],
-            "Line": edisgo_object.topology.lines_df.loc[
-                :,
-                ["bus0", "bus1", "x", "r", "b", "s_nom", "num_parallel", "length"],
-            ],
-            "Transformer": edisgo_object.topology.transformers_df.loc[
-                :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
-            ].rename(columns={"r_pu": "r", "x_pu": "x"}),
-        }
+        components = _get_grid_component_dict(edisgo_object.topology)
+        components["Transformer"] = edisgo_object.topology.transformers_df.loc[
+            :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
+        ].rename(columns={"r_pu": "r", "x_pu": "x"})
 
     elif "mv" in mode:
         pypsa_network.mode = "mv"
@@ -469,7 +457,8 @@ def _get_grid_component_dict(grid_object):
 
     Parameters
     ----------
-    grid_object : :class:`~.network.grids.Grid`
+    grid_object : :class:`~.network.grids.Grid` or :class:`~.network.topology.Topology`
+        Single grid or, for the export of the whole network, the topology.
 
     Returns
     -------
