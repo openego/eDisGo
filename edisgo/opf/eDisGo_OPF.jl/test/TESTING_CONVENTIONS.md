@@ -36,6 +36,7 @@ test/
 ├── testutils/TestUtils.jl  # fixtures and helper functions
 ├── data/                   # checked-in JSON fixtures + generator script
 ├── test_smoke.jl           # load package, dependencies and fixtures
+├── coverage_report.jl      # line coverage of src/ after a coverage run
 ├── TESTING_CONVENTIONS.md  # this file
 └── FUNCTION_COVERAGE.md    # checklist of all functions
 ```
@@ -175,9 +176,14 @@ julia --project=. test/core/test_variables.jl
 julia --project=. test/runtests.jl variables objective
 EDISGO_OPF_TESTS=core julia --project=. -e 'using Pkg; Pkg.test()'
 
-# with coverage
+# with coverage, then the line coverage report of src/
 julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
+julia test/coverage_report.jl
 ```
+
+**Line coverage of `src/` must stay at 100 %.** CI runs `test/coverage_report.jl`
+after the suite; it lists every uncovered line and fails the job below 100 %. The
+Julia coverage is not sent to Coveralls, which only holds the Python coverage.
 
 The test dependencies are deliberately listed in `[extras]`/`[targets]` of
 `Project.toml` and **not** in a separate `test/Project.toml`: that way the suite

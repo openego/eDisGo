@@ -34,4 +34,3 @@ eDisGo.egg-info/
 *.jl.*.cov
 *.jl.cov
 *.jl.mem
-/edisgo/opf/eDisGo_OPF.jl/lcov.info

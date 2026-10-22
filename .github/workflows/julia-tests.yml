@@ -4,6 +4,15 @@
 # by its own workflow. Gurobi is commercial and has no licence here, so tests that
 # need it skip themselves (see TestUtils.gurobi_available); everything else runs
 # against Ipopt.
+#
+# Line coverage of src/ is checked in the job itself (test/coverage_report.jl) and
+# must stay at 100 %. It is deliberately not sent to Coveralls: the Coveralls
+# project holds the Python coverage, and a second upload for the same commit
+# replaced its status with the Julia figure.
+#
+# Like the other workflows, this one runs on push only. With an additional
+# pull_request trigger, every push to a PR branch of this repository ran the
+# suite twice.
 name: "Julia OPF Tests"
 
 concurrency:
@@ -12,10 +21,6 @@ concurrency:
 
 on:
   push:
-    paths:
-      - "edisgo/opf/eDisGo_OPF.jl/**"
-      - ".github/workflows/julia-tests.yml"
-  pull_request:
     paths:
       - "edisgo/opf/eDisGo_OPF.jl/**"
       - ".github/workflows/julia-tests.yml"
@@ -55,16 +60,5 @@ jobs:
       - name: Run tests
         run: julia --project=. -e 'using Pkg; Pkg.test(coverage=true)'
 
-      - name: Process coverage
-        uses: julia-actions/julia-processcoverage@v1
-        with:
-          directories: edisgo/opf/eDisGo_OPF.jl/src
-
-      - name: Upload coverage to Coveralls
-        uses: coverallsapp/github-action@v2
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          file: lcov.info
-          flag-name: julia-opf
-          parallel: false
-        continue-on-error: true
+      - name: Check line coverage
+        run: julia test/coverage_report.jl 100
