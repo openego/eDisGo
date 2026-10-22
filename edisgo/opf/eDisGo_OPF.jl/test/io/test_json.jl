@@ -136,32 +136,25 @@ end
     end
 
     @testset "conductors" begin
-        # Multi-conductor data is not supported and is supposed to produce a
-        # warning here. It does not: the logger `_LOGGER` referenced by the
-        # `Memento.warn` call is never defined in `eDisGo_OPF` (it is an internal
-        # of PowerModels and therefore not brought in by `using PowerModels`), so
-        # the branch raises `UndefVarError` instead of warning. Any input
-        # containing the key — with or without validation — is thus rejected
-        # outright.
+        # Multi-conductor data is not supported: the key is kept as it is, and a
+        # warning points to PowerModelsDistribution. `eDisGo_OPF` logs through the
+        # PowerModels logger.
+        @test eDisGo_OPF._LOGGER === PowerModels._LOGGER
         text = json_text(d -> d["conductors"] = 1)
-        @test_throws UndefVarError eDisGo_OPF.parse_json(text; validate=false)
-        @test_throws UndefVarError eDisGo_OPF.parse_json(text)
-        err = try
-            eDisGo_OPF.parse_json(text; validate=false)
-        catch e
-            e
+        for validate in (false, true)
+            parsed, warnings = TestUtils.capture_warnings(
+                () -> eDisGo_OPF.parse_json(text; validate=validate))
+            @test parsed["conductors"] == 1
+            @test count(occursin("only single conductors are supported", w)
+                        for w in warnings) == 1
         end
-        @test err.var === :_LOGGER
-        @test !isdefined(eDisGo_OPF, :_LOGGER)
 
-        # What *should* happen: a warning, and the parsed data handed back with the
-        # key intact. Marked broken until the missing logger is fixed in `src/`.
-        @test_broken (parsed = eDisGo_OPF.parse_json(text; validate=false);
-                      parsed["conductors"] == 1)
-
-        # Without the key the same input parses fine, so the key really is what
-        # trips the call.
-        @test eDisGo_OPF.parse_json(json_text(); validate=false) isa Dict{String,Any}
+        # Without the key the same input parses fine and without that warning, so
+        # the key really is what triggers it.
+        parsed, warnings = TestUtils.capture_warnings(
+            () -> eDisGo_OPF.parse_json(json_text(); validate=false))
+        @test parsed isa Dict{String,Any}
+        @test !any(occursin("conductor", w) for w in warnings)
     end
 
     @testset "invalid input" begin

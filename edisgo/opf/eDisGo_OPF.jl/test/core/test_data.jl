@@ -9,12 +9,9 @@
 #   compare the mutated dict field by field against the input.
 # * `correct_bus_types!` / `_correct_bus_types!` repair the `bus_type` markers
 #   before a power flow. Both are currently *dead code* — the only call site,
-#   in `correct_network_data!` (`src/io/common.jl`), is commented out — and the
-#   worker is broken: it references `_LOGGER` and `_biggest_generator`, neither
-#   of which is in scope inside `eDisGo_OPF` (both are internal, non-exported
-#   names of `PowerModels`). Every branch that wants to *change* something
-#   therefore raises an `UndefVarError` instead. The tests below pin down that
-#   actual behaviour and mark the intended behaviour `@test_broken`.
+#   in `correct_network_data!` (`src/io/common.jl`), is commented out — but
+#   they are tested all the same, including the warning every correction logs
+#   (captured with `TestUtils.capture_warnings`).
 
 include(joinpath(@__DIR__, "..", "testsetup.jl"))
 
@@ -183,21 +180,20 @@ end
     # `KeyError("bus")`.
     @test !haskey(mn, "bus")
 
-    # A correction inside a sub-network hits the same `_LOGGER` bug as the
-    # single-network case (see the `_correct_bus_types!` test set below): bus 2
-    # of sub-network 2 is marked PV but its generator is switched off.
-    broken_mn = TestUtils.multinetwork(TestUtils.small_network())
+    # A correction inside a sub-network is applied there and only there: bus 2
+    # of sub-network 2 is marked PV but its generator is switched off, so it is
+    # demoted to PQ.
+    fix_mn = TestUtils.multinetwork(TestUtils.small_network())
     for n in ("1", "2")
-        broken_mn["nw"][n]["gen"]["1"]["gen_status"] = 0
+        fix_mn["nw"][n]["gen"]["1"]["gen_status"] = 0
     end
-    broken_mn["nw"]["2"]["bus"]["2"]["bus_type"] = 2
-    exception = data_thrown(() -> eDisGo_OPF.correct_bus_types!(broken_mn))
-    @test exception isa UndefVarError
-    @test exception.var === :_LOGGER
-    @test broken_mn["nw"]["2"]["bus"]["2"]["bus_type"] == 2
-    # BUG: intended behaviour is the demotion to PQ in the affected sub-network.
-    @test_broken (eDisGo_OPF.correct_bus_types!(broken_mn);
-                  broken_mn["nw"]["2"]["bus"]["2"]["bus_type"] == 1)
+    fix_mn["nw"]["2"]["bus"]["2"]["bus_type"] = 2
+    _, warnings = TestUtils.capture_warnings(() -> eDisGo_OPF.correct_bus_types!(fix_mn))
+    @test fix_mn["nw"]["2"]["bus"]["2"]["bus_type"] == 1
+    @test [fix_mn["nw"]["1"]["bus"][i]["bus_type"] for i in ["1", "2", "3", "4"]] ==
+          [3, 1, 1, 1]
+    @test length(warnings) == 1
+    @test occursin("no active generators found at bus 2", only(warnings))
 end
 
 @testset "_correct_bus_types!" begin
@@ -246,36 +242,36 @@ end
     @test Dict(i => bus["bus_type"] for (i, bus) in real["bus"]) == real_before
     @test count(bus["bus_type"] == 3 for bus in values(real["bus"])) == 1
 
-    # --- paths that are broken --------------------------------------------
-    # BUG: `_LOGGER` and `_biggest_generator` are internal names of PowerModels
-    # and are not imported into `eDisGo_OPF`, so every branch that logs a warning
-    # or looks for a replacement slack dies with an `UndefVarError` before it can
-    # apply its fix. Each case below asserts the actual behaviour and marks the
-    # documented behaviour `@test_broken`.
+    # --- paths that correct the bus types ----------------------------------
+    # Every correction logs a warning naming the bus; a consistent network logs
+    # none.
+    _, warnings = TestUtils.capture_warnings(
+        () -> eDisGo_OPF._correct_bus_types!(TestUtils.small_network()))
+    @test isempty(warnings)
 
-    # PV bus (type 2) without an active generator should become PQ (type 1).
+    # PV bus (type 2) without an active generator becomes PQ (type 1).
     # `gen_status == 0` means the generator does not count.
     pv_off = TestUtils.small_network()
     pv_off["bus"]["2"]["bus_type"] = 2
     pv_off["gen"]["1"]["gen_status"] = 0
-    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(pv_off))
-    @test exception isa UndefVarError
-    @test exception.var === :_LOGGER
-    # The warning precedes the assignment, so the bus keeps its wrong type.
-    @test pv_off["bus"]["2"]["bus_type"] == 2
-    @test_broken (eDisGo_OPF._correct_bus_types!(pv_off);
-                  pv_off["bus"]["2"]["bus_type"] == 1)
+    _, warnings = TestUtils.capture_warnings(() -> eDisGo_OPF._correct_bus_types!(pv_off))
+    @test pv_off["bus"]["2"]["bus_type"] == 1
+    @test pv_off["bus"]["1"]["bus_type"] == 3
+    @test length(warnings) == 1
+    @test occursin("no active generators found at bus 2", only(warnings))
 
-    # Slack bus (type 3) without an active generator should become PQ, too —
-    # after which no slack is left and the fallback below would take over.
+    # Slack bus (type 3) without an active generator becomes PQ, too. No slack
+    # is left then, so the fallback promotes the bus of the biggest active `gen`
+    # (bus 2) to the reference bus.
     slack_off = TestUtils.small_network()
     slack_off["gen_slack"]["1"]["gen_status"] = 0
-    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(slack_off))
-    @test exception isa UndefVarError
-    @test exception.var === :_LOGGER
-    @test slack_off["bus"]["1"]["bus_type"] == 3
-    @test_broken (eDisGo_OPF._correct_bus_types!(slack_off);
-                  slack_off["bus"]["1"]["bus_type"] != 3)
+    _, warnings = TestUtils.capture_warnings(
+        () -> eDisGo_OPF._correct_bus_types!(slack_off))
+    @test slack_off["bus"]["1"]["bus_type"] == 1
+    @test slack_off["bus"]["2"]["bus_type"] == 3
+    @test length(warnings) == 2
+    @test occursin("no active generators found at bus 1", warnings[1])
+    @test occursin("no reference bus found, setting bus 2 as reference", warnings[2])
 
     # Unrecognised bus types become PV when generators hang off the bus (bus 2)
     # and PQ when none do (bus 4). Both negative and out-of-range codes are
@@ -283,25 +279,25 @@ end
     for (bus, code, intended) in (("2", 7, 2), ("4", 7, 1), ("2", 0, 2), ("4", -1, 1))
         unknown = TestUtils.small_network()
         unknown["bus"][bus]["bus_type"] = code
-        exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(unknown))
-        @test exception isa UndefVarError
-        @test exception.var === :_LOGGER
-        @test unknown["bus"][bus]["bus_type"] == code
-        @test_broken (eDisGo_OPF._correct_bus_types!(unknown);
-                      unknown["bus"][bus]["bus_type"] == intended)
+        _, warnings = TestUtils.capture_warnings(
+            () -> eDisGo_OPF._correct_bus_types!(unknown))
+        @test unknown["bus"][bus]["bus_type"] == intended
+        @test length(warnings) == 1
+        @test occursin("unrecongized bus_type $(code), updating to bus_type $(intended)",
+                       only(warnings))
     end
 
-    # No slack bus at all: the bus of the biggest generator should be promoted.
-    # Note that only `gen` is searched — `gen_nd` and `gen_slack` do not take
-    # part in the fallback — so bus 2 would become the reference bus here.
+    # No slack bus at all: the bus of the biggest generator is promoted. Note
+    # that only `gen` is searched — `gen_nd` and `gen_slack` do not take part in
+    # the fallback — so bus 2 becomes the reference bus here, not bus 1.
     no_slack = TestUtils.small_network()
     no_slack["bus"]["1"]["bus_type"] = 1
-    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(no_slack))
-    @test exception isa UndefVarError
-    @test exception.var === :_biggest_generator
-    @test all(bus["bus_type"] == 1 for bus in values(no_slack["bus"]))
-    @test_broken (eDisGo_OPF._correct_bus_types!(no_slack);
-                  no_slack["bus"]["2"]["bus_type"] == 3)
+    _, warnings = TestUtils.capture_warnings(
+        () -> eDisGo_OPF._correct_bus_types!(no_slack))
+    @test no_slack["bus"]["2"]["bus_type"] == 3
+    @test count(bus["bus_type"] == 3 for bus in values(no_slack["bus"])) == 1
+    @test occursin("no reference bus found, setting bus 2 as reference based on generator 1",
+                   only(warnings))
 
     # Same fallback, but with several dispatchable generators: the one with the
     # largest `pmax` wins.
@@ -310,26 +306,31 @@ end
     biggest["gen"]["2"] = merge(deepcopy(biggest["gen"]["1"]),
                                 Dict{String,Any}("index" => 2, "gen_bus" => 4,
                                                  "pmax" => 5.0))
-    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(biggest))
-    @test exception isa UndefVarError
-    @test exception.var === :_biggest_generator
-    @test_broken (eDisGo_OPF._correct_bus_types!(biggest);
-                  biggest["bus"]["4"]["bus_type"] == 3)
+    @test biggest["gen"]["2"]["pmax"] > biggest["gen"]["1"]["pmax"]
+    TestUtils.capture_warnings(() -> eDisGo_OPF._correct_bus_types!(biggest))
+    @test biggest["bus"]["4"]["bus_type"] == 3
+    @test biggest["bus"]["2"]["bus_type"] == 1
 
-    # No generators at all: the documented behaviour is a `Memento.error` about
-    # the missing reference generator. Actually the `UndefVarError` above fires
-    # first, so that message is unreachable.
+    # Only switched-off generators: none qualifies as reference, which is an
+    # error.
+    all_off = TestUtils.small_network()
+    all_off["bus"]["1"]["bus_type"] = 1
+    all_off["gen"]["1"]["gen_status"] = 0
+    exception = data_thrown(() -> TestUtils.capture_warnings(
+        () -> eDisGo_OPF._correct_bus_types!(all_off)))
+    @test exception isa ErrorException
+    @test occursin("no generators found in the given network data", exception.msg)
+
+    # No `gen` at all: the same situation, but PowerModels' `_biggest_generator`
+    # already rejects the empty list with its own, less helpful message, so the
+    # error above is never reached.
     no_gens = TestUtils.small_network()
     no_gens["bus"]["1"]["bus_type"] = 1
-    for group in ("gen", "gen_nd", "gen_slack")
-        no_gens[group] = Dict{String,Any}()
-    end
-    exception = data_thrown(() -> eDisGo_OPF._correct_bus_types!(no_gens))
-    @test exception isa UndefVarError
-    @test exception.var === :_biggest_generator
-    @test_broken occursin("no generators found",
-                          sprint(showerror,
-                                 data_thrown(() -> eDisGo_OPF._correct_bus_types!(no_gens))))
+    no_gens["gen"] = Dict{String,Any}()
+    exception = data_thrown(() -> TestUtils.capture_warnings(
+        () -> eDisGo_OPF._correct_bus_types!(no_gens)))
+    @test exception isa ErrorException
+    @test occursin("generator list passed to _biggest_generator was empty", exception.msg)
 
     # --- structural requirements -------------------------------------------
     # All three generator groups and the bus table have to exist.

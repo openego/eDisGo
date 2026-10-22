@@ -125,10 +125,8 @@ function ct_tap_network()
 end
 
 # The three predicates below describe what the fallback paths of
-# `constraint_store_state` are *meant* to do. They are used with `@test_broken`:
-# every one of these paths first logs through `Memento.warn(_LOGGER, …)`, and
-# `_LOGGER` is not defined in `eDisGo_OPF` (only `PowerModels._LOGGER` is), so
-# they all raise an `UndefVarError` instead of falling back.
+# `constraint_store_state` do. Each of these paths also logs a warning, which the
+# tests capture with `TestUtils.capture_warnings`.
 
 "Initial-state constraint built with the documented default `time_elapsed = 1.0`."
 function ct_initial_falls_back_to_unit_time_step()
@@ -532,17 +530,11 @@ end
         end
 
         @testset "missing time_elapsed" begin
-            # Actual behaviour: the fallback path logs through `_LOGGER`, which is
-            # not defined in `eDisGo_OPF` — the model build dies instead.
-            pm = ct_small_model()
-            delete!(PowerModels.ref(pm, 1), :time_elapsed)
-            @test !haskey(PowerModels.ref(pm, 1), :time_elapsed)
-            @test_throws UndefVarError eDisGo_OPF.constraint_store_state(
-                pm, 1, nw=1, kind="storage")
-            @test isempty(ct_eq_constraints(pm.model))
-
-            # Intended behaviour: warn and fall back to `time_elapsed = 1.0`.
-            @test_broken ct_initial_falls_back_to_unit_time_step()
+            # Warn and fall back to `time_elapsed = 1.0`.
+            ok, warnings = TestUtils.capture_warnings(
+                ct_initial_falls_back_to_unit_time_step)
+            @test ok
+            @test count(occursin("should specify time_elapsed", w) for w in warnings) == 1
         end
     end
 
@@ -610,36 +602,28 @@ end
         end
 
         @testset "missing time_elapsed" begin
-            pm = ct_small_model()
-            delete!(PowerModels.ref(pm, 2), :time_elapsed)
-            @test_throws UndefVarError eDisGo_OPF.constraint_store_state(
-                pm, 1, 1, 2, "storage")
-            @test isempty(ct_eq_constraints(pm.model))
+            # Warn and fall back to `time_elapsed = 1.0`.
+            ok, warnings = TestUtils.capture_warnings(
+                ct_coupled_falls_back_to_unit_time_step)
+            @test ok
+            @test count(occursin("network 2 should specify time_elapsed", w)
+                        for w in warnings) == 1
             # `nw_1` is not consulted for the elapsed time: removing it there
             # changes nothing.
             pm_ok = ct_small_model()
             delete!(PowerModels.ref(pm_ok, 1), :time_elapsed)
             eDisGo_OPF.constraint_store_state(pm_ok, 1, 1, 2, "storage")
             @test length(ct_eq_constraints(pm_ok.model)) == 1
-
-            @test_broken ct_coupled_falls_back_to_unit_time_step()
         end
 
         @testset "component missing in the first network" begin
             # A unit that is inactive in `nw_1` has no stored-energy variable
-            # there; the code means to fall back to the initial-state constraint
-            # built from `nw_2`'s data — but warns through the undefined `_LOGGER`
-            # before it gets there.
-            pm = ct_small_model()
-            delete!(PowerModels.ref(pm, 1, :storage), 1)
-            @test !haskey(PowerModels.ref(pm, 1, :storage), 1)
-            @test haskey(PowerModels.ref(pm, 2, :storage), 1)
-            @test_throws UndefVarError eDisGo_OPF.constraint_store_state(
-                pm, 1, 1, 2, "storage")
-            @test isempty(ct_eq_constraints(pm.model))
-
-            # Intended behaviour: the two initial-state constraints from `nw_2`.
-            @test_broken ct_coupled_falls_back_to_initial()
+            # there; the code warns and falls back to the two initial-state
+            # constraints built from `nw_2`'s data.
+            ok, warnings = TestUtils.capture_warnings(ct_coupled_falls_back_to_initial)
+            @test ok
+            @test count(occursin("storage component 1 was not found in network 1", w)
+                        for w in warnings) == 1
 
             # Present in `nw_1`: the regular coupling constraint, no fallback.
             pm_ok = ct_small_model()

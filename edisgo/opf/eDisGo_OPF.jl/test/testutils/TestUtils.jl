@@ -30,6 +30,7 @@ using PowerModels
 using InfrastructureModels
 using JuMP
 using JSON
+import Memento
 
 export FIXTURE_DIR,
     fixture_path,
@@ -42,6 +43,7 @@ export FIXTURE_DIR,
     num_constraints_total,
     constraint_strings,
     variable_keys,
+    capture_warnings,
     silence_powermodels!
 
 "Directory holding the checked-in JSON fixtures."
@@ -367,5 +369,35 @@ level; leaving that on makes the test output unreadable. Tests that assert on a
 specific warning should re-enable logging locally instead.
 """
 silence_powermodels!() = PowerModels.logger_config!("error")
+
+"""
+    capture_warnings(f) -> (result, warnings)
+
+Run `f()` with the PowerModels logger — which `eDisGo_OPF` logs through — raised
+to `"warn"`, and return the result of `f` together with the messages of all
+warnings it logged, in order. The logger's handlers and level are restored
+afterwards, so the rest of the suite stays silenced (see
+[`silence_powermodels!`](@ref)). Exceptions thrown by `f` propagate unchanged.
+"""
+function capture_warnings(f)
+    logger = Memento.getlogger(PowerModels)
+    io = IOBuffer()
+    handlers = copy(Memento.gethandlers(logger))
+    result = nothing
+    try
+        logger.handlers = Dict{Any,Memento.Handler}()
+        push!(logger, Memento.DefaultHandler(io, Memento.DefaultFormatter("{level}|{msg}")))
+        Memento.setlevel!(logger, "warn") do
+            Memento.setpropagating!(logger, false) do
+                result = f()
+            end
+        end
+    finally
+        logger.handlers = handlers
+    end
+    lines = split(String(take!(io)), '\n'; keepempty=false)
+    warnings = [String(split(l, '|'; limit=2)[2]) for l in lines if startswith(l, "warn|")]
+    return result, warnings
+end
 
 end # module TestUtils

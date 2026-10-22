@@ -673,16 +673,16 @@ end
         @test_throws KeyError base_nw_ref(data_off)
         @test_broken (r_off = base_nw_ref(data_off); isempty(r_off[:ref_buses]))
 
-        # BUG: with more than one slack bus the code warns via `Memento.warn(_LOGGER,
-        # …)`, but `_LOGGER` is never defined in `eDisGo_OPF` (PowerModels keeps
-        # its own `_LOGGER` private), so the warning raises `UndefVarError` and
-        # takes the whole `ref` build down with it.
+        # More than one slack bus: both are collected, with a warning that this
+        # can make the problem infeasible.
         data_two = TestUtils.small_network()
         data_two["bus"]["2"]["bus_type"] = 3
-        @test_throws UndefVarError base_nw_ref(data_two)
-        # What it should do instead — warn and collect both reference buses:
-        @test_broken (r2 = base_nw_ref(data_two);
-                      base_sorted_keys(r2[:ref_buses]) == [1, 2])
+        r2, warnings = TestUtils.capture_warnings(() -> base_nw_ref(data_two))
+        @test base_sorted_keys(r2[:ref_buses]) == [1, 2]
+        @test count(occursin("multiple reference buses found", w) for w in warnings) == 1
+        # A single slack bus does not warn.
+        _, warnings = TestUtils.capture_warnings(() -> base_nw_ref(TestUtils.small_network()))
+        @test !any(occursin("multiple reference buses", w) for w in warnings)
     end
 
     @testset "buspairs" begin

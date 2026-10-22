@@ -13,11 +13,9 @@
 # `cst_new_constraints` and compared coefficient by coefficient — string
 # comparisons would not tell `-0.25 * ps` from `-0.25000001 * ps`.
 #
-# Known production bug (see also test/FUNKTIONSABDECKUNG.md): `_LOGGER` is not
-# defined in `eDisGo_OPF`, so the `time_elapsed` fallback paths of
-# `constraint_cp_state_initial`/`constraint_cp_state` throw an `UndefVarError`
-# instead of warning. The tests below pin the actual behaviour and keep the
-# intended one as `@test_broken`.
+# The `time_elapsed` fallback paths of `constraint_cp_state_initial` and
+# `constraint_cp_state` warn through the PowerModels logger and continue with a
+# unit time step; `TestUtils.capture_warnings` makes that warning visible.
 
 include(joinpath(@__DIR__, "..", "testsetup.jl"))
 
@@ -373,20 +371,19 @@ end
         @test !haskey(PowerModels.ref(pm, 1), :time_elapsed)
         before = length(cst_eq_constraints(pm.model))
 
-        # BUG: the fallback branch warns via `Memento.warn(_LOGGER, …)`, but
-        # `_LOGGER` is not defined in `eDisGo_OPF` — the warning is not the only
-        # thing that fails, the whole constraint is never created.
-        @test !isdefined(eDisGo_OPF, :_LOGGER)
-        @test_throws UndefVarError eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.9)
-        exception = cst_thrown(() -> eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.9))
-        @test exception isa UndefVarError
-        @test exception.var === :_LOGGER
-        @test length(cst_eq_constraints(pm.model)) == before
-
-        # Intended behaviour: warn once and continue with time_elapsed = 1.0, i.e.
-        # produce the very same constraint as the fixture's `time_elapsed == 1`.
-        @test_broken (eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.9);
-                      length(cst_eq_constraints(pm.model)) == before + 1)
+        # The fallback warns once and continues with time_elapsed = 1.0:
+        # cpe == 0.5*(e_min+e_max) + 1.0 * eta * pcp.
+        cons, warnings = TestUtils.capture_warnings() do
+            cst_new_constraints(pm.model) do
+                eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.9)
+            end
+        end
+        @test count(occursin("should specify time_elapsed", w) for w in warnings) == 1
+        @test length(cst_eq_constraints(pm.model)) == before + 1
+        cst_check(only(cons),
+                  Dict(PowerModels.var(pm, 1, :cpe, 1) => 1.0,
+                       PowerModels.var(pm, 1, :pcp, 1) => -0.9),
+                  0.5)
     end
 end
 
@@ -460,19 +457,23 @@ end
         # Only network 1 loses the entry; network 2 keeps it. The lookup is done on
         # `n_1`, so the fallback is still taken.
         delete!(PowerModels.ref(pm, 1), :time_elapsed)
-        @test haskey(PowerModels.ref(pm, 2), :time_elapsed)
+        PowerModels.ref(pm, 2)[:time_elapsed] = 0.25
         before = length(cst_eq_constraints(pm.model))
 
-        # BUG: same undefined `_LOGGER` as in `constraint_cp_state_initial`.
-        @test_throws UndefVarError eDisGo_OPF.constraint_cp_state(pm, 1, 2, 1, 0.9)
-        exception = cst_thrown(() -> eDisGo_OPF.constraint_cp_state(pm, 1, 2, 1, 0.9))
-        @test exception isa UndefVarError
-        @test exception.var === :_LOGGER
-        @test length(cst_eq_constraints(pm.model)) == before
-
-        # Intended behaviour: warn and continue with time_elapsed = 1.0.
-        @test_broken (eDisGo_OPF.constraint_cp_state(pm, 1, 2, 1, 0.9);
-                      length(cst_eq_constraints(pm.model)) == before + 1)
+        # The fallback warns once and continues with time_elapsed = 1.0, even
+        # though network 2 has its own entry: cpe_2 - cpe_1 == 1.0 * eta * pcp_2.
+        cons, warnings = TestUtils.capture_warnings() do
+            cst_new_constraints(pm.model) do
+                eDisGo_OPF.constraint_cp_state(pm, 1, 2, 1, 0.9)
+            end
+        end
+        @test count(occursin("should specify time_elapsed", w) for w in warnings) == 1
+        @test length(cst_eq_constraints(pm.model)) == before + 1
+        cst_check(only(cons),
+                  Dict(PowerModels.var(pm, 2, :cpe, 1) => 1.0,
+                       PowerModels.var(pm, 1, :cpe, 1) => -1.0,
+                       PowerModels.var(pm, 2, :pcp, 1) => -0.9),
+                  0.0)
     end
 end
 
