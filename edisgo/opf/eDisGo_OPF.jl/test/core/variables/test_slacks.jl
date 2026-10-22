@@ -479,3 +479,37 @@ end
         vsl_check_reporting(eDisGo_OPF.variable_gen_slack, :gen, :pgens)
     end
 end
+
+@testset "variable_ev_slack" begin
+    data = vsl_network()
+    vsl_add!(data, "electromobility", 3; cp_bus=2, p_max=0.7)
+
+    @testset "key, index set and bounds" begin
+        for bounded in (true, false)
+            pm = vsl_model(data)
+            eDisGo_OPF.variable_ev_slack(pm; nw=1, bounded=bounded)
+            pcps = PowerModels.var(pm, 1, :pcps)
+            @test vsl_ids(pcps) == [1, 3]
+            @test vsl_ids(pcps) ==
+                  sort(collect(PowerModels.ids(pm, 1, :electromobility)))
+            for i in (1, 3)
+                # Non-negative and otherwise free — unlike the other grid
+                # restriction slacks not even `bounded=true` caps it (e.g. at
+                # `p_max`).
+                @test vsl_lb(pcps[i]) == 0.0
+                @test vsl_ub(pcps[i]) === nothing
+                @test JuMP.start_value(pcps[i]) === nothing
+                @test JuMP.name(pcps[i]) == "1_pcps[$i]"
+            end
+            @test JuMP.num_variables(pm.model) == 2
+        end
+    end
+
+    @testset "nw" begin
+        vsl_check_nw(eDisGo_OPF.variable_ev_slack, :pcps)
+    end
+
+    @testset "report" begin
+        vsl_check_reporting(eDisGo_OPF.variable_ev_slack, :electromobility, :pcps)
+    end
+end
