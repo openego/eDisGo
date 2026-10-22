@@ -684,3 +684,14 @@ end
         @test_broken soc_branches == nc_branches
     end
 end
+
+@testset "constraint_max_line_loading" begin
+    @testset "AbstractSOCBFModelEdisgo" begin
+        bf_check_max_line_loading(eDisGo_OPF.SOCBFPowerModelEdisgo)
+    end
+
+    @testset "AbstractNCBFModelEdisgo" begin
+        # Plain quadratic `@constraint`, not `@NLconstraint`, in the NC model too.
+        bf_check_max_line_loading(eDisGo_OPF.NCBFPowerModelEdisgo)
+    end
+end
