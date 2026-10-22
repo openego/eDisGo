@@ -466,3 +466,82 @@ end
         end
     end
 end
+
+@testset "variable_heat_pump_power_real" begin
+    @testset "key and index set" begin
+        data = vfx_add_component!(TestUtils.small_network(), "heatpumps", 5;
+                                  p_max=0.8)
+        pm = vfx_bare_model(data)
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_heat_pump_power_real(pm, nw=1)
+        end
+        @test added == 2
+        @test TestUtils.variable_keys(pm, 1) == [:php]
+        @test vfx_indices(pm, 1, :php) == Set(PowerModels.ids(pm, 1, :heatpumps))
+        @test vfx_indices(pm, 1, :php) == Set([1, 5])
+        @test JuMP.name(PowerModels.var(pm, 1, :php, 5)) == "1_php[5]"
+        @test isempty(PowerModels.var(pm, 2))
+    end
+
+    @testset "no heat pumps" begin
+        data = TestUtils.small_network()
+        empty!(data["heatpumps"])
+        empty!(data["time_series"]["heatpumps"])
+        pm = vfx_bare_model(data)
+        @test vfx_added_variables(() -> eDisGo_OPF.variable_heat_pump_power_real(pm, nw=1),
+                                  pm) == 0
+        @test isempty(PowerModels.var(pm, 1, :php))
+    end
+
+    @testset "bounded" begin
+        # Bounded by `p_min`/`p_max` — not by the time-varying heat demand `pd`,
+        # which only enters through `constraint_hp_operation`.
+        data = TestUtils.small_network()
+        data["heatpumps"]["1"]["p_min"] = 0.1
+        data["time_series"]["heatpumps"]["1"]["pd"] = [0.4, 1.6]
+        pm = vfx_bare_model(data)
+        PowerModels.ref(pm, 2, :heatpumps, 1)["p_max"] = 1.25
+        eDisGo_OPF.variable_heat_pump_power_real(pm, nw=1)
+        eDisGo_OPF.variable_heat_pump_power_real(pm, nw=2, bounded=true)
+        @test vfx_bounds(PowerModels.var(pm, 1, :php, 1)) == (0.1, 2.0)
+        @test vfx_bounds(PowerModels.var(pm, 2, :php, 1)) == (0.1, 1.25)
+        @test JuMP.name(PowerModels.var(pm, 2, :php, 1)) == "2_php[1]"
+    end
+
+    @testset "unbounded" begin
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_heat_pump_power_real(pm, nw=1, bounded=false)
+        vfx_check_unbounded(pm, 1, :php)
+    end
+
+    @testset "start values" begin
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_heat_pump_power_real(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :php, 1)) == 0.0
+
+        data = TestUtils.small_network()
+        data["heatpumps"]["1"]["php_start"] = 1.2
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_heat_pump_power_real(pm, nw=1)
+        eDisGo_OPF.variable_heat_pump_power_real(pm, nw=2, bounded=false)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :php, 1)) == 1.2
+        @test JuMP.start_value(PowerModels.var(pm, 2, :php, 1)) == 1.2
+    end
+
+    @testset "report" begin
+        vfx_check_report(eDisGo_OPF.variable_heat_pump_power_real, :heatpumps, [:php])
+    end
+
+    @testset "real eDisGo test grid" begin
+        data = TestUtils.pm_network()
+        pm = vfx_bare_model(TestUtils.pm_network())
+        for n in sort(collect(PowerModels.nw_ids(pm)))
+            eDisGo_OPF.variable_heat_pump_power_real(pm, nw=n)
+            @test vfx_indices(pm, n, :php) == vfx_int_ids(data["heatpumps"])
+            for (i, hp) in data["heatpumps"]
+                @test vfx_bounds(PowerModels.var(pm, n, :php, parse(Int, i))) ==
+                      (hp["p_min"], hp["p_max"])
+            end
+        end
+    end
+end
