@@ -501,3 +501,25 @@ end
         @test_broken (3, 3, 4) in vfc_index(ll)
     end
 end
+
+@testset "variable_gen_power_curt" begin
+    @testset "creates pgc only" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt(pm, nw=1)
+        # The reactive curtailment `qgc` is commented out in the wrapper.
+        @test TestUtils.variable_keys(pm, 1) == [:pgc]
+        @test !haskey(PowerModels.var(pm, 1), :qgc)
+        @test JuMP.num_variables(pm.model) == 1
+        @test length(vfc_reported(pm, 1, :gen_nd, :pgc)) == 1
+    end
+
+    @testset "forwards keyword arguments" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt(pm, nw=2, bounded=false, report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        pgc = PowerModels.var(pm, 2, :pgc)
+        @test vfc_unbounded(pgc)
+        @test JuMP.name(pgc[1]) == "2_pgc[1]"
+        @test isempty(vfc_reported(pm, 2, :gen_nd, :pgc))
+    end
+end
