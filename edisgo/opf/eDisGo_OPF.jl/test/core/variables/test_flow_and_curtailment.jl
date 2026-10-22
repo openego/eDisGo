@@ -312,3 +312,88 @@ end
         @test length(vfc_reported(pm, 2, :branch, :qf)) == 3
     end
 end
+
+@testset "variable_bus_voltage_magnitude_sqr" begin
+    @testset "index set excludes storage buses" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:w]
+        w = PowerModels.var(pm, 1, :w)
+        # Bus 4 is the storage bus behind the virtual branch; it has no voltage.
+        @test vfc_index(w) == Set([1, 2, 3])
+        @test !(4 in vfc_index(w))
+        @test JuMP.name(w[2]) == "1_w[2]"
+    end
+
+    @testset "real grid" begin
+        pm = vfc_big_model()
+        eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm, nw=1)
+        w = PowerModels.var(pm, 1, :w)
+        buses = PowerModels.ref(pm, 1, :bus)
+        storage_buses = Set(i for (i, b) in buses if b["storage"])
+        @test length(storage_buses) == 1
+        @test vfc_index(w) == setdiff(Set(keys(buses)), storage_buses)
+        @test length(w) == 142
+    end
+
+    @testset "bounded=true" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :bus, 2)["vmin"] = 0.95
+        PowerModels.ref(pm, 1, :bus, 2)["vmax"] = 1.05
+        eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm, nw=1, bounded=true)
+        w = PowerModels.var(pm, 1, :w)
+        # Bounds are the squared voltage limits.
+        for i in (1, 3)
+            lb, ub = vfc_bounds(w[i])
+            @test lb ≈ 0.9^2
+            @test ub ≈ 1.1^2
+        end
+        lb, ub = vfc_bounds(w[2])
+        @test lb ≈ 0.95^2
+        @test ub ≈ 1.05^2
+    end
+
+    @testset "bounded=false" begin
+        # Without bounds only the physical lower bound 0 of a squared quantity
+        # remains.
+        pm = vfc_model()
+        eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm, nw=1, bounded=false)
+        w = PowerModels.var(pm, 1, :w)
+        @test all(vfc_bounds(w[i]) == (0.0, nothing) for i in (1, 2, 3))
+    end
+
+    @testset "start values" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :bus, 2)["w_start"] = 1.02
+        eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm, nw=1)
+        w = PowerModels.var(pm, 1, :w)
+        @test JuMP.start_value(w[2]) == 1.02
+        # Default start value is slightly above 1, not PowerModels' 0.
+        @test JuMP.start_value(w[1]) == 1.001
+        @test JuMP.start_value(w[3]) == 1.001
+    end
+
+    @testset "report" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm, nw=1, report=true)
+        w = PowerModels.var(pm, 1, :w)
+        @test vfc_reported(pm, 1, :bus, :w) == Dict(1 => w[1], 2 => w[2], 3 => w[3])
+
+        pm = vfc_model()
+        eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm, nw=1, report=false)
+        @test isempty(vfc_reported(pm, 1, :bus, :w))
+    end
+
+    @testset "nw keyword" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :bus, 3)["vmax"] = 1.05
+        PowerModels.ref(pm, 2, :bus, 3)["w_start"] = 0.98
+        eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm, nw=2)
+        @test isempty(PowerModels.var(pm, 1))
+        w = PowerModels.var(pm, 2, :w)
+        @test JuMP.name(w[3]) == "2_w[3]"
+        @test vfc_bounds(w[3])[2] ≈ 1.05^2
+        @test JuMP.start_value(w[3]) == 0.98
+        @test length(vfc_reported(pm, 2, :bus, :w)) == 3
+    end
+end
