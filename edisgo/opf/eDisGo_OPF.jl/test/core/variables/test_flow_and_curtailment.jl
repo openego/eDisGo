@@ -397,3 +397,29 @@ end
         @test length(vfc_reported(pm, 2, :bus, :w)) == 3
     end
 end
+
+@testset "variable_max_line_loading" begin
+    @testset "creates ll" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_max_line_loading(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:ll]
+        @test vfc_index(PowerModels.var(pm, 1, :ll)) == Set([(1, 1, 2), (2, 2, 3)])
+        @test length(vfc_reported(pm, 1, :branch, :ll)) == 2
+    end
+
+    @testset "forwards keyword arguments" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_max_line_loading(pm, nw=2, report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        @test startswith(JuMP.name(PowerModels.var(pm, 2, :ll)[(1, 1, 2)]), "2_ll[")
+        @test isempty(vfc_reported(pm, 2, :branch, :ll))
+    end
+
+    @testset "no bounded keyword" begin
+        # Unlike the other wrappers, `bounded` is not accepted: the inner function
+        # has no such keyword (the lower bound of 1 is part of the definition).
+        pm = vfc_model()
+        @test_throws MethodError eDisGo_OPF.variable_max_line_loading(pm, nw=1,
+                                                                      bounded=false)
+    end
+end
