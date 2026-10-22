@@ -11,7 +11,6 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 import os
 
@@ -180,18 +179,14 @@ def add_basemap(ax, zoom=12, timeout=10):
     """
     Adds map to a plot.
 
-    The map tiles are downloaded from the internet. `timeout` is the time in
-    seconds to wait for each tile before the download fails. contextily
-    versions older than 1.7.1 do not support a timeout and wait without limit.
+    The map tiles are downloaded from the internet. If the tile server does not
+    respond within `timeout` seconds, the download fails.
 
     """
     url = ctx.providers.CartoDB.Positron
     xmin, xmax, ymin, ymax = ax.axis()
-    kwargs = {}
-    if "timeout" in inspect.signature(ctx.bounds2img).parameters:
-        kwargs["timeout"] = timeout
     basemap, extent = ctx.bounds2img(
-        xmin, ymin, xmax, ymax, zoom=zoom, source=url, **kwargs
+        xmin, ymin, xmax, ymax, zoom=zoom, source=url, timeout=timeout
     )
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
     # restore original x/y limits
@@ -337,9 +332,11 @@ def mv_grid_topology(
     background_map : :obj:`Boolean`
         If True map is drawn in the background. This also requires the
         contextily package to be installed and internet access to download the
-        map tiles. If the download fails, or with contextily 1.7.1 or newer a
-        tile takes longer than 10 seconds, the plot is drawn without the map and
-        a warning is logged. Default: True.
+        map tiles. If the tile server does not respond within 10 seconds or the
+        download fails for another reason, the plot is drawn without the map and
+        a warning is logged. The map tiles come from CartoDB, which requires an
+        API key that eDisGo cannot pass. The tiles therefore only show the text
+        "API KEY REQUIRED". Default: True.
     limits_cb_lines : :obj:`tuple`
         Tuple with limits for colorbar of line color. First entry is the
         minimum and second entry the maximum value. Only needs to be provided

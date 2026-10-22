@@ -294,11 +294,13 @@ Changes
 * The example notebooks ``edisgo_simple_example`` and ``full_workflow_walkthrough``
   draw their MV grid plots without a background map. Downloading the map tiles could
   take tens of minutes or fail without a good internet connection. The simple example
-  explains how to switch the map back on with ``background_map=True``. The graph of
-  an LV grid is now drawn for the LV grid selected earlier in the notebook instead of
-  a second one picked by position (openego/eDisGo#276)
-* :func:`~.tools.plots.add_basemap` waits at most 10 seconds for each map tile
-  (``timeout`` parameter, needs contextily 1.7.1 or newer). Before, a slow or missing
+  explains how to switch the map back on with ``background_map=True`` and that the
+  CartoDB map tiles then only show the text "API KEY REQUIRED", as CartoDB requires an
+  API key that eDisGo cannot pass. The graph of an LV grid is now drawn for the LV
+  grid selected earlier in the notebook instead of a second one picked by position
+  (openego/eDisGo#276)
+* :func:`~.tools.plots.add_basemap` gives up on a map tile if the tile server does not
+  respond within 10 seconds (new ``timeout`` parameter). Before, a slow or missing
   internet connection blocked MV grid plots with ``background_map=True`` without
   limit. A failed download is logged as a warning and the plot is drawn without the
-  map, as before
+  map. eDisGo now needs contextily 1.7.1 or newer

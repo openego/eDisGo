@@ -126,7 +126,8 @@ class TestPlots:
         )
 
     def test_add_basemap_timeout(self, monkeypatch):
-        # the tile download gets a timeout and a failing download is raised
+        # add_basemap passes the timeout to contextily and passes a failed
+        # download on to the caller
         calls = {}
 
         def bounds2img(*args, timeout=None, **kwargs):
