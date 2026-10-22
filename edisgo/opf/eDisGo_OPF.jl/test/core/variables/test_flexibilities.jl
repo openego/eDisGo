@@ -732,3 +732,60 @@ end
         end
     end
 end
+
+@testset "variable_cp_power_imaginary" begin
+    @testset "key and index set" begin
+        data = vfx_add_component!(vfx_cp_q_network(), "electromobility", 4)
+        pm = vfx_bare_model(data)
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_cp_power_imaginary(pm, nw=1)
+        end
+        @test added == 2
+        @test TestUtils.variable_keys(pm, 1) == [:qcp]
+        @test vfx_indices(pm, 1, :qcp) == Set([1, 4])
+        @test JuMP.name(PowerModels.var(pm, 1, :qcp, 1)) == "1_qcp[1]"
+        @test isempty(PowerModels.var(pm, 2))
+    end
+
+    @testset "bounded" begin
+        pm = vfx_bare_model(vfx_cp_q_network())
+        PowerModels.ref(pm, 2, :electromobility, 1)["q_min"] = -0.5
+        eDisGo_OPF.variable_cp_power_imaginary(pm, nw=1)
+        eDisGo_OPF.variable_cp_power_imaginary(pm, nw=2, bounded=true)
+        @test vfx_bounds(PowerModels.var(pm, 1, :qcp, 1)) == (-0.25, 0.15)
+        @test vfx_bounds(PowerModels.var(pm, 2, :qcp, 1)) == (-0.5, 0.15)
+    end
+
+    @testset "unbounded" begin
+        pm = vfx_bare_model(vfx_cp_q_network())
+        eDisGo_OPF.variable_cp_power_imaginary(pm, nw=1, bounded=false)
+        vfx_check_unbounded(pm, 1, :qcp)
+    end
+
+    @testset "no start values" begin
+        # Created without a `start`: a `qcp_start` in the data is ignored.
+        data = vfx_cp_q_network()
+        data["electromobility"]["1"]["qcp_start"] = 0.1
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_cp_power_imaginary(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :qcp, 1)) === nothing
+    end
+
+    @testset "report" begin
+        vfx_check_report(eDisGo_OPF.variable_cp_power_imaginary, :electromobility, [:qcp])
+    end
+
+    @testset "real eDisGo test grid" begin
+        data = TestUtils.pm_network()
+        pm = vfx_bare_model(TestUtils.pm_network())
+        for n in sort(collect(PowerModels.nw_ids(pm)))
+            eDisGo_OPF.variable_cp_power_imaginary(pm, nw=n)
+            @test vfx_indices(pm, n, :qcp) ==
+                  vfx_int_ids(data["electromobility"])
+            for (i, cp) in data["electromobility"]
+                @test vfx_bounds(PowerModels.var(pm, n, :qcp, parse(Int, i))) ==
+                      (cp["q_min"], cp["q_max"])
+            end
+        end
+    end
+end
