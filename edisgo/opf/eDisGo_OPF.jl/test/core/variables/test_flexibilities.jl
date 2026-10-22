@@ -425,3 +425,44 @@ end
         end
     end
 end
+
+# ---------------------------------------------------------------------------
+# heat pumps
+# ---------------------------------------------------------------------------
+
+@testset "variable_heat_pump_power" begin
+    @testset "creates only the active power variable" begin
+        pm = vfx_bare_model()
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_heat_pump_power(pm, nw=1)
+        end
+        # The reactive power call is commented out: no `qhp`, reactive heat pump
+        # power is derived from the power factor in the power balance instead.
+        @test added == 1
+        @test TestUtils.variable_keys(pm, 1) == [:php]
+        @test !haskey(PowerModels.var(pm, 1), :qhp)
+        @test vfx_bounds(PowerModels.var(pm, 1, :php, 1)) == (0.0, 2.0)
+        @test sort(collect(keys(vfx_reported(pm, 1, :heatpumps)[1]))) == [:php]
+        @test isempty(PowerModels.var(pm, 2))
+    end
+
+    @testset "forwards nw, bounded and report" begin
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_heat_pump_power(pm, nw=2, bounded=false, report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        @test TestUtils.variable_keys(pm, 2) == [:php]
+        vfx_check_unbounded(pm, 2, :php)
+        @test vfx_reported(pm, 2, :heatpumps) === nothing
+    end
+
+    @testset "in the full OPF build" begin
+        for model_type in (SOCBFPowerModelEdisgo, NCBFPowerModelEdisgo)
+            pm = TestUtils.build_small_model(model_type)
+            for n in 1:2
+                @test vfx_indices(pm, n, :php) == Set([1])
+                @test vfx_bounds(PowerModels.var(pm, n, :php, 1)) == (0.0, 2.0)
+                @test !haskey(PowerModels.var(pm, n), :qhp)
+            end
+        end
+    end
+end
