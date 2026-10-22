@@ -423,3 +423,59 @@ end
         vsl_check_reporting(eDisGo_OPF.variable_load_slack, :load, :pds)
     end
 end
+
+@testset "variable_gen_slack" begin
+    # Gen 2 is switched off and must be filtered out, gen 4 is active with a
+    # static set point. The non-dispatchable and slack generators (ids 1) are
+    # not part of the index set.
+    data = vsl_network()
+    vsl_add!(data, "gen", 2; gen_status=0)
+    vsl_add!(data, "gen", 4; gen_bus=3, pg=0.1)
+    vsl_add!(data, "gen_nd", 6)
+
+    @testset "key and index set" begin
+        pm = vsl_model(data)
+        eDisGo_OPF.variable_gen_slack(pm; nw=1)
+        pgens = PowerModels.var(pm, 1, :pgens)
+        @test vsl_ids(pgens) == [1, 4]
+        @test !(2 in vsl_ids(pgens))
+        @test !(6 in vsl_ids(pgens))       # gen_nd ids are not used
+        @test vsl_ids(pgens) == sort(collect(PowerModels.ids(pm, 1, :gen)))
+        @test JuMP.num_variables(pm.model) == 2
+        for i in (1, 4)
+            @test JuMP.start_value(pgens[i]) === nothing
+            @test JuMP.name(pgens[i]) == "1_pgens[$i]"
+        end
+    end
+
+    @testset "bounded=true: 0 ≤ pgens ≤ pg of the time step" begin
+        pm = vsl_model(data)
+        for n in (1, 2)
+            eDisGo_OPF.variable_gen_slack(pm; nw=n)
+        end
+        @test vsl_lb(PowerModels.var(pm, 1, :pgens)[1]) == 0.0
+        @test vsl_ub(PowerModels.var(pm, 1, :pgens)[1]) == 0.3
+        @test vsl_lb(PowerModels.var(pm, 2, :pgens)[1]) == 0.0
+        @test vsl_ub(PowerModels.var(pm, 2, :pgens)[1]) == 0.35
+        for n in (1, 2)
+            @test vsl_ub(PowerModels.var(pm, n, :pgens)[4]) == 0.1
+        end
+    end
+
+    @testset "bounded=false: only the lower bound" begin
+        pm = vsl_model(data)
+        eDisGo_OPF.variable_gen_slack(pm; nw=1, bounded=false)
+        for i in (1, 4)
+            @test vsl_lb(PowerModels.var(pm, 1, :pgens)[i]) == 0.0
+            @test vsl_ub(PowerModels.var(pm, 1, :pgens)[i]) === nothing
+        end
+    end
+
+    @testset "nw" begin
+        vsl_check_nw(eDisGo_OPF.variable_gen_slack, :pgens)
+    end
+
+    @testset "report" begin
+        vsl_check_reporting(eDisGo_OPF.variable_gen_slack, :gen, :pgens)
+    end
+end
