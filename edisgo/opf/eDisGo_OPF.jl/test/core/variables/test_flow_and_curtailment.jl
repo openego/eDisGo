@@ -120,3 +120,107 @@ const VFC_ARCS = Set([(1, 1, 2), (2, 2, 3), (3, 3, 4)])
         @test vfc_bounds(PowerModels.var(pm, 1, :q)[(1, 1, 2)]) == (-5.0, 5.0)
     end
 end
+
+@testset "variable_branch_power_real_radial" begin
+    @testset "index set" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:p]
+        p = PowerModels.var(pm, 1, :p)
+        # One variable per *from*-arc — the radial model has no to-side flow —
+        # and the virtual storage branch 3 is included.
+        @test vfc_index(p) == VFC_ARCS
+        @test Set(vfc_index(p)) == Set(PowerModels.ref(pm, 1, :arcs_from))
+        @test !any(arc in vfc_index(p) for arc in PowerModels.ref(pm, 1, :arcs_to))
+        @test JuMP.name(p[(2, 2, 3)]) == "1_p[(2, 2, 3)]"
+    end
+
+    @testset "real grid" begin
+        pm = vfc_big_model()
+        eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1)
+        p = PowerModels.var(pm, 1, :p)
+        @test length(p) == length(PowerModels.ref(pm, 1, :branch)) == 142
+        @test vfc_index(p) == Set(PowerModels.ref(pm, 1, :arcs_from))
+    end
+
+    @testset "bounded=true" begin
+        pm = vfc_model()
+        # Branch 1: `c_rating_a * max(vmax)` is tighter than `rate_a` (5.0).
+        PowerModels.ref(pm, 1, :branch, 1)["c_rating_a"] = 2.0
+        # Branch 2: no rating at all, so there is nothing to bound it with.
+        delete!(PowerModels.ref(pm, 1, :branch, 2), "rate_a")
+        eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1, bounded=true)
+        p = PowerModels.var(pm, 1, :p)
+        lb, ub = vfc_bounds(p[(1, 1, 2)])
+        @test lb ≈ -2.2
+        @test ub ≈ 2.2
+        @test vfc_bounds(p[(2, 2, 3)]) == (nothing, nothing)
+        @test vfc_bounds(p[(3, 3, 4)]) == (-5.0, 5.0)
+    end
+
+    @testset "bounded=false" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1, bounded=false)
+        @test vfc_unbounded(PowerModels.var(pm, 1, :p))
+    end
+
+    @testset "start values" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :branch, 1)["p_start"] = 0.11
+        PowerModels.ref(pm, 1, :branch, 2)["p_start"] = 0.22
+        # `pf_start` takes precedence over `p_start` on the from-arc.
+        PowerModels.ref(pm, 1, :branch, 2)["pf_start"] = 0.33
+        eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1)
+        p = PowerModels.var(pm, 1, :p)
+        @test JuMP.start_value(p[(1, 1, 2)]) == 0.11
+        @test JuMP.start_value(p[(2, 2, 3)]) == 0.33
+        # Default start value when no field is given.
+        @test JuMP.start_value(p[(3, 3, 4)]) == 0.0
+    end
+
+    @testset "pt_start (defect)" begin
+        # Actual: `p` only exists for the from-arcs, but a `pt_start` field still
+        # makes the function set a start value on the to-arc `(1, 2, 1)` — which
+        # is not part of the container, so the call throws.
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :branch, 1)["pt_start"] = 0.2
+        @test_throws KeyError eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1)
+        # Intended: the field is ignored (or rejected with a clear message).
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :branch, 1)["pt_start"] = 0.2
+        @test_broken try
+            eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1)
+            true
+        catch
+            false
+        end
+    end
+
+    @testset "report" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1, report=true)
+        p = PowerModels.var(pm, 1, :p)
+        reported = vfc_reported(pm, 1, :branch, :pf)
+        @test reported == Dict(1 => p[(1, 1, 2)], 2 => p[(2, 2, 3)], 3 => p[(3, 3, 4)])
+        # No to-side field is written.
+        @test isempty(vfc_reported(pm, 1, :branch, :pt))
+
+        pm = vfc_model()
+        eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1, report=false)
+        @test isempty(vfc_reported(pm, 1, :branch, :pf))
+    end
+
+    @testset "nw keyword" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :branch, 1)["p_start"] = 0.7
+        PowerModels.ref(pm, 2, :branch, 1)["rate_a"] = 3.0
+        eDisGo_OPF.variable_branch_power_real_radial(pm, nw=2)
+        @test isempty(PowerModels.var(pm, 1))
+        p = PowerModels.var(pm, 2, :p)
+        @test JuMP.name(p[(1, 1, 2)]) == "2_p[(1, 1, 2)]"
+        @test JuMP.start_value(p[(1, 1, 2)]) == 0.7
+        @test vfc_bounds(p[(1, 1, 2)]) == (-3.0, 3.0)
+        @test length(vfc_reported(pm, 2, :branch, :pf)) == 3
+        @test isempty(vfc_reported(pm, 1, :branch, :pf))
+    end
+end
