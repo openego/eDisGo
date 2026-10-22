@@ -1,0 +1,77 @@
+<div class="rw" id="rw-ov">
+<div class="rw-row" id="rw-ov-tabs"></div>
+<div class="rw-box"><svg id="rw-ov-svg" role="img" aria-label="Order of the reinforcement steps"></svg></div>
+<div class="rw-detail" id="rw-ov-detail" aria-live="polite"></div>
+<p class="rw-note">Click a step to see what is checked, which function applies the measure and which settings matter.</p>
+<script>
+(function () {
+  var RW = window.RW, svg = document.getElementById("rw-ov-svg"), det = document.getElementById("rw-ov-detail");
+  var FLOWS = {
+    reinforce: {
+      title: "reinforce_grid",
+      steps: [
+        { id: "pf", label: "Power flow", sub: "analyze()", loop: false,
+          text: "A power flow is run for the selected time steps (<code>timesteps_pfa</code>, or the most critical ones with <code>reduced_analysis=True</code>). All checks below use its results in <code>edisgo.results</code>." },
+        { id: "ol", label: "Overloading", sub: "all equipment", loop: true,
+          text: "<b>Checks:</b> <code>hv_mv_station_max_overload</code>, <code>mv_lv_station_max_overload</code>, <code>mv_line_max_relative_overload</code>, <code>lv_line_max_relative_overload</code>.<br><b>Measures:</b> <code>reinforce_hv_mv_station_overloading</code>, <code>reinforce_mv_lv_station_overloading</code>, <code>reinforce_lines_overloading</code>, all in the same step. A power flow follows, and the loop repeats until nothing is overloaded or <code>max_while_iterations</code> is reached." },
+        { id: "mvv", label: "MV voltage", sub: "MV lines", loop: true,
+          text: "<b>Check:</b> <code>voltage_issues(voltage_level=\"mv\")</code>.<br><b>Measure:</b> <code>reinforce_lines_voltage_issues</code> on the MV grid: split the feeder at two thirds or reinforce the lines on the path. One problem per feeder and iteration, then a new power flow." },
+        { id: "st", label: "MV/LV stations", sub: "voltage", loop: true,
+          text: "<b>Check:</b> <code>voltage_issues(voltage_level=\"mv_lv\")</code>, the voltage difference between the primary and secondary side of each MV/LV station.<br><b>Measure:</b> <code>reinforce_mv_lv_station_voltage_issues</code> adds one parallel standard transformer per station and iteration." },
+        { id: "lvv", label: "LV voltage", sub: "LV lines", loop: true,
+          text: "<b>Check:</b> <code>voltage_issues(voltage_level=\"lv\")</code> for every LV grid.<br><b>Measure:</b> <code>reinforce_lines_voltage_issues</code> per LV grid, like in the MV, with two LV rules: no split inside a building, and house connections are not reinforced." },
+        { id: "ol2", label: "Overloading again", sub: "all equipment", loop: true,
+          text: "Voltage measures lower the impedance and change load flows, which can create new overloads, for example on a split line that now carries the whole rear part of a feeder. The overloading loop runs a second time." },
+        { id: "cost", label: "Costs", sub: "costs", loop: false,
+          text: "All changes are collected in <code>results.equipment_changes</code>. <code>grid_expansion_costs</code> turns them into costs per line and transformer, see the cost calculator further down." }
+      ]
+    },
+    enhanced: {
+      title: "enhanced_reinforce_grid",
+      steps: [
+        { id: "sep", label: "Separate LV grids", sub: "optional", loop: false,
+          text: "<code>run_separate_lv_grids</code>: every LV grid whose largest residual apparent power (load minus generation and storage) exceeds <code>separation_threshold</code> (default 2) times the rated power of its transformers is split by <code>separate_lv_grid</code>. This is repeated until no new grid is created, see the example further down." },
+        { id: "lvsingle", label: "Each LV grid", sub: "mode=\"lv\"", loop: false,
+          text: "Every LV grid is reinforced on its own (<code>reinforce(mode=\"lv\", lv_grid_id=...)</code>). If the power flow of a single LV grid does not converge, the grid is separated first and then reinforced." },
+        { id: "all", label: "Everything at once", sub: "whole grid", loop: false,
+          text: "<code>reinforce(catch_convergence_problems=True)</code> on the whole grid. If this succeeds, the function returns here." },
+        { id: "seq", label: "Fallback in sequence", sub: "mv, mvlv, lv", loop: false,
+          text: "Only if the previous step failed: MV only, then MV plus MV/LV stations (<code>mode=\"mvlv\"</code>), then each LV grid separately. Each step is attempted even if the one before failed." },
+        { id: "dist", label: "Cost-distorting mode", sub: "optional", loop: false,
+          text: "Only with <code>activate_cost_results_disturbing_mode=True</code>: LV grids that still fail get all lines replaced by standard lines, and if that is not enough all components are aggregated at the MV/LV station. The total cost is then an underestimate." },
+        { id: "final", label: "Final reinforcement", sub: "whole grid", loop: false,
+          text: "A last <code>reinforce()</code> over the now feasible grid." }
+      ]
+    }
+  };
+  var cur = "reinforce", pick = 0;
+  document.getElementById("rw-ov-tabs").appendChild(RW.seg([{ id: "reinforce", label: "reinforce()" }, { id: "enhanced", label: "enhanced_reinforce_grid()" }], cur, function (id) { cur = id; pick = 0; draw(); }, "Function"));
+  function draw() {
+    var F = FLOWS[cur], n = F.steps.length, W = 800, bw = Math.min(130, (W - 20) / n - 10), gap = (W - 20 - n * bw) / (n - 1), H = 160, y = 40, bh = 70;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    var defs = RW.el("defs", {}, null, svg), m = RW.el("marker", { id: "rw-ov-arr", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, null, defs);
+    RW.el("path", { d: "M0,0 L10,5 L0,10 z", fill: "var(--muted)" }, null, m);
+    F.steps.forEach(function (s, i) {
+      var x = 10 + i * (bw + gap), on = i === pick;
+      if (i < n - 1) RW.el("line", { x1: x + bw, y1: y + bh / 2, x2: x + bw + gap - 2, y2: y + bh / 2, stroke: "var(--muted)", "stroke-width": 1.5, "marker-end": "url(#rw-ov-arr)" }, null, svg);
+      if (s.loop) {
+        RW.el("path", { d: "M" + (x + bw * 0.7) + "," + (y + bh) + " C" + (x + bw * 0.7) + "," + (y + bh + 34) + " " + (x + bw * 0.3) + "," + (y + bh + 34) + " " + (x + bw * 0.3) + "," + (y + bh + 2), fill: "none", stroke: "var(--acc)", "stroke-width": 1.4, "marker-end": "url(#rw-ov-arr)" }, null, svg);
+        RW.el("text", { x: x + bw / 2, y: y + bh + 46, "text-anchor": "middle", "font-size": 12, fill: "var(--muted)" }, "max. 20×", svg);
+      }
+      var g = RW.el("g", { tabindex: 0, role: "button", "aria-label": s.label, style: "cursor:pointer" }, null, svg);
+      RW.el("rect", { x: x, y: y, width: bw, height: bh, rx: 4, fill: on ? "var(--acc)" : "#fff", stroke: on ? "var(--acc)" : "var(--rule)", "stroke-width": 1.5 }, null, g);
+      var words = s.label.split(" "), lines = words.length > 1 && s.label.length > 10 ? [words.slice(0, Math.ceil(words.length / 2)).join(" "), words.slice(Math.ceil(words.length / 2)).join(" ")] : [s.label];
+      lines.forEach(function (t, li) { RW.el("text", { x: x + bw / 2, y: y + 20 + li * 16 - (lines.length - 1) * 4, "text-anchor": "middle", "font-size": 14, "font-weight": 700, fill: on ? "#fff" : "var(--ink)" }, t, g); });
+      RW.el("text", { x: x + bw / 2, y: y + bh - 8, "text-anchor": "middle", "font-size": 12, fill: on ? "#fff" : "var(--muted)" }, s.sub, g);
+      RW.el("text", { x: x + 6, y: y - 8, "class": "rw-sm" }, String(i + 1), g);
+      g.onclick = function () { pick = i; draw(); };
+      g.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick = i; draw(); } };
+    });
+    var s = F.steps[pick];
+    det.innerHTML = "<h4>" + (pick + 1) + ". " + s.label + " <span class=\"rw-pill acc\">" + F.title + "</span></h4><p>" + s.text + "</p>";
+  }
+  draw();
+})();
+</script>
+</div>

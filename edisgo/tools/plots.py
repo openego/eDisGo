@@ -30,7 +30,7 @@ from pyproj import Transformer
 from pypsa import Network as PyPSANetwork
 
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
-from edisgo.tools import session_scope
+from edisgo.tools import legacy_oep_table, session_scope
 from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates_graph
 
 if TYPE_CHECKING:
@@ -44,8 +44,6 @@ if TYPE_CHECKING:
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
-    from egoio.db_tables.grid import EgoDpMvGriddistrict
-    from egoio.db_tables.model_draft import EgoGridMvGriddistrict
     from geoalchemy2 import shape
 
     contextily = True
@@ -198,6 +196,7 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
     with session_scope() as session:
         # get polygon from versioned schema
         if config["data_source"]["oedb_data_source"] == "versioned":
+            EgoDpMvGriddistrict = legacy_oep_table("grid", "ego_dp_mv_griddistrict")
             version = config["versioned"]["version"]
             query = session.query(
                 EgoDpMvGriddistrict.subst_id, EgoDpMvGriddistrict.geom
@@ -212,6 +211,9 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
 
         # get polygon from model_draft
         else:
+            EgoGridMvGriddistrict = legacy_oep_table(
+                "model_draft", "ego_grid_mv_griddistrict"
+            )
             query = session.query(
                 EgoGridMvGriddistrict.subst_id, EgoGridMvGriddistrict.geom
             )
