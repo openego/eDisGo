@@ -513,3 +513,45 @@ end
         vsl_check_reporting(eDisGo_OPF.variable_ev_slack, :electromobility, :pcps)
     end
 end
+
+@testset "variable_slack_gen" begin
+    @testset "creates pgs and qgs" begin
+        for model_type in (SOCBFPowerModelEdisgo, NCBFPowerModelEdisgo)
+            pm = vsl_model(; model_type=model_type)
+            eDisGo_OPF.variable_slack_gen(pm; nw=1)
+            @test TestUtils.variable_keys(pm, 1) == [:pgs, :qgs]
+            @test isempty(PowerModels.var(pm, 2))
+            @test JuMP.num_variables(pm.model) == 2
+        end
+    end
+
+    @testset "forwards nw and report" begin
+        pm = vsl_model()
+        eDisGo_OPF.variable_slack_gen(pm; nw=2, report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        @test TestUtils.variable_keys(pm, 2) == [:pgs, :qgs]
+        @test isempty(PowerModels.sol(pm, 2))
+
+        pm = vsl_model()
+        eDisGo_OPF.variable_slack_gen(pm; nw=1)
+        @test Set(keys(PowerModels.sol(pm, 1, :gen_slack, 1))) == Set([:pgs, :qgs])
+    end
+
+    @testset "has no bounded keyword" begin
+        # Unlike the other wrappers, the two members do not take `bounded`, so
+        # passing it through the wrapper fails. `build_mn_opf_bf_flex` never does.
+        pm = vsl_model()
+        @test_throws MethodError eDisGo_OPF.variable_slack_gen(pm; nw=1,
+                                                                bounded=false)
+    end
+
+    @testset "used by build_mn_opf_bf_flex for every opf_version" begin
+        for v in 1:4
+            pm = vsl_built(v)
+            for n in PowerModels.nw_ids(pm)
+                @test haskey(PowerModels.var(pm, n), :pgs)
+                @test haskey(PowerModels.var(pm, n), :qgs)
+            end
+        end
+    end
+end
