@@ -737,3 +737,15 @@ end
 @testset "variable_slack_HV_requirements_real" begin
     vsl_check_hv_slack(eDisGo_OPF.variable_slack_HV_requirements_real, :phvs)
 end
+
+@testset "variable_slack_HV_requirements_imaginary" begin
+    vsl_check_hv_slack(eDisGo_OPF.variable_slack_HV_requirements_imaginary, :qhvs)
+
+    @testset "not created by build_mn_opf_bf_flex" begin
+        for v in 1:4
+            pm = vsl_built(v)
+            @test all(!haskey(PowerModels.var(pm, n), :qhvs)
+                      for n in PowerModels.nw_ids(pm))
+        end
+    end
+end
