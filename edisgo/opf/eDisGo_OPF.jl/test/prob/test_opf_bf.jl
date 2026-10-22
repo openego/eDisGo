@@ -322,3 +322,234 @@ end
             data, PowerModels.SOCBFPowerModel, OPF_IPOPT)
     end
 end
+
+@testset "build_mn_opf_bf_flex" begin
+    @testset "variables, opf_version $v" for v in 1:4
+        pm = opf_small_model(opf_version=v)
+        @test pm isa eDisGo_OPF.NCBFPowerModelEdisgo
+        @test TestUtils.variable_keys(pm, 1) == opf_expected_vars(v, 1)
+        @test TestUtils.variable_keys(pm, 2) == opf_expected_vars(v, 2)
+        # Same variables for the SOC formulation.
+        pm_soc = opf_small_model(eDisGo_OPF.SOCBFPowerModelEdisgo, opf_version=v)
+        @test TestUtils.variable_keys(pm_soc, 1) == opf_expected_vars(v, 1)
+        if v in (1, 3)
+            # One maximum line loading for the whole horizon, physical branches only.
+            @test opf_indices(PowerModels.var(pm, 1, :ll)) == Set([(1, 1, 2), (2, 2, 3)])
+        end
+    end
+
+    @testset "grid restrictions" begin
+        ccm_ub = (5.0 * 1.0 / 0.9)^2      # (rate_a · tap / vmin)²
+        for v in 1:4
+            pm = opf_small_model(opf_version=v)
+            for n in 1:2
+                ccm = PowerModels.var(pm, n, :ccm)
+                w = PowerModels.var(pm, n, :w)
+                @test all(JuMP.lower_bound(ccm[l]) == 0.0 for l in 1:3)
+                # The virtual storage branch keeps its current limit in every version.
+                @test JuMP.upper_bound(ccm[3]) ≈ ccm_ub
+                if v in (1, 3)
+                    # Lifted: no current limit on lines, no voltage band.
+                    @test !JuMP.has_upper_bound(ccm[1])
+                    @test !JuMP.has_upper_bound(ccm[2])
+                    @test all(JuMP.lower_bound(w[i]) == 0.0 for i in 1:3)
+                    @test all(!JuMP.has_upper_bound(w[i]) for i in 1:3)
+                else
+                    @test JuMP.upper_bound(ccm[1]) ≈ ccm_ub
+                    @test JuMP.upper_bound(ccm[2]) ≈ ccm_ub
+                    @test all(JuMP.lower_bound(w[i]) ≈ 0.81 for i in 1:3)
+                    @test all(JuMP.upper_bound(w[i]) ≈ 1.21 for i in 1:3)
+                end
+                # Branch flows are never bounded (the current limit replaces that).
+                for x in (PowerModels.var(pm, n, :p), PowerModels.var(pm, n, :q))
+                    @test opf_indices(x) == Set([(1, 1, 2), (2, 2, 3), (3, 3, 4)])
+                    @test all(!JuMP.has_lower_bound(x[arc]) && !JuMP.has_upper_bound(x[arc])
+                              for arc in opf_indices(x))
+                end
+            end
+        end
+    end
+
+    @testset "curtailment" begin
+        for v in (2, 4)
+            pm = opf_small_model(opf_version=v)
+            for n in 1:2
+                pgc = PowerModels.var(pm, n, :pgc)[1]
+                @test JuMP.lower_bound(pgc) == 0.0
+                @test JuMP.upper_bound(pgc) ≈ 0.6
+                # P and Q balance of bus 3, plus the "curt" HV requirement in 4.
+                @test opf_count_with(pm, n, "pgc", "1") == (v == 2 ? 2 : 3)
+            end
+        end
+        @test !haskey(PowerModels.var(opf_small_model(opf_version=1), 1), :pgc)
+
+        # BUG: version 3 creates `pgc` for the "curt" HV requirement, but neither
+        # the power balance (curtailment slacks only for 2 and 4, form/bf.jl:213)
+        # nor the objective use it. The requirement is met by a curtailment that
+        # never reaches the grid, while the Python side (`from_powermodels`)
+        # subtracts exactly this `pgc` from the generator feed-in.
+        pm = opf_small_model(opf_version=3)
+        for n in 1:2
+            pgc = PowerModels.var(pm, n, :pgc)[1]
+            @test JuMP.upper_bound(pgc) ≈ 0.6
+            @test opf_count_with(pm, n, "pgc", "1") == 1           # HV constraint only
+            @test_broken opf_count_with(pm, n, "pgc", "1") == 3    # plus P/Q balance
+            @test JuMP.coefficient(JuMP.objective_function(pm.model).aff, pgc) == 0.0
+        end
+    end
+
+    @testset "overlying grid requirements" begin
+        for v in (3, 4)
+            pm = opf_small_model(opf_version=v)
+            for n in 1:2
+                @test opf_indices(PowerModels.var(pm, n, :phvs)) == Set(1:5)
+                # One constraint per requirement, each containing its own slack.
+                @test all(opf_count_with(pm, n, "phvs", "$i\\]") == 1 for i in 1:5)
+            end
+        end
+        # Versions 1 and 2 ignore HV requirements present in the data.
+        for v in (1, 2)
+            pm = opf_small_model(opf_version=v, overlying_grid=true)
+            @test !haskey(PowerModels.var(pm, 1), :phvs)
+            @test !any(occursin("phvs", s) for s in opf_constraint_strings(pm))
+        end
+        # Versions 3 and 4 still build without any HV requirement in the data.
+        for v in (3, 4)
+            pm = opf_small_model(opf_version=v, overlying_grid=false)
+            @test isempty(PowerModels.var(pm, 1, :phvs))
+            @test opf_counts(pm) == opf_expected_counts(pm)
+        end
+    end
+
+    @testset "constraint counts" begin
+        # Hand-counted for small_network (4 buses, 2 physical + 1 storage branch,
+        # one unit of every flexibility, 2 steps):
+        # eq   = 2 × (8 balance + 2 voltage drop + 1 slack voltage + 1 heat pump
+        #        [+ 5 HV]) + 3 storage kinds × 3 + 3 charging point = 36 [46]
+        # quad = 2 × 2 maximum line loading (versions 1 and 3)
+        # nl   = 2 × 2 current equations (NC; SOC: 2 × 3 quadratic cones instead)
+        expected = Dict(1 => (eq=36, quad=4, nl=4), 2 => (eq=36, quad=0, nl=4),
+                        3 => (eq=46, quad=4, nl=4), 4 => (eq=46, quad=0, nl=4))
+        for v in 1:4
+            pm = opf_small_model(opf_version=v)
+            @test opf_counts(pm) == expected[v]
+            @test opf_counts(pm) == opf_expected_counts(pm)
+            # No other constraint types than these (apart from variable bounds).
+            types = Set{Any}([(JuMP.AffExpr, MOI.EqualTo{Float64})])
+            v in (1, 3) && push!(types, (JuMP.QuadExpr, MOI.LessThan{Float64}))
+            @test opf_constraint_types(pm) == types
+        end
+        soc_expected = Dict(1 => (eq=36, quad=10, nl=0), 2 => (eq=36, quad=6, nl=0))
+        for v in (1, 2)
+            pm = opf_small_model(eDisGo_OPF.SOCBFPowerModelEdisgo, opf_version=v)
+            @test opf_counts(pm) == soc_expected[v]
+            @test opf_counts(pm) == opf_expected_counts(pm)
+        end
+        # More time steps add one coupling equation per storage unit and step:
+        # 3 × 12 + 3 × (2 + 2) + (1 + 2 + 1) = 52.
+        pm = opf_small_model(opf_version=2, num_steps=3)
+        @test opf_counts(pm) == (eq=52, quad=0, nl=6)
+        @test opf_counts(pm) == opf_expected_counts(pm)
+    end
+
+    @testset "inter-temporal coupling" begin
+        pm = opf_small_model(opf_version=1)
+        strs = opf_constraint_strings(pm)
+        # The maximum line loading of both networks is bounded by `ll` of network 1.
+        @test count(s -> occursin(opf_var_regex(1, "ll"), s), strs) == 4
+        @test count(s -> occursin(opf_var_regex(2, "p"), s) &&
+                         occursin(opf_var_regex(1, "ll"), s), strs) == 2
+        @test !any(occursin(opf_var_regex(2, "ll"), s) for s in strs)
+        # Exactly one equation couples the state of each storage-like unit across
+        # the two steps.
+        for name in ("se", "hse", "dsme", "cpe")
+            @test count(s -> occursin(opf_var_regex(1, name, "1\\]"), s) &&
+                             occursin(opf_var_regex(2, name, "1\\]"), s), strs) == 1
+        end
+        # Final state: the storage state of the last step appears in its coupling
+        # equation and in the end condition (battery, heat storage, DSM, charging
+        # point alike).
+        for name in ("se", "hse", "dsme", "cpe")
+            @test opf_count_with(pm, 2, name, "1\\]") == 2
+        end
+    end
+
+    @testset "single time step" begin
+        pm = opf_small_model(opf_version=2, num_steps=1)
+        # 12 per network + 3 × 2 storage-like + 1 charging point.
+        @test opf_counts(pm) == (eq=19, quad=0, nl=2)
+        @test opf_counts(pm) == opf_expected_counts(pm)
+        # Battery, heat storage and DSM get their initial and their end condition
+        # in the same network …
+        for name in ("se", "hse", "dsme")
+            @test opf_count_with(pm, 1, name, "1\\]") == 2
+        end
+        # BUG: … the charging point only the initial one. Its end condition
+        # (cpe = middle of the band, Eq. (3.25) for t = tau) lives in
+        # `constraint_cp_state`, which is only called from the second step on, so
+        # a single-step OPF leaves the charging-point energy free in its band.
+        @test opf_count_with(pm, 1, "cpe", "1\\]") == 1
+        @test_broken opf_count_with(pm, 1, "cpe", "1\\]") == 2
+    end
+
+    @testset "objective, opf_version $v" for (v, objective) in (
+            1 => eDisGo_OPF.objective_min_line_loading_max,
+            2 => eDisGo_OPF.objective_min_losses_slacks,
+            3 => eDisGo_OPF.objective_min_line_loading_max_OG,
+            4 => eDisGo_OPF.objective_min_losses_slacks_OG)
+        pm = opf_small_model(opf_version=v)
+        @test JuMP.objective_sense(pm.model) == MOI.MIN_SENSE
+        built = JuMP.objective_function(pm.model)
+        # The installed objective is exactly the one of this version: building it
+        # again on the same model gives the same expression.
+        opf_capture_stdout(() -> objective(pm))
+        @test JuMP.isequal_canonical(built, JuMP.objective_function(pm.model))
+        # Quadratic only through the squared HV slacks of versions 3 and 4.
+        @test (built isa JuMP.QuadExpr) == opf_has_og(v)
+        aff = built isa JuMP.QuadExpr ? built.aff : built
+        if v in (1, 3)
+            @test JuMP.coefficient(aff, PowerModels.var(pm, 1, :ll)[(1, 1, 2)]) > 0
+        else
+            @test JuMP.coefficient(aff, PowerModels.var(pm, 1, :pds)[1]) > 0
+        end
+        if opf_has_og(v)
+            phvs = PowerModels.var(pm, 2, :phvs)[1]
+            @test JuMP.coefficient(built, phvs, phvs) > 0
+        end
+    end
+
+    @testset "unknown opf_version" begin
+        for v in (0, 5)
+            err = try
+                opf_small_model(opf_version=v)
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("OPF version $v is not implemented", err.msg)
+        end
+    end
+
+    @testset "model type" begin
+        data = TestUtils.multinetwork(TestUtils.small_network())
+        @test_throws MethodError eDisGo_OPF.instantiate_model(
+            data, PowerModels.SOCBFPowerModel, eDisGo_OPF.build_mn_opf_bf_flex)
+    end
+
+    @testset "eDisGo test grid, opf_version $v" for v in 1:4
+        pm, _ = opf_capture_stdout() do
+            TestUtils.build_model(eDisGo_OPF.NCBFPowerModelEdisgo;
+                                  overlying_grid=opf_has_og(v), opf_version=v)
+        end
+        @test sort(collect(PowerModels.nw_ids(pm))) == 1:4
+        @test TestUtils.variable_keys(pm, 1) == opf_expected_vars(v, 1)
+        @test TestUtils.variable_keys(pm, 4) == opf_expected_vars(v, 4)
+        @test length(PowerModels.var(pm, 1, :p)) == 142
+        @test length(PowerModels.var(pm, 1, :pgs)) == 1
+        if opf_has_og(v)
+            @test !isempty(PowerModels.var(pm, 1, :phvs))
+        end
+        @test opf_counts(pm) == opf_expected_counts(pm)
+    end
+end
