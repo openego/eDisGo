@@ -561,3 +561,126 @@ end
         @test all(startswith(name, "2_") for c in cs for name in keys(first(bf_terms(c))))
     end
 end
+
+@testset "constraint_model_current" begin
+    @testset "AbstractSOCBFModelEdisgo" begin
+        @testset "second-order cone on every branch" begin
+            pm = bf_model(bf_tap_network(), bf_flow_variables!;
+                          model_type=eDisGo_OPF.SOCBFPowerModelEdisgo)
+            @test bf_added(() -> eDisGo_OPF.constraint_model_current(pm, 1),
+                           pm.model) == 3
+            cs = bf_quad_constraints(pm.model)
+            @test length(cs) == 3
+            @test JuMP.num_nonlinear_constraints(pm.model) == 0
+            # The virtual storage branch 3 is included.
+            @test bf_current_model_branches(pm) == Set([1, 2, 3])
+
+            for (idx, arc, f_bus, tm) in ((1, (1, 1, 2), 1, 2.0), (2, (2, 2, 3), 2, 1.0),
+                                          (3, (3, 3, 4), 3, 1.0))
+                c = only(filter(x -> occursin("1_ccm[$idx]", string(x)), cs))
+                p = PowerModels.var(pm, 1, :p, arc)
+                q = PowerModels.var(pm, 1, :q, arc)
+                w = PowerModels.var(pm, 1, :w, f_bus)
+                ccm = PowerModels.var(pm, 1, :ccm, idx)
+                # p² + q² ≤ (w_fr/tm²)·ccm
+                @test bf_coef2(c, p, p) == 1.0
+                @test bf_coef2(c, q, q) == 1.0
+                @test bf_coef2(c, w, ccm) ≈ -1 / tm^2
+                @test length(JuMP.constraint_object(c).func.terms) == 3
+                @test isempty(JuMP.constraint_object(c).func.aff.terms)
+                @test JuMP.constraint_object(c).set == MOI.LessThan(0.0)
+                vals = Dict(p => 0.3, q => 0.4, w => 0.81, ccm => 0.5)
+                @test bf_eval(c, vals) ≈ 0.3^2 + 0.4^2 - 0.81 / tm^2 * 0.5
+            end
+        end
+
+        @testset "missing variables" begin
+            pm = bf_small_model(bf_flow_variables_without_ccm!;
+                                model_type=eDisGo_OPF.SOCBFPowerModelEdisgo)
+            @test_throws ErrorException eDisGo_OPF.constraint_model_current(pm, 1)
+            @test isempty(bf_quad_constraints(pm.model))
+        end
+
+        @testset "network selection" begin
+            pm = bf_small_model(bf_flow_variables!;
+                                model_type=eDisGo_OPF.SOCBFPowerModelEdisgo)
+            eDisGo_OPF.constraint_model_current(pm, 2)
+            cs = bf_quad_constraints(pm.model)
+            @test length(cs) == 3
+            @test all(occursin("2_", string(c)) && !occursin("1_", string(c)) for c in cs)
+        end
+    end
+
+    @testset "AbstractNCBFModelEdisgo" begin
+        @testset "exact equality on physical branches" begin
+            pm = bf_model(bf_tap_network(), bf_flow_variables!;
+                          model_type=eDisGo_OPF.NCBFPowerModelEdisgo)
+            # `@NLconstraint` ends up in JuMP's legacy nonlinear model, which
+            # `num_constraints` does not count.
+            @test bf_added(() -> eDisGo_OPF.constraint_model_current(pm, 1),
+                           pm.model) == 0
+            @test isempty(bf_quad_constraints(pm.model))
+            @test JuMP.num_nonlinear_constraints(pm.model) == 2
+            # The virtual storage branch 3 is skipped.
+            @test bf_current_model_branches(pm) == Set([1, 2])
+
+            cs = JuMP.all_nonlinear_constraints(pm.model)
+            for (idx, arc, f_bus, tm) in ((1, (1, 1, 2), 1, 2.0), (2, (2, 2, 3), 2, 1.0))
+                c = only(filter(x -> occursin("1_ccm[$idx]", string(x)), cs))
+                s = string(c)
+                @test occursin("= 0", s) && !occursin("<", s) && !occursin(">", s)
+                p = PowerModels.var(pm, 1, :p, arc)
+                q = PowerModels.var(pm, 1, :q, arc)
+                w = PowerModels.var(pm, 1, :w, f_bus)
+                ccm = PowerModels.var(pm, 1, :ccm, idx)
+                # p² + q² - (w_fr/tm²)·ccm, evaluated at two points to pin both the
+                # quadratic flow terms and the bilinear coupling term.
+                @test bf_eval(c, Dict(p => 0.3, q => 0.4, w => 0.81, ccm => 0.5)) ≈
+                      0.3^2 + 0.4^2 - 0.81 / tm^2 * 0.5
+                @test bf_eval(c, Dict(p => -0.2, w => 1.1, ccm => 2.0)) ≈
+                      0.2^2 - 1.1 / tm^2 * 2.0
+            end
+        end
+
+        @testset "storage flag decides" begin
+            # Flagging the physical branch 2 as storage branch drops its equation.
+            pm = bf_small_model(bf_flow_variables!;
+                                model_type=eDisGo_OPF.NCBFPowerModelEdisgo)
+            PowerModels.ref(pm, 1, :branch, 2)["storage"] = true
+            eDisGo_OPF.constraint_model_current(pm, 1)
+            @test bf_current_model_branches(pm) == Set([1])
+        end
+
+        @testset "missing variables" begin
+            pm = bf_small_model(bf_flow_variables_without_ccm!;
+                                model_type=eDisGo_OPF.NCBFPowerModelEdisgo)
+            @test_throws ErrorException eDisGo_OPF.constraint_model_current(pm, 1)
+            @test JuMP.num_nonlinear_constraints(pm.model) == 0
+        end
+
+        @testset "network selection" begin
+            pm = bf_small_model(bf_flow_variables!;
+                                model_type=eDisGo_OPF.NCBFPowerModelEdisgo)
+            eDisGo_OPF.constraint_model_current(pm, 2)
+            strs = string.(JuMP.all_nonlinear_constraints(pm.model))
+            @test length(strs) == 2
+            @test all(occursin("2_", s) && !occursin("1_", s) for s in strs)
+        end
+    end
+
+    @testset "SOC and NC cover the same branches" begin
+        # Known defect: the SOC relaxation is written for the virtual storage
+        # branch, the exact NC equality is not. Intended: both formulations treat
+        # the storage branches alike.
+        pm_soc = bf_small_model(bf_flow_variables!;
+                                model_type=eDisGo_OPF.SOCBFPowerModelEdisgo)
+        pm_nc = bf_small_model(bf_flow_variables!;
+                               model_type=eDisGo_OPF.NCBFPowerModelEdisgo)
+        eDisGo_OPF.constraint_model_current(pm_soc, 1)
+        eDisGo_OPF.constraint_model_current(pm_nc, 1)
+        soc_branches = bf_current_model_branches(pm_soc)
+        nc_branches = bf_current_model_branches(pm_nc)
+        @test setdiff(soc_branches, nc_branches) == Set([3])
+        @test_broken soc_branches == nc_branches
+    end
+end
