@@ -67,15 +67,15 @@ requirements = [
     "shapely >= 1.7.0, < 2.2.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.6.0",
-    "urllib3 < 2.8.0",
+    "urllib3 < 2.9.0",
     "workalendar < 17.1.0",
-    "astroid == 4.0.3",
+    "astroid == 4.3.4",
 ]
 
 dev_requirements = [
     "ruff < 0.16.0",
     "pre-commit < 4.7.0",
-    "pylint < 4.1.0",
+    "pylint < 4.2.0",
     "pytest < 9.2.0",
     "nbclient < 0.12.0",
     "pytest-xdist < 4.0.0",
@@ -90,7 +90,7 @@ dev_requirements = [
     "sphinx_rtd_theme >= 0.5.2, < 3.2.0",
     "sphinx-autodoc-typehints < 3.13.0",
     "sphinx-autoapi < 3.9.0",
-    "astroid == 4.0.3",
+    "astroid == 4.3.4",
 ]
 
 extras = {"dev": dev_requirements}
