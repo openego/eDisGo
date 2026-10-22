@@ -224,3 +224,91 @@ end
         @test isempty(vfc_reported(pm, 1, :branch, :pf))
     end
 end
+
+@testset "variable_branch_power_imaginary_radial" begin
+    @testset "index set" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:q]
+        q = PowerModels.var(pm, 1, :q)
+        # Like `p`, despite the docstring speaking of `arcs`: from-arcs only,
+        # storage branch included.
+        @test vfc_index(q) == VFC_ARCS
+        @test !any(arc in vfc_index(q) for arc in PowerModels.ref(pm, 1, :arcs_to))
+        @test JuMP.name(q[(2, 2, 3)]) == "1_q[(2, 2, 3)]"
+    end
+
+    @testset "bounded=true" begin
+        # The reactive flow is bounded by the same apparent-power rating as the
+        # active flow.
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :branch, 1)["c_rating_a"] = 2.0
+        delete!(PowerModels.ref(pm, 1, :branch, 2), "rate_a")
+        eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1, bounded=true)
+        q = PowerModels.var(pm, 1, :q)
+        lb, ub = vfc_bounds(q[(1, 1, 2)])
+        @test lb ≈ -2.2
+        @test ub ≈ 2.2
+        @test vfc_bounds(q[(2, 2, 3)]) == (nothing, nothing)
+        @test vfc_bounds(q[(3, 3, 4)]) == (-5.0, 5.0)
+    end
+
+    @testset "bounded=false" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1, bounded=false)
+        @test vfc_unbounded(PowerModels.var(pm, 1, :q))
+    end
+
+    @testset "start values" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :branch, 1)["q_start"] = -0.11
+        PowerModels.ref(pm, 1, :branch, 2)["q_start"] = -0.22
+        PowerModels.ref(pm, 1, :branch, 2)["qf_start"] = -0.33
+        # The active-power fields must not leak into `q`.
+        PowerModels.ref(pm, 1, :branch, 3)["p_start"] = 0.5
+        eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1)
+        q = PowerModels.var(pm, 1, :q)
+        @test JuMP.start_value(q[(1, 1, 2)]) == -0.11
+        @test JuMP.start_value(q[(2, 2, 3)]) == -0.33
+        @test JuMP.start_value(q[(3, 3, 4)]) == 0.0
+    end
+
+    @testset "qt_start (defect)" begin
+        # Same defect as `pt_start` for the active flow: the to-arc does not exist.
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :branch, 1)["qt_start"] = 0.2
+        @test_throws KeyError eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1)
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :branch, 1)["qt_start"] = 0.2
+        @test_broken try
+            eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1)
+            true
+        catch
+            false
+        end
+    end
+
+    @testset "report" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1, report=true)
+        q = PowerModels.var(pm, 1, :q)
+        @test vfc_reported(pm, 1, :branch, :qf) ==
+              Dict(1 => q[(1, 1, 2)], 2 => q[(2, 2, 3)], 3 => q[(3, 3, 4)])
+        @test isempty(vfc_reported(pm, 1, :branch, :qt))
+
+        pm = vfc_model()
+        eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1, report=false)
+        @test isempty(vfc_reported(pm, 1, :branch, :qf))
+    end
+
+    @testset "nw keyword" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :branch, 1)["q_start"] = -0.7
+        eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=2)
+        @test isempty(PowerModels.var(pm, 1))
+        q = PowerModels.var(pm, 2, :q)
+        @test JuMP.name(q[(1, 1, 2)]) == "2_q[(1, 1, 2)]"
+        @test JuMP.start_value(q[(1, 1, 2)]) == -0.7
+        @test length(vfc_reported(pm, 2, :branch, :qf)) == 3
+    end
+end
