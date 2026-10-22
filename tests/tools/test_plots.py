@@ -1,5 +1,6 @@
 import copy
 
+import numpy as np
 import pytest
 
 from matplotlib import pyplot as plt
@@ -140,3 +141,16 @@ class TestPlots:
             plots.add_basemap(ax)
         plt.close(fig)
         assert calls["timeout"] == 10
+
+    def test_add_basemap_source_note(self, monkeypatch):
+        # the TopPlusOpen licence requires the BKG source note on the map
+        def bounds2img(*args, **kwargs):
+            return np.zeros((256, 256, 4)), (0, 1, 0, 1)
+
+        monkeypatch.setattr(plots.ctx, "bounds2img", bounds2img)
+        fig, ax = plt.subplots()
+        plots.add_basemap(ax)
+        texts = [text.get_text() for text in ax.texts]
+        plt.close(fig)
+        assert any(text.startswith("© BKG (") for text in texts)
+        assert any("dl-de/by-2-0" in text for text in texts)

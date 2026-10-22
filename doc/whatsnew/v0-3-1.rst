@@ -294,11 +294,14 @@ Changes
 * The example notebooks ``edisgo_simple_example`` and ``full_workflow_walkthrough``
   draw their MV grid plots without a background map. Downloading the map tiles could
   take tens of minutes or fail without a good internet connection. The simple example
-  explains how to switch the map back on with ``background_map=True`` and that the
-  CartoDB map tiles then only show the text "API KEY REQUIRED", as CartoDB requires an
-  API key that eDisGo cannot pass. The graph of an LV grid is now drawn for the LV
-  grid selected earlier in the notebook instead of a second one picked by position
-  (openego/eDisGo#276)
+  explains how to switch the map back on with ``background_map=True``. The graph of
+  an LV grid is now drawn for the LV grid selected earlier in the notebook instead of
+  a second one picked by position (openego/eDisGo#276)
+* The background map of the MV grid plots is now the grey TopPlusOpen map of the
+  German Federal Agency for Cartography and Geodesy (BKG) instead of CartoDB Positron.
+  CartoDB requires an API key, without which every map tile only showed the text "API
+  KEY REQUIRED". TopPlusOpen needs no key and covers Germany in detail. The plot shows
+  the source note required by its licence (dl-de/by-2-0)
 * :func:`~.tools.plots.add_basemap` gives up on a map tile if the tile server does not
   respond within 10 seconds (new ``timeout`` parameter). Before, a slow or missing
   internet connection blocked MV grid plots with ``background_map=True`` without
