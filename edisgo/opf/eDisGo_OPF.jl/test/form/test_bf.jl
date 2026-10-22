@@ -493,3 +493,71 @@ end
               intersect(storage_ids, rated_ids)
     end
 end
+
+@testset "constraint_voltage_magnitude_difference" begin
+    @testset "voltage drop equation" begin
+        # Branch 2 (bus 2 → bus 3), neither end is the slack bus. `r`, `x` and `tm`
+        # are taken from the arguments, not from the data (br_r = br_x = 0.01,
+        # tap = 1 there); `t_idx` is not used at all.
+        pm = bf_small_model(bf_flow_variables!)
+        @test bf_added(() -> eDisGo_OPF.constraint_voltage_magnitude_difference(
+            pm, 1, 2, 2, 3, (2, 2, 3), (99, 99, 99), 0.03, 0.04, 2.0), pm.model) == 1
+        c = only(bf_eq_constraints(pm.model))
+        # w_fr/tm² - w_to == 2(r·p + x·q) - (r² + x²)·ccm
+        @test bf_terms(c) == (Dict(
+            bf_name(pm, 1, :w, 2) => 1 / 2.0^2,
+            bf_name(pm, 1, :w, 3) => -1.0,
+            bf_name(pm, 1, :p, (2, 2, 3)) => -2 * 0.03,
+            bf_name(pm, 1, :q, (2, 2, 3)) => -2 * 0.04,
+            bf_name(pm, 1, :ccm, 2) => 0.03^2 + 0.04^2), 0.0)
+    end
+
+    @testset "slack bus" begin
+        # Branch 1 leaves the slack bus 1 (`bus_type == 3`): the squared voltage
+        # there is additionally pinned to 1 p.u.
+        pm = bf_small_model(bf_flow_variables!)
+        @test PowerModels.ref(pm, 1, :bus, 1)["bus_type"] == 3
+        @test bf_added(() -> eDisGo_OPF.constraint_voltage_magnitude_difference(
+            pm, 1, 1, 1, 2, (1, 1, 2), (1, 2, 1), 0.01, 0.01, 1.0), pm.model) == 2
+        c_drop, c_slack = bf_eq_constraints(pm.model)
+        @test JuMP.coefficient(JuMP.constraint_object(c_drop).func,
+                               PowerModels.var(pm, 1, :w, 1)) == 1.0
+        @test bf_terms(c_slack) == (Dict(bf_name(pm, 1, :w, 1) => 1.0), 1.0)
+    end
+
+    @testset "two branches at the slack bus" begin
+        # Only the sending bus is checked, once per call: every branch leaving the
+        # slack bus repeats the (redundant, but harmless) `w == 1` equation.
+        data = TestUtils.small_network()
+        data["bus"]["5"] = TestUtils._bus(5)
+        data["branch"]["4"] = TestUtils._branch(4, 1, 5)
+        pm = bf_model(data, bf_flow_variables!)
+        eDisGo_OPF.constraint_voltage_magnitude_difference(
+            pm, 1, 1, 1, 2, (1, 1, 2), (1, 2, 1), 0.01, 0.01, 1.0)
+        eDisGo_OPF.constraint_voltage_magnitude_difference(
+            pm, 1, 4, 1, 5, (4, 1, 5), (4, 5, 1), 0.01, 0.01, 1.0)
+        cs = bf_eq_constraints(pm.model)
+        @test length(cs) == 4
+        slack = Dict(bf_name(pm, 1, :w, 1) => 1.0)
+        @test count(c -> bf_terms(c) == (slack, 1.0), cs) == 2
+    end
+
+    @testset "virtual storage branch" begin
+        # The storage bus 4 has no voltage variable, so the low-level function
+        # cannot be applied to the storage branch — the template
+        # `constraint_voltage_magnitude_difference_radial` skips it beforehand.
+        pm = bf_small_model(bf_flow_variables!)
+        @test_throws KeyError eDisGo_OPF.constraint_voltage_magnitude_difference(
+            pm, 1, 3, 3, 4, (3, 3, 4), (3, 4, 3), 0.01, 0.01, 1.0)
+        @test isempty(bf_eq_constraints(pm.model))
+    end
+
+    @testset "network selection" begin
+        pm = bf_small_model(bf_flow_variables!)
+        eDisGo_OPF.constraint_voltage_magnitude_difference(
+            pm, 2, 1, 1, 2, (1, 1, 2), (1, 2, 1), 0.01, 0.01, 1.0)
+        cs = bf_eq_constraints(pm.model)
+        @test length(cs) == 2
+        @test all(startswith(name, "2_") for c in cs for name in keys(first(bf_terms(c))))
+    end
+end
