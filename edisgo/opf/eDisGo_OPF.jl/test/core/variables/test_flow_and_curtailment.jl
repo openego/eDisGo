@@ -523,3 +523,84 @@ end
         @test isempty(vfc_reported(pm, 2, :gen_nd, :pgc))
     end
 end
+
+@testset "variable_gen_power_curt_real" begin
+    @testset "index set" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:pgc]
+        pgc = PowerModels.var(pm, 1, :pgc)
+        # Only the non-dispatchable generators, not `gen` or `gen_slack`.
+        @test vfc_index(pgc) == Set([1])
+        @test JuMP.name(pgc[1]) == "1_pgc[1]"
+    end
+
+    @testset "real grid" begin
+        pm = vfc_big_model()
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=1)
+        pgc = PowerModels.var(pm, 1, :pgc)
+        @test vfc_index(pgc) == Set(PowerModels.ids(pm, 1, :gen_nd))
+        @test length(pgc) == 27
+    end
+
+    @testset "bounded=true" begin
+        # At most the whole time-step-specific feed-in `pg` can be curtailed.
+        data = TestUtils.small_network(num_steps=2)
+        data["time_series"]["gen_nd"]["1"]["pg"] = [0.6, 0.45]
+        pm = vfc_model_from(data)
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=1, bounded=true)
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=2, bounded=true)
+        @test vfc_bounds(PowerModels.var(pm, 1, :pgc)[1]) == (0.0, 0.6)
+        @test vfc_bounds(PowerModels.var(pm, 2, :pgc)[1]) == (0.0, 0.45)
+    end
+
+    @testset "bounded=false" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=1, bounded=false)
+        @test vfc_unbounded(PowerModels.var(pm, 1, :pgc))
+    end
+
+    @testset "start values" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :pgc)[1]) == 0.0
+
+        pm = vfc_model()
+        # The field `set_ac_bf_start_values!` writes for the warm start.
+        PowerModels.ref(pm, 1, :gen_nd, 1)["pgc_start"] = 0.25
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :pgc)[1]) == 0.25
+    end
+
+    @testset "report" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=1, report=true)
+        @test vfc_reported(pm, 1, :gen_nd, :pgc) ==
+              Dict(1 => PowerModels.var(pm, 1, :pgc)[1])
+
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=1, report=false)
+        @test isempty(vfc_reported(pm, 1, :gen_nd, :pgc))
+    end
+
+    @testset "nw keyword" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :gen_nd, 1)["pgc_start"] = 0.1
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=2)
+        @test isempty(PowerModels.var(pm, 1))
+        pgc = PowerModels.var(pm, 2, :pgc)
+        @test JuMP.name(pgc[1]) == "2_pgc[1]"
+        @test JuMP.start_value(pgc[1]) == 0.1
+        @test length(vfc_reported(pm, 2, :gen_nd, :pgc)) == 1
+    end
+
+    @testset "no generators" begin
+        data = TestUtils.small_network()
+        data["gen_nd"] = Dict{String,Any}()
+        data["time_series"]["gen_nd"] = Dict{String,Any}()
+        pm = vfc_model_from(data)
+        eDisGo_OPF.variable_gen_power_curt_real(pm, nw=1)
+        @test isempty(PowerModels.var(pm, 1, :pgc))
+        @test isempty(vfc_reported(pm, 1, :gen_nd, :pgc))
+    end
+end
