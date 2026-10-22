@@ -828,3 +828,41 @@ end
         @test length(vfc_reported(pm, 2, :storage, :qs)) == 1
     end
 end
+
+@testset "variable_dsm_storage_power" begin
+    @testset "creates pdsm and dsme" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power(pm, nw=1)
+        # The reactive DSM power `qdsm` is commented out in the wrapper.
+        @test TestUtils.variable_keys(pm, 1) == [:dsme, :pdsm]
+        @test !haskey(PowerModels.var(pm, 1), :qdsm)
+        @test JuMP.num_variables(pm.model) == 2
+        @test length(vfc_reported(pm, 1, :dsm, :pdsm)) == 1
+        @test length(vfc_reported(pm, 1, :dsm, :dsme)) == 1
+    end
+
+    @testset "forwards keyword arguments" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power(pm, nw=2, bounded=false, report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        pdsm = PowerModels.var(pm, 2, :pdsm)
+        dsme = PowerModels.var(pm, 2, :dsme)
+        @test vfc_unbounded(pdsm)
+        @test vfc_unbounded(dsme)
+        @test JuMP.name(pdsm[1]) == "2_pdsm[1]"
+        @test JuMP.name(dsme[1]) == "2_dsme[1]"
+        @test isempty(vfc_reported(pm, 2, :dsm, :pdsm))
+        @test isempty(vfc_reported(pm, 2, :dsm, :dsme))
+    end
+
+    @testset "no DSM units" begin
+        data = TestUtils.small_network()
+        data["dsm"] = Dict{String,Any}()
+        data["time_series"]["dsm"] = Dict{String,Any}()
+        pm = vfc_model_from(data)
+        eDisGo_OPF.variable_dsm_storage_power(pm, nw=1)
+        @test isempty(PowerModels.var(pm, 1, :pdsm))
+        @test isempty(PowerModels.var(pm, 1, :dsme))
+        @test JuMP.num_variables(pm.model) == 0
+    end
+end
