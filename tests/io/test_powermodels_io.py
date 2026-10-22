@@ -1,3 +1,6 @@
+import copy
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -304,6 +307,29 @@ class TestPowermodelsIO:
                 )
             )
         )
+
+    def test_to_powermodels_flexible_hps_without_thermal_storage(self):
+        # flexible heat pumps without thermal storage get a storage with zero
+        # capacity, also if no thermal storage is defined at all
+        edisgo = copy.deepcopy(self.edisgo)
+        flexible_hps = edisgo.heat_pump.thermal_storage_units_df.index.values
+        edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
+            columns=["capacity", "efficiency", "state_of_charge_initial"]
+        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "error",
+                message="The behavior of DataFrame concatenation with empty",
+                category=FutureWarning,
+            )
+            powermodels_network, _ = powermodels_io.to_powermodels(
+                edisgo, opf_version=1, flexible_hps=flexible_hps
+            )
+
+        heat_storage = powermodels_network["heat_storage"].values()
+        assert len(heat_storage) == len(flexible_hps)
+        assert all(storage["capacity"] == 0.0 for storage in heat_storage)
+        assert all(storage["charge_efficiency"] == 0.0 for storage in heat_storage)
 
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)

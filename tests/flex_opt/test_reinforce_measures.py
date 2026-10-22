@@ -300,12 +300,18 @@ class TestReinforceMeasures:
 
         # LV:
         # * check where node_2_3 is in_building => problem at
-        #   Bus_BranchTee_LVGrid_5_2, leads to reinforcement of line
-        #   Line_50000003 (which is first line in feeder and not a
-        #   standard line)
+        #   Bus_BranchTee_LVGrid_5_2, node_2_3 is moved back to
+        #   Bus_BranchTee_LVGrid_5_1, which is the feeder representative, so no
+        #   line can be disconnected and lines on the path are reinforced.
+        #   Line_50000002 (30 m NAYY 4x1x35) is the house connection to the bus
+        #   in the building and is not reinforced. That leaves Line_50000003
+        #   (first line in feeder, 0.56 m NAYY 4x1x300), which gets a parallel
+        #   line of the same type, as a standard line would increase its
+        #   resistance.
         # * check where node_2_3 is not in_building => problem at
         #   Bus_BranchTee_LVGrid_5_5, leads to reinforcement of line
-        #   Line_50000009 (which is first line in feeder and a standard line)
+        #   Line_50000009 (which is the only line on the path and a standard
+        #   line)
 
         crit_nodes = pd.DataFrame(
             {
@@ -328,12 +334,6 @@ class TestReinforceMeasures:
         assert (
             "BusBar_MVGrid_1_LVGrid_5_LV"
             in self.edisgo.topology.lines_df.loc[
-                "Line_50000003", ["bus0", "bus1"]
-            ].values
-        )
-        assert (
-            "BusBar_MVGrid_1_LVGrid_5_LV"
-            in self.edisgo.topology.lines_df.loc[
                 "Line_50000009", ["bus0", "bus1"]
             ].values
         )
@@ -344,25 +344,16 @@ class TestReinforceMeasures:
                 "Line_50000009", ["bus0", "bus1"]
             ].values
         )
-        assert (
-            "Bus_BranchTee_LVGrid_5_1"
-            in self.edisgo.topology.lines_df.loc[
-                "Line_50000003", ["bus0", "bus1"]
-            ].values
-        )
         # check line parameters
         std_line = self.edisgo.topology.equipment_data["lv_cables"].loc[
             self.edisgo.config["grid_expansion_standard_equipment"]["lv_line"]
         ]
         line = self.edisgo.topology.lines_df.loc["Line_50000003"]
-        assert line.type_info == std_line.name
-        assert np.isclose(line.r, std_line.R_per_km * line.length)
-        assert np.isclose(
-            line.x, std_line.L_per_km * line.length * 2 * np.pi * 50 / 1e3
-        )
-        assert np.isclose(
-            line.s_nom, np.sqrt(3) * grid.nominal_voltage * std_line.I_max_th
-        )
+        assert line.type_info == "NAYY 4x1x300"
+        assert line.num_parallel == 2
+        # house connection is unchanged
+        line = self.edisgo.topology.lines_df.loc["Line_50000002"]
+        assert line.type_info == "NAYY 4x1x35"
         assert line.num_parallel == 1
         line = self.edisgo.topology.lines_df.loc["Line_50000009"]
         assert line.type_info == std_line.name
@@ -454,6 +445,62 @@ class TestReinforceMeasures:
         assert np.isclose(line.s_nom, 0.275 * 0.4 * np.sqrt(3))
         assert line.num_parallel == 1
 
+    def test_separate_lv_grid_line_to_new_station(self):
+        # if the line replaced at the separation point is stronger than one
+        # standard line, the new line to the new station gets as many parallel
+        # standard lines as needed to be at least as strong
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        crit_lines_lv = check_tech_constraints.lv_line_max_relative_overload(
+            self.edisgo
+        )
+        lv_grid_id = int(
+            self.edisgo.topology.buses_df.loc[
+                self.edisgo.topology.lines_df.loc[crit_lines_lv.index[0]].bus0
+            ].lv_grid_id
+        )
+        lv_grid = self.edisgo.topology.get_lv_grid(lv_grid_id)
+        # double all lines in the grid
+        self.edisgo.topology.update_number_of_parallel_lines(
+            lv_grid.lines_df.num_parallel * 2
+        )
+        orig_lines = lv_grid.lines_df.copy()
+        all_lv_grid_ids = [g.id for g in self.edisgo.topology.mv_grid.lv_grids]
+
+        _, lines_changes = reinforce_measures.separate_lv_grid(self.edisgo, lv_grid)
+
+        new_grid = [
+            g
+            for g in self.edisgo.topology.mv_grid.lv_grids
+            if g.id not in all_lv_grid_ids
+        ][0]
+        new_station_bus = new_grid.station.index[0]
+        new_lines = self.edisgo.topology.lines_df.loc[list(lines_changes)]
+        new_lines = new_lines[
+            (new_lines.bus0 == new_station_bus) | (new_lines.bus1 == new_station_bus)
+        ]
+        assert not new_lines.empty
+        std_line = self.edisgo.config["grid_expansion_standard_equipment"]["lv_line"]
+        for line, data in new_lines.iterrows():
+            node = data.bus1 if data.bus0 == new_station_bus else data.bus0
+            replaced = orig_lines[
+                (orig_lines.bus0 == node) | (orig_lines.bus1 == node)
+            ].s_nom.max()
+            assert data.type_info == std_line
+            assert data.num_parallel >= 2
+            assert data.s_nom >= replaced - 1e-9
+            assert lines_changes[line] == data.num_parallel
+
+    def test_separate_lv_grid_line_without_nominal_power(self):
+        # a replaced line without nominal power is replaced by one standard line
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        lv_grid = self.edisgo.topology.get_lv_grid(5)
+        self.edisgo.topology._lines_df.loc[lv_grid.lines_df.index, "s_nom"] = np.nan
+
+        _, lines_changes = reinforce_measures.separate_lv_grid(self.edisgo, lv_grid)
+
+        assert lines_changes
+        assert all(n == 1 for n in lines_changes.values())
+
     def test_separate_lv_grid(self):
         self.edisgo = copy.deepcopy(self.edisgo_root)
 
@@ -517,3 +564,9 @@ class TestReinforceMeasures:
             )
 
             assert len(orig_g.lines_df) == len(new_g_0.lines_df) + len(new_g_1.lines_df)
+
+            # the new transformer has the type of the standard transformer
+            std_trafo = self.edisgo.config["grid_expansion_standard_equipment"][
+                "mv_lv_transformer"
+            ]
+            assert (new_g_1.transformers_df.type_info == std_trafo).all()

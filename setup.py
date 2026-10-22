@@ -34,11 +34,13 @@ def read(fname):
 
 
 requirements = [
-    "contextily < 1.8.0",
-    "dash < 4.4.0",
+    "contextily >= 1.7.1, < 1.8.0",
+    "dash < 4.5.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
-    "geoalchemy2 < 0.7.0",
+    # pinned: oedialect 0.1.1 requires geoalchemy2<0.7.0, and newer geoalchemy2
+    # releases need SQLAlchemy>=1.4, which conflicts with sqlalchemy<1.4.0 below
+    "geoalchemy2 == 0.6.3",
     "geopandas >= 0.12.0, < 1.2.0",
     "geopy >= 2.0.0, < 2.5.0",
     "jupyterlab < 4.6.0",
@@ -64,16 +66,16 @@ requirements = [
     "scipy < 1.18.0",
     "shapely >= 1.7.0, < 2.2.0",
     "sqlalchemy < 1.4.0",
-    "sshtunnel < 0.5.0",
-    "urllib3 < 2.8.0",
+    "sshtunnel < 0.6.0",
+    "urllib3 < 2.9.0",
     "workalendar < 17.1.0",
-    "astroid == 4.0.3",
+    "astroid == 4.3.4",
 ]
 
 dev_requirements = [
     "ruff < 0.16.0",
     "pre-commit < 4.7.0",
-    "pylint < 4.1.0",
+    "pylint < 4.2.0",
     "pytest < 9.2.0",
     "nbclient < 0.12.0",
     "pytest-xdist < 4.0.0",
@@ -81,14 +83,14 @@ dev_requirements = [
     "pytest-html < 5.0.0",
     "pytest-metadata < 4.0.0",
     "anyio < 5.0.0",
-    "dash < 4.4.0",
+    "dash < 4.5.0",
     "pluggy < 2.0.0",
     "pyupgrade < 3.22.0",
     "sphinx < 9.2.0",
     "sphinx_rtd_theme >= 0.5.2, < 3.2.0",
     "sphinx-autodoc-typehints < 3.13.0",
     "sphinx-autoapi < 3.9.0",
-    "astroid == 4.0.3",
+    "astroid == 4.3.4",
 ]
 
 extras = {"dev": dev_requirements}

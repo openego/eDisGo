@@ -233,6 +233,46 @@ Changes
   clients held them. :func:`~.tools.session_scope` now uses
   :func:`~.io.db.engine` with ``ssh=False``, which reads the token like the other OEP
   imports (openego/eDisGo#739)
+* Fixed :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` when no
+  line can be disconnected because the node at two thirds of the feeder length is the
+  feeder representative. Only the first line of the feeder got one more parallel line
+  per iteration, which reduces the voltage deviation less with every iteration and
+  never touches the rest of the path, so grid reinforcement could abort with
+  :class:`~.flex_opt.exceptions.MaximumIterationError`. This happens e.g. after a long
+  first line was installed by disconnecting the feeder in a previous iteration. Now
+  lines on the path to the critical node are reinforced one at a time, each time
+  choosing the measure with the largest reduction of resistance times current per
+  cost, until the voltage difference along the path is reduced by an estimate of the
+  share needed to solve the voltage issue. Lines thicker than the standard line are no
+  longer replaced by a single standard line but get a parallel line of the same type.
+  House connections, i.e. lines to buses in buildings, are not reinforced, as they
+  often do not belong to the grid operator.
+  In the test grids this solves voltage issues that previously could not be solved and
+  does not increase grid expansion costs where reinforcement already
+  converged (openego/eDisGo#738)
+* :func:`~.flex_opt.reinforce_measures.separate_lv_grid` connects the rear half of
+  each feeder to the new station with as many parallel standard lines as needed to be
+  at least as strong as the line it replaces. Before, this was always one standard
+  line, even where the replaced line was e.g. two parallel standard lines, so the
+  separation could create a new overload. The new MV/LV transformer now has the type
+  of the standard transformer instead of ``None`` in ``type_info`` (adopted from
+  openego/eDisGo#391)
+* Rewrote the grid reinforcement methodology page with interactive examples for the
+  order of the reinforcement steps, the split voltage band, line and station
+  overloading, the iterations of the line reinforcement due to voltage issues in LV
+  feeders, the separation of LV grids and the grid expansion costs
+* Stopped grid reinforcement aborting with ``ValueError: Power flow analysis did not
+  converge`` after splitting a feeder due to voltage issues.
+  :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` connects the
+  rear part of a split feeder to the station by one standard line. Where the bypassed
+  path consists of thicker or parallel lines, this line has a higher resistance than
+  the path, and with enough load behind the split the power flow has no solution, as
+  in an LV grid of MV grid 34632 after the spatial complexity reduction. If the power
+  flow then does not converge, the split lines in LV grids that do not converge on
+  their own get a parallel line and the power flow is repeated, in up to four rounds,
+  before the error is raised. Grids whose power flow converges are not affected. The
+  methodology docs now describe the feeder split with an interactive example and the
+  limits of line reinforcement due to voltage issues (openego/eDisGo#777)
 * OEP connections are closed right after use instead of being kept open in a
   connection pool. The OEP limits open connections per account to 8, and each process
   kept at least one pooled connection open per engine, so a few processes with the
@@ -251,3 +291,41 @@ Changes
   now direct dependencies. ``res_feedin_data`` in ``config_db_tables.cfg`` now names
   the table (``ego_renewable_feedin``); the former value ``EgoRenewableFeedin`` is
   still accepted
+* The example notebooks ``edisgo_simple_example`` and ``full_workflow_walkthrough``
+  draw their MV grid plots without a background map. Downloading the map tiles could
+  take tens of minutes or fail without a good internet connection. The simple example
+  explains how to switch the map back on with ``background_map=True``. The graph of
+  an LV grid is now drawn for the LV grid selected earlier in the notebook instead of
+  a second one picked by position (openego/eDisGo#276)
+* The background map of the MV grid plots is now the grey TopPlusOpen map of the
+  German Federal Agency for Cartography and Geodesy (BKG) instead of CartoDB Positron.
+  CartoDB requires an API key, without which every map tile only showed the text "API
+  KEY REQUIRED". TopPlusOpen needs no key and covers Germany in detail. The plot shows
+  the source note required by its licence (dl-de/by-2-0)
+* :func:`~.tools.plots.add_basemap` gives up on a map tile if the tile server does not
+  respond within 10 seconds (new ``timeout`` parameter). Before, a slow or missing
+  internet connection blocked MV grid plots with ``background_map=True`` without
+  limit. A failed download is logged as a warning and the plot is drawn without the
+  map. eDisGo now needs contextily 1.7.1 or newer
+* Central heat pumps and resistive heaters imported with
+  :meth:`~.edisgo.EDisGo.import_heat_pumps` are now always assigned to the nearest
+  district heating area, measured in meters in EPSG:3035. Before, the distance was
+  measured in units of the grid CRS and limited to 1000 units: in grids in EPSG:4326
+  this was 1000 degrees, i.e. no limit, but the nearest area in degrees can differ
+  from the nearest area in meters; in grids in a projected CRS, heat buses farther
+  than about 1000 m from every area got no ``district_heating_id`` and ``area_id``,
+  which made the heat demand import and the OPF fail later on. This removes the
+  geopandas warning about distances in a geographic CRS
+* Fixed pandas ``FutureWarning`` messages in the heat pump import, the heat demand
+  import and the OPF heat storage, and no longer calculate the unused centroids of the
+  district heating areas. Results do not change (openego/eDisGo#634)
+* :func:`~.io.pypsa_io.to_pypsa` now passes the line shunt susceptance ``b`` to PyPSA
+  also when exporting a single grid (``mode="mv"``, ``"mvlv"`` or ``"lv"``). Before,
+  these exports dropped ``b``, so PyPSA set it to zero. This changes the results of
+  power flow analyses and grid reinforcements run per grid, e.g. in
+  :func:`~.flex_opt.reinforce_grid.enhanced_reinforce_grid`, for lines with ``b``
+  other than zero: ``b`` is calculated from the equipment data for lines added with a
+  ``type_info`` or changed by :meth:`~.network.topology.Topology.change_line_type`
+  during reinforcement, and for MV lines after
+  :func:`~.tools.tools.add_line_susceptance` (for all lines with ``mode="all_b"``)
+  (openego/eDisGo#654)
