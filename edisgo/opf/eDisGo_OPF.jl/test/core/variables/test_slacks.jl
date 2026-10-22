@@ -215,3 +215,38 @@ end
         end
     end
 end
+
+@testset "variable_slack_heat_pump_storage" begin
+    @testset "creates phss and phps2" begin
+        for model_type in (SOCBFPowerModelEdisgo, NCBFPowerModelEdisgo)
+            pm = vsl_model(; model_type=model_type)
+            eDisGo_OPF.variable_slack_heat_pump_storage(pm; nw=1)
+            @test TestUtils.variable_keys(pm, 1) == [:phps2, :phss]
+            @test isempty(PowerModels.var(pm, 2))
+            @test JuMP.num_variables(pm.model) == 2
+        end
+    end
+
+    @testset "forwards nw and report, accepts bounded" begin
+        pm = vsl_model()
+        eDisGo_OPF.variable_slack_heat_pump_storage(pm; nw=2, bounded=false,
+                                                    report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        @test TestUtils.variable_keys(pm, 2) == [:phps2, :phss]
+        @test isempty(PowerModels.sol(pm, 2))
+
+        pm = vsl_model()
+        eDisGo_OPF.variable_slack_heat_pump_storage(pm; nw=1)
+        @test Set(keys(PowerModels.sol(pm, 1))) == Set([:heat_storage, :heatpumps])
+    end
+
+    @testset "used by build_mn_opf_bf_flex for every opf_version" begin
+        for v in 1:4
+            pm = vsl_built(v)
+            for n in PowerModels.nw_ids(pm)
+                @test haskey(PowerModels.var(pm, n), :phss)
+                @test haskey(PowerModels.var(pm, n), :phps2)
+            end
+        end
+    end
+end
