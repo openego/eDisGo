@@ -692,10 +692,10 @@ class TestEDisGo:
 
         results = edisgo_obj.results
 
-        assert len(results.grid_expansion_costs) == 454
+        assert len(results.grid_expansion_costs) == 453
         # counts the parallel standard lines to new stations after LV grid separation;
         # house connections are not reinforced due to voltage issues
-        assert len(results.equipment_changes) == 884
+        assert len(results.equipment_changes) == 827
         assert results.v_res.shape == (4, 148)
 
         edisgo_obj = copy.deepcopy(self.edisgo)

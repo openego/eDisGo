@@ -316,3 +316,13 @@ Changes
 * Fixed pandas ``FutureWarning`` messages in the heat pump import, the heat demand
   import and the OPF heat storage, and no longer calculate the unused centroids of the
   district heating areas. Results do not change (openego/eDisGo#634)
+* :func:`~.io.pypsa_io.to_pypsa` now passes the line shunt susceptance ``b`` to PyPSA
+  also when exporting a single grid (``mode="mv"``, ``"mvlv"`` or ``"lv"``). Before,
+  these exports dropped ``b``, so PyPSA set it to zero. This changes the results of
+  power flow analyses and grid reinforcements run per grid, e.g. in
+  :func:`~.flex_opt.reinforce_grid.enhanced_reinforce_grid`, for lines with ``b``
+  other than zero: ``b`` is calculated from the equipment data for lines added with a
+  ``type_info`` or changed by :meth:`~.network.topology.Topology.change_line_type`
+  during reinforcement, and for MV lines after
+  :func:`~.tools.tools.add_line_susceptance` (for all lines with ``mode="all_b"``)
+  (openego/eDisGo#654)
