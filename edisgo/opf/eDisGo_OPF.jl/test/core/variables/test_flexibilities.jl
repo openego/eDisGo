@@ -329,3 +329,99 @@ end
         @test JuMP.num_variables(pm.model) == 4 * length(data["heat_storage"])
     end
 end
+
+@testset "variable_heat_storage_energy" begin
+    @testset "key and index set" begin
+        pm = vfx_bare_model()
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_heat_storage_energy(pm, nw=1)
+        end
+        @test added == 1
+        @test TestUtils.variable_keys(pm, 1) == [:hse]
+        @test vfx_indices(pm, 1, :hse) == Set([1])
+        @test JuMP.name(PowerModels.var(pm, 1, :hse, 1)) == "1_hse[1]"
+        @test isempty(PowerModels.var(pm, 2))
+    end
+
+    @testset "indexed by heat storage, not by heat pump" begin
+        data = vfx_add_heat_storage!(TestUtils.small_network(), 7; capacity=2.5)
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_heat_storage_energy(pm, nw=1)
+        @test vfx_indices(pm, 1, :hse) == Set([1, 7])
+        @test vfx_bounds(PowerModels.var(pm, 1, :hse, 7)) == (0.0, 2.5)
+    end
+
+    @testset "no heat storage" begin
+        data = TestUtils.small_network()
+        empty!(data["heat_storage"])
+        pm = vfx_bare_model(data)
+        @test vfx_added_variables(() -> eDisGo_OPF.variable_heat_storage_energy(pm, nw=1),
+                                  pm) == 0
+        @test haskey(PowerModels.var(pm, 1), :hse)
+        @test isempty(PowerModels.var(pm, 1, :hse))
+    end
+
+    @testset "inactive heat storage" begin
+        data = vfx_add_heat_storage!(TestUtils.small_network(), 2; capacity=2.5,
+                                     status=false)
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_heat_storage_energy(pm, nw=1)
+        # Same as for `phs`: the `status` field is ignored.
+        @test vfx_indices(pm, 1, :hse) == Set([1, 2])
+        @test_broken vfx_indices(pm, 1, :hse) == Set([1])
+    end
+
+    @testset "bounded" begin
+        # Between 0 (empty) and the capacity; the lower bound does not depend on
+        # the capacity and is not taken from `soc_initial`/`energy`.
+        data = TestUtils.small_network()
+        data["heat_storage"]["1"]["soc_initial"] = 1.0
+        data["heat_storage"]["1"]["energy"] = 2.0
+        pm = vfx_bare_model(data)
+        PowerModels.ref(pm, 2, :heat_storage, 1)["capacity"] = 6.0
+        eDisGo_OPF.variable_heat_storage_energy(pm, nw=1)
+        eDisGo_OPF.variable_heat_storage_energy(pm, nw=2, bounded=true)
+        @test vfx_bounds(PowerModels.var(pm, 1, :hse, 1)) == (0.0, 4.0)
+        @test vfx_bounds(PowerModels.var(pm, 2, :hse, 1)) == (0.0, 6.0)
+        @test JuMP.name(PowerModels.var(pm, 2, :hse, 1)) == "2_hse[1]"
+    end
+
+    @testset "unbounded" begin
+        # Not even the physical lower bound 0 is kept.
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_heat_storage_energy(pm, nw=1, bounded=false)
+        vfx_check_unbounded(pm, 1, :hse)
+    end
+
+    @testset "start values" begin
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_heat_storage_energy(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :hse, 1)) == 0.0
+
+        data = TestUtils.small_network()
+        data["heat_storage"]["1"]["hse_start"] = 3.25
+        data["heat_storage"]["1"]["phs_start"] = -1.0
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_heat_storage_energy(pm, nw=1)
+        eDisGo_OPF.variable_heat_storage_energy(pm, nw=2, bounded=false)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :hse, 1)) == 3.25
+        @test JuMP.start_value(PowerModels.var(pm, 2, :hse, 1)) == 3.25
+    end
+
+    @testset "report" begin
+        vfx_check_report(eDisGo_OPF.variable_heat_storage_energy, :heat_storage, [:hse])
+    end
+
+    @testset "real eDisGo test grid" begin
+        data = TestUtils.pm_network()
+        pm = vfx_bare_model(TestUtils.pm_network())
+        for n in sort(collect(PowerModels.nw_ids(pm)))
+            eDisGo_OPF.variable_heat_storage_energy(pm, nw=n)
+            @test vfx_indices(pm, n, :hse) == vfx_int_ids(data["heat_storage"])
+            for (i, hs) in data["heat_storage"]
+                @test vfx_bounds(PowerModels.var(pm, n, :hse, parse(Int, i))) ==
+                      (0.0, hs["capacity"])
+            end
+        end
+    end
+end
