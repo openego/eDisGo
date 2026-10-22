@@ -285,3 +285,35 @@ end
         vsl_check_reporting(eDisGo_OPF.variable_hs_slack, :heat_storage, :phss)
     end
 end
+
+@testset "variable_hp2_slack" begin
+    # A second heat pump with its own id on another bus.
+    data = vsl_network()
+    vsl_add!(data, "heatpumps", 5; hp_bus=2)
+
+    @testset "key, index set and bounds" begin
+        for bounded in (true, false)
+            pm = vsl_model(data)
+            eDisGo_OPF.variable_hp2_slack(pm; nw=1, bounded=bounded)
+            phps2 = PowerModels.var(pm, 1, :phps2)
+            @test vsl_ids(phps2) == [1, 5]
+            @test vsl_ids(phps2) == sort(collect(PowerModels.ids(pm, 1, :heatpumps)))
+            for i in (1, 5)
+                # Non-negative and otherwise free; `bounded` has no effect.
+                @test vsl_lb(phps2[i]) == 0.0
+                @test vsl_ub(phps2[i]) === nothing
+                @test JuMP.start_value(phps2[i]) === nothing
+                @test JuMP.name(phps2[i]) == "1_phps2[$i]"
+            end
+            @test JuMP.num_variables(pm.model) == 2
+        end
+    end
+
+    @testset "nw" begin
+        vsl_check_nw(eDisGo_OPF.variable_hp2_slack, :phps2)
+    end
+
+    @testset "report" begin
+        vsl_check_reporting(eDisGo_OPF.variable_hp2_slack, :heatpumps, :phps2)
+    end
+end
