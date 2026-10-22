@@ -545,3 +545,64 @@ end
         end
     end
 end
+
+@testset "variable_heat_pump_power_imaginary" begin
+    @testset "key and index set" begin
+        data = vfx_add_component!(vfx_hp_q_network(), "heatpumps", 5)
+        pm = vfx_bare_model(data)
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_heat_pump_power_imaginary(pm, nw=1)
+        end
+        @test added == 2
+        @test TestUtils.variable_keys(pm, 1) == [:qhp]
+        @test vfx_indices(pm, 1, :qhp) == Set([1, 5])
+        @test JuMP.name(PowerModels.var(pm, 1, :qhp, 1)) == "1_qhp[1]"
+        @test isempty(PowerModels.var(pm, 2))
+    end
+
+    @testset "bounded" begin
+        pm = vfx_bare_model(vfx_hp_q_network())
+        PowerModels.ref(pm, 2, :heatpumps, 1)["q_max"] = 0.5
+        eDisGo_OPF.variable_heat_pump_power_imaginary(pm, nw=1)
+        eDisGo_OPF.variable_heat_pump_power_imaginary(pm, nw=2, bounded=true)
+        @test vfx_bounds(PowerModels.var(pm, 1, :qhp, 1)) == (-0.3, 0.2)
+        @test vfx_bounds(PowerModels.var(pm, 2, :qhp, 1)) == (-0.3, 0.5)
+        # Not to be confused with the active power bounds.
+        @test vfx_bounds(PowerModels.var(pm, 1, :qhp, 1)) !=
+              (PowerModels.ref(pm, 1, :heatpumps, 1)["p_min"],
+               PowerModels.ref(pm, 1, :heatpumps, 1)["p_max"])
+    end
+
+    @testset "unbounded" begin
+        pm = vfx_bare_model(vfx_hp_q_network())
+        eDisGo_OPF.variable_heat_pump_power_imaginary(pm, nw=1, bounded=false)
+        vfx_check_unbounded(pm, 1, :qhp)
+    end
+
+    @testset "no start values" begin
+        # Unlike `php`, `qhp` is created without a `start`, so a `qhp_start` in
+        # the data is ignored and the variable has no start value at all.
+        data = vfx_hp_q_network()
+        data["heatpumps"]["1"]["qhp_start"] = 0.1
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_heat_pump_power_imaginary(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :qhp, 1)) === nothing
+    end
+
+    @testset "report" begin
+        vfx_check_report(eDisGo_OPF.variable_heat_pump_power_imaginary, :heatpumps, [:qhp])
+    end
+
+    @testset "real eDisGo test grid" begin
+        data = TestUtils.pm_network()
+        pm = vfx_bare_model(TestUtils.pm_network())
+        for n in sort(collect(PowerModels.nw_ids(pm)))
+            eDisGo_OPF.variable_heat_pump_power_imaginary(pm, nw=n)
+            @test vfx_indices(pm, n, :qhp) == vfx_int_ids(data["heatpumps"])
+            for (i, hp) in data["heatpumps"]
+                @test vfx_bounds(PowerModels.var(pm, n, :qhp, parse(Int, i))) ==
+                      (hp["q_min"], hp["q_max"])
+            end
+        end
+    end
+end
