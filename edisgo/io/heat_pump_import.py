@@ -261,11 +261,10 @@ def _query_central_heat_sources_oedb(
 def _prepare_central_heat_sources(edisgo_object, data):
     """Assign weather/district IDs and locations without database access.
 
-    Reproject all spatial inputs to the grid CRS before joining them. Prefer a
-    CHP plant in the same heating district and within the grid, then the heat-bus
-    location if it is within the grid, and finally the HV/MV station. The heat-bus
-    location is generally the district centroid in eGon, but we use its actual
-    geometry rather than the separately calculated polygon centroid.
+    Each heat bus gets the weather cell it lies in and the nearest district heating
+    area. Prefer a CHP plant in the same heating district and within the grid, then
+    the heat-bus location if it is within the grid, and finally the HV/MV station.
+    All results are in the grid CRS.
     """
     df = data["plants"]
     if df.empty:
@@ -288,17 +287,23 @@ def _prepare_central_heat_sources(edisgo_object, data):
         rsuffix="weather",
     )
 
-    # Calculate centroids for district heating areas
-    gdf_district_heating_areas["centroid"] = gdf_district_heating_areas.centroid
-    gdf_district_heating_areas = gdf_district_heating_areas.set_geometry("geom_polygon")
-
-    # Perform spatial join with district heating areas
+    # Assign each heat bus to the nearest district heating area. sjoin_nearest
+    # measures distances in units of the CRS, so the join is done in a projected
+    # CRS in meters (EPSG:3035, ETRS89-LAEA for Europe), also if the grid is in a
+    # geographic CRS. The heat bus geometries are carried along in the grid CRS and
+    # set as geometry again afterwards, so that they are returned unchanged.
+    metric_crs = "EPSG:3035"
+    geom_col = gdf_combined.geometry.name
     df_geom = gpd.sjoin_nearest(
-        gdf_combined,
-        gdf_district_heating_areas,
+        gdf_combined.assign(_geom_grid_crs=gdf_combined.geometry).to_crs(metric_crs),
+        gdf_district_heating_areas.to_crs(metric_crs),
         how="left",
         rsuffix="district_heating",
-        max_distance=1000,
+    )
+    df_geom = (
+        df_geom.drop(columns=geom_col)
+        .set_geometry("_geom_grid_crs")
+        .rename_geometry(geom_col)
     )
 
     df_merge = pd.merge(df_geom, df, how="right", right_on="bus1", left_on="bus1")
@@ -330,7 +335,7 @@ def _prepare_central_heat_sources(edisgo_object, data):
         # if geom is still None, use geolocation of HV/MV station
         if geom is None:
             hvmv_station = edisgo_object.topology.mv_grid.station
-            geom = Point(hvmv_station.x[0], hvmv_station.y[0])
+            geom = Point(hvmv_station.x.iloc[0], hvmv_station.y.iloc[0])
         df_merge.at[idx, "geom"] = geom
     return df_merge.loc[
         :,
