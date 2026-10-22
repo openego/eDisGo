@@ -317,3 +317,56 @@ end
         vsl_check_reporting(eDisGo_OPF.variable_hp2_slack, :heatpumps, :phps2)
     end
 end
+
+@testset "variable_hp_slack" begin
+    # Heat pump 5 has a negative demand (no time series, so in both steps).
+    data = vsl_network()
+    vsl_add!(data, "heatpumps", 5; hp_bus=2, pd=-0.5, cop=2.0)
+
+    @testset "key and index set" begin
+        pm = vsl_model(data)
+        eDisGo_OPF.variable_hp_slack(pm; nw=1)
+        phps = PowerModels.var(pm, 1, :phps)
+        @test vsl_ids(phps) == [1, 5]
+        @test vsl_ids(phps) == sort(collect(PowerModels.ids(pm, 1, :heatpumps)))
+        @test JuMP.num_variables(pm.model) == 2
+        for i in (1, 5)
+            @test JuMP.start_value(phps[i]) === nothing
+            @test JuMP.name(phps[i]) == "1_phps[$i]"
+        end
+    end
+
+    @testset "bounded=true: 0 ≤ phps ≤ max(pd/cop, 0) of the time step" begin
+        pm = vsl_model(data)
+        for n in (1, 2)
+            eDisGo_OPF.variable_hp_slack(pm; nw=n)
+        end
+        # Heat pump 1: pd/cop = 1.0/4.0 in step 1 and 0.9/3.0 in step 2.
+        @test vsl_lb(PowerModels.var(pm, 1, :phps)[1]) == 0.0
+        @test vsl_ub(PowerModels.var(pm, 1, :phps)[1]) ≈ 0.25
+        @test vsl_lb(PowerModels.var(pm, 2, :phps)[1]) == 0.0
+        @test vsl_ub(PowerModels.var(pm, 2, :phps)[1]) ≈ 0.3
+        # Heat pump 5: pd/cop = -0.25 is clamped to 0, the slack is fixed at 0.
+        for n in (1, 2)
+            @test vsl_lb(PowerModels.var(pm, n, :phps)[5]) == 0.0
+            @test vsl_ub(PowerModels.var(pm, n, :phps)[5]) == 0.0
+        end
+    end
+
+    @testset "bounded=false: only the lower bound" begin
+        pm = vsl_model(data)
+        eDisGo_OPF.variable_hp_slack(pm; nw=1, bounded=false)
+        for i in (1, 5)
+            @test vsl_lb(PowerModels.var(pm, 1, :phps)[i]) == 0.0
+            @test vsl_ub(PowerModels.var(pm, 1, :phps)[i]) === nothing
+        end
+    end
+
+    @testset "nw" begin
+        vsl_check_nw(eDisGo_OPF.variable_hp_slack, :phps)
+    end
+
+    @testset "report" begin
+        vsl_check_reporting(eDisGo_OPF.variable_hp_slack, :heatpumps, :phps)
+    end
+end
