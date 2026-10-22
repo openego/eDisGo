@@ -423,3 +423,81 @@ end
                                                                       bounded=false)
     end
 end
+
+@testset "variable_line_loading_max" begin
+    @testset "index set excludes storage branches" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_line_loading_max(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:ll]
+        ll = PowerModels.var(pm, 1, :ll)
+        # Branch 3 is the virtual storage branch.
+        @test vfc_index(ll) == Set([(1, 1, 2), (2, 2, 3)])
+        @test !((3, 3, 4) in vfc_index(ll))
+        @test JuMP.name(ll[(1, 1, 2)]) == "1_ll[(1, 1, 2)]"
+    end
+
+    @testset "real grid" begin
+        pm = vfc_big_model()
+        eDisGo_OPF.variable_line_loading_max(pm, nw=1)
+        ll = PowerModels.var(pm, 1, :ll)
+        branches = PowerModels.ref(pm, 1, :branch)
+        @test vfc_index(ll) == Set((l, b["f_bus"], b["t_bus"])
+                                   for (l, b) in branches if !b["storage"])
+        @test length(ll) == 141
+    end
+
+    @testset "bounds" begin
+        # The loading factor is bounded below by 1 (= no line reinforcement
+        # needed) and unbounded above; there is no `bounded` switch.
+        pm = vfc_model()
+        eDisGo_OPF.variable_line_loading_max(pm, nw=1)
+        ll = PowerModels.var(pm, 1, :ll)
+        @test all(vfc_bounds(x) == (1.0, nothing) for x in ll)
+    end
+
+    @testset "start values" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :branch, 1)["ll_start"] = 1.5
+        eDisGo_OPF.variable_line_loading_max(pm, nw=1)
+        ll = PowerModels.var(pm, 1, :ll)
+        @test JuMP.start_value(ll[(1, 1, 2)]) == 1.5
+        # The default start value 0 lies below the lower bound 1.
+        @test JuMP.start_value(ll[(2, 2, 3)]) == 0.0
+    end
+
+    @testset "report" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_line_loading_max(pm, nw=1, report=true)
+        ll = PowerModels.var(pm, 1, :ll)
+        @test vfc_reported(pm, 1, :branch, :ll) ==
+              Dict(1 => ll[(1, 1, 2)], 2 => ll[(2, 2, 3)])
+
+        pm = vfc_model()
+        eDisGo_OPF.variable_line_loading_max(pm, nw=1, report=false)
+        @test isempty(vfc_reported(pm, 1, :branch, :ll))
+    end
+
+    @testset "nw keyword" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :branch, 2)["ll_start"] = 2.5
+        eDisGo_OPF.variable_line_loading_max(pm, nw=2)
+        @test isempty(PowerModels.var(pm, 1))
+        ll = PowerModels.var(pm, 2, :ll)
+        @test JuMP.name(ll[(2, 2, 3)]) == "2_ll[(2, 2, 3)]"
+        @test JuMP.start_value(ll[(2, 2, 3)]) == 2.5
+        @test length(vfc_reported(pm, 2, :branch, :ll)) == 2
+    end
+
+    @testset "storage flag read from network 1 (defect)" begin
+        # In network 2, branch 3 is turned into an ordinary line. The function
+        # nevertheless looks the `storage` flag up in network 1, so for `nw=2`
+        # branch 3 is still skipped.
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :branch, 3)["storage"] = false
+        eDisGo_OPF.variable_line_loading_max(pm, nw=2)
+        ll = PowerModels.var(pm, 2, :ll)
+        @test !((3, 3, 4) in vfc_index(ll))
+        # Intended: network 2's own branch data decides.
+        @test_broken (3, 3, 4) in vfc_index(ll)
+    end
+end
