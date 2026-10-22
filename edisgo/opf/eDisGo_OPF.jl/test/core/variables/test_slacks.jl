@@ -21,7 +21,7 @@
 # something. The wrappers are additionally checked against the full
 # `build_mn_opf_bf_flex` model of every `opf_version`.
 #
-# Known production bug (see also test/FUNKTIONSABDECKUNG.md):
+# Known production bug (see also test/FUNCTION_COVERAGE.md):
 # `variable_slack_gen_real`/`_imaginary` ignore the `pgs_start`/`qgs_start`
 # fields that `set_ac_bf_start_values!` writes for the warm start, so the slack
 # generator is never warm-started. The tests pin the actual behaviour and keep

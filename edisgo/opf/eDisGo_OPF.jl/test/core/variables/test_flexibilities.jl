@@ -25,7 +25,7 @@
 # None of the eDisGo flexibility types is filtered by `ref_add_core!`. For heat
 # storage this means that the `"status"` field carried by every unit is ignored:
 # an inactive unit still gets its variables. The tests pin that behaviour and
-# keep the intended exclusion as `@test_broken` (see test/FUNKTIONSABDECKUNG.md).
+# keep the intended exclusion as `@test_broken` (see test/FUNCTION_COVERAGE.md).
 
 include(joinpath(@__DIR__, "..", "..", "testsetup.jl"))
 

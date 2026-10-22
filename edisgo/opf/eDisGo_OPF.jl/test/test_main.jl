@@ -19,7 +19,7 @@
 # loads the whole package in a fresh process, so the number of runs is kept
 # minimal: one non-convex Ipopt run (`method="nc"`), which always runs (CI), and
 # two SOC runs with Gurobi (`method="soc"`, without and with warm start), which
-# need a Gurobi licence and are skipped without one (TESTKONVENTIONEN.md,
+# need a Gurobi licence and are skipped without one (TESTING_CONVENTIONS.md,
 # section 4).
 
 include(joinpath(@__DIR__, "testsetup.jl"))

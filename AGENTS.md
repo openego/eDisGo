@@ -1,31 +1,30 @@
-# Hinweise für Coding-Agents
+# Notes for coding agents
 
-Diese Datei wird von KI-Coding-Werkzeugen automatisch gelesen (Konvention `AGENTS.md`).
+AI coding tools read this file automatically (the `AGENTS.md` convention).
 
-## Julia-OPF-Paket (`edisgo/opf/eDisGo_OPF.jl`)
+## Julia OPF package (`edisgo/opf/eDisGo_OPF.jl`)
 
-Für **alle** Arbeiten an der Testsuite des Julia-Pakets gelten verbindlich:
+For **all** work on the test suite of the Julia package, these files are binding:
 
-- [`edisgo/opf/eDisGo_OPF.jl/test/TESTKONVENTIONEN.md`](edisgo/opf/eDisGo_OPF.jl/test/TESTKONVENTIONEN.md)
-  — Struktur, Aufbau einer Testdatei, Fixtures, Ausführung, Commit-Konvention.
-- [`edisgo/opf/eDisGo_OPF.jl/test/FUNKTIONSABDECKUNG.md`](edisgo/opf/eDisGo_OPF.jl/test/FUNKTIONSABDECKUNG.md)
-  — Checkliste aller Funktionen. Ziel ist die vollständige Abdeckung; pro
-  abgehakter Funktion ein eigener Commit.
+- [`edisgo/opf/eDisGo_OPF.jl/test/TESTING_CONVENTIONS.md`](edisgo/opf/eDisGo_OPF.jl/test/TESTING_CONVENTIONS.md)
+  — layout, structure of a test file, fixtures, running the tests, commit
+  conventions.
+- [`edisgo/opf/eDisGo_OPF.jl/test/FUNCTION_COVERAGE.md`](edisgo/opf/eDisGo_OPF.jl/test/FUNCTION_COVERAGE.md)
+  — checklist of all functions and the production defects found so far. The goal
+  is complete coverage; one commit per ticked function.
 
-Kurzfassung: Testdateien spiegeln `src/`, ein `@testset` pro Funktion, Kommentare
-im Code auf Englisch, Markdown-Dokumentation auf Deutsch. Tests laufen mit
-`julia --project=. -e 'using Pkg; Pkg.test()'` aus `edisgo/opf/eDisGo_OPF.jl`.
+In short: test files mirror `src/`, one `@testset` per function, everything in
+English. Run the tests with `julia --project=. -e 'using Pkg; Pkg.test()'` from
+`edisgo/opf/eDisGo_OPF.jl`.
 
 ## Commits
 
-Commits und Pull-Request-Beschreibungen tragen ausschließlich den Autor aus der
-git-Konfiguration. **Keine** `Co-Authored-By:`- oder `Claude-Session:`-Trailer,
-kein "Generated with"-Hinweis, keine Erwähnung eines KI-Werkzeugs — weder im
-Betreff noch im Body.
+Commits and pull request descriptions carry only the author from the git
+configuration. **No** `Co-Authored-By:` or `Claude-Session:` trailers, no
+"Generated with" note, no mention of an AI tool — neither in the subject nor in
+the body.
 
-## Sprache
+## Language
 
-- Code, Docstrings und Code-Kommentare: **Englisch**.
-- Markdown-Dokumentation in diesem Repository: **Deutsch**, sofern die Datei
-  nicht bereits auf Englisch gepflegt wird (`README.md`, `doc/`, `AUTHORS.md`,
-  `doc/whatsnew/`).
+Code, docstrings, code comments, commit messages and Markdown documentation:
+**English**.

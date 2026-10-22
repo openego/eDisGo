@@ -13,7 +13,7 @@
 #     julia --project=. test/runtests.jl variables objective
 #     EDISGO_OPF_TESTS=core julia --project=. -e 'using Pkg; Pkg.test()'
 #
-# See test/TESTKONVENTIONEN.md for the conventions this suite follows.
+# See test/TESTING_CONVENTIONS.md for the conventions this suite follows.
 
 using Test
 

@@ -14,7 +14,7 @@
 # `src/core/constraint_template.jl` collect these arguments from the `ref` is
 # tested in `test/core/test_constraint_template.jl`.
 #
-# Known production defects documented here (see test/FUNKTIONSABDECKUNG.md):
+# Known production defects documented here (see test/FUNCTION_COVERAGE.md):
 # - `constraint_model_current` treats the virtual storage branches differently in
 #   the SOC (included) and the NC variant (skipped).
 # - For `opf_version` 3 `constraint_power_balance` leaves the curtailment `pgc`
