@@ -35,10 +35,12 @@ def read(fname):
 
 requirements = [
     "contextily < 1.8.0",
-    "dash < 4.4.0",
+    "dash < 4.5.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
-    "geoalchemy2 < 0.7.0",
+    # pinned: oedialect 0.1.1 requires geoalchemy2<0.7.0, and newer geoalchemy2
+    # releases need SQLAlchemy>=1.4, which conflicts with sqlalchemy<1.4.0 below
+    "geoalchemy2 == 0.6.3",
     "geopandas >= 0.12.0, < 1.2.0",
     "geopy >= 2.0.0, < 2.5.0",
     "jupyterlab < 4.6.0",
@@ -64,7 +66,7 @@ requirements = [
     "scipy < 1.18.0",
     "shapely >= 1.7.0, < 2.2.0",
     "sqlalchemy < 1.4.0",
-    "sshtunnel < 0.5.0",
+    "sshtunnel < 0.6.0",
     "urllib3 < 2.8.0",
     "workalendar < 17.1.0",
     "astroid == 4.0.3",
@@ -81,7 +83,7 @@ dev_requirements = [
     "pytest-html < 5.0.0",
     "pytest-metadata < 4.0.0",
     "anyio < 5.0.0",
-    "dash < 4.4.0",
+    "dash < 4.5.0",
     "pluggy < 2.0.0",
     "pyupgrade < 3.22.0",
     "sphinx < 9.2.0",
