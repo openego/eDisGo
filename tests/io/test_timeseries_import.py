@@ -446,6 +446,32 @@ class TestTimeseriesImport:
         assert mocks["district_heating"].call_count == 2
         assert mocks["cts"].call_count == 2
 
+    def test_heat_demand_oedb_without_residential_heat_demand(
+        self, mock_oep_demand_retrieval
+    ):
+        """Buildings without a residential or CTS heat profile get zero demand."""
+
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path,
+            legacy_ding0_grids=False,
+        )
+        hp_data_egon = self.setup_egon_heat_pump_data()
+        edisgo_object.topology.loads_df = pd.concat(
+            [edisgo_object.topology.loads_df, hp_data_egon]
+        )
+        # get_residential_heat_profiles_per_building returns an empty frame if
+        # there is no residential heat demand for any of the buildings
+        mock_oep_demand_retrieval["residential_heat"].side_effect = (
+            lambda *args, **kwargs: pd.DataFrame(columns=[431821, 430859])
+        )
+
+        df = timeseries_import.heat_demand_oedb(edisgo_object, "eGon2035", engine=None)
+
+        # building 431821 only has a CTS profile, building 430859 has none
+        assert np.isclose(df["HP_442081"].iloc[0], 0.3)
+        assert (df["HP_448156"] == 0.0).all()
+        assert all(pd.api.types.is_float_dtype(dtype) for dtype in df.dtypes)
+
     def test_electricity_demand_oedb(
         self,
         caplog,

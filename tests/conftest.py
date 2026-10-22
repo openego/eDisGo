@@ -4,6 +4,8 @@ import os
 import matplotlib
 import pytest
 
+from oedialect.dialect import OEDialect
+from sqlalchemy import event
 from sqlalchemy.engine import Engine
 
 matplotlib.use("Agg")
@@ -84,10 +86,10 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(skip_windows)
 
 
-def _is_oep_engine(db_engine):
+def _is_oep_connection(dialect, connect_params):
     return (
-        db_engine.url.host == "openenergyplatform.org"
-        or db_engine.url.drivername.endswith("+oedialect")
+        isinstance(dialect, OEDialect)
+        or connect_params.get("host") == "openenergyplatform.org"
     )
 
 
@@ -112,29 +114,29 @@ def oep_engine(request):
 
 
 @pytest.fixture(autouse=True)
-def prevent_unmarked_oep_access(request, monkeypatch):
-    """Prevent tests without the oep marker from connecting to the OEP."""
+def prevent_unmarked_oep_access(request):
+    """Prevent tests without the oep marker from connecting to the OEP.
 
-    oep_access_allowed = request.node.get_closest_marker("oep") is not None
+    The guard rejects each new DBAPI connection to the OEP before it is opened.
+    That covers every way SQLAlchemy connects, including table reflection, which
+    bypasses Engine.connect. OEP engines use a NullPool, so no OEP connection is
+    reused from the pool without passing the guard.
+    """
 
-    original_connect = Engine.connect
-    original_raw_connection = Engine.raw_connection
+    if request.node.get_closest_marker("oep") is not None:
+        yield
+        return
 
-    def check_access(engine):
-        if _is_oep_engine(engine) and not oep_access_allowed:
+    def reject_oep_connection(dialect, connection_record, cargs, connect_params):
+        if _is_oep_connection(dialect, connect_params):
             pytest.fail(
                 "Unmarked test attempted to connect to the live OEP: "
                 f"{request.node.nodeid}",
                 pytrace=False,
             )
 
-    def guarded_connect(engine, *args, **kwargs):
-        check_access(engine)
-        return original_connect(engine, *args, **kwargs)
-
-    def guarded_raw_connection(engine, *args, **kwargs):
-        check_access(engine)
-        return original_raw_connection(engine, *args, **kwargs)
-
-    monkeypatch.setattr(Engine, "connect", guarded_connect)
-    monkeypatch.setattr(Engine, "raw_connection", guarded_raw_connection)
+    event.listen(Engine, "do_connect", reject_oep_connection)
+    try:
+        yield
+    finally:
+        event.remove(Engine, "do_connect", reject_oep_connection)
