@@ -695,3 +695,173 @@ end
         bf_check_max_line_loading(eDisGo_OPF.NCBFPowerModelEdisgo)
     end
 end
+
+@testset "constraint_power_balance" begin
+    @testset "with grid restriction slacks" begin
+        # opf_version 2: the balance includes the load-shedding and curtailment
+        # slack variables. One component of each kind, each with its own
+        # parameter value (see `bf_balance_args`).
+        pm = bf_small_model(bf_all_variables!; opf_version=2)
+        @test bf_added(() -> bf_power_balance(pm), pm.model) == 2
+        cstr_p, cstr_q = bf_eq_constraints(pm.model)
+        v(sym, idx) = bf_name(pm, 1, sym, idx)
+
+        # Σpt == Σpf + Σccm·r - Σpgs - Σpg - Σpg_nd - Σps + Σpd - Σpds + Σpgens
+        #        + Σpgc + Σpdsm + Σ(php - phps) + Σ(pcp - pcps),
+        # constants moved to the right-hand side: -(0.3 + 0.6 - 0.2).
+        @test bf_terms(cstr_p)[1] == Dict(
+            v(:p, (2, 2, 3)) => 1.0, v(:p, (3, 3, 4)) => -1.0, v(:ccm, 2) => -0.03,
+            v(:pgs, 1) => 1.0, v(:ps, 1) => 1.0, v(:pds, 1) => 1.0,
+            v(:pgens, 1) => -1.0, v(:pgc, 1) => -1.0, v(:pdsm, 1) => -1.0,
+            v(:php, 1) => -1.0, v(:phps, 1) => 1.0, v(:pcp, 1) => -1.0,
+            v(:pcps, 1) => 1.0)
+        @test bf_terms(cstr_p)[2] ≈ -(0.3 + 0.6 - 0.2)
+
+        # Σqt - Σpt·strg_pf == Σqf + Σccm·x - Σqgs - Σqg - Σqg_nd + Σqd
+        #   - Σpds·pf_load + Σpgc·pf_gen_nd + Σpgens·pf_gen_d + Σpdsm·pf_dsm
+        #   + Σ(php - phps)·pf_hp + Σ(pcp - pcps)·pf_cp
+        @test bf_terms(cstr_q)[1] == Dict(
+            v(:q, (2, 2, 3)) => 1.0, v(:p, (2, 2, 3)) => -0.18,
+            v(:q, (3, 3, 4)) => -1.0, v(:ccm, 2) => -0.04, v(:qgs, 1) => 1.0,
+            v(:pds, 1) => 0.17, v(:pgc, 1) => -0.15, v(:pgens, 1) => -0.16,
+            v(:pdsm, 1) => -0.12, v(:php, 1) => -0.13, v(:phps, 1) => 0.13,
+            v(:pcp, 1) => -0.14, v(:pcps, 1) => 0.14)
+        @test bf_terms(cstr_q)[2] ≈ -(-0.1 - 0.2 - 0.07)
+    end
+
+    @testset "without grid restriction slacks" begin
+        # opf_version 1: no slack variables exist, none are used; the power
+        # factors of generators and loads have nothing left to multiply.
+        pm = bf_small_model(bf_all_variables!; opf_version=1)
+        for sym in (:pgc, :pgens, :pds, :phps, :pcps)
+            @test !haskey(PowerModels.var(pm, 1), sym)
+        end
+        @test bf_added(() -> bf_power_balance(pm), pm.model) == 2
+        cstr_p, cstr_q = bf_eq_constraints(pm.model)
+        v(sym, idx) = bf_name(pm, 1, sym, idx)
+        @test bf_terms(cstr_p)[1] == Dict(
+            v(:p, (2, 2, 3)) => 1.0, v(:p, (3, 3, 4)) => -1.0, v(:ccm, 2) => -0.03,
+            v(:pgs, 1) => 1.0, v(:ps, 1) => 1.0, v(:pdsm, 1) => -1.0,
+            v(:php, 1) => -1.0, v(:pcp, 1) => -1.0)
+        @test bf_terms(cstr_p)[2] ≈ -(0.3 + 0.6 - 0.2)
+        @test bf_terms(cstr_q)[1] == Dict(
+            v(:q, (2, 2, 3)) => 1.0, v(:p, (2, 2, 3)) => -0.18,
+            v(:q, (3, 3, 4)) => -1.0, v(:ccm, 2) => -0.04, v(:qgs, 1) => 1.0,
+            v(:pdsm, 1) => -0.12, v(:php, 1) => -0.13, v(:pcp, 1) => -0.14)
+        @test bf_terms(cstr_q)[2] ≈ -(-0.1 - 0.2 - 0.07)
+    end
+
+    @testset "storage power factor is unused" begin
+        # `bus_storage_pf` is part of the signature but enters neither equation:
+        # the battery's reactive power comes in via `branch_strg_pf` of its
+        # virtual branch instead.
+        pm_a = bf_small_model(bf_all_variables!)
+        pm_b = bf_small_model(bf_all_variables!)
+        bf_power_balance(pm_a; bus_storage_pf=Dict(1 => 0.11))
+        bf_power_balance(pm_b; bus_storage_pf=Dict(1 => 0.99))
+        @test bf_terms.(bf_eq_constraints(pm_a.model)) ==
+              bf_terms.(bf_eq_constraints(pm_b.model))
+        _, cstr_q = bf_eq_constraints(pm_a.model)
+        @test bf_coef(cstr_q, PowerModels.var(pm_a, 1, :ps, 1)) == 0.0
+    end
+
+    @testset "bus with lines only" begin
+        # Empty component collections reduce the balance to the line flows and
+        # losses; the empty sums do not break the constraint.
+        pm = bf_small_model(bf_all_variables!)
+        empty_ids = Int[]
+        no_values = Dict{Int,Float64}()
+        @test bf_added(() -> bf_power_balance(pm;
+            bus_gens=empty_ids, bus_gens_nd=empty_ids, bus_gens_slack=empty_ids,
+            bus_loads=empty_ids, bus_storage=empty_ids, bus_dsm=empty_ids,
+            bus_hps=empty_ids, bus_cps=empty_ids,
+            bus_pg=no_values, bus_qg=no_values, bus_pg_nd=no_values,
+            bus_qg_nd=no_values, bus_pd=no_values, bus_qd=no_values,
+            branch_strg_pf=Dict(2 => 0.0)), pm.model) == 2
+        cstr_p, cstr_q = bf_eq_constraints(pm.model)
+        v(sym, idx) = bf_name(pm, 1, sym, idx)
+        @test bf_terms(cstr_p) == (Dict(v(:p, (2, 2, 3)) => 1.0,
+                                        v(:p, (3, 3, 4)) => -1.0,
+                                        v(:ccm, 2) => -0.03), 0.0)
+        # A zero storage power factor leaves at most a vanishing `pt` term.
+        q_terms, q_rhs = bf_terms(cstr_q)
+        @test get(q_terms, v(:p, (2, 2, 3)), 0.0) == 0.0
+        @test filter(kv -> kv[2] != 0.0, q_terms) == Dict(v(:q, (2, 2, 3)) => 1.0,
+                                                          v(:q, (3, 3, 4)) => -1.0,
+                                                          v(:ccm, 2) => -0.04)
+        @test q_rhs == 0.0
+    end
+
+    @testset "missing variables" begin
+        # `_check_var_keys` only compares counts: asking for two storage units
+        # when only one `ps` exists fails before anything is added.
+        pm = bf_small_model(bf_all_variables!)
+        @test_throws ErrorException bf_power_balance(pm; bus_storage=[1, 2])
+        @test isempty(bf_eq_constraints(pm.model))
+        # The same for a slack variable of opf_version 2 that was never created.
+        pm2 = bf_small_model(bf_flow_variables!)
+        @test_throws ErrorException bf_power_balance(pm2)
+        @test isempty(bf_eq_constraints(pm2.model))
+    end
+
+    @testset "opf_version is read from network 1" begin
+        # The case distinction looks at network 1 only, whatever `n` is.
+        pm = bf_small_model(bf_all_variables!; opf_version=2)
+        PowerModels.ref(pm, 2)[:opf_version] = 1
+        bf_power_balance(pm, 2)
+        cstr_p, _ = bf_eq_constraints(pm.model)
+        @test bf_coef(cstr_p, PowerModels.var(pm, 2, :pds, 1)) == 1.0
+        @test all(startswith(name, "2_") for name in keys(first(bf_terms(cstr_p))))
+    end
+
+    @testset "opf_version 4" begin
+        # Version 4 takes the same branch as version 2.
+        pm = bf_small_model(bf_all_variables!; opf_version=4, overlying_grid=true)
+        bf_power_balance(pm)
+        cstr_p, cstr_q = bf_eq_constraints(pm.model)
+        @test bf_coef(cstr_p, PowerModels.var(pm, 1, :pds, 1)) == 1.0
+        @test bf_coef(cstr_p, PowerModels.var(pm, 1, :pgc, 1)) == -1.0
+        @test bf_coef(cstr_q, PowerModels.var(pm, 1, :pgc, 1)) ≈ -0.15
+    end
+
+    @testset "opf_version 3 ignores curtailment" begin
+        # Version 3 creates the curtailment `pgc` and counts it towards the "curt"
+        # requirement of the overlying grid, but the balance takes the branch of
+        # version 1 and leaves `pgc` out: curtailment that serves the overlying
+        # grid does not reduce the feed-in the grid has to carry.
+        pm = bf_small_model(bf_all_variables!; opf_version=3, overlying_grid=true)
+        pgc = PowerModels.var(pm, 1, :pgc, 1)
+        bf_power_balance(pm)
+        cstr_p, cstr_q = bf_eq_constraints(pm.model)
+        @test bf_coef(cstr_p, pgc) == 0.0
+        @test bf_coef(cstr_q, pgc) == 0.0
+
+        i_curt = only(i for (i, req) in PowerModels.ref(pm, 1, :HV_requirements)
+                      if req["name"] == "curt")
+        eDisGo_OPF.constraint_HV_requirements(pm, i_curt, 1)
+        c_hv = bf_eq_constraints(pm.model)[end]
+        @test bf_coef(c_hv, pgc) == 1.0
+
+        # Intended: curtailment enters the balance as in versions 2 and 4.
+        @test_broken bf_coef(cstr_p, pgc) == -1.0
+    end
+
+    @testset "duals" begin
+        # With `output => duals` in the setting both equations are stored in the
+        # solution of the bus …
+        setting = Dict{String,Any}("output" => Dict{String,Any}("duals" => true))
+        pm = bf_model(TestUtils.small_network(), bf_all_variables!; setting=setting)
+        @test InfrastructureModels.report_duals(pm)
+        bf_power_balance(pm, 1, 3)
+        cstr_p, cstr_q = bf_eq_constraints(pm.model)
+        @test PowerModels.sol(pm, 1, :bus, 3)[:lam_kcl_r] == cstr_p
+        @test PowerModels.sol(pm, 1, :bus, 3)[:lam_kcl_i] == cstr_q
+
+        # … without it, nothing is reported.
+        pm_off = bf_small_model(bf_all_variables!)
+        @test !InfrastructureModels.report_duals(pm_off)
+        bf_power_balance(pm_off, 1, 3)
+        @test !haskey(PowerModels.sol(pm_off, 1, :bus, 3), :lam_kcl_r)
+        @test !haskey(PowerModels.sol(pm_off, 1, :bus, 3), :lam_kcl_i)
+    end
+end
