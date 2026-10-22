@@ -582,6 +582,7 @@ class TestTools:
         legacy_session = Mock(return_value=context)
         other_session = Mock(side_effect=AssertionError("Wrong database connection"))
         read_sql = Mock(return_value=pd.DataFrame({"gid": [1122075]}))
+        monkeypatch.setattr(tools, "legacy_oep_table", Mock())
         monkeypatch.setattr(tools, "session_scope", legacy_session)
         monkeypatch.setattr(tools, "session_scope_egon_data", other_session)
         monkeypatch.setattr(tools.pd, "read_sql", read_sql)
