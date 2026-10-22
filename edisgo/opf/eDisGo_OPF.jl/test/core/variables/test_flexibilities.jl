@@ -649,3 +649,86 @@ end
         end
     end
 end
+
+@testset "variable_cp_power_real" begin
+    @testset "key and index set" begin
+        data = vfx_add_component!(TestUtils.small_network(), "electromobility", 4)
+        pm = vfx_bare_model(data)
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_cp_power_real(pm, nw=1)
+        end
+        @test added == 2
+        @test TestUtils.variable_keys(pm, 1) == [:pcp]
+        @test vfx_indices(pm, 1, :pcp) == Set(PowerModels.ids(pm, 1, :electromobility))
+        @test vfx_indices(pm, 1, :pcp) == Set([1, 4])
+        @test JuMP.name(PowerModels.var(pm, 1, :pcp, 4)) == "1_pcp[4]"
+        @test isempty(PowerModels.var(pm, 2))
+    end
+
+    @testset "no charging points" begin
+        data = TestUtils.small_network()
+        empty!(data["electromobility"])
+        empty!(data["time_series"]["electromobility"])
+        pm = vfx_bare_model(data)
+        @test vfx_added_variables(() -> eDisGo_OPF.variable_cp_power_real(pm, nw=1),
+                                  pm) == 0
+        @test isempty(PowerModels.var(pm, 1, :pcp))
+    end
+
+    @testset "bounded" begin
+        # `p_max` is a time series: each network takes the value of its own time
+        # step, not the static value 1.0 of the single-network data.
+        data = TestUtils.small_network()
+        data["electromobility"]["1"]["p_min"] = 0.05
+        data["time_series"]["electromobility"]["1"]["p_max"] = [0.7, 0.9]
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_cp_power_real(pm, nw=1)
+        eDisGo_OPF.variable_cp_power_real(pm, nw=2, bounded=true)
+        @test vfx_bounds(PowerModels.var(pm, 1, :pcp, 1)) == (0.05, 0.7)
+        @test vfx_bounds(PowerModels.var(pm, 2, :pcp, 1)) == (0.05, 0.9)
+        @test JuMP.name(PowerModels.var(pm, 2, :pcp, 1)) == "2_pcp[1]"
+    end
+
+    @testset "unbounded" begin
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_cp_power_real(pm, nw=1, bounded=false)
+        vfx_check_unbounded(pm, 1, :pcp)
+    end
+
+    @testset "start values" begin
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_cp_power_real(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :pcp, 1)) == 0.0
+
+        data = TestUtils.small_network()
+        data["electromobility"]["1"]["pcp_start"] = 0.35
+        data["electromobility"]["1"]["cpe_start"] = 0.8
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_cp_power_real(pm, nw=1)
+        eDisGo_OPF.variable_cp_power_real(pm, nw=2, bounded=false)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :pcp, 1)) == 0.35
+        @test JuMP.start_value(PowerModels.var(pm, 2, :pcp, 1)) == 0.35
+    end
+
+    @testset "report" begin
+        vfx_check_report(eDisGo_OPF.variable_cp_power_real, :electromobility, [:pcp])
+    end
+
+    @testset "real eDisGo test grid" begin
+        data = TestUtils.pm_network()
+        ts = data["time_series"]["electromobility"]
+        # The fixture's charging-point time series do vary, so the check below
+        # really distinguishes the time steps.
+        @test length(unique(ts["1"]["p_max"])) > 1
+        pm = vfx_bare_model(TestUtils.pm_network())
+        for n in sort(collect(PowerModels.nw_ids(pm)))
+            eDisGo_OPF.variable_cp_power_real(pm, nw=n)
+            @test vfx_indices(pm, n, :pcp) ==
+                  vfx_int_ids(data["electromobility"])
+            for (i, cp) in data["electromobility"]
+                @test vfx_bounds(PowerModels.var(pm, n, :pcp, parse(Int, i))) ==
+                      (cp["p_min"], ts[i]["p_max"][n])
+            end
+        end
+    end
+end
