@@ -370,3 +370,56 @@ end
         vsl_check_reporting(eDisGo_OPF.variable_hp_slack, :heatpumps, :phps)
     end
 end
+
+@testset "variable_load_slack" begin
+    # Load 2 is switched off and must be filtered out, load 3 is active with a
+    # static demand.
+    data = vsl_network()
+    vsl_add!(data, "load", 2; status=0)
+    vsl_add!(data, "load", 3; load_bus=2, pd=0.15)
+
+    @testset "key and index set" begin
+        pm = vsl_model(data)
+        eDisGo_OPF.variable_load_slack(pm; nw=1)
+        pds = PowerModels.var(pm, 1, :pds)
+        @test vsl_ids(pds) == [1, 3]
+        @test !(2 in vsl_ids(pds))
+        @test vsl_ids(pds) == sort(collect(PowerModels.ids(pm, 1, :load)))
+        @test JuMP.num_variables(pm.model) == 2
+        for i in (1, 3)
+            @test JuMP.start_value(pds[i]) === nothing
+            @test JuMP.name(pds[i]) == "1_pds[$i]"
+        end
+    end
+
+    @testset "bounded=true: 0 ≤ pds ≤ pd of the time step" begin
+        pm = vsl_model(data)
+        for n in (1, 2)
+            eDisGo_OPF.variable_load_slack(pm; nw=n)
+        end
+        @test vsl_lb(PowerModels.var(pm, 1, :pds)[1]) == 0.0
+        @test vsl_ub(PowerModels.var(pm, 1, :pds)[1]) == 0.2
+        @test vsl_lb(PowerModels.var(pm, 2, :pds)[1]) == 0.0
+        @test vsl_ub(PowerModels.var(pm, 2, :pds)[1]) == 0.25
+        for n in (1, 2)
+            @test vsl_ub(PowerModels.var(pm, n, :pds)[3]) == 0.15
+        end
+    end
+
+    @testset "bounded=false: only the lower bound" begin
+        pm = vsl_model(data)
+        eDisGo_OPF.variable_load_slack(pm; nw=1, bounded=false)
+        for i in (1, 3)
+            @test vsl_lb(PowerModels.var(pm, 1, :pds)[i]) == 0.0
+            @test vsl_ub(PowerModels.var(pm, 1, :pds)[i]) === nothing
+        end
+    end
+
+    @testset "nw" begin
+        vsl_check_nw(eDisGo_OPF.variable_load_slack, :pds)
+    end
+
+    @testset "report" begin
+        vsl_check_reporting(eDisGo_OPF.variable_load_slack, :load, :pds)
+    end
+end
