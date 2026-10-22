@@ -250,3 +250,38 @@ end
         end
     end
 end
+
+@testset "variable_hs_slack" begin
+    # A second heat storage with an id no heat pump has, and switched off:
+    # `phss` follows the heat-storage ids, and `ref_add_core!` does not filter
+    # heat storages by status.
+    data = vsl_network()
+    vsl_add!(data, "heat_storage", 7; status=false)
+
+    @testset "key, index set and bounds" begin
+        for bounded in (true, false)
+            pm = vsl_model(data)
+            eDisGo_OPF.variable_hs_slack(pm; nw=1, bounded=bounded)
+            phss = PowerModels.var(pm, 1, :phss)
+            @test vsl_ids(phss) == [1, 7]
+            @test vsl_ids(phss) == sort(collect(PowerModels.ids(pm, 1, :heat_storage)))
+            @test vsl_ids(phss) != sort(collect(PowerModels.ids(pm, 1, :heatpumps)))
+            for i in (1, 7)
+                # Non-negative and otherwise free; `bounded` has no effect.
+                @test vsl_lb(phss[i]) == 0.0
+                @test vsl_ub(phss[i]) === nothing
+                @test JuMP.start_value(phss[i]) === nothing
+                @test JuMP.name(phss[i]) == "1_phss[$i]"
+            end
+            @test JuMP.num_variables(pm.model) == 2
+        end
+    end
+
+    @testset "nw" begin
+        vsl_check_nw(eDisGo_OPF.variable_hs_slack, :phss)
+    end
+
+    @testset "report" begin
+        vsl_check_reporting(eDisGo_OPF.variable_hs_slack, :heat_storage, :phss)
+    end
+end
