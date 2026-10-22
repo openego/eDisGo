@@ -660,3 +660,40 @@ end
         @test length(vfc_reported(pm, 2, :gen_nd, :qgc)) == 1
     end
 end
+
+@testset "variable_battery_storage" begin
+    @testset "creates ps and se" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_battery_storage(pm, nw=1)
+        # Active power and energy; the reactive power `qs` is not created (it is
+        # derived from the power factor of the virtual branch instead).
+        @test TestUtils.variable_keys(pm, 1) == [:ps, :se]
+        @test !haskey(PowerModels.var(pm, 1), :qs)
+        @test JuMP.num_variables(pm.model) == 2
+        ps = PowerModels.var(pm, 1, :ps)
+        se = PowerModels.var(pm, 1, :se)
+        @test vfc_index(ps) == vfc_index(se) == Set([1])
+        @test vfc_bounds(ps[1]) == (-0.4, 0.4)
+        # `se` comes from PowerModels: bounded by [0, energy_rating], start 1.
+        @test vfc_bounds(se[1]) == (0.0, 0.4)
+        @test JuMP.start_value(se[1]) == 1.0
+        @test vfc_reported(pm, 1, :storage, :ps) == Dict(1 => ps[1])
+        @test vfc_reported(pm, 1, :storage, :se) == Dict(1 => se[1])
+    end
+
+    @testset "forwards keyword arguments" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :storage, 1)["se_start"] = 0.2
+        eDisGo_OPF.variable_battery_storage(pm, nw=2, bounded=false, report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        ps = PowerModels.var(pm, 2, :ps)
+        se = PowerModels.var(pm, 2, :se)
+        @test vfc_unbounded(ps)
+        @test vfc_unbounded(se)
+        @test JuMP.name(ps[1]) == "2_ps[1]"
+        @test JuMP.name(se[1]) == "2_se[1]"
+        @test JuMP.start_value(se[1]) == 0.2
+        @test isempty(vfc_reported(pm, 2, :storage, :ps))
+        @test isempty(vfc_reported(pm, 2, :storage, :se))
+    end
+end
