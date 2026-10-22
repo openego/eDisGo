@@ -2,7 +2,214 @@
 # heat pumps and charging points, from `variable_heat_storage` through
 # `variable_cp_energy`.
 #
-# TODO: not written yet. See test/FUNKTIONSABDECKUNG.md for the functions still
-# missing tests and test/TESTKONVENTIONEN.md for how to write them.
+# The ten functions come in two shapes:
+#
+#   * three wrappers (`variable_heat_storage`, `variable_heat_pump_power`,
+#     `variable_cp_power`) that only forward their keyword arguments to the
+#     variable functions of one component type — note that the reactive-power
+#     calls `variable_heat_pump_power_imaginary`/`variable_cp_power_imaginary`
+#     are commented out in them, so `qhp`/`qcp` never exist in the OPF;
+#   * seven functions that each create one JuMP variable per component of one
+#     type (`heat_storage`, `heatpumps` or `electromobility`), optionally bound
+#     it by fields of the component and register it in the solution.
+#
+# Every function is called on a model whose build method adds nothing
+# (`vfx_bare_model`), so each variable, bound and solution entry observed
+# afterwards was created by the function under test. The hand-written
+# `TestUtils.small_network` is used for the unit tests, because its single
+# component of every type can be manipulated in isolation; the real eDisGo test
+# grid (`TestUtils.pm_network`, 3 heat pumps with heat storage, 1 charging point,
+# 4 time steps with varying charging-point time series) confirms the index sets
+# and the per-time-step bounds on representative data.
+#
+# None of the eDisGo flexibility types is filtered by `ref_add_core!`. For heat
+# storage this means that the `"status"` field carried by every unit is ignored:
+# an inactive unit still gets its variables. The tests pin that behaviour and
+# keep the intended exclusion as `@test_broken` (see test/FUNKTIONSABDECKUNG.md).
 
 include(joinpath(@__DIR__, "..", "..", "testsetup.jl"))
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+"""
+    vfx_bare_model(data=TestUtils.small_network(); model_type=NCBFPowerModelEdisgo)
+
+Instantiate a model on `data` (single-network form, expanded with
+`TestUtils.multinetwork`) whose build method adds nothing, so `pm.model` holds no
+variable and `pm.sol` no entry before the function under test runs.
+"""
+function vfx_bare_model(data::Dict{String,<:Any}=TestUtils.small_network();
+                        model_type::Type=NCBFPowerModelEdisgo)
+    return eDisGo_OPF.instantiate_model(TestUtils.multinetwork(data), model_type,
+                                        _pm -> nothing)
+end
+
+"Index set of the variable container `key` in network `nw` of `pm`."
+vfx_indices(pm, nw::Int, key::Symbol) = Set(only(axes(PowerModels.var(pm, nw, key))))
+
+"`(lower, upper)` bound of `v`, with `nothing` standing for a missing bound."
+vfx_bounds(v::JuMP.VariableRef) =
+    (JuMP.has_lower_bound(v) ? JuMP.lower_bound(v) : nothing,
+     JuMP.has_upper_bound(v) ? JuMP.upper_bound(v) : nothing)
+
+"""
+    vfx_reported(pm, nw, comp)
+
+The solution entries registered for component type `comp` in network `nw`, or
+`nothing` if there are none. Reads `pm.sol` without side effects —
+`PowerModels.sol(pm, nw, comp)` would `get!` an empty entry and thereby hide a
+missing report.
+"""
+vfx_reported(pm, nw::Int, comp::Symbol) = get(PowerModels.sol(pm, nw), comp, nothing)
+
+"Run `f()` and return the number of JuMP variables it added to `pm.model`."
+function vfx_added_variables(f, pm)
+    before = JuMP.num_variables(pm.model)
+    f()
+    return JuMP.num_variables(pm.model) - before
+end
+
+"Assert that every variable of the container `key` in network `nw` is free."
+function vfx_check_unbounded(pm, nw::Int, key::Symbol)
+    vars = PowerModels.var(pm, nw, key)
+    @test !isempty(vars)
+    for v in vars
+        @test vfx_bounds(v) == (nothing, nothing)
+    end
+end
+
+"""
+    vfx_check_report(f, comp, fields)
+
+Check the `report` keyword of the variable function `f`: `f(pm; nw=1, kwargs...)` must
+register the variables `fields` (each stored under its own name as field) for
+every `comp` in network 1 by default and with `report=true`, and must register
+nothing — while still creating the variables — with `report=false`.
+"""
+function vfx_check_report(f, comp::Symbol, fields::Vector{Symbol})
+    for kwargs in ((;), (; report=true))
+        pm = vfx_bare_model()
+        f(pm; nw=1, kwargs...)
+        entries = vfx_reported(pm, 1, comp)
+        ids = sort(collect(PowerModels.ids(pm, 1, comp)))
+        @test entries !== nothing
+        entries === nothing && continue
+        @test sort(collect(keys(entries))) == ids
+        for i in ids
+            @test sort(collect(keys(entries[i]))) == sort(fields)
+            for key in fields
+                @test entries[i][key] == PowerModels.var(pm, 1, key, i)
+            end
+        end
+        # Only the network the variables were created for is reported.
+        @test vfx_reported(pm, 2, comp) === nothing
+    end
+
+    pm = vfx_bare_model()
+    f(pm; nw=1, report=false)
+    @test vfx_reported(pm, 1, comp) === nothing
+    for key in fields
+        @test haskey(PowerModels.var(pm, 1), key)
+    end
+end
+
+"""
+    vfx_add_heat_storage!(data, i; capacity, status=true)
+
+Add heat storage unit `i` (without a heat pump of the same index) to the
+single-network `data` of `TestUtils.small_network`.
+"""
+function vfx_add_heat_storage!(data::Dict{String,<:Any}, i::Int; capacity::Real,
+                               status::Bool=true)
+    hs = deepcopy(data["heat_storage"]["1"])
+    hs["index"] = i
+    hs["name"] = "Heat_Storage_$i"
+    hs["capacity"] = capacity
+    hs["status"] = status
+    data["heat_storage"][string(i)] = hs
+    return data
+end
+
+"""
+    vfx_add_component!(data, comp, i; fields...)
+
+Copy unit 1 of component type `comp` (and its time series, if any) of the
+single-network `data` to index `i`, overriding the given `fields`.
+"""
+function vfx_add_component!(data::Dict{String,<:Any}, comp::String, i::Int; fields...)
+    unit = deepcopy(data[comp]["1"])
+    unit["index"] = i
+    for (k, v) in fields
+        unit[string(k)] = v
+    end
+    data[comp][string(i)] = unit
+    ts = get(data["time_series"], comp, Dict())
+    haskey(ts, "1") && (ts[string(i)] = deepcopy(ts["1"]))
+    return data
+end
+
+"Small network whose heat pump has a non-degenerate reactive power range."
+function vfx_hp_q_network()
+    data = TestUtils.small_network()
+    data["heatpumps"]["1"]["q_min"] = -0.3
+    data["heatpumps"]["1"]["q_max"] = 0.2
+    return data
+end
+
+"Small network whose charging point has a non-degenerate reactive power range."
+function vfx_cp_q_network()
+    data = TestUtils.small_network()
+    data["electromobility"]["1"]["q_min"] = -0.25
+    data["electromobility"]["1"]["q_max"] = 0.15
+    return data
+end
+
+"Integer ids of the components in the (single-network, string-keyed) dict `comps`."
+vfx_int_ids(comps::Dict) = Set(parse(Int, i) for i in keys(comps))
+
+# ---------------------------------------------------------------------------
+# heat storage
+# ---------------------------------------------------------------------------
+
+@testset "variable_heat_storage" begin
+    @testset "creates the power and the energy variables" begin
+        pm = vfx_bare_model()
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_heat_storage(pm, nw=1)
+        end
+        # One `phs` and one `hse` per heat storage unit, nothing else.
+        @test added == 2
+        @test TestUtils.variable_keys(pm, 1) == [:hse, :phs]
+        @test vfx_indices(pm, 1, :phs) == Set([1])
+        @test vfx_indices(pm, 1, :hse) == Set([1])
+        @test isempty(PowerModels.var(pm, 2))
+        # Bounds and reports of both parts (default keywords).
+        @test vfx_bounds(PowerModels.var(pm, 1, :phs, 1)) == (-4.0, 4.0)
+        @test vfx_bounds(PowerModels.var(pm, 1, :hse, 1)) == (0.0, 4.0)
+        @test sort(collect(keys(vfx_reported(pm, 1, :heat_storage)[1]))) == [:hse, :phs]
+    end
+
+    @testset "forwards nw, bounded and report" begin
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_heat_storage(pm, nw=2, bounded=false, report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        @test TestUtils.variable_keys(pm, 2) == [:hse, :phs]
+        vfx_check_unbounded(pm, 2, :phs)
+        vfx_check_unbounded(pm, 2, :hse)
+        @test vfx_reported(pm, 2, :heat_storage) === nothing
+    end
+
+    @testset "in the full OPF build" begin
+        for model_type in (SOCBFPowerModelEdisgo, NCBFPowerModelEdisgo)
+            pm = TestUtils.build_small_model(model_type)
+            for n in 1:2
+                @test vfx_indices(pm, n, :phs) == Set([1])
+                @test vfx_indices(pm, n, :hse) == Set([1])
+                @test vfx_bounds(PowerModels.var(pm, n, :phs, 1)) == (-4.0, 4.0)
+                @test vfx_bounds(PowerModels.var(pm, n, :hse, 1)) == (0.0, 4.0)
+            end
+        end
+    end
+end
