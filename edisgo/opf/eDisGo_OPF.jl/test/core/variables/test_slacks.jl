@@ -678,3 +678,62 @@ end
         end
     end
 end
+
+"""
+Shared body of the `variable_slack_HV_requirements_real` / `_imaginary` tests: `f`
+creates the variable `field` over the overlying-grid requirements.
+"""
+function vsl_check_hv_slack(f, field::Symbol)
+    @testset "key, index set and bounds" begin
+        for bounded in (true, false)
+            pm = vsl_model(vsl_network(; overlying_grid=true))
+            f(pm; nw=1, bounded=bounded)
+            v = PowerModels.var(pm, 1, field)
+            @test vsl_ids(v) == [1, 2, 3, 4, 5]
+            @test vsl_ids(v) ==
+                  sort(collect(PowerModels.ids(pm, 1, :HV_requirements)))
+            @test JuMP.num_variables(pm.model) == 5
+            for i in 1:5
+                # Free in both directions (the bounds are commented out), and
+                # `bounded` has no effect.
+                @test vsl_lb(v[i]) === nothing
+                @test vsl_ub(v[i]) === nothing
+                @test JuMP.start_value(v[i]) === nothing
+                @test JuMP.name(v[i]) == "1_$(field)[$i]"
+            end
+        end
+    end
+
+    @testset "no HV requirements" begin
+        # Without an overlying grid the index set is empty.
+        pm = vsl_model()
+        f(pm; nw=1)
+        @test isempty(PowerModels.var(pm, 1, field))
+        @test JuMP.num_variables(pm.model) == 0
+    end
+
+    @testset "nw" begin
+        pm = vsl_model(vsl_network(; overlying_grid=true))
+        f(pm; nw=2)
+        @test !haskey(PowerModels.var(pm, 1), field)
+        @test JuMP.name(PowerModels.var(pm, 2, field)[1]) == "2_$(field)[1]"
+    end
+
+    @testset "report" begin
+        pm = vsl_model(vsl_network(; overlying_grid=true))
+        f(pm; nw=1, report=true)
+        v = PowerModels.var(pm, 1, field)
+        reported = vsl_reported(pm, 1, :HV_requirements, field)
+        @test sort(collect(keys(reported))) == [1, 2, 3, 4, 5]
+        @test all(reported[i] === v[i] for i in 1:5)
+
+        pm = vsl_model(vsl_network(; overlying_grid=true))
+        f(pm; nw=1, report=false)
+        @test haskey(PowerModels.var(pm, 1), field)
+        @test isempty(vsl_reported(pm, 1, :HV_requirements, field))
+    end
+end
+
+@testset "variable_slack_HV_requirements_real" begin
+    vsl_check_hv_slack(eDisGo_OPF.variable_slack_HV_requirements_real, :phvs)
+end
