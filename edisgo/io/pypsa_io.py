@@ -107,9 +107,7 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         slack_df = _set_slack(edisgo_object.topology.mv_grid)
 
         components = _get_grid_component_dict(edisgo_object.topology)
-        components["Transformer"] = edisgo_object.topology.transformers_df.loc[
-            :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
-        ].rename(columns={"r_pu": "r", "x_pu": "x"})
+        components["Transformer"] = _get_transformer_df(edisgo_object.topology)
 
     elif "mv" in mode:
         pypsa_network.mode = "mv"
@@ -127,10 +125,7 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         if mode == "mv":
             mv_components["Transformer"] = pd.DataFrame(dtype=float)
         elif mode == "mvlv":
-            # get all MV/LV transformers
-            mv_components["Transformer"] = edisgo_object.topology.transformers_df.loc[
-                :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
-            ].rename(columns={"r_pu": "r", "x_pu": "x"})
+            mv_components["Transformer"] = _get_transformer_df(edisgo_object.topology)
         else:
             raise ValueError("Provide proper mode for mv network export.")
 
@@ -479,6 +474,26 @@ def _get_grid_component_dict(grid_object):
         ],
     }
     return components
+
+
+def _get_transformer_df(topology):
+    """
+    Returns all MV/LV transformers with the columns PyPSA needs.
+
+    Parameters
+    ----------
+    topology : :class:`~.network.topology.Topology`
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        MV/LV transformers with columns "bus0", "bus1", "x", "r", "type_info" and
+        "s_nom".
+
+    """
+    return topology.transformers_df.loc[
+        :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
+    ].rename(columns={"r_pu": "r", "x_pu": "x"})
 
 
 def _append_lv_components(

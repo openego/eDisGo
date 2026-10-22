@@ -63,6 +63,7 @@ class TestPypsaIO:
         assert pypsa_network_full.lines.loc[lv_line, "b"] == 5.678e-5
         assert pypsa_network_mv.lines.loc[mv_line, "b"] == 1.234e-5
         assert pypsa_network_lv.lines.loc[lv_line, "b"] == 5.678e-5
+        # mode="mvlv" exports only MV lines
         assert pypsa_network_mvlv.lines.loc[mv_line, "b"] == 1.234e-5
 
     def test_append_lv_components(self):
