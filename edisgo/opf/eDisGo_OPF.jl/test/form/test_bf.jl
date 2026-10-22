@@ -378,3 +378,118 @@ end
         @test all(startswith(JuMP.name(v), "2_w[") for v in PowerModels.var(pm, 2, :w))
     end
 end
+
+@testset "variable_buspair_current_magnitude_sqr" begin
+    @testset "index set and lower bound" begin
+        for bounded in (true, false)
+            pm = bf_small_model(bf_nothing!)
+            eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm, nw=1, bounded=bounded)
+            ccm = PowerModels.var(pm, 1, :ccm)
+            # Every branch, the virtual storage branch 3 included.
+            @test bf_index_set(ccm) == Set([1, 2, 3])
+            for i in 1:3
+                @test JuMP.has_lower_bound(ccm[i])
+                @test JuMP.lower_bound(ccm[i]) == 0.0
+                @test JuMP.name(ccm[i]) == "1_ccm[$i]"
+            end
+        end
+    end
+
+    @testset "bounded" begin
+        # ub = (rate_a·tap / vmin(f_bus))². Branch 1 gets a tap of 2, the sending
+        # bus 2 of branch 2 a lower vmin. Bus 3 — the *receiving* bus of branch 2
+        # and the sending bus of the storage branch 3 — gets an even lower vmin,
+        # which must only show up in branch 3's bound.
+        data = bf_tap_network()
+        data["bus"]["2"]["vmin"] = 0.8
+        data["bus"]["3"]["vmin"] = 0.5
+        pm = bf_model(data, bf_nothing!)
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm, nw=1)
+        ccm = PowerModels.var(pm, 1, :ccm)
+        @test JuMP.upper_bound(ccm[1]) ≈ (5.0 * 2.0 / 0.9)^2
+        @test JuMP.upper_bound(ccm[2]) ≈ (5.0 / 0.8)^2
+        @test JuMP.upper_bound(ccm[3]) ≈ (5.0 / 0.5)^2
+    end
+
+    @testset "missing or infinite rate_a" begin
+        # No finite rating, no upper bound — the other branches are unaffected.
+        data = TestUtils.small_network()
+        delete!(data["branch"]["1"], "rate_a")
+        data["branch"]["2"]["rate_a"] = Inf
+        pm = bf_model(data, bf_nothing!)
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm, nw=1)
+        ccm = PowerModels.var(pm, 1, :ccm)
+        @test !JuMP.has_upper_bound(ccm[1])
+        @test !JuMP.has_upper_bound(ccm[2])
+        @test JuMP.upper_bound(ccm[3]) ≈ (5.0 / 0.9)^2
+    end
+
+    @testset "unbounded" begin
+        # Only the virtual storage branches keep their upper bound.
+        pm = bf_small_model(bf_nothing!)
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm, nw=1, bounded=false)
+        ccm = PowerModels.var(pm, 1, :ccm)
+        @test !JuMP.has_upper_bound(ccm[1])
+        @test !JuMP.has_upper_bound(ccm[2])
+        @test JuMP.upper_bound(ccm[3]) ≈ (5.0 / 0.9)^2
+
+        # A storage branch without rating stays unbounded as well.
+        data = TestUtils.small_network()
+        delete!(data["branch"]["3"], "rate_a")
+        pm2 = bf_model(data, bf_nothing!)
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm2, nw=1, bounded=false)
+        @test !any(JuMP.has_upper_bound(v) for v in PowerModels.var(pm2, 1, :ccm))
+    end
+
+    @testset "start values" begin
+        data = TestUtils.small_network()
+        data["branch"]["2"]["ccm_start"] = 0.7
+        pm = bf_model(data, bf_nothing!)
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm, nw=1)
+        ccm = PowerModels.var(pm, 1, :ccm)
+        @test JuMP.start_value(ccm[2]) == 0.7
+        @test JuMP.start_value(ccm[1]) == 0.0
+        @test JuMP.start_value(ccm[3]) == 0.0
+    end
+
+    @testset "report" begin
+        pm = bf_small_model(bf_nothing!)
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm, nw=1)
+        ccm = PowerModels.var(pm, 1, :ccm)
+        for i in 1:3
+            @test PowerModels.sol(pm, 1, :branch, i)[:ccm] == ccm[i]
+        end
+
+        pm_off = bf_small_model(bf_nothing!)
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm_off, nw=1, report=false)
+        @test haskey(PowerModels.var(pm_off, 1), :ccm)
+        @test !haskey(PowerModels.sol(pm_off, 1), :branch)
+    end
+
+    @testset "network selection" begin
+        pm = bf_small_model(bf_nothing!)
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm, nw=2)
+        @test !haskey(PowerModels.var(pm, 1), :ccm)
+        @test all(startswith(JuMP.name(v), "2_ccm[") for v in PowerModels.var(pm, 2, :ccm))
+    end
+
+    @testset "real test grid" begin
+        pm = eDisGo_OPF.instantiate_model(TestUtils.multinetwork(TestUtils.pm_network()),
+                                          eDisGo_OPF.SOCBFPowerModelEdisgo, bf_nothing!)
+        branches = PowerModels.ref(pm, 1, :branch)
+        storage_ids = Set(i for (i, b) in branches if b["storage"])
+        rated_ids = Set(i for (i, b) in branches if isfinite(get(b, "rate_a", Inf)))
+        @test !isempty(storage_ids)
+        @test length(storage_ids) < length(branches)
+
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm, nw=1)
+        ccm = PowerModels.var(pm, 1, :ccm)
+        @test bf_index_set(ccm) == Set(keys(branches))
+        @test Set(i for i in keys(branches) if JuMP.has_upper_bound(ccm[i])) == rated_ids
+
+        eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm, nw=2, bounded=false)
+        ccm2 = PowerModels.var(pm, 2, :ccm)
+        @test Set(i for i in keys(branches) if JuMP.has_upper_bound(ccm2[i])) ==
+              intersect(storage_ids, rated_ids)
+    end
+end
