@@ -309,3 +309,72 @@ end
         end
     end
 end
+
+@testset "variable_bus_voltage" begin
+    @testset "creates w for non-storage buses" begin
+        pm = bf_small_model(bf_nothing!)
+        eDisGo_OPF.variable_bus_voltage(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:w]
+        # Bus 4 is the storage bus of the virtual branch and has no voltage.
+        @test PowerModels.ref(pm, 1, :bus, 4)["storage"] == true
+        @test bf_index_set(PowerModels.var(pm, 1, :w)) == Set([1, 2, 3])
+        @test isempty(PowerModels.var(pm, 2))
+    end
+
+    @testset "bounded" begin
+        data = TestUtils.small_network()
+        data["bus"]["2"]["vmin"] = 0.95
+        data["bus"]["2"]["vmax"] = 1.05
+        pm = bf_model(data, bf_nothing!)
+        eDisGo_OPF.variable_bus_voltage(pm, nw=1)
+        w = PowerModels.var(pm, 1, :w)
+        for (i, vmin, vmax) in ((1, 0.9, 1.1), (2, 0.95, 1.05), (3, 0.9, 1.1))
+            @test JuMP.lower_bound(w[i]) ≈ vmin^2
+            @test JuMP.upper_bound(w[i]) ≈ vmax^2
+        end
+    end
+
+    @testset "unbounded" begin
+        pm = bf_small_model(bf_nothing!)
+        eDisGo_OPF.variable_bus_voltage(pm, nw=1, bounded=false)
+        w = PowerModels.var(pm, 1, :w)
+        for i in 1:3
+            @test JuMP.lower_bound(w[i]) == 0.0
+            @test !JuMP.has_upper_bound(w[i])
+        end
+    end
+
+    @testset "start values" begin
+        data = TestUtils.small_network()
+        data["bus"]["2"]["w_start"] = 0.98
+        pm = bf_model(data, bf_nothing!)
+        eDisGo_OPF.variable_bus_voltage(pm, nw=1)
+        w = PowerModels.var(pm, 1, :w)
+        @test JuMP.start_value(w[2]) == 0.98
+        # Without `w_start` the start is slightly above 1 p.u.
+        @test JuMP.start_value(w[1]) == 1.001
+        @test JuMP.start_value(w[3]) == 1.001
+    end
+
+    @testset "report" begin
+        pm = bf_small_model(bf_nothing!)
+        eDisGo_OPF.variable_bus_voltage(pm, nw=1)
+        w = PowerModels.var(pm, 1, :w)
+        for i in 1:3
+            @test PowerModels.sol(pm, 1, :bus, i)[:w] == w[i]
+        end
+        @test !haskey(PowerModels.sol(pm, 1, :bus, 4), :w)
+
+        pm_off = bf_small_model(bf_nothing!)
+        eDisGo_OPF.variable_bus_voltage(pm_off, nw=1, report=false)
+        @test haskey(PowerModels.var(pm_off, 1), :w)
+        @test !haskey(PowerModels.sol(pm_off, 1), :bus)
+    end
+
+    @testset "network selection" begin
+        pm = bf_small_model(bf_nothing!)
+        eDisGo_OPF.variable_bus_voltage(pm, nw=2)
+        @test !haskey(PowerModels.var(pm, 1), :w)
+        @test all(startswith(JuMP.name(v), "2_w[") for v in PowerModels.var(pm, 2, :w))
+    end
+end
