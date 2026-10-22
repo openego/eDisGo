@@ -302,3 +302,15 @@ Changes
   now direct dependencies. ``res_feedin_data`` in ``config_db_tables.cfg`` now names
   the table (``ego_renewable_feedin``); the former value ``EgoRenewableFeedin`` is
   still accepted
+* Central heat pumps and resistive heaters imported with
+  :meth:`~.edisgo.EDisGo.import_heat_pumps` are now always assigned to the nearest
+  district heating area, measured in meters in EPSG:3035. Before, the distance was
+  measured in units of the grid CRS and limited to 1000 units: in grids in EPSG:4326
+  this was 1000 degrees, i.e. no limit, but the nearest area in degrees can differ
+  from the nearest area in meters; in grids in a projected CRS, heat buses farther
+  than about 1000 m from every area got no ``district_heating_id`` and ``area_id``,
+  which made the heat demand import and the OPF fail later on. This removes the
+  geopandas warning about distances in a geographic CRS
+* Fixed pandas ``FutureWarning`` messages in the heat pump import, the heat demand
+  import and the OPF heat storage, and no longer calculate the unused centroids of the
+  district heating areas. Results do not change (openego/eDisGo#634)
