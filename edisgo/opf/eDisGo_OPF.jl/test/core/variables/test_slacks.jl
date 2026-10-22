@@ -635,3 +635,46 @@ end
 @testset "variable_slack_gen_imaginary" begin
     vsl_check_slack_gen(eDisGo_OPF.variable_slack_gen_imaginary, :qgs, "qgs_start")
 end
+
+@testset "variable_slack_HV_requirements" begin
+    @testset "creates phvs only" begin
+        pm = vsl_model(vsl_network(; overlying_grid=true))
+        eDisGo_OPF.variable_slack_HV_requirements(pm; nw=1)
+        # The reactive slack `qhvs` is commented out of the wrapper.
+        @test TestUtils.variable_keys(pm, 1) == [:phvs]
+        @test isempty(PowerModels.var(pm, 2))
+        @test JuMP.num_variables(pm.model) == 5   # five HV requirements
+    end
+
+    @testset "forwards nw, bounded and report" begin
+        pm = vsl_model(vsl_network(; overlying_grid=true))
+        eDisGo_OPF.variable_slack_HV_requirements(pm; nw=2, bounded=false,
+                                                  report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        @test TestUtils.variable_keys(pm, 2) == [:phvs]
+        @test isempty(PowerModels.sol(pm, 2))
+
+        pm = vsl_model(vsl_network(; overlying_grid=true))
+        eDisGo_OPF.variable_slack_HV_requirements(pm; nw=1)
+        @test collect(keys(PowerModels.sol(pm, 1))) == [:HV_requirements]
+    end
+
+    @testset "used by build_mn_opf_bf_flex for opf_version 3 and 4 only" begin
+        for v in 1:4
+            pm = vsl_built(v)
+            for n in PowerModels.nw_ids(pm)
+                @test haskey(PowerModels.var(pm, n), :phvs) == (v in (3, 4))
+                @test !haskey(PowerModels.var(pm, n), :qhvs)
+            end
+        end
+    end
+
+    @testset "real grid: one slack per HV requirement in every time step" begin
+        pm = TestUtils.build_model(; overlying_grid=true, opf_version=4)
+        for n in PowerModels.nw_ids(pm)
+            @test !isempty(PowerModels.ids(pm, n, :HV_requirements))
+            @test vsl_ids(PowerModels.var(pm, n, :phvs)) ==
+                  sort(collect(PowerModels.ids(pm, n, :HV_requirements)))
+        end
+    end
+end
