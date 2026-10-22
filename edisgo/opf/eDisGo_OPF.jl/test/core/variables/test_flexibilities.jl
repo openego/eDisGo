@@ -606,3 +606,46 @@ end
         end
     end
 end
+
+# ---------------------------------------------------------------------------
+# charging points
+# ---------------------------------------------------------------------------
+
+@testset "variable_cp_power" begin
+    @testset "creates the charging power and the energy variables" begin
+        pm = vfx_bare_model()
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_cp_power(pm, nw=1)
+        end
+        # The reactive power call is commented out: no `qcp`.
+        @test added == 2
+        @test TestUtils.variable_keys(pm, 1) == [:cpe, :pcp]
+        @test !haskey(PowerModels.var(pm, 1), :qcp)
+        @test vfx_bounds(PowerModels.var(pm, 1, :pcp, 1)) == (0.0, 1.0)
+        @test vfx_bounds(PowerModels.var(pm, 1, :cpe, 1)) == (0.0, 1.0)
+        @test sort(collect(keys(vfx_reported(pm, 1, :electromobility)[1]))) ==
+              [:cpe, :pcp]
+        @test isempty(PowerModels.var(pm, 2))
+    end
+
+    @testset "forwards nw, bounded and report" begin
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_cp_power(pm, nw=2, bounded=false, report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        @test TestUtils.variable_keys(pm, 2) == [:cpe, :pcp]
+        vfx_check_unbounded(pm, 2, :pcp)
+        vfx_check_unbounded(pm, 2, :cpe)
+        @test vfx_reported(pm, 2, :electromobility) === nothing
+    end
+
+    @testset "in the full OPF build" begin
+        for model_type in (SOCBFPowerModelEdisgo, NCBFPowerModelEdisgo)
+            pm = TestUtils.build_small_model(model_type)
+            for n in 1:2
+                @test vfx_indices(pm, n, :pcp) == Set([1])
+                @test vfx_indices(pm, n, :cpe) == Set([1])
+                @test !haskey(PowerModels.var(pm, n), :qcp)
+            end
+        end
+    end
+end
