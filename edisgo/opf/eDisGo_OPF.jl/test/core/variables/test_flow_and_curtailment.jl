@@ -936,3 +936,55 @@ end
         @test length(vfc_reported(pm, 2, :dsm, :pdsm)) == 1
     end
 end
+
+@testset "variable_dsm_storage_power_imaginary" begin
+    @testset "index set" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_imaginary(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:qdsm]
+        qdsm = PowerModels.var(pm, 1, :qdsm)
+        @test vfc_index(qdsm) == Set([1])
+        @test JuMP.name(qdsm[1]) == "1_qdsm[1]"
+    end
+
+    @testset "bounded=true" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_imaginary(pm, nw=1, bounded=true)
+        @test vfc_bounds(PowerModels.var(pm, 1, :qdsm)[1]) == (-0.098, 0.098)
+    end
+
+    @testset "bounded=false" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_imaginary(pm, nw=1, bounded=false)
+        @test vfc_unbounded(PowerModels.var(pm, 1, :qdsm))
+    end
+
+    @testset "no start value" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :dsm, 1)["qdsm_start"] = 0.01
+        eDisGo_OPF.variable_dsm_storage_power_imaginary(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :qdsm)[1]) === nothing
+    end
+
+    @testset "report" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_imaginary(pm, nw=1, report=true)
+        @test vfc_reported(pm, 1, :dsm, :qdsm) ==
+              Dict(1 => PowerModels.var(pm, 1, :qdsm)[1])
+
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_imaginary(pm, nw=1, report=false)
+        @test isempty(vfc_reported(pm, 1, :dsm, :qdsm))
+    end
+
+    @testset "nw keyword" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :dsm, 1)["q_max"] = 0.05
+        eDisGo_OPF.variable_dsm_storage_power_imaginary(pm, nw=2)
+        @test isempty(PowerModels.var(pm, 1))
+        qdsm = PowerModels.var(pm, 2, :qdsm)
+        @test JuMP.name(qdsm[1]) == "2_qdsm[1]"
+        @test vfc_bounds(qdsm[1]) == (-0.098, 0.05)
+        @test length(vfc_reported(pm, 2, :dsm, :qdsm)) == 1
+    end
+end
