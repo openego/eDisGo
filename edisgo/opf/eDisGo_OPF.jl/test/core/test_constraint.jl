@@ -227,23 +227,26 @@ end
     @testset "heat_storage" begin
         pm = cst_model(num_steps=4)
         p_loss = 0.04
-        # Standing loss over one hour of a daily loss rate: (1 - p_loss)^(1/24).
-        loss_factor = (1 - p_loss)^(1 / 24)
-        @test loss_factor ≈ 0.9983005 atol = 1e-7
+        time_elapsed = 0.5
+        # Standing loss of a daily loss rate over one time step of `time_elapsed`
+        # hours: (1 - p_loss)^(time_elapsed/24).
+        loss_factor = (1 - p_loss)^(time_elapsed / 24)
+        @test loss_factor ≈ 0.9991499 atol = 1e-7
 
         cons = cst_new_constraints(pm.model) do
-            eDisGo_OPF.constraint_store_state(pm, 2, 3, 1, 1.0, 1.0, 0.5,
+            eDisGo_OPF.constraint_store_state(pm, 2, 3, 1, 1.0, 1.0, time_elapsed,
                                               "heat_storage", p_loss)
         end
         @test length(cons) == 1
-        # Eq. (3.23): hse_2 - hse_1 * (1 - p_loss)^(1/24) == -time_elapsed * phs_2
+        # Eq. (3.23): hse_2 - hse_1 * (1 - p_loss)^(time_elapsed/24)
+        #                 == -time_elapsed * phs_2
         cst_check(cons[1],
                   Dict(PowerModels.var(pm, 3, :hse, 1) => 1.0,
                        PowerModels.var(pm, 2, :hse, 1) => -loss_factor,
-                       PowerModels.var(pm, 3, :phs, 1) => 0.5),
+                       PowerModels.var(pm, 3, :phs, 1) => time_elapsed),
                   0.0)
         # Nailing the number down independently of the expression above.
-        @test cst_coeffs(cons[1])[PowerModels.var(pm, 2, :hse, 1)] ≈ -0.9983005 atol = 1e-7
+        @test cst_coeffs(cons[1])[PowerModels.var(pm, 2, :hse, 1)] ≈ -0.9991499 atol = 1e-7
     end
 
     @testset "heat_storage without standing loss" begin

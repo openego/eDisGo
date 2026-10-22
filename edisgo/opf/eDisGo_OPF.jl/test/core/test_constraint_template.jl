@@ -563,7 +563,7 @@ end
 
         @testset "heat_storage" begin
             # The only place where `p_loss` actually enters a constraint: the
-            # previous state decays by (1 - p_loss)^(1/24) per time step.
+            # previous state decays by (1 - p_loss)^(time_elapsed/24) per time step.
             data = TestUtils.small_network()
             data["time_elapsed"] = 0.5
             data["heat_storage"]["1"]["p_loss"] = 0.1
@@ -573,11 +573,11 @@ end
                 pm.model) == 1
             c = only(ct_eq_constraints(pm.model))
             @test ct_coef(c, PowerModels.var(pm, 2, :hse, 1)) == 1.0
-            @test ct_coef(c, PowerModels.var(pm, 1, :hse, 1)) ≈ -(1 - 0.1)^(1 / 24)
+            @test ct_coef(c, PowerModels.var(pm, 1, :hse, 1)) ≈ -(1 - 0.1)^(0.5 / 24)
             @test ct_coef(c, PowerModels.var(pm, 2, :phs, 1)) == 0.5
             @test JuMP.normalized_rhs(c) == 0.0
             # The fixture's own p_loss = 0.04 gives a different decay factor, so
-            # the value really comes from the component.
+            # the value really comes from the component (fixture time_elapsed = 1).
             pm_ref = ct_model(TestUtils.small_network())
             eDisGo_OPF.constraint_store_state(pm_ref, 1, 1, 2, "heat_storage")
             @test ct_coef(only(ct_eq_constraints(pm_ref.model)),
