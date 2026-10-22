@@ -213,3 +213,119 @@ vfx_int_ids(comps::Dict) = Set(parse(Int, i) for i in keys(comps))
         end
     end
 end
+
+@testset "variable_heat_storage_power" begin
+    @testset "key and index set" begin
+        pm = vfx_bare_model()
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_heat_storage_power(pm, nw=1)
+        end
+        @test added == 1
+        @test TestUtils.variable_keys(pm, 1) == [:phs]
+        @test vfx_indices(pm, 1, :phs) == Set(PowerModels.ids(pm, 1, :heat_storage))
+        @test vfx_indices(pm, 1, :phs) == Set([1])
+        @test JuMP.name(PowerModels.var(pm, 1, :phs, 1)) == "1_phs[1]"
+        # Network 2 is untouched.
+        @test isempty(PowerModels.var(pm, 2))
+    end
+
+    @testset "indexed by heat storage, not by heat pump" begin
+        # Unit 7 has no heat pump of the same index; it still gets its variable,
+        # and no variable is created for the heat pumps.
+        data = vfx_add_heat_storage!(TestUtils.small_network(), 7; capacity=2.5)
+        pm = vfx_bare_model(data)
+        @test sort(collect(PowerModels.ids(pm, 1, :heatpumps))) == [1]
+        eDisGo_OPF.variable_heat_storage_power(pm, nw=1)
+        @test vfx_indices(pm, 1, :phs) == Set([1, 7])
+        @test vfx_bounds(PowerModels.var(pm, 1, :phs, 1)) == (-4.0, 4.0)
+        @test vfx_bounds(PowerModels.var(pm, 1, :phs, 7)) == (-2.5, 2.5)
+    end
+
+    @testset "no heat storage" begin
+        data = TestUtils.small_network()
+        empty!(data["heat_storage"])
+        pm = vfx_bare_model(data)
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_heat_storage_power(pm, nw=1)
+        end
+        # The (empty) container is registered all the same, so later lookups of
+        # `var(pm, nw, :phs)` do not fail.
+        @test added == 0
+        @test haskey(PowerModels.var(pm, 1), :phs)
+        @test isempty(PowerModels.var(pm, 1, :phs))
+    end
+
+    @testset "inactive heat storage" begin
+        data = vfx_add_heat_storage!(TestUtils.small_network(), 2; capacity=2.5,
+                                     status=false)
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_heat_storage_power(pm, nw=1)
+        # Actual behaviour: `ref_add_core!` does not filter `heat_storage` by its
+        # `status` field (unlike battery `storage`), so the inactive unit 2 gets a
+        # variable — and, bounded by ±capacity, may be dispatched.
+        @test vfx_indices(pm, 1, :phs) == Set([1, 2])
+        # Intended behaviour: inactive units are left out of the model.
+        @test_broken vfx_indices(pm, 1, :phs) == Set([1])
+    end
+
+    @testset "bounded" begin
+        # Bounded by ±capacity on every network; a capacity changed in the `ref`
+        # of network 2 only shows up there.
+        pm = vfx_bare_model()
+        PowerModels.ref(pm, 2, :heat_storage, 1)["capacity"] = 6.0
+        eDisGo_OPF.variable_heat_storage_power(pm, nw=1)
+        eDisGo_OPF.variable_heat_storage_power(pm, nw=2, bounded=true)
+        @test vfx_bounds(PowerModels.var(pm, 1, :phs, 1)) == (-4.0, 4.0)
+        @test vfx_bounds(PowerModels.var(pm, 2, :phs, 1)) == (-6.0, 6.0)
+        @test JuMP.name(PowerModels.var(pm, 2, :phs, 1)) == "2_phs[1]"
+    end
+
+    @testset "unbounded" begin
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_heat_storage_power(pm, nw=1, bounded=false)
+        vfx_check_unbounded(pm, 1, :phs)
+    end
+
+    @testset "start values" begin
+        # Without `phs_start` the start value falls back to 0.0 ...
+        pm = vfx_bare_model()
+        eDisGo_OPF.variable_heat_storage_power(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :phs, 1)) == 0.0
+
+        # ... otherwise it is taken from the unit, also when unbounded.
+        data = vfx_add_heat_storage!(TestUtils.small_network(), 2; capacity=2.5)
+        data["heat_storage"]["1"]["phs_start"] = 1.5
+        data["heat_storage"]["2"]["phs_start"] = -0.75
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_heat_storage_power(pm, nw=1)
+        eDisGo_OPF.variable_heat_storage_power(pm, nw=2, bounded=false)
+        for n in 1:2
+            @test JuMP.start_value(PowerModels.var(pm, n, :phs, 1)) == 1.5
+            @test JuMP.start_value(PowerModels.var(pm, n, :phs, 2)) == -0.75
+        end
+        # The energy start value is not mixed up with the power start value.
+        data = TestUtils.small_network()
+        data["heat_storage"]["1"]["hse_start"] = 3.0
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_heat_storage_power(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :phs, 1)) == 0.0
+    end
+
+    @testset "report" begin
+        vfx_check_report(eDisGo_OPF.variable_heat_storage_power, :heat_storage, [:phs])
+    end
+
+    @testset "real eDisGo test grid" begin
+        data = TestUtils.pm_network()
+        pm = vfx_bare_model(TestUtils.pm_network())
+        for n in sort(collect(PowerModels.nw_ids(pm)))
+            eDisGo_OPF.variable_heat_storage_power(pm, nw=n)
+            @test vfx_indices(pm, n, :phs) == vfx_int_ids(data["heat_storage"])
+            for (i, hs) in data["heat_storage"]
+                @test vfx_bounds(PowerModels.var(pm, n, :phs, parse(Int, i))) ==
+                      (-hs["capacity"], hs["capacity"])
+            end
+        end
+        @test JuMP.num_variables(pm.model) == 4 * length(data["heat_storage"])
+    end
+end
