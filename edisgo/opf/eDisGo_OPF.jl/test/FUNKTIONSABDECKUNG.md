@@ -14,10 +14,10 @@ dahinter notieren)
 
 ## Arbeitsstand (Stand 2026-10-22)
 
-**84 von 84 Einträgen erledigt**, Suite grün: 3446 bestandene Assertions,
-35 `@test_broken`, 0 Fehlschläge, Laufzeit rund 4 min mit Gurobi-Lizenz (davon
+**84 von 84 Einträgen erledigt**, Suite grün: 3458 bestandene Assertions,
+18 `@test_broken`, 0 Fehlschläge, Laufzeit rund 4:20 min mit Gurobi-Lizenz (davon
 rund 2 min für die `Main.jl`-Subprozesse; ohne Gurobi, wie in der CI, entfallen
-die beiden SOC-Läufe).
+die beiden SOC-Läufe). Zeilenabdeckung von `src/`: 887 von 887 Zeilen (100 %).
 
 | Quelldatei | Status |
 | --- | --- |
@@ -46,17 +46,20 @@ Beim Testschreiben gefunden, **bewusst nicht behoben** (gehört in einen eigenen
 Fix-Branch); die Tests halten jeweils das Ist-Verhalten fest und markieren das
 Soll mit `@test_broken`:
 
-1. **`_LOGGER` ist im Modul `eDisGo_OPF` nicht definiert** (`isdefined(...) ==
-   false`). An 13 Stellen wird `Memento.warn(_LOGGER, ...)` bzw.
-   `Memento.error(_LOGGER, ...)` mit dem blanken Namen aufgerufen — in
-   `io/json.jl`, `core/constraint.jl`, `core/constraint_template.jl`,
-   `core/base.jl:221` und `core/data.jl`. Jeder dieser Pfade wirft
-   `UndefVarError(:_LOGGER)` statt zu warnen. Betrifft unter anderem alle
-   `time_elapsed`-Fallbacks: die Nebenbedingung wird dann gar nicht erst angelegt.
-   Fix wäre ein `const _LOGGER = PowerModels._LOGGER` im Modul.
-2. **`_biggest_generator` ebenfalls nicht sichtbar** — `_correct_bus_types!`
-   bricht in jedem korrigierenden Zweig ab. Fällt produktiv nicht auf, weil
-   `correct_network_data!` den Aufruf auskommentiert hat.
+1. ~~**`_LOGGER` ist im Modul `eDisGo_OPF` nicht definiert**~~ — **behoben**
+   (`fix/opf-julia-logger`): das Modul definiert jetzt
+   `const _LOGGER = PowerModels._LOGGER`. Vorher warfen alle 13
+   `Memento.warn`/`Memento.error`-Aufrufe `UndefVarError(:_LOGGER)` statt zu
+   warnen, unter anderem in allen `time_elapsed`-Fallbacks. Die Tests prüfen die
+   Warnungen jetzt mit `TestUtils.capture_warnings`.
+2. ~~**`_biggest_generator` ebenfalls nicht sichtbar**~~ — **behoben**
+   (`fix/opf-julia-logger`): `_correct_bus_types!` ruft
+   `PowerModels._biggest_generator` auf. Rest: Ist `gen` leer, wirft schon
+   PowerModels einen Fehler („generator list passed to _biggest_generator was
+   empty. please report this bug.“), die eigene Meldung „no generators found“
+   kommt nur, wenn alle Generatoren abgeschaltet sind. Produktiv weiterhin
+   folgenlos, weil `correct_network_data!` den Aufruf auskommentiert hat
+   (Mangel 9).
 3. **`ref_add_core!` wirft `KeyError`, sobald ein Bus deaktiviert wird**
    (`bus_type == 4`): die eDisGo-eigenen Komponenten (`dsm`, `heatpumps`,
    `electromobility`, `gen_nd`, `gen_slack`) werden nicht mitgefiltert.
@@ -152,13 +155,9 @@ spricht von `arcs`, der Code nutzt `arcs_from`.
 ### `src/core/data.jl` → `test/core/test_data.jl`
 
 - [x] `set_ac_bf_start_values!` — Dict
-- [~] `correct_bus_types!` — Dict (Weiterreichen an den Worker für Einzel- und
-  Multinetzwerk getestet; die mutierenden Pfade nur als `@test_broken`, weil der
-  Worker `_correct_bus_types!` defekt ist — siehe dort)
-- [~] `_correct_bus_types!` — Dict (alle Zweige abgedeckt, aber jeder
-  korrigierende Zweig bricht mit `UndefVarError` ab: `_LOGGER` und
-  `_biggest_generator` sind interne PowerModels-Namen und in `eDisGo_OPF`
-  nicht sichtbar. Soll-Verhalten als `@test_broken` festgehalten)
+- [x] `correct_bus_types!` — Dict
+- [x] `_correct_bus_types!` — Dict (Anmerkung: bei leerem `gen` greift die
+  PowerModels-Fehlermeldung statt der eigenen, siehe Mangel 2)
 
 ### `src/core/solution.jl` → `test/core/test_solution.jl`
 
@@ -224,12 +223,8 @@ spricht von `arcs`, der Code nutzt `arcs_from`.
 
 - [x] `constraint_store_state_initial` — AbstractBFModelEdisgo
 - [x] `constraint_store_state` — AbstractBFModelEdisgo
-- [x] `constraint_cp_state_initial` — AbstractBFModelEdisgo (Bug: der
-  `time_elapsed`-Fallback ruft `Memento.warn(_LOGGER, …)` auf; `_LOGGER` ist in
-  `eDisGo_OPF` nicht definiert, deshalb `UndefVarError` statt Warnung und die
-  Nebenbedingung entsteht gar nicht — als `@test_broken` dokumentiert)
-- [x] `constraint_cp_state` — AbstractBFModelEdisgo (Bug: derselbe undefinierte
-  `_LOGGER` im `time_elapsed`-Fallback wie oben — als `@test_broken` dokumentiert)
+- [x] `constraint_cp_state_initial` — AbstractBFModelEdisgo
+- [x] `constraint_cp_state` — AbstractBFModelEdisgo
 - [x] `constraint_hp_operation` — AbstractBFModelEdisgo
 - [x] `constraint_HV_requirements` — AbstractBFModelEdisgo (Bug: für einen
   unbekannten `hv_req["name"]` gibt es keinen `else`-Zweig; `pflex` bleibt
@@ -245,15 +240,7 @@ spricht von `arcs`, der Code nutzt `arcs_from`.
   `pf` lässt das Template dennoch scheitern)
 - [x] `constraint_voltage_magnitude_difference_radial` — AbstractBFModelEdisgo
 - [x] `constraint_store_state` — AbstractBFModelEdisgo, `(pm, i; nw, kind)`
-  (Mangel: fehlt `time_elapsed` im `ref`, soll laut Code eine Warnung folgen
-  und auf 1.0 zurueckgefallen werden; die Warnung geht an `_LOGGER`, das im
-  Modul `eDisGo_OPF` nicht definiert ist — es fliegt ein `UndefVarError`.
-  Ist-Verhalten per `@test_throws`, Soll-Verhalten per `@test_broken`
-  festgehalten)
 - [x] `constraint_store_state` — AbstractBFModelEdisgo, `(pm, i, nw_1, nw_2, kind)`
-  (Mangel: derselbe `_LOGGER`-Fehler auf zwei Pfaden — fehlendes
-  `time_elapsed` in `nw_2` und Komponente in `nw_1` nicht vorhanden, wo auf
-  `constraint_store_state_initial` zurueckgefallen werden soll)
 - [x] `constraint_model_current` — AbstractPowerModel
 
 ### `src/core/objective.jl` → `test/core/test_objective.jl`
@@ -290,9 +277,7 @@ spricht von `arcs`, der Code nutzt `arcs_from`.
 
 ### `src/io/json.jl` → `test/io/test_json.jl`
 
-- [x] `parse_json` — Union{IO — Bug: der `conductors`-Zweig referenziert das in
-  `eDisGo_OPF` nicht definierte `_LOGGER` und wirft statt zu warnen einen
-  `UndefVarError` (als `@test_broken` dokumentiert)
+- [x] `parse_json` — Union{IO
 
 ### `src/io/common.jl` → `test/io/test_common.jl`
 
