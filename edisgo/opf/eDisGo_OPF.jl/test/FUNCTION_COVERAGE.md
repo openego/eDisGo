@@ -44,7 +44,7 @@ side effects on `pm.sol`, capturing stdout) that belong in `TestUtils`.
 Found while writing the tests. Unless marked as fixed, they are **deliberately
 not fixed** here (a fix is a commit of its own, see `TESTING_CONVENTIONS.md`,
 section 6); the tests record the actual behaviour and mark the intended one with
-`@test_broken`:
+`@test_broken`. Every open defect has a GitHub issue; the overview is #810.
 
 1. ~~**`_LOGGER` is not defined in the module `eDisGo_OPF`**~~ — **fixed**: the
    module now defines `const _LOGGER = PowerModels._LOGGER`. Before, all 13
@@ -56,37 +56,47 @@ section 6); the tests record the actual behaviour and mark the intended one with
    if `gen` is empty, PowerModels already throws its own error ("generator list
    passed to _biggest_generator was empty. please report this bug."); the
    package's own message "no generators found" only appears when all generators
-   are switched off. Still without effect in production, because
-   `correct_network_data!` has the call commented out (defect 9).
-3. **`ref_add_core!` throws `KeyError` as soon as a bus is deactivated**
-   (`bus_type == 4`): the eDisGo-specific components (`dsm`, `heatpumps`,
-   `electromobility`, `gen_nd`, `gen_slack`) are not filtered along with it.
+   are switched off. When promoting a reference bus, the fallback also only
+   looks at `gen`, not at `gen_slack`, where eDisGo puts the slack generator.
+   Still without effect in production, because `correct_network_data!` has the
+   call commented out (defect 9). Tracked in #806.
+3. **`ref_add_core!` throws `KeyError` when a deactivated bus carries an
+   eDisGo-specific component** (`bus_type == 4`): `dsm`, `heatpumps`,
+   `electromobility`, `gen_nd` and `gen_slack` are not filtered along with the
+   bus. A deactivated bus with only PowerModels components works. (#805)
 4. **`solve_model` silently ignores `multinetwork`/`multiconductor`.**
    PowerModels throws an error for a contradicting flag; here a malformed data
-   structure goes unnoticed.
+   structure goes unnoticed. (#806)
 5. **`constraint_model_current` treats virtual storage branches
    inconsistently**: the NC variant skips them (`form/bf.jl:128`), the SOC
-   variant does not (`form/bf.jl:101`).
+   variant does not (`form/bf.jl:101`). In NC, `ccm` of the virtual branch is
+   then only limited by its bounds, so the battery losses `ccm·r` are a free
+   variable that usually ends up at 0. `check_SOC_equality` also skips storage
+   branches. (#802)
 6. **`constraint_HV_requirements` has no `else` branch** — for an unknown
    `hv_req["name"]`, `pflex` stays undefined and `sum(pflex)` throws
-   `UndefVarError(:pflex)`.
+   `UndefVarError(:pflex)`. (#806)
 7. **Debug `println`s in `objective_min_line_loading_max_OG`**
    (`core/objective.jl:138,140`) write to stdout on every model build with
-   `opf_version` 3.
+   `opf_version` 3. (#803)
 8. **The `phss` term in `objective_min_losses_slacks`/`_OG`** sums over the heat
    pump indices, although `phss` is created per heat storage. The indices are
    identical in both fixtures; with different numbering there would be a
-   `KeyError`.
+   `KeyError`, already in `constraint_hp_operation`, which also reads
+   `phs`/`phss` with the heat pump index. The underlying issue is the implicit
+   1:1 pairing of heat pump and heat storage. (#807)
 9. **`correct_network_data!` has `check_reference_bus` and `correct_bus_types!`
    commented out** — a network without a slack bus passes without a warning.
    `check_connectivity` does not check the eDisGo-specific components for valid
-   bus references at all.
+   bus references at all. (#806)
 10. **The SOC→NC warm start in `Main.jl` never works.** `Main.jl:127` calls
     `set_ac_bf_start_values!` without the module prefix, but `eDisGo_OPF` does
     not export the function. With `method="soc"`, `warm_start=True` and a tight
     SOC solution, the script dies with `UndefVarError` after the Gurobi solve
     (exit code 1, no result JSON); Python then reports "Julia process failed!".
-    The fix would be `eDisGo_OPF.set_ac_bf_start_values!`.
+    The prefix alone is not enough: with `opf_version` 1, the default of
+    `EDisGo.pm_optimize`, `set_ac_bf_start_values!` then fails with
+    `KeyError("pgc")`, because `pgc` only exists for versions 2–4. (#800)
 11. **In `opf_version` 3, the curtailment `pgc` is decoupled from the power
     balance.** `build_mn_opf_bf_flex` creates `pgc` for version 3
     (`prob/opf_bf.jl:36-38`), `constraint_HV_requirements` counts it towards the
@@ -98,32 +108,38 @@ section 6); the tests record the actual behaviour and mark the intended one with
     (`edisgo/io/powermodels_io.py`), so the OPF power flows don't match the
     results written back. Side note: `TestUtils.pm_network(opf_version=3)`
     removes `"curt"` from `flexibilities`, while Python sets it for 2, 3 and 4
-    (`powermodels_io.py:149`).
+    (`powermodels_io.py:149`). This affects production: the runner presets
+    `overlying_grid_opf.yaml` and `overlying_grid_opf_spatial.yaml` run
+    `opf_version: 3`. The two `@test_broken` assume the fix "add `pgc` to the
+    balance"; another domain decision means rewriting them. (#801)
 12. **`variable_slack_gen_real`/`_imaginary` ignore the start values**
     (`core/variables.jl:554-570`). `set_ac_bf_start_values!` writes
     `pgs_start`/`qgs_start`, but the variables are created without `start` — the
     slack generator is not initialised in the warm start (once defect 10 is
     fixed). Likewise, `set_ac_bf_start_values!` sets no `cpe_start`, although
-    `variable_cp_energy` would read it.
+    `variable_cp_energy` would read it. In addition, `Main.jl` only seeds time
+    step 1, and no start values are written for the grid variables (`w`,
+    `ccm`, `p`, `q`). (#804)
 13. **`variable_branch_power_real_radial`/`_imaginary_radial` throw a `KeyError`
-    for `pt_start`/`qt_start`** (`core/variables.jl:39-42` and `:73-76`): the
+    for `pt_start`/`qt_start`** (`core/variables.jl:38-41` and `:73-76`): the
     variables only exist on `arcs_from`, but the start value is set on the to-arc.
-    Latent, because nothing writes branch start values at the moment.
+    Latent, because nothing writes branch start values at the moment. (#804)
 14. **`variable_line_loading_max` reads the `storage` flag from network 1 instead
     of `nw`** (`core/variables.jl:118`). Without effect as long as it is only
-    called with `nw=1`.
+    called with `nw=1`. (#808)
 15. **`ref_add_core!` does not filter `heat_storage` by `status`** (nor
     `gen_slack` by `gen_status`), unlike `storage`. A switched-off heat storage
     gets `phs`/`hse` with full bounds. Unnoticed in production, because Python
-    always sets `status` to `True`.
+    always sets `status` to `True`. (#805)
 16. **With a single time step, the final-state condition of charging points is
     missing** (Eq. 3.25 for t = τ): it only lives in `constraint_cp_state`, which
     `prob/opf_bf.jl:86-92` calls from the second time step on. Battery, heat
-    storage and DSM get both conditions.
+    storage and DSM get both conditions. (#809)
 
 Minor findings without `@test_broken`: for an unknown `method`, `Main.jl` prints
-the unsolved network without `status`/`solver`/`solve_time` and exit code 0
-(Python then misleadingly reports "Julia process failed!"). Because of defect 5,
+the unsolved network without `status`/`solver`/`solve_time` and exit code 0;
+depending on whether Python picks up that line, it then misleadingly reports
+"Julia process failed!" or silently writes no results (#806). Because of defect 5,
 the SOC model is not a true relaxation of the NC model; the SOC optimum is
 measurably above the NC optimum. The docstring of
 `variable_branch_power_imaginary_radial` mentions `arcs`, the code uses
