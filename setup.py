@@ -34,7 +34,7 @@ def read(fname):
 
 
 requirements = [
-    "contextily < 1.8.0",
+    "contextily >= 1.7.1, < 1.8.0",
     "dash < 4.5.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",

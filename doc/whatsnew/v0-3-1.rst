@@ -291,6 +291,22 @@ Changes
   now direct dependencies. ``res_feedin_data`` in ``config_db_tables.cfg`` now names
   the table (``ego_renewable_feedin``); the former value ``EgoRenewableFeedin`` is
   still accepted
+* The example notebooks ``edisgo_simple_example`` and ``full_workflow_walkthrough``
+  draw their MV grid plots without a background map. Downloading the map tiles could
+  take tens of minutes or fail without a good internet connection. The simple example
+  explains how to switch the map back on with ``background_map=True``. The graph of
+  an LV grid is now drawn for the LV grid selected earlier in the notebook instead of
+  a second one picked by position (openego/eDisGo#276)
+* The background map of the MV grid plots is now the grey TopPlusOpen map of the
+  German Federal Agency for Cartography and Geodesy (BKG) instead of CartoDB Positron.
+  CartoDB requires an API key, without which every map tile only showed the text "API
+  KEY REQUIRED". TopPlusOpen needs no key and covers Germany in detail. The plot shows
+  the source note required by its licence (dl-de/by-2-0)
+* :func:`~.tools.plots.add_basemap` gives up on a map tile if the tile server does not
+  respond within 10 seconds (new ``timeout`` parameter). Before, a slow or missing
+  internet connection blocked MV grid plots with ``background_map=True`` without
+  limit. A failed download is logged as a warning and the plot is drawn without the
+  map. eDisGo now needs contextily 1.7.1 or newer
 * Central heat pumps and resistive heaters imported with
   :meth:`~.edisgo.EDisGo.import_heat_pumps` are now always assigned to the nearest
   district heating area, measured in meters in EPSG:3035. Before, the distance was
