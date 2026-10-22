@@ -125,10 +125,11 @@ def test_prepare_central_heat_sources_offline(source_crs):
 
     np.testing.assert_allclose(result.p_set, [0.1, 0.2, 0.3, 0.4])
     np.testing.assert_allclose(result.weather_cell_id, [11, 11, 22, np.nan])
-    # The second bus is 100 m outside its nearest area; the fourth has none nearby.
-    np.testing.assert_allclose(result.district_heating_id, [5, 6, 7, np.nan])
-    np.testing.assert_allclose(result.area_id, [50, 60, 70, np.nan])
-    # Valid CHP; reject out-of-grid CHP and use bus; station; unmatched inside bus.
+    # Every heat bus gets its nearest area, also the second bus, which lies 100 m
+    # outside area 6, and the fourth bus, which lies about 2.8 km from area 6.
+    np.testing.assert_allclose(result.district_heating_id, [5, 6, 7, 6])
+    np.testing.assert_allclose(result.area_id, [50, 60, 70, 60])
+    # Valid CHP; out-of-grid CHP of area 6, so the bus; station; again the bus.
     expected = [
         Point(1500, 1200),
         Point(5100, 4000),
@@ -138,7 +139,61 @@ def test_prepare_central_heat_sources_offline(source_crs):
     for actual, location in zip(result.geom, expected):
         assert actual.distance(location) < 1e-6
     assert result.crs.to_epsg() == 3857
+    # the input frames are not modified
     assert "centroid" not in data["district_heating_areas"]
+
+
+def test_prepare_central_heat_sources_geographic_grid_crs():
+    """In a grid in EPSG:4326, the nearest district heating area is found in meters."""
+    # At 50 degrees latitude, one degree of longitude is about 64 % of one degree
+    # of latitude. Area 5 lies 800 m east and area 6 900 m north of heat bus 1, so
+    # area 6 is nearer in degrees, but area 5 is nearer in meters.
+    bus = Point(10.0, 50.0)
+    east = 800 / (111320 * np.cos(np.radians(50.0)))
+    north = 900 / 111195
+    areas = [
+        box(bus.x + east, bus.y - 1e-4, bus.x + east + 2e-4, bus.y + 1e-4),
+        box(bus.x - 1e-4, bus.y + north, bus.x + 1e-4, bus.y + north + 2e-4),
+    ]
+    # heat bus 2 lies about 6.7 km from area 5 and 7.6 km from area 6 and still gets
+    # the nearest area
+    heat_buses = gpd.GeoDataFrame(
+        {"bus1": [1, 2], "geom": [bus, Point(bus.x, bus.y - 0.06)]},
+        geometry="geom",
+        crs=4326,
+    )
+    grid_district = box(9.9, 49.9, 10.1, 50.1)
+    grid = SimpleNamespace(
+        topology=SimpleNamespace(
+            grid_district={"srid": 4326, "geom": grid_district},
+            mv_grid=SimpleNamespace(station=pd.DataFrame({"x": [10.0], "y": [50.0]})),
+        )
+    )
+    data = {
+        "plants": pd.DataFrame({"bus0": [1, 1], "bus1": [1, 2], "p_set": [0.1, 0.2]}),
+        "heat_buses": heat_buses,
+        "weather_cells": gpd.GeoDataFrame(
+            {"weather_cell_id": [11], "geom": [grid_district]},
+            geometry="geom",
+            crs=4326,
+        ),
+        "district_heating_areas": gpd.GeoDataFrame(
+            {"district_heating_id": [5, 6], "area_id": [50, 60], "geom_polygon": areas},
+            geometry="geom_polygon",
+            crs=4326,
+        ),
+        "chp_plants": gpd.GeoDataFrame(
+            {"district_heating_id": [], "geom": []}, geometry="geom", crs=4326
+        ),
+    }
+
+    result = heat_pump_import._prepare_central_heat_sources(grid, data)
+
+    np.testing.assert_allclose(result.district_heating_id, [5, 5])
+    assert result.crs.to_epsg() == 4326
+    # the heat bus locations are returned unchanged
+    for actual, expected in zip(result.geom, heat_buses.geometry):
+        assert actual.equals_exact(expected, tolerance=0)
 
 
 def test_prepare_central_heat_sources_empty_offline():
@@ -357,28 +412,28 @@ class TestHeatPumpImport:
         hp_df = loads_df[loads_df.type == "heat_pump"]
         assert len(hp_df) == 3
         # check that smallest heat pump is connected to LV
-        bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.05].bus[0]
+        bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.05].bus.iloc[0]
         assert self.edisgo.topology.buses_df.at[bus_hp_voltage_level_7, "v_nom"] == 0.4
         # check that medium heat pump is connected to MV/LV station
-        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.17].bus[0]
+        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.17].bus.iloc[0]
         line_hp_voltage_level_6 = self.edisgo.topology.lines_df[
             self.edisgo.topology.lines_df.bus1 == bus_hp_voltage_level_6
         ]
         assert (
-            line_hp_voltage_level_6.bus0[0]
+            line_hp_voltage_level_6.bus0.iloc[0]
             in self.edisgo.topology.transformers_df.bus1.values
         )
         # check that largest heat pump is connected to MV
-        bus_hp_voltage_level_5 = hp_df[hp_df.p_set == 1.0].bus[0]
+        bus_hp_voltage_level_5 = hp_df[hp_df.p_set == 1.0].bus.iloc[0]
         assert self.edisgo.topology.buses_df.at[bus_hp_voltage_level_5, "v_nom"] == 20.0
 
         # ############# test integration of individual heat pumps ####################
 
         # manipulate bus of the largest individual heat pump to be an MV bus
         loads_df = self.edisgo.topology.loads_df
-        bus_hp_voltage_level_5_building = loads_df[loads_df.building_id == 446933].bus[
-            0
-        ]
+        bus_hp_voltage_level_5_building = loads_df[
+            loads_df.building_id == 446933
+        ].bus.iloc[0]
         self.edisgo.topology.buses_df.at[bus_hp_voltage_level_5_building, "v_nom"] = (
             20.0
         )
@@ -393,24 +448,24 @@ class TestHeatPumpImport:
         hp_df = loads_df[loads_df.type == "heat_pump"]
         assert len(hp_df) == 6
         # check that smallest heat pump is integrated at same bus as building
-        bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.005].bus[0]
+        bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.005].bus.iloc[0]
         assert (
             loads_df[loads_df.building_id == 446963].bus.values
             == bus_hp_voltage_level_7
         ).all()
         # check that medium heat pump cannot be integrated at same bus as building
-        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.15].bus[0]
+        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.15].bus.iloc[0]
         line_hp_voltage_level_6 = self.edisgo.topology.lines_df[
             self.edisgo.topology.lines_df.bus1 == bus_hp_voltage_level_6
         ]
         assert (
-            line_hp_voltage_level_6.bus0[0]
+            line_hp_voltage_level_6.bus0.iloc[0]
             in self.edisgo.topology.transformers_df.bus1.values
         )
         assert len(loads_df[loads_df.building_id == 445710].bus.unique()) == 2
         # check that largest heat pump can be connected to building because the building
         # is already connected to the MV
-        bus_hp_voltage_level_5 = hp_df[hp_df.p_set == 2.0].bus[0]
+        bus_hp_voltage_level_5 = hp_df[hp_df.p_set == 2.0].bus.iloc[0]
         assert bus_hp_voltage_level_5 == bus_hp_voltage_level_5_building
 
         # ######## test check of duplicated names ###########
@@ -436,11 +491,11 @@ class TestHeatPumpImport:
         assert len(hp_df) == 2
         # check that resistive heater in same district heating network as heat pumps
         # is integrated at same bus
-        bus_rh = hp_df[hp_df.p_set == 21.0].bus[0]
+        bus_rh = hp_df[hp_df.p_set == 21.0].bus.iloc[0]
         assert bus_rh in loads_df[loads_df.sector == "district_heating"].bus.values
         # check that resistive heater in other district heating network is integrated
         # in voltage level 6
-        bus_rh = hp_df[hp_df.p_set == 0.17].bus[0]
+        bus_rh = hp_df[hp_df.p_set == 0.17].bus.iloc[0]
         assert determine_bus_voltage_level(self.edisgo, bus_rh) == 6
 
     def test_efficiency_resistive_heaters_oedb_offline(

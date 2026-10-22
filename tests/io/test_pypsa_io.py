@@ -33,6 +33,39 @@ class TestPypsaIO:
         assert len(pypsa_network.buses) == 15
         # ToDo: Check further things and parameter options
 
+    def test_to_pypsa_line_b_column_consistent_across_modes(self):
+        # every export mode must pass the line shunt susceptance "b" to PyPSA;
+        # "b" is zero in the ding0 test grid, so set non-zero values to make the
+        # check meaningful
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        self.edisgo.set_time_series_worst_case_analysis()
+        timeindex = self.edisgo.timeseries.timeindex
+
+        mv_grid = self.edisgo.topology.mv_grid
+        lv_grid = self.edisgo.topology.get_lv_grid(1)
+        mv_line = mv_grid.lines_df.index[0]
+        lv_line = lv_grid.lines_df.index[0]
+        self.edisgo.topology.lines_df.loc[mv_line, "b"] = 1.234e-5
+        self.edisgo.topology.lines_df.loc[lv_line, "b"] = 5.678e-5
+
+        pypsa_network_full = pypsa_io.to_pypsa(self.edisgo, timesteps=timeindex)
+        pypsa_network_mv = pypsa_io.to_pypsa(
+            self.edisgo, timesteps=timeindex, mode="mv"
+        )
+        pypsa_network_lv = pypsa_io.to_pypsa(
+            self.edisgo, timesteps=timeindex, mode="lv", lv_grid_id=lv_grid.id
+        )
+        pypsa_network_mvlv = pypsa_io.to_pypsa(
+            self.edisgo, timesteps=timeindex, mode="mvlv"
+        )
+
+        assert pypsa_network_full.lines.loc[mv_line, "b"] == 1.234e-5
+        assert pypsa_network_full.lines.loc[lv_line, "b"] == 5.678e-5
+        assert pypsa_network_mv.lines.loc[mv_line, "b"] == 1.234e-5
+        assert pypsa_network_lv.lines.loc[lv_line, "b"] == 5.678e-5
+        # mode="mvlv" exports only MV lines
+        assert pypsa_network_mvlv.lines.loc[mv_line, "b"] == 1.234e-5
+
     def test_append_lv_components(self):
         lv_components = {
             "Load": pd.DataFrame(),
