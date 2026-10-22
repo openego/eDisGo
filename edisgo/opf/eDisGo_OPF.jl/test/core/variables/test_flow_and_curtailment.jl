@@ -604,3 +604,59 @@ end
         @test isempty(vfc_reported(pm, 1, :gen_nd, :pgc))
     end
 end
+
+@testset "variable_gen_power_curt_imaginary" begin
+    @testset "index set" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_imaginary(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:qgc]
+        qgc = PowerModels.var(pm, 1, :qgc)
+        @test vfc_index(qgc) == Set([1])
+        @test JuMP.name(qgc[1]) == "1_qgc[1]"
+    end
+
+    @testset "bounded=true" begin
+        # Generators feed in with a negative (inductive) `qg`; curtailment can
+        # reduce it down to zero.
+        data = TestUtils.small_network(num_steps=2)
+        data["time_series"]["gen_nd"]["1"]["qg"] = [-0.29, -0.2]
+        pm = vfc_model_from(data)
+        eDisGo_OPF.variable_gen_power_curt_imaginary(pm, nw=1, bounded=true)
+        eDisGo_OPF.variable_gen_power_curt_imaginary(pm, nw=2, bounded=true)
+        @test vfc_bounds(PowerModels.var(pm, 1, :qgc)[1]) == (-0.29, 0.0)
+        @test vfc_bounds(PowerModels.var(pm, 2, :qgc)[1]) == (-0.2, 0.0)
+    end
+
+    @testset "bounded=false" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_imaginary(pm, nw=1, bounded=false)
+        @test vfc_unbounded(PowerModels.var(pm, 1, :qgc))
+    end
+
+    @testset "no start value" begin
+        # Unlike `pgc`, `qgc` gets no start value at all — not even from a field.
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :gen_nd, 1)["qgc_start"] = -0.1
+        eDisGo_OPF.variable_gen_power_curt_imaginary(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :qgc)[1]) === nothing
+    end
+
+    @testset "report" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_imaginary(pm, nw=1, report=true)
+        @test vfc_reported(pm, 1, :gen_nd, :qgc) ==
+              Dict(1 => PowerModels.var(pm, 1, :qgc)[1])
+
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_imaginary(pm, nw=1, report=false)
+        @test isempty(vfc_reported(pm, 1, :gen_nd, :qgc))
+    end
+
+    @testset "nw keyword" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_gen_power_curt_imaginary(pm, nw=2)
+        @test isempty(PowerModels.var(pm, 1))
+        @test JuMP.name(PowerModels.var(pm, 2, :qgc)[1]) == "2_qgc[1]"
+        @test length(vfc_reported(pm, 2, :gen_nd, :qgc)) == 1
+    end
+end
