@@ -55,17 +55,18 @@ RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
 logger = logging.getLogger(__name__)
 
 
-# TODO: the dummy timeseries should be as long as the simulated days and not
-#  the timeindex of the edisgo object. At the moment this would result into
-#  wrong results if the timeindex of the edisgo object is not continuously
-#  (e.g. 2 weeks of the year)
+# TODO: the dummy timeseries should start with the simulated period and not
+#  with the first time step of the edisgo object. At the moment the charging
+#  processes are counted from the first time step of the edisgo object, so their
+#  time series are shifted if the edisgo time index does not start at the
+#  beginning of the simulated period
 def charging_strategy(
     edisgo_obj: EDisGo,
     strategy: str = "dumb",
     timestamp_share_threshold: Number = 0.2,
     minimum_charging_capacity_factor: Number = 0.1,
     charging_park_ids: Iterable[int] | None = None,
-):
+) -> None:
     """
     Applies charging strategy to set EV charging time series at charging parks.
 
@@ -156,6 +157,7 @@ def charging_strategy(
     simbev_timedelta = timeindex[1] - timeindex[0]
 
     resample = edisgo_timedelta != simbev_timedelta
+    timeindex_orig = edisgo_obj.timeseries.timeindex
 
     if resample:
         logger.warning(
@@ -172,6 +174,11 @@ def charging_strategy(
 
     if strategy == "dumb":
         # "dumb" charging
+        # Collect each charging park's series and add them to the time series in a
+        # single call after the loop. Adding them one at a time concatenates onto
+        # the growing loads_active_power frame on every iteration (O(parks^2)),
+        # which dominated the runtime on large grids.
+        cp_ts = {}
         for cp in charging_parks:
             dummy_ts = np.zeros(len_ts)
 
@@ -189,13 +196,19 @@ def charging_strategy(
             ].itertuples():
                 dummy_ts[start : start + stop] += cap
 
+            cp_ts[cp.edisgo_id] = dummy_ts
+
+        if cp_ts:
             edisgo_obj.timeseries.add_component_time_series(
                 "loads_active_power",
-                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex),
+                pd.DataFrame(data=cp_ts, index=timeindex),
             )
 
     elif strategy == "reduced":
         # "reduced" charging
+        # See the "dumb" branch above: accumulate all park columns and add them
+        # once to avoid the O(parks^2) per-park concatenation.
+        cp_ts = {}
         for cp in charging_parks:
             dummy_ts = np.zeros(len_ts)
 
@@ -227,9 +240,12 @@ def charging_strategy(
                 else:
                     dummy_ts[start : start + stop_reduced] += cap_reduced
 
+            cp_ts[cp.edisgo_id] = dummy_ts
+
+        if cp_ts:
             edisgo_obj.timeseries.add_component_time_series(
                 "loads_active_power",
-                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex),
+                pd.DataFrame(data=cp_ts, index=timeindex),
             )
 
     elif strategy == "residual":
@@ -350,6 +366,10 @@ def charging_strategy(
 
     if resample:
         edisgo_obj.timeseries.resample(freq=edisgo_timedelta)
+        # resampling covers the whole range from the first to the last time step,
+        # which fills the gaps of a non-contiguous time index (e.g. two separate
+        # weeks), so restore the original time steps
+        edisgo_obj.timeseries.timeindex = timeindex_orig
 
     # set reactive power time series to 0 Mvar
     # fmt: off

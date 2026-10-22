@@ -1,0 +1,167 @@
+<div class="vpr" id="vpr">
+<style>
+.vpr { --ink: #1d2731; --muted: #5d6a73; --rule: #d7dee3; --grid: #eef2f4; --acc: #0f6f8c; --acc-soft: #dcedf3;
+  --bad: #c2362b; --bad-soft: #f8e1de; --ok: #2b7a4b; --std: #0f6f8c; --thick: #6a4fb3; --ohl: #8a6d3b;
+  border: 1px solid var(--rule); padding: 14px 16px; margin: 0 0 24px; background: #fff; color: var(--ink);
+  font-size: 14px; line-height: 1.45; }
+.vpr * { box-sizing: border-box; }
+.vpr .vpr-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.vpr button { font: 600 16px/1 monospace; width: 32px; height: 30px; border: 1px solid var(--rule); background: #fff;
+  color: var(--ink); border-radius: 4px; cursor: pointer; }
+.vpr button:disabled { opacity: .35; cursor: default; }
+.vpr button:focus-visible, .vpr input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.vpr input[type=range] { flex: 1 1 200px; min-width: 0; accent-color: var(--acc); }
+.vpr .vpr-step { font-weight: 600; min-width: 15em; }
+.vpr .vpr-status { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 10px 0 4px; color: var(--muted); }
+.vpr .vpr-status b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.vpr .vpr-pill { padding: 1px 8px; border-radius: 99px; font-weight: 600; }
+.vpr .vpr-pill.bad { background: var(--bad-soft); color: var(--bad); }
+.vpr .vpr-pill.ok { background: #dff0e5; color: var(--ok); }
+.vpr svg { display: block; width: 100%; height: auto; }
+.vpr svg text { font-family: inherit; fill: var(--ink); }
+.vpr .vpr-sm { font-size: 11px; fill: var(--muted); }
+.vpr .vpr-lbl { font-size: 13px; font-weight: 700; }
+.vpr .vpr-explain { margin: 8px 0 6px; }
+.vpr .vpr-scroll { overflow-x: auto; }
+.vpr table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13px; margin: 0; }
+.vpr th, .vpr td { border: 0; border-bottom: 1px solid var(--rule); padding: 4px 8px; text-align: left; background: none; }
+.vpr th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.vpr td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vpr tr.pick td { background: var(--acc-soft); font-weight: 600; }
+.vpr .vpr-bar { height: 10px; background: var(--muted); opacity: .45; display: inline-block; vertical-align: middle; }
+.vpr tr.pick .vpr-bar { background: var(--acc); opacity: 1; }
+.vpr .vpr-note { color: var(--muted); font-size: 12px; }
+.vpr .vpr-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.vpr .vpr-legend i { display: inline-block; width: 22px; border-top: 3px solid; vertical-align: middle; margin-right: 5px; }
+</style>
+<div class="vpr-controls">
+  <button type="button" id="vpr-prev" aria-label="Previous step">‹</button>
+  <input type="range" id="vpr-range" min="0" max="1" value="0" aria-label="Reinforcement step">
+  <button type="button" id="vpr-next" aria-label="Next step">›</button>
+  <span class="vpr-step" id="vpr-step"></span>
+</div>
+<div class="vpr-status" id="vpr-status"></div>
+<svg id="vpr-net" viewBox="0 0 800 170" role="img" aria-label="Feeder with lines L1 to L5"></svg>
+<div class="vpr-legend">
+  <span><i style="border-color:var(--std)"></i>NA2XS2Y 3x1x185 RM/25 (standard line)</span>
+  <span><i style="border-color:var(--thick);border-top-width:5px"></i>NA2XS2Y 3x1x240 RM/25</span>
+  <span><i style="border-color:var(--ohl);border-top-style:dashed;border-top-width:2px"></i>overhead line 48-AL1/8-ST1A</span>
+</div>
+<svg id="vpr-prof" viewBox="0 0 800 230" role="img" aria-label="Voltage rise along the feeder"></svg>
+<p class="vpr-explain" id="vpr-explain"></p>
+<div class="vpr-scroll" id="vpr-table"></div>
+<script>
+(function () {
+  var D = {"lines":[{"id":"L1","len":8.0,"type":"NA2XS2Y 3x1x185 RM/25","short":"185","rpk":0.164,"n":1,"I":1.4},{"id":"L2","len":0.6,"type":"NA2XS2Y 3x1x240 RM/25","short":"240","rpk":0.125,"n":1,"I":1.4},{"id":"L3","len":0.5,"type":"NA2XS2Y 3x1x240 RM/25","short":"240","rpk":0.125,"n":1,"I":1.4},{"id":"L4","len":1.4,"type":"48-AL1/8-ST1A","short":"OHL 48","rpk":0.35,"n":1,"I":1.0},{"id":"L5","len":1.0,"type":"48-AL1/8-ST1A","short":"OHL 48","rpk":0.35,"n":1,"I":1.0}],"limit":0.05,"C":0.02962,"iterations":[{"it":1,"rise":0.085,"dev":0.035,"share":0.41176,"v":2.8693,"target":2.27856},{"it":2,"rise":0.06595,"dev":0.01595,"share":0.24185,"v":2.2261,"target":1.95691}],"states":[{"kind":"start","it":1,"lines":[{"id":"L1","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":1,"r":1.312},{"id":"L2","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.075},{"id":"L3","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.0625},{"id":"L4","type":"48-AL1/8-ST1A","short":"OHL 48","n":1,"r":0.49},{"id":"L5","type":"48-AL1/8-ST1A","short":"OHL 48","n":1,"r":0.35}],"profile":[0.0,0.05441,0.05752,0.06012,0.07463,0.085],"cost":0.0},{"kind":"measure","it":1,"pick":"L4","action":"replace","options":[{"id":"L1","action":"parallel","dr":0.656,"keep":false,"dv":0.9184,"earth":true,"cost":640.0,"eff":0.00144},{"id":"L2","action":"parallel","dr":0.0375,"keep":true,"dv":0.0525,"earth":true,"cost":48.0,"eff":0.00109},{"id":"L3","action":"parallel","dr":0.03125,"keep":true,"dv":0.04375,"earth":true,"cost":40.0,"eff":0.00109},{"id":"L4","action":"replace","dr":0.2604,"dv":0.2604,"earth":true,"cost":112.0,"eff":0.00232},{"id":"L5","action":"replace","dr":0.186,"dv":0.186,"earth":true,"cost":80.0,"eff":0.00232}],"v_before":2.8693,"v_after":2.6089,"target":2.27856,"v_start":2.8693,"lines":[{"id":"L1","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":1,"r":1.312},{"id":"L2","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.075},{"id":"L3","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.0625},{"id":"L4","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":1,"r":0.2296},{"id":"L5","type":"48-AL1/8-ST1A","short":"OHL 48","n":1,"r":0.35}],"profile":[0.0,0.05441,0.05752,0.06012,0.06692,0.07729],"cost":112.0},{"kind":"measure","it":1,"pick":"L4","action":"parallel","options":[{"id":"L1","action":"parallel","dr":0.656,"keep":false,"dv":0.9184,"earth":true,"cost":640.0,"eff":0.00144},{"id":"L2","action":"parallel","dr":0.0375,"keep":true,"dv":0.0525,"earth":true,"cost":48.0,"eff":0.00109},{"id":"L3","action":"parallel","dr":0.03125,"keep":true,"dv":0.04375,"earth":true,"cost":40.0,"eff":0.00109},{"id":"L4","action":"parallel","dr":0.1148,"keep":false,"dv":0.1148,"earth":false,"cost":28.0,"eff":0.0041},{"id":"L5","action":"replace","dr":0.186,"dv":0.186,"earth":true,"cost":80.0,"eff":0.00232}],"v_before":2.6089,"v_after":2.4941,"target":2.27856,"v_start":2.8693,"lines":[{"id":"L1","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":1,"r":1.312},{"id":"L2","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.075},{"id":"L3","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.0625},{"id":"L4","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.1148},{"id":"L5","type":"48-AL1/8-ST1A","short":"OHL 48","n":1,"r":0.35}],"profile":[0.0,0.05441,0.05752,0.06012,0.06352,0.07389],"cost":140.0},{"kind":"measure","it":1,"pick":"L5","action":"replace","options":[{"id":"L1","action":"parallel","dr":0.656,"keep":false,"dv":0.9184,"earth":true,"cost":640.0,"eff":0.00144},{"id":"L2","action":"parallel","dr":0.0375,"keep":true,"dv":0.0525,"earth":true,"cost":48.0,"eff":0.00109},{"id":"L3","action":"parallel","dr":0.03125,"keep":true,"dv":0.04375,"earth":true,"cost":40.0,"eff":0.00109},{"id":"L4","action":"parallel","dr":0.03827,"keep":false,"dv":0.03827,"earth":false,"cost":28.0,"eff":0.00137},{"id":"L5","action":"replace","dr":0.186,"dv":0.186,"earth":true,"cost":80.0,"eff":0.00232}],"v_before":2.4941,"v_after":2.3081,"target":2.27856,"v_start":2.8693,"lines":[{"id":"L1","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":1,"r":1.312},{"id":"L2","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.075},{"id":"L3","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.0625},{"id":"L4","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.1148},{"id":"L5","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":1,"r":0.164}],"profile":[0.0,0.05441,0.05752,0.06012,0.06352,0.06838],"cost":220.0},{"kind":"measure","it":1,"pick":"L5","action":"parallel","options":[{"id":"L1","action":"parallel","dr":0.656,"keep":false,"dv":0.9184,"earth":true,"cost":640.0,"eff":0.00144},{"id":"L2","action":"parallel","dr":0.0375,"keep":true,"dv":0.0525,"earth":true,"cost":48.0,"eff":0.00109},{"id":"L3","action":"parallel","dr":0.03125,"keep":true,"dv":0.04375,"earth":true,"cost":40.0,"eff":0.00109},{"id":"L4","action":"parallel","dr":0.03827,"keep":false,"dv":0.03827,"earth":false,"cost":28.0,"eff":0.00137},{"id":"L5","action":"parallel","dr":0.082,"keep":false,"dv":0.082,"earth":false,"cost":20.0,"eff":0.0041}],"v_before":2.3081,"v_after":2.2261,"target":2.27856,"v_start":2.8693,"lines":[{"id":"L1","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":1,"r":1.312},{"id":"L2","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.075},{"id":"L3","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.0625},{"id":"L4","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.1148},{"id":"L5","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.082}],"profile":[0.0,0.05441,0.05752,0.06012,0.06352,0.06595],"cost":240.0},{"kind":"measure","it":2,"pick":"L1","action":"parallel","options":[{"id":"L1","action":"parallel","dr":0.656,"keep":false,"dv":0.9184,"earth":true,"cost":640.0,"eff":0.00144},{"id":"L2","action":"parallel","dr":0.0375,"keep":true,"dv":0.0525,"earth":true,"cost":48.0,"eff":0.00109},{"id":"L3","action":"parallel","dr":0.03125,"keep":true,"dv":0.04375,"earth":true,"cost":40.0,"eff":0.00109},{"id":"L4","action":"parallel","dr":0.03827,"keep":false,"dv":0.03827,"earth":false,"cost":28.0,"eff":0.00137},{"id":"L5","action":"parallel","dr":0.02733,"keep":false,"dv":0.02733,"earth":false,"cost":20.0,"eff":0.00137}],"v_before":2.2261,"v_after":1.3077,"target":1.95691,"v_start":2.2261,"lines":[{"id":"L1","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.656},{"id":"L2","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.075},{"id":"L3","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.0625},{"id":"L4","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.1148},{"id":"L5","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.082}],"profile":[0.0,0.02721,0.03032,0.03291,0.03631,0.03874],"cost":880.0},{"kind":"end","it":2,"lines":[{"id":"L1","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.656},{"id":"L2","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.075},{"id":"L3","type":"NA2XS2Y 3x1x240 RM/25","short":"240","n":1,"r":0.0625},{"id":"L4","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.1148},{"id":"L5","type":"NA2XS2Y 3x1x185 RM/25","short":"185","n":2,"r":0.082}],"profile":[0.0,0.02721,0.03032,0.03291,0.03631,0.03874],"cost":880.0}],"cost_cable":20.0,"cost_earth":60.0,"std":"NA2XS2Y 3x1x185 RM/25"};
+  var root = document.getElementById("vpr");
+  var NS = "http://www.w3.org/2000/svg";
+  function el(tag, a, txt) { var e = document.createElementNS(NS, tag); for (var k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; }
+  function f(x, d) { return x.toFixed(d == null ? 2 : d); }
+  var L = D.lines, S = D.states, starts = [], acc = 0;
+  L.forEach(function (l) { starts.push(acc); acc += l.len; });
+  var total = acc, nodeKm = [0].concat(L.map(function (l, i) { return starts[i] + l.len; }));
+  var X0 = 70, X1 = 770;
+  function x(km) { return X0 + km / total * (X1 - X0); }
+  function col(s) { return s === "185" ? "var(--std)" : s === "240" ? "var(--thick)" : "var(--ohl)"; }
+  var range = root.querySelector("#vpr-range"); range.max = S.length - 1;
+  var idx = 0;
+
+  function drawNet(st, pick) {
+    var svg = root.querySelector("#vpr-net"); svg.textContent = ""; var y = 82;
+    st.lines.forEach(function (l, i) {
+      var xa = x(starts[i]) + 7, xb = x(starts[i] + L[i].len) - 7, n = Math.min(l.n, 6);
+      for (var k = 0; k < n; k++) {
+        var yy = y + (k - (n - 1) / 2) * 5;
+        svg.appendChild(el("line", { x1: xa, x2: xb, y1: yy, y2: yy, stroke: col(l.short), "stroke-width": l.short === "240" ? 4 : 2.5,
+          "stroke-dasharray": l.short === "OHL 48" ? "6 4" : null }));
+      }
+      if (pick === l.id) svg.appendChild(el("rect", { x: xa - 3, y: y - 6 - n * 2.5, width: xb - xa + 6, height: 12 + n * 5, rx: 3, fill: "none", stroke: "var(--acc)", "stroke-width": 2 }));
+      var mid = (xa + xb) / 2, below = i === 2, ty = below ? y + 40 : y - 26 - n * 2;
+      svg.appendChild(el("text", { x: mid, y: ty, "text-anchor": "middle", "class": "vpr-lbl" }, l.id + (l.n > 1 ? " ×" + l.n : "")));
+      svg.appendChild(el("text", { x: mid, y: below ? ty + 14 : ty - 14, "text-anchor": "middle", "class": "vpr-sm" }, "I = " + f(L[i].I, 1)));
+    });
+    nodeKm.forEach(function (km, i) {
+      if (i === 0) { svg.appendChild(el("rect", { x: x(0) - 8, y: y - 24, width: 8, height: 48, fill: "var(--ink)" }));
+        svg.appendChild(el("text", { x: x(0) - 14, y: y + 4, "text-anchor": "end", "class": "vpr-sm" }, "station")); return; }
+      var over = st.profile[i] > D.limit + 1e-9;
+      svg.appendChild(el("circle", { cx: x(km), cy: y, r: 5.5, fill: over ? "var(--bad)" : "#fff", stroke: over ? "var(--bad)" : "var(--ink)", "stroke-width": 1.6 }));
+      svg.appendChild(el("text", { x: x(km), y: y + 21, "text-anchor": "middle", "class": "vpr-sm" }, "B" + i));
+    });
+    svg.appendChild(el("text", { x: x(total), y: 160, "text-anchor": "end", "class": "vpr-sm" }, "generator at B5, PV at B3"));
+  }
+
+  function drawProfile(st) {
+    var svg = root.querySelector("#vpr-prof"); svg.textContent = "";
+    var top = 12, bot = 195, vmax = 0.09;
+    function yv(v) { return bot - v / vmax * (bot - top); }
+    svg.appendChild(el("rect", { x: X0, y: top, width: X1 - X0, height: yv(D.limit) - top, fill: "var(--bad-soft)" }));
+    for (var v = 0; v <= vmax + 1e-9; v += 0.02) {
+      svg.appendChild(el("line", { x1: X0, x2: X1, y1: yv(v), y2: yv(v), stroke: "var(--grid)" }));
+      svg.appendChild(el("text", { x: X0 - 6, y: yv(v) + 4, "text-anchor": "end", "class": "vpr-sm" }, f(v * 100, 0) + " %"));
+    }
+    svg.appendChild(el("line", { x1: X0, x2: X1, y1: yv(D.limit), y2: yv(D.limit), stroke: "var(--bad)", "stroke-width": 1.4, "stroke-dasharray": "6 4" }));
+    svg.appendChild(el("text", { x: X0 + 6, y: yv(D.limit) - 5, "class": "vpr-sm", style: "fill: var(--bad)" }, "allowed voltage rise 5 %"));
+    nodeKm.forEach(function (km, i) {
+      svg.appendChild(el("text", { x: x(km), y: bot + 16, "text-anchor": "middle", "class": "vpr-sm" }, i ? "B" + i : "station"));
+    });
+    function path(p, color, dash, w) {
+      svg.appendChild(el("path", { d: nodeKm.map(function (km, i) { return (i ? "L" : "M") + x(km) + " " + yv(p[i]); }).join(" "),
+        fill: "none", stroke: color, "stroke-width": w, "stroke-dasharray": dash }));
+    }
+    if (st !== S[0]) path(S[0].profile, "#9aa4ab", "5 4", 1.6);
+    path(st.profile, "var(--acc)", null, 2.4);
+    var vEnd = st.profile[st.profile.length - 1];
+    svg.appendChild(el("text", { x: X1, y: yv(vEnd) - 8, "text-anchor": "end", "class": "vpr-lbl", style: "fill:" + (vEnd > D.limit ? "var(--bad)" : "var(--ok)") }, f(vEnd * 100, 1) + " %"));
+  }
+
+  function itInfo(it) { return D.iterations[it - 1]; }
+  function render() {
+    var st = S[idx]; range.value = idx;
+    root.querySelector("#vpr-prev").disabled = idx === 0;
+    root.querySelector("#vpr-next").disabled = idx === S.length - 1;
+    var label;
+    if (st.kind === "start") label = "Start";
+    else if (st.kind === "end") label = "Result";
+    else {
+      var inIt = S.filter(function (s) { return s.kind === "measure" && s.it === st.it; });
+      label = "Iteration " + st.it + ", measure " + (inIt.indexOf(st) + 1) + " of " + inIt.length;
+    }
+    root.querySelector("#vpr-step").textContent = label;
+    var vEnd = st.profile[st.profile.length - 1], over = vEnd > D.limit + 1e-9;
+    root.querySelector("#vpr-status").innerHTML =
+      "<span>voltage rise at B5: <span class='vpr-pill " + (over ? "bad" : "ok") + "'>" + f(vEnd * 100, 2) + " %</span></span>" +
+      "<span>costs so far: <b>" + f(st.cost, 0) + " kEUR</b></span>";
+    drawNet(st, st.pick);
+    drawProfile(st);
+    var ex = root.querySelector("#vpr-explain"), tb = root.querySelector("#vpr-table");
+    if (st.kind === "start") {
+      var i1 = itInfo(1);
+      ex.innerHTML = "All buses exceed the allowed voltage rise of 5 %. The node at two thirds of the path to B5 is B1, which is directly connected to the station, so no line can be disconnected and the lines on the path are reinforced instead. " +
+        "Deviation at B5: " + f(i1.dev * 100, 1) + " % of " + f(i1.rise * 100, 1) + " % voltage rise, so <i>share</i> = " + f(i1.share, 3) +
+        " and Σ r·I on the path has to be reduced by <i>share</i>/2 = " + f(i1.share / 2 * 100, 1) + " % in the first iteration.";
+      tb.innerHTML = "";
+    } else if (st.kind === "end") {
+      ex.innerHTML = "After iteration " + st.it + " the power flow shows no voltage issue anymore. L2 and L3 were never reinforced: a standard line would increase their resistance, and a parallel line would reduce the voltage difference too little for its cost.";
+      tb.innerHTML = "";
+    } else {
+      var it = itInfo(st.it);
+      ex.innerHTML = "Iteration " + st.it + ": deviation " + f(it.dev * 100, 2) + " % of " + f(it.rise * 100, 2) + " % voltage rise → <i>share</i> = " + f(it.share, 3) +
+        ". Target: reduce Σ r·I from " + f(it.v, 3) + " to " + f(it.target, 3) + ". Before this measure: " + f(st.v_before, 3) + ", after: " + f(st.v_after, 3) +
+        (st.v_after <= st.target + 1e-9 ? " ≤ target, power flow is checked again." : " > target, next measure.");
+      var mx = Math.max.apply(null, st.options.map(function (o) { return o.eff; }));
+      var h = "<table><thead><tr><th>Line</th><th>Measure</th><th class='num'>Δr·I</th><th class='num'>Costs (kEUR)</th><th>Reduction per cost</th></tr></thead><tbody>";
+      st.options.forEach(function (o) {
+        var what = o.action === "replace" ? "replace by standard line" : (o.keep ? "parallel line of same type" : "parallel line");
+        h += "<tr" + (o.id === st.pick ? " class='pick'" : "") + "><td>" + o.id + "</td><td>" + what + "</td><td class='num'>" + f(o.dv, 3) + "</td><td class='num'>" + f(o.cost, 0) +
+          (o.earth ? "" : " <span class='vpr-note'>(no earthwork)</span>") + "</td><td><span class='vpr-bar' style='width:" + (o.eff / mx * 120).toFixed(0) + "px'></span></td></tr>";
+      });
+      tb.innerHTML = h + "</tbody></table>";
+    }
+  }
+  range.addEventListener("input", function () { idx = +range.value; render(); });
+  root.querySelector("#vpr-prev").addEventListener("click", function () { if (idx > 0) { idx--; render(); } });
+  root.querySelector("#vpr-next").addEventListener("click", function () { if (idx < S.length - 1) { idx++; render(); } });
+  render();
+})();
+</script>
+</div>

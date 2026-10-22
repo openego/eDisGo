@@ -31,48 +31,36 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 
-def oedb(edisgo_object, scenario, engine, import_types=None):
+def _query_individual_heat_pumps_oedb(
+    edisgo_object, scenario, engine, query_limit=None
+):
     """
-    Gets heat pumps for specified scenario from oedb and integrates them into the grid.
+    Get heat pumps for individual heating per building from oedb.
 
-    See :attr:`~.edisgo.EDisGo.import_heat_pumps` for more information.
-
-    Parameters
-    ----------
-    edisgo_object : :class:`~.EDisGo`
-    scenario : str
-        Scenario for which to retrieve heat pump data. Possible options
-        are "eGon2035" and "eGon100RE".
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
-    import_types : list(str) or None
-        Specifies which technologies to import. Possible options are
-        "individual_heat_pumps", "central_heat_pumps" and "central_resistive_heaters".
-        If None, all are imported.
+    Weather cell ID is as well added in this function.
 
     Returns
-    --------
-    list(str)
-        List with names (as in index of :attr:`~.network.topology.Topology.loads_df`)
-        of integrated heat pumps.
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing installed heat pump capacity for all individual heat
+        pumps in the grid per building.
+        For more information see parameter `hp_individual` in
+        :func:`~.io.heat_pump_import._grid_integration`.
 
     """
-
-    def _get_individual_heat_pumps():
-        """
-        Get heat pumps for individual heating per building from oedb.
-
-        Weather cell ID is as well added in this function.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            Dataframe containing installed heat pump capacity for all individual heat
-            pumps in the grid per building.
-            For more information see parameter `hp_individual` in
-            :func:`~.io.heat_pump_import._grid_integration`.
-
-        """
+    config = Config()
+    (egon_hp_capacity_buildings,) = config.import_tables_from_oep(
+        engine, ["egon_hp_capacity_buildings"], "demand"
+    )
+    egon_map_zensus_mvgd_buildings, egon_map_zensus_weather_cell = (
+        config.import_tables_from_oep(
+            engine,
+            ["egon_map_zensus_mvgd_buildings", "egon_map_zensus_weather_cell"],
+            "boundaries",
+        )
+    )
+    building_ids = edisgo_object.topology.loads_df.building_id.unique()
+    with db.session_scope_egon_data(engine) as session:
         query = (
             session.query(
                 egon_hp_capacity_buildings.building_id,
@@ -98,6 +86,8 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 == egon_map_zensus_weather_cell.zensus_population_id,
             )
         )
+        if query_limit is not None:
+            query = query.limit(query_limit)
 
         df = pd.read_sql(query.statement, engine, index_col=None)
 
@@ -106,47 +96,74 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         # e.g. for CTS and residential
         return df.drop_duplicates(subset=["building_id"])
 
-    def _get_central_heat_pump_or_resistive_heaters(
-        carrier, egon_district_heating_areas
-    ):
-        """
-        Get heat pumps or resistive heaters in district heating from oedb.
 
-        Weather cell ID and geolocation is as well added in this function.
-        Concerning the geolocation - the electricity bus central heat pumps and
-        resistive heaters are attached to is not determined based on the geolocation
-        (which is in egon_data always set to the centroid of the district heating area
-        they are in) but based on the majority of heat demand in an MV grid area.
-        Further, large heat pumps and resistive heaters are split into several smaller
-        ones in egon_data. The geolocation is however not adapted in egon_data. Due to
-        this, it is often the case, that the central heat pumps and resistive heaters
-        lie outside the MV grid district area. Therefore, the geolocation is adapted in
-        this function. It is first checked, if there is a CHP plant in the same district
-        heating area. If this is the case and the CHP plant lies within the MV grid
-        district, then the geolocation of the is set to the same geolocation as the
-        CHP plant, as it is assumed, that this would be a suitable place for a heat pump
-        and resistive heaters as well. If there is no
-        CHP plant, then it is checked if the centroid of the district heating area lies
-        within the MV grid. If this is the case, then this is used. If neither of these
-        options can be used, then the geolocation of the HV/MV station is used, as there
-        is no better indicator where the heat pump or resistive heater would be placed.
+def _query_central_heat_sources_oedb(
+    edisgo_object, scenario, engine, carrier, query_limit=None
+):
+    """
+    Retrieve central heat-source records and raw spatial data from the database.
 
-        Parameters
-        ----------
-        carrier : str
-            Specifies whether to obtain central heat pumps or resistive heaters.
-            Possible options are "central_heat_pump" and "central_resistive_heater".
+    Shared retrieval helper for central heat pumps and resistive heaters. CRS
+    conversion, spatial assignments and location fallbacks are performed by
+    :func:`_prepare_central_heat_sources`, not by this query helper.
 
-        Returns
-        -------
-        :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>`
-            Geodataframe containing information on all central heat pumps or
-            resistive heaters in the grid per district heating area.
-            For more information see parameter `hp_central` or
-            `resistive_heater_central` in
-            :func:`~.io.heat_pump_import._grid_integration`.
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+        Provides the MV grid ID used to select plants, the grid-district CRS
+        assigned to weather-cell geometries and the maximum plant capacity from
+        ``config["grid_connection"]["upper_limit_voltage_level_4"]``.
+    scenario : str
+        Scenario for which to retrieve data, e.g. "eGon2035" or "eGon100RE".
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine for the OEP or an eGon-data database.
+    carrier : str
+        Technology to select from the eTraGo links: "central_heat_pump" or
+        "central_resistive_heater".
+    query_limit : int or None, optional
+        Maximum number of plant records to retrieve, intended for reduced live
+        tests. Does not limit the spatial support queries. Default: None, meaning
+        no explicit row limit.
 
-        """
+    Returns
+    -------
+    dict
+        Raw tables with the following keys:
+
+        * ``plants`` : pandas.DataFrame
+            Plant records with ``bus0`` (electricity bus/MV grid ID), ``bus1``
+            (heat bus ID) and ``p_set`` (nominal electrical capacity in MW).
+        * ``heat_buses`` : geopandas.GeoDataFrame
+            Heat buses referenced by the plants, with ``bus1``, ``geom`` and
+            ``scn_name``.
+        * ``weather_cells`` : geopandas.GeoDataFrame
+            Weather cells with ``weather_cell_id`` and ``geom``.
+        * ``district_heating_areas`` : geopandas.GeoDataFrame
+            Areas for the scenario, with ``district_heating_id``, ``area_id``,
+            ``geom_polygon`` and ``scenario``.
+        * ``chp_plants`` : geopandas.GeoDataFrame
+            CHP plants for the scenario, with ``district_heating_id`` and
+            ``geom``, used later to select heat-source locations.
+
+        If no plants are found, only ``plants`` is returned as an empty
+        DataFrame; spatial support queries are skipped. Geometries are not
+        reprojected here. Heat buses, district-heating areas and CHP plants use
+        their database SRIDs; weather cells are assigned the grid-district CRS.
+    """
+    config = Config()
+    (egon_district_heating_areas,) = config.import_tables_from_oep(
+        engine, ["egon_district_heating_areas"], "demand"
+    )
+    egon_district_heating, egon_era5_weather_cells = config.import_tables_from_oep(
+        engine, ["egon_district_heating", "egon_era5_weather_cells"], "supply"
+    )
+    # Local eGon databases store eTraGo tables in "grid"; the OEP resolves
+    # the aliases via "supply".
+    etrago_schema = "supply" if "openenergyplatform" in str(engine.url) else "grid"
+    egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
+        engine, ["egon_etrago_bus", "egon_etrago_link"], etrago_schema
+    )
+    with db.session_scope_egon_data(engine) as session:
         # get heat pumps / resistive heaters in the grid
         query = session.query(
             egon_etrago_link.bus0,
@@ -159,6 +176,8 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             egon_etrago_link.p_nom
             <= edisgo_object.config["grid_connection"]["upper_limit_voltage_level_4"],
         )
+        if query_limit is not None:
+            query = query.limit(query_limit)
         df = pd.read_sql(query.statement, engine, index_col=None)
         if not df.empty:
             # Query for egon_etrago_bus
@@ -177,7 +196,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 engine,
                 index_col=None,
                 crs=f"EPSG:{srid_etrago_bus}",
-            ).to_crs(mv_grid_geom_srid)
+            )
 
             # Query for egon_era5_weather_cells
             query_weather_cells = session.query(
@@ -189,7 +208,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 engine,
                 index_col=None,
                 crs=f"EPSG:{edisgo_object.topology.grid_district['srid']}",
-            ).to_crs(mv_grid_geom_srid)
+            )
 
             # Query for egon_district_heating_areas
             query_district_heating_areas = session.query(
@@ -209,34 +228,6 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 geom_col="geom_polygon",
                 index_col=None,
                 crs=f"EPSG:{srid}",
-            ).to_crs(mv_grid_geom_srid)
-
-            # Perform spatial join with weather cells
-            gdf_combined = gpd.sjoin(
-                gdf_etrago_bus,
-                gdf_weather_cells,
-                how="left",
-                predicate="intersects",
-                rsuffix="weather",
-            )
-
-            # Calculate centroids for district heating areas
-            gdf_district_heating_areas["centroid"] = gdf_district_heating_areas.centroid
-            gdf_district_heating_areas = gdf_district_heating_areas.set_geometry(
-                "geom_polygon"
-            )
-
-            # Perform spatial join with district heating areas
-            df_geom = gpd.sjoin_nearest(
-                gdf_combined,
-                gdf_district_heating_areas,
-                how="left",
-                rsuffix="district_heating",
-                max_distance=1000,
-            )
-
-            df_merge = pd.merge(
-                df_geom, df, how="right", right_on="bus1", left_on="bus1"
             )
 
             # check if there is a CHP plant where heat pump / resistive heater can
@@ -256,50 +247,128 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 engine,
                 index_col=None,
                 crs=f"EPSG:{srid_dh_supply}",
-            ).to_crs(mv_grid_geom_srid)
-            df_geom_chp = df_geom_chp.loc[
-                df_geom_chp.district_heating_id.isin(df_geom.district_heating_id), :
-            ]
+            )
+            return {
+                "plants": df,
+                "heat_buses": gdf_etrago_bus,
+                "weather_cells": gdf_weather_cells,
+                "district_heating_areas": gdf_district_heating_areas,
+                "chp_plants": df_geom_chp,
+            }
+        return {"plants": df}
 
-            # set geolocation of central heat pump / resistive heater
-            for idx in df_merge.index:
-                geom = None
-                # if there is a CHP plant and it lies within the grid district, use
-                # its geolocation
-                df_chp = df_geom_chp[
-                    df_geom_chp.district_heating_id
-                    == df_merge.at[idx, "district_heating_id"]
-                ]
-                if not df_chp.empty:
-                    for idx_chp in df_chp.index:
-                        if edisgo_object.topology.grid_district["geom"].contains(
-                            df_chp.at[idx_chp, "geom"]
-                        ):
-                            geom = df_chp.at[idx_chp, "geom"]
-                            break
-                # if the heat bus lies within the grid district, use its geolocation
-                if geom is None and edisgo_object.topology.grid_district[
-                    "geom"
-                ].contains(df_merge.at[idx, "geom"]):
-                    geom = df_merge.at[idx, "geom"]
-                # if geom is still None, use geolocation of HV/MV station
-                if geom is None:
-                    hvmv_station = edisgo_object.topology.mv_grid.station
-                    geom = Point(hvmv_station.x[0], hvmv_station.y[0])
-                df_merge.at[idx, "geom"] = geom
-            return df_merge.loc[
-                :,
-                ["p_set", "weather_cell_id", "district_heating_id", "geom", "area_id"],
-            ]
-        else:
-            return df
 
-    def _get_individual_heat_pump_capacity():
-        """
-        Get total capacity of heat pumps for individual heating from oedb for sanity
-        checking.
+def _prepare_central_heat_sources(edisgo_object, data):
+    """Assign weather/district IDs and locations without database access.
 
-        """
+    Reproject all spatial inputs to the grid CRS before joining them. Prefer a
+    CHP plant in the same heating district and within the grid, then the heat-bus
+    location if it is within the grid, and finally the HV/MV station. The heat-bus
+    location is generally the district centroid in eGon, but we use its actual
+    geometry rather than the separately calculated polygon centroid.
+    """
+    df = data["plants"]
+    if df.empty:
+        return df.copy()
+
+    mv_grid_geom_srid = edisgo_object.topology.grid_district["srid"]
+    gdf_etrago_bus = data["heat_buses"].to_crs(mv_grid_geom_srid)
+    gdf_weather_cells = data["weather_cells"].to_crs(mv_grid_geom_srid)
+    gdf_district_heating_areas = data["district_heating_areas"].to_crs(
+        mv_grid_geom_srid
+    )
+    df_geom_chp = data["chp_plants"].to_crs(mv_grid_geom_srid)
+
+    # Perform spatial join with weather cells
+    gdf_combined = gpd.sjoin(
+        gdf_etrago_bus,
+        gdf_weather_cells,
+        how="left",
+        predicate="intersects",
+        rsuffix="weather",
+    )
+
+    # Calculate centroids for district heating areas
+    gdf_district_heating_areas["centroid"] = gdf_district_heating_areas.centroid
+    gdf_district_heating_areas = gdf_district_heating_areas.set_geometry("geom_polygon")
+
+    # Perform spatial join with district heating areas
+    df_geom = gpd.sjoin_nearest(
+        gdf_combined,
+        gdf_district_heating_areas,
+        how="left",
+        rsuffix="district_heating",
+        max_distance=1000,
+    )
+
+    df_merge = pd.merge(df_geom, df, how="right", right_on="bus1", left_on="bus1")
+
+    df_geom_chp = df_geom_chp.loc[
+        df_geom_chp.district_heating_id.isin(df_geom.district_heating_id), :
+    ]
+
+    # set geolocation of central heat pump / resistive heater
+    for idx in df_merge.index:
+        geom = None
+        # if there is a CHP plant and it lies within the grid district, use
+        # its geolocation
+        df_chp = df_geom_chp[
+            df_geom_chp.district_heating_id == df_merge.at[idx, "district_heating_id"]
+        ]
+        if not df_chp.empty:
+            for idx_chp in df_chp.index:
+                if edisgo_object.topology.grid_district["geom"].contains(
+                    df_chp.at[idx_chp, "geom"]
+                ):
+                    geom = df_chp.at[idx_chp, "geom"]
+                    break
+        # if the heat bus lies within the grid district, use its geolocation
+        if geom is None and edisgo_object.topology.grid_district["geom"].contains(
+            df_merge.at[idx, "geom"]
+        ):
+            geom = df_merge.at[idx, "geom"]
+        # if geom is still None, use geolocation of HV/MV station
+        if geom is None:
+            hvmv_station = edisgo_object.topology.mv_grid.station
+            geom = Point(hvmv_station.x[0], hvmv_station.y[0])
+        df_merge.at[idx, "geom"] = geom
+    return df_merge.loc[
+        :,
+        ["p_set", "weather_cell_id", "district_heating_id", "geom", "area_id"],
+    ]
+
+
+def _query_central_heat_pumps_oedb(edisgo_object, scenario, engine, query_limit=None):
+    """Retrieve central heat-pump records and raw spatial support data."""
+    return _query_central_heat_sources_oedb(
+        edisgo_object, scenario, engine, "central_heat_pump", query_limit=query_limit
+    )
+
+
+def _query_central_resistive_heaters_oedb(
+    edisgo_object, scenario, engine, query_limit=None
+):
+    """Retrieve central resistive-heater records and raw spatial support data."""
+    return _query_central_heat_sources_oedb(
+        edisgo_object,
+        scenario,
+        engine,
+        "central_resistive_heater",
+        query_limit=query_limit,
+    )
+
+
+def _query_individual_heat_pump_capacity_oedb(edisgo_object, scenario, engine):
+    """
+    Get total capacity of heat pumps for individual heating from oedb for sanity
+    checking.
+
+    """
+    config = Config()
+    (egon_individual_heating,) = config.import_tables_from_oep(
+        engine, ["egon_individual_heating"], "supply"
+    )
+    with db.session_scope_egon_data(engine) as session:
         query = session.query(
             egon_individual_heating.capacity,
         ).filter(
@@ -313,36 +382,30 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         else:
             return np.sum(cap)
 
-    config = Config()
-    (
-        egon_district_heating_areas,
-        egon_hp_capacity_buildings,
-    ) = config.import_tables_from_oep(
-        engine, ["egon_district_heating_areas", "egon_hp_capacity_buildings"], "demand"
-    )
-    (
-        egon_district_heating,
-        egon_era5_weather_cells,
-        egon_individual_heating,
-    ) = config.import_tables_from_oep(
-        engine,
-        ["egon_district_heating", "egon_era5_weather_cells", "egon_individual_heating"],
-        "supply",
-    )
-    (
-        egon_map_zensus_mvgd_buildings,
-        egon_map_zensus_weather_cell,
-    ) = config.import_tables_from_oep(
-        engine,
-        ["egon_map_zensus_mvgd_buildings", "egon_map_zensus_weather_cell"],
-        "boundaries",
-    )
-    egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
-        engine, ["egon_etrago_bus", "egon_etrago_link"], "supply"
-    )
 
-    building_ids = edisgo_object.topology.loads_df.building_id.unique()
-    mv_grid_geom_srid = edisgo_object.topology.grid_district["srid"]
+def oedb(edisgo_object, scenario, engine, import_types=None):
+    """
+    Get heat pumps for a specified OEP scenario and integrate them into the grid.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    scenario : str
+        Scenario for which to retrieve heat-pump data. Possible options are
+        "eGon2035" and "eGon100RE".
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+    import_types : list(str) or None
+        Technologies to import. Possible options are "individual_heat_pumps",
+        "central_heat_pumps" and "central_resistive_heaters". If None, all are
+        imported.
+
+    Returns
+    -------
+    list(str)
+        Names of the integrated heat pumps in
+        :attr:`~.network.topology.Topology.loads_df`.
+    """
 
     if import_types is None:
         import_types = [
@@ -351,36 +414,38 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             "central_resistive_heaters",
         ]
 
-    # get individual and district heating heat pumps, as well as resistive heaters
-    # in district heating
-    with db.session_scope_egon_data(engine) as session:
-        if "individual_heat_pumps" in import_types:
-            hp_individual = _get_individual_heat_pumps()
-        else:
-            hp_individual = pd.DataFrame(columns=["p_set"])
-
-        if "central_heat_pumps" in import_types:
-            hp_central = _get_central_heat_pump_or_resistive_heaters(
-                "central_heat_pump", egon_district_heating_areas
-            )
-        else:
-            hp_central = pd.DataFrame(columns=["p_set"])
-
-        if "central_resistive_heaters" in import_types:
-            resistive_heaters_central = _get_central_heat_pump_or_resistive_heaters(
-                "central_resistive_heater", egon_district_heating_areas
-            )
-        else:
-            resistive_heaters_central = pd.DataFrame(columns=["p_set"])
-
-    # sanity check
-    with db.session_scope_egon_data(engine) as session:
-        hp_individual_cap = _get_individual_heat_pump_capacity()
-    if not np.isclose(hp_individual_cap, hp_individual.p_set.sum(), atol=1e-3):
-        logger.warning(
-            f"Capacity of individual heat pumps ({hp_individual.p_set.sum()} MW) "
-            f"differs from expected capacity ({hp_individual_cap} MW)."
+    if "individual_heat_pumps" in import_types:
+        hp_individual = _query_individual_heat_pumps_oedb(
+            edisgo_object=edisgo_object, scenario=scenario, engine=engine
         )
+        hp_individual_cap = _query_individual_heat_pump_capacity_oedb(
+            edisgo_object=edisgo_object, scenario=scenario, engine=engine
+        )
+        if not np.isclose(hp_individual_cap, hp_individual.p_set.sum(), atol=1e-3):
+            logger.warning(
+                f"Capacity of individual heat pumps ({hp_individual.p_set.sum()} MW) "
+                f"differs from expected capacity ({hp_individual_cap} MW)."
+            )
+    else:
+        hp_individual = pd.DataFrame(columns=["p_set"])
+
+    if "central_heat_pumps" in import_types:
+        central_data = _query_central_heat_pumps_oedb(
+            edisgo_object=edisgo_object, scenario=scenario, engine=engine
+        )
+        hp_central = _prepare_central_heat_sources(edisgo_object, central_data)
+    else:
+        hp_central = pd.DataFrame(columns=["p_set"])
+
+    if "central_resistive_heaters" in import_types:
+        resistive_data = _query_central_resistive_heaters_oedb(
+            edisgo_object=edisgo_object, scenario=scenario, engine=engine
+        )
+        resistive_heaters_central = _prepare_central_heat_sources(
+            edisgo_object, resistive_data
+        )
+    else:
+        resistive_heaters_central = pd.DataFrame(columns=["p_set"])
 
     # integrate into grid
     return _grid_integration(
@@ -496,12 +561,18 @@ def _grid_integration(
             [edisgo_object.topology.loads_df, hp_individual_small]
         )
 
-        integrated_hps = hp_individual_small.index
+        # accumulate integrated heat pump names in a plain list (built into an Index
+        # once at the end) to avoid O(n^2) per-iteration Index.append below
+        integrated_hps_list: list = list(hp_individual_small.index)
 
         # integrate large individual heat pumps - if building is already connected to
         # higher voltage level it can be integrated at same bus, otherwise it is
         # integrated based on geolocation
-        integrated_hps_own_grid_conn = pd.Index([])
+        integrated_hps_own_grid_conn_list: list = []
+        # collect same-bus rows and concat them into loads_df once after the loop to
+        # avoid O(n^2) per-iteration pd.concat (rows are independent additions, so
+        # batching keeps the same resulting frame and row order)
+        same_bus_rows: list = []
         for hp in hp_individual_large.index:
             # check if building is already connected to a voltage level equal to or
             # higher than the voltage level the heat pump should be connected to
@@ -515,10 +586,8 @@ def _grid_integration(
 
             if voltage_level_hp >= voltage_level_building:
                 # integrate at same bus as building
-                edisgo_object.topology.loads_df = pd.concat(
-                    [edisgo_object.topology.loads_df, hp_individual_large.loc[[hp], :]]
-                )
-                integrated_hps = integrated_hps.append(pd.Index([hp]))
+                same_bus_rows.append(hp_individual_large.loc[[hp], :])
+                integrated_hps_list.append(hp)
             else:
                 # integrate based on geolocation
                 hp_name = edisgo_object.integrate_component_based_on_geolocation(
@@ -534,10 +603,16 @@ def _grid_integration(
                     sector="individual_heating",
                     building_id=hp_individual_large.at[hp, "building_id"],
                 )
-                integrated_hps = integrated_hps.append(pd.Index([hp_name]))
-                integrated_hps_own_grid_conn = integrated_hps_own_grid_conn.append(
-                    pd.Index([hp])
-                )
+                integrated_hps_list.append(hp_name)
+                integrated_hps_own_grid_conn_list.append(hp)
+
+        # concat all collected same-bus rows in one operation (O(n) instead of O(n^2))
+        if same_bus_rows:
+            edisgo_object.topology.loads_df = pd.concat(
+                [edisgo_object.topology.loads_df, *same_bus_rows]
+            )
+        integrated_hps = pd.Index(integrated_hps_list)
+        integrated_hps_own_grid_conn = pd.Index(integrated_hps_own_grid_conn_list)
         # logging messages
         logger.debug(
             f"{sum(hp_individual.p_set):.2f} MW of heat pumps for individual heating "
@@ -659,16 +734,25 @@ def efficiency_resistive_heaters_oedb(scenario, engine):
         given in p.u.
 
     """
+    heat_parameters = _query_resistive_heater_efficiency_oedb(
+        scenario=scenario,
+        engine=engine,
+    )
+
+    return heat_parameters["efficiency"]
+
+
+def _query_resistive_heater_efficiency_oedb(scenario, engine):
+    """Query heat parameters containing resistive-heater efficiencies."""
+
     config = Config()
     (egon_scenario_parameters,) = config.import_tables_from_oep(
         engine, ["egon_scenario_parameters"], "scenario"
     )
 
-    # get cop from database
     with db.session_scope_egon_data(engine) as session:
         query = session.query(
             egon_scenario_parameters.heat_parameters,
         ).filter(egon_scenario_parameters.name == scenario)
-        eta_dict = query.first()[0]["efficiency"]
 
-    return eta_dict
+        return query.first()[0]

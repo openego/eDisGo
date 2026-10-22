@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import math
 
+from collections import deque
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -115,24 +116,35 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
     graph_root.nodes[start_node]["pos"] = (0, 0)
     graph_copy = graph_root.copy()
 
-    long_paths = []
-    next_nodes = []
+    long_paths: list = []
+    next_nodes: deque = deque()
 
-    # Find longest paths
-    for i in range(0, len(list(nx.neighbors(graph_root, start_node)))):
-        path_length_to_transformer = []
+    # Find longest paths.
+    # For each neighbour branch of the transformer, locate the node that is
+    # farthest away (measured in number of hops/nodes, unweighted), recover the
+    # path to it and peel it off so the next iteration finds the next branch.
+    # ``nx.shortest_path_length`` returns *all* distances from ``start_node`` in
+    # a single traversal, replacing the previous per-node O(nodes**2) calls to
+    # ``nx.shortest_simple_paths``.
+    for _ in range(0, len(list(nx.neighbors(graph_root, start_node)))):
+        # Distance in number of nodes on the path: reachable nodes use the hop
+        # count + 1, unreachable nodes are treated as 0 (as the old code did via
+        # ``len([])`` for an empty path).
+        distances = nx.shortest_path_length(graph_copy, start_node)
+        farthest_node = None
+        max_path_length = -1
+        # Iterating in ``graph_copy.nodes()`` order with a strict ``>`` keeps the
+        # original first-wins tie-break (``list.index(max(...))``).
         for node in graph_copy.nodes():
-            try:
-                paths = list(nx.shortest_simple_paths(graph_copy, start_node, node))
-            except nx.NetworkXNoPath:
-                paths = [[]]
-            path_length_to_transformer.append(len(paths[0]))
-        index = path_length_to_transformer.index(max(path_length_to_transformer))
-        path_to_max_distance_node = list(
-            nx.shortest_simple_paths(
-                graph_copy, start_node, list(nx.nodes(graph_copy))[index]
-            )
-        )[0]
+            path_length = distances[node] + 1 if node in distances else 0
+            if path_length > max_path_length:
+                max_path_length = path_length
+                farthest_node = node
+        # For a (forest) tree the shortest path is unique and identical to the
+        # first path returned by ``shortest_simple_paths``.
+        path_to_max_distance_node = nx.shortest_path(
+            graph_copy, start_node, farthest_node
+        )
         path_to_max_distance_node.remove(start_node)
         graph_copy.remove_nodes_from(path_to_max_distance_node)
         for node in path_to_max_distance_node:
@@ -140,6 +152,12 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
 
     path_to_max_distance_node = long_paths
     n = 0
+
+    # Precompute the number of nodes on the path from the transformer to every
+    # node once. ``len(path) % 2`` (the alternating direction flag below) equals
+    # ``(distance_in_hops + 1) % 2`` and no longer needs a per-node call to
+    # ``nx.shortest_simple_paths``.
+    path_length_from_start = nx.shortest_path_length(graph_root, start_node)
 
     # make the coordinates
     for node in list(nx.neighbors(graph_root, start_node)):
@@ -156,11 +174,23 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
 
     graph_copy = graph_root.copy()
     graph_copy.remove_node(start_node)
-    while graph_copy.number_of_nodes() > 0:
+    # ``next_nodes`` is a FIFO queue; using a deque with ``popleft`` preserves the
+    # exact processing order of the previous ``list``/``remove`` implementation.
+    # The layout assumes a tree, where every node is reached from exactly one
+    # neighbour. On a ring a node is reachable from both sides, so it is enqueued
+    # at most once and keeps the position of its first discovery, which the
+    # breadth-first order reaches over the shorter path.
+    enqueued = set(next_nodes)
+    while graph_copy.number_of_nodes() > 0 and next_nodes:
         next_node = next_nodes[0]
         n = 0
         for node in list(nx.neighbors(graph_copy, next_node)):
+            # ``n`` counts every neighbour, skipped ones included: it is the index
+            # of the branch in the fan-out and has to stay in step with the
+            # neighbour count handed to ``coordinate_branch`` below.
             n = n + 1
+            if node in enqueued:
+                continue
             if node in path_to_max_distance_node:
                 pos, origin_angle = coordinate_longest_path(
                     graph_root.nodes[next_node]["pos"],
@@ -168,14 +198,7 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
                     graph_root.edges[next_node, node]["length"],
                 )
             elif next_node in path_to_max_distance_node:
-                direction = math.fmod(
-                    len(
-                        list(
-                            nx.shortest_simple_paths(graph_root, start_node, next_node)
-                        )[0]
-                    ),
-                    2,
-                )
+                direction = float((path_length_from_start[next_node] + 1) % 2)
                 pos, origin_angle = coordinate_longest_path_neighbor(
                     graph_root.nodes[next_node]["pos"],
                     graph_root.nodes[next_node]["origin_angle"],
@@ -194,9 +217,18 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
             graph_root.nodes[node]["pos"] = pos
             graph_root.nodes[node]["origin_angle"] = origin_angle
             next_nodes.append(node)
+            enqueued.add(node)
 
         graph_copy.remove_node(next_node)
-        next_nodes.remove(next_node)
+        next_nodes.popleft()
+
+    if graph_copy.number_of_nodes() > 0:
+        # Only reachable if the graph is disconnected: the queue runs dry while
+        # nodes are left over. Those keep the coordinates they came in with.
+        logger.warning(
+            f"Pseudo coordinates: {graph_copy.number_of_nodes()} bus(es) are not "
+            f"reachable from {start_node} and keep their original coordinates."
+        )
 
     return graph_root
 

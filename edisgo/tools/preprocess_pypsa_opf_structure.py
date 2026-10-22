@@ -154,7 +154,6 @@ def aggregate_fluct_generators(psa_network):
     gen_df = psa_network.generators.copy()
     gen_t_dict = psa_network.generators_t.copy()
     gen_buses = np.unique(gen_df.bus)
-    gen_aggr_df_all = pd.DataFrame(columns=gen_df.columns)
     for gen_bus in gen_buses:
         gens = gen_df[gen_df.bus == gen_bus]
         n_gens = len(gens)
@@ -189,12 +188,6 @@ def aggregate_fluct_generators(psa_network):
                         "fluctuating": [True],
                     },
                     index=[gen_name],
-                )
-                gen_aggr_df_all = pd.concat(
-                    [
-                        gen_aggr_df_all,
-                        gen_aggr_df,
-                    ]
                 )
                 # drop aggregated generators and add new generator to generator
                 # dataframe

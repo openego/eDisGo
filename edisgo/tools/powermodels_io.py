@@ -616,7 +616,7 @@ def _build_storage_units(psa_net, ppc):
     print("storage units are not implemented yet")
 
 
-def _build_load_dict(psa_net, ppc):
+def _build_load_dict(psa_net: pypsa.Network, ppc: dict) -> dict:
     """
     build load dict containing timeseries from psa_net.loads_t
     :param psa_net: pypsa network
@@ -630,13 +630,15 @@ def _build_load_dict(psa_net, ppc):
     time_horizon = len(psa_net.loads_t["p_set"])
 
     load_dict["time_horizon"] = time_horizon
+    # Pull the time-series frames to numpy arrays once (shape time_horizon x n_loads),
+    # reindexing columns to psa_net.loads.index so column order matches load_idx.
+    p_set = psa_net.loads_t["p_set"].reindex(columns=psa_net.loads.index).values
+    q_set = psa_net.loads_t["q_set"].reindex(columns=psa_net.loads.index).values
     for t in range(time_horizon):
         load_dict["load_data"][str(t + 1)] = dict()
         for load_idx, bus_idx in enumerate(load_buses):
-            # p_d = psa_net.loads_t["p_set"].values[t,load_idx]
-            # qd = psa_net.loads_t["q_set"].values[t,load_idx]
-            p_d = psa_net.loads_t["p_set"][psa_net.loads.index[load_idx]][t]
-            qd = psa_net.loads_t["q_set"][psa_net.loads.index[load_idx]][t]
+            p_d = p_set[t, load_idx]
+            qd = q_set[t, load_idx]
             load_dict["load_data"][str(t + 1)][str(load_idx + 1)] = {
                 "pd": p_d,
                 "qd": qd,
@@ -648,7 +650,7 @@ def _build_load_dict(psa_net, ppc):
     return load_dict
 
 
-def _build_generator_dict(psa_net, ppc):
+def _build_generator_dict(psa_net: pypsa.Network, ppc: dict) -> dict:
     generator_dict = {"gen_data": dict()}
     time_horizon = len(psa_net.generators_t["p_set"])
     generator_dict["time_horizon"] = time_horizon
@@ -659,13 +661,19 @@ def _build_generator_dict(psa_net, ppc):
     gen_buses = [
         psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.generators["bus"]
     ]
+    # Pull the time-series frames to numpy arrays once (shape time_horizon x n_gens),
+    # reindexing columns to psa_net.generators.index so column order matches gen_idx.
+    p_set = (
+        psa_net.generators_t["p_set"].reindex(columns=psa_net.generators.index).values
+    )
+    q_set = (
+        psa_net.generators_t["q_set"].reindex(columns=psa_net.generators.index).values
+    )
     for t in range(time_horizon):
         generator_dict["gen_data"][str(t + 1)] = dict()
         for gen_idx, bus_idx in enumerate(gen_buses):
-            # pg = psa_net.generators_t["p_set"].values[t, gen_idx]
-            # qg = psa_net.generators_t["q_set"].values[t, gen_idx]
-            pg = psa_net.generators_t["p_set"][psa_net.generators.index[gen_idx]][t]
-            qg = psa_net.generators_t["q_set"][psa_net.generators.index[gen_idx]][t]
+            pg = p_set[t, gen_idx]
+            qg = q_set[t, gen_idx]
             # if no value is set, set pg and qg to large value, e.g. representing slack
             # TODO verify or find another solution not using "large" value
             if np.isnan(pg):

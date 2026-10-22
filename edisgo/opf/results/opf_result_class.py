@@ -176,6 +176,13 @@ class OPFResults:
         Aggregated exchange with the overlying grid.
     battery_storage_t : :class:`~.opf.results.opf_result_class.BatteryStorage`
         Battery-storage results.
+    interval_results : list of dict
+        Per-interval solve report, populated when the OPF is run separately over
+        several disconnected time intervals (see the ``optimize`` pipeline task,
+        which splits a non-contiguous time index — e.g. from automatic timestep
+        selection — into independent optimizations). Each entry has keys
+        ``start``, ``end``, ``status``, ``solver`` and ``solution_time``. Empty
+        for a single contiguous optimization.
 
     """
 
@@ -190,6 +197,7 @@ class OPFResults:
         self.grid_slacks_t = GridSlacks()
         self.overlying_grid = pd.DataFrame()
         self.battery_storage_t = BatteryStorage()
+        self.interval_results = []
 
     def to_csv(self, directory, attributes=None):
         """
