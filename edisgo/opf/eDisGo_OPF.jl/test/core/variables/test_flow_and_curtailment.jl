@@ -770,3 +770,61 @@ end
         @test length(vfc_reported(pm, 2, :storage, :ps)) == 1
     end
 end
+
+@testset "variable_battery_storage_power_imaginary" begin
+    @testset "index set" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_battery_storage_power_imaginary(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:qs]
+        qs = PowerModels.var(pm, 1, :qs)
+        @test vfc_index(qs) == Set([1])
+        @test JuMP.name(qs[1]) == "1_qs[1]"
+    end
+
+    @testset "bounded=true" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_battery_storage_power_imaginary(pm, nw=1, bounded=true)
+        @test vfc_bounds(PowerModels.var(pm, 1, :qs)[1]) == (-0.19, 0.19)
+    end
+
+    @testset "bounded=false" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_battery_storage_power_imaginary(pm, nw=1, bounded=false)
+        @test vfc_unbounded(PowerModels.var(pm, 1, :qs))
+    end
+
+    @testset "start values" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_battery_storage_power_imaginary(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :qs)[1]) == 0.0
+
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :storage, 1)["qs_start"] = 0.07
+        # The active-power start value must not be picked up.
+        PowerModels.ref(pm, 1, :storage, 1)["ps_start"] = 0.3
+        eDisGo_OPF.variable_battery_storage_power_imaginary(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :qs)[1]) == 0.07
+    end
+
+    @testset "report" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_battery_storage_power_imaginary(pm, nw=1, report=true)
+        @test vfc_reported(pm, 1, :storage, :qs) ==
+              Dict(1 => PowerModels.var(pm, 1, :qs)[1])
+
+        pm = vfc_model()
+        eDisGo_OPF.variable_battery_storage_power_imaginary(pm, nw=1, report=false)
+        @test isempty(vfc_reported(pm, 1, :storage, :qs))
+    end
+
+    @testset "nw keyword" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :storage, 1)["qmin"] = -0.05
+        eDisGo_OPF.variable_battery_storage_power_imaginary(pm, nw=2)
+        @test isempty(PowerModels.var(pm, 1))
+        qs = PowerModels.var(pm, 2, :qs)
+        @test JuMP.name(qs[1]) == "2_qs[1]"
+        @test vfc_bounds(qs[1]) == (-0.05, 0.19)
+        @test length(vfc_reported(pm, 2, :storage, :qs)) == 1
+    end
+end
