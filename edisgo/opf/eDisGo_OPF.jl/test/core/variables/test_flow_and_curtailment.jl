@@ -866,3 +866,73 @@ end
         @test JuMP.num_variables(pm.model) == 0
     end
 end
+
+@testset "variable_dsm_storage_power_real" begin
+    @testset "index set" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:pdsm]
+        pdsm = PowerModels.var(pm, 1, :pdsm)
+        @test vfc_index(pdsm) == Set([1])
+        @test JuMP.name(pdsm[1]) == "1_pdsm[1]"
+    end
+
+    @testset "real grid" begin
+        pm = vfc_big_model()
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=1)
+        pdsm = PowerModels.var(pm, 1, :pdsm)
+        @test vfc_index(pdsm) == Set(PowerModels.ids(pm, 1, :dsm))
+        @test length(pdsm) == 2
+    end
+
+    @testset "bounded=true" begin
+        # The shiftable power follows the time series per step.
+        data = TestUtils.small_network(num_steps=2)
+        data["time_series"]["dsm"]["1"]["p_min"] = [-0.3, -0.1]
+        data["time_series"]["dsm"]["1"]["p_max"] = [0.3, 0.2]
+        pm = vfc_model_from(data)
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=1, bounded=true)
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=2, bounded=true)
+        @test vfc_bounds(PowerModels.var(pm, 1, :pdsm)[1]) == (-0.3, 0.3)
+        @test vfc_bounds(PowerModels.var(pm, 2, :pdsm)[1]) == (-0.1, 0.2)
+    end
+
+    @testset "bounded=false" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=1, bounded=false)
+        @test vfc_unbounded(PowerModels.var(pm, 1, :pdsm))
+    end
+
+    @testset "start values" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :pdsm)[1]) == 0.0
+
+        pm = vfc_model()
+        PowerModels.ref(pm, 1, :dsm, 1)["pdsm_start"] = 0.12
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=1)
+        @test JuMP.start_value(PowerModels.var(pm, 1, :pdsm)[1]) == 0.12
+    end
+
+    @testset "report" begin
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=1, report=true)
+        @test vfc_reported(pm, 1, :dsm, :pdsm) ==
+              Dict(1 => PowerModels.var(pm, 1, :pdsm)[1])
+
+        pm = vfc_model()
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=1, report=false)
+        @test isempty(vfc_reported(pm, 1, :dsm, :pdsm))
+    end
+
+    @testset "nw keyword" begin
+        pm = vfc_model()
+        PowerModels.ref(pm, 2, :dsm, 1)["pdsm_start"] = -0.05
+        eDisGo_OPF.variable_dsm_storage_power_real(pm, nw=2)
+        @test isempty(PowerModels.var(pm, 1))
+        pdsm = PowerModels.var(pm, 2, :pdsm)
+        @test JuMP.name(pdsm[1]) == "2_pdsm[1]"
+        @test JuMP.start_value(pdsm[1]) == -0.05
+        @test length(vfc_reported(pm, 2, :dsm, :pdsm)) == 1
+    end
+end
