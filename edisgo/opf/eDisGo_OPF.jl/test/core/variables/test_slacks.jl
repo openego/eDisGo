@@ -555,3 +555,79 @@ end
         end
     end
 end
+
+"""
+Shared body of the `variable_slack_gen_real` / `_imaginary` tests: `f` creates
+the variable `field` with start field `start_field` over the slack generators.
+"""
+function vsl_check_slack_gen(f, field::Symbol, start_field::String)
+    # A second slack generator on another bus, switched off: `ref_add_core!`
+    # does not filter `gen_slack` by `gen_status`, so it gets a variable too.
+    data = vsl_network()
+    vsl_add!(data, "gen_slack", 2; gen_bus=2, gen_status=0)
+
+    @testset "key, index set and bounds" begin
+        pm = vsl_model(data)
+        f(pm; nw=1)
+        v = PowerModels.var(pm, 1, field)
+        @test vsl_ids(v) == [1, 2]
+        @test vsl_ids(v) == sort(collect(PowerModels.ids(pm, 1, :gen_slack)))
+        @test JuMP.num_variables(pm.model) == 2
+        for i in (1, 2)
+            # Completely free, in both directions.
+            @test vsl_lb(v[i]) === nothing
+            @test vsl_ub(v[i]) === nothing
+            @test JuMP.name(v[i]) == "1_$(field)[$i]"
+        end
+    end
+
+    @testset "start value" begin
+        # `set_ac_bf_start_values!` writes `pgs_start`/`qgs_start` for the warm
+        # start, but the variable is created without `start = ...`.
+        data_s = vsl_network()
+        data_s["gen_slack"]["1"][start_field] = 0.42
+        pm = vsl_model(data_s)
+        f(pm; nw=1)
+        x = PowerModels.var(pm, 1, field)[1]
+        @test PowerModels.ref(pm, 1, :gen_slack, 1)[start_field] == 0.42
+        @test JuMP.start_value(x) === nothing          # actual: ignored
+        @test_broken JuMP.start_value(x) == 0.42       # intended: warm start
+    end
+
+    @testset "has no bounded keyword" begin
+        pm = vsl_model()
+        @test_throws MethodError f(pm; nw=1, bounded=true)
+    end
+
+    @testset "nw" begin
+        vsl_check_nw(f, field)
+    end
+
+    @testset "report" begin
+        vsl_check_reporting(f, :gen_slack, field)
+    end
+end
+
+@testset "variable_slack_gen_real" begin
+    vsl_check_slack_gen(eDisGo_OPF.variable_slack_gen_real, :pgs, "pgs_start")
+
+    @testset "pgs_start as written by set_ac_bf_start_values!" begin
+        # End to end: the field the warm-start helper writes is the one that
+        # would have to be read.
+        net = vsl_network()
+        for (comp, fields) in (("gen_nd", ("pgc",)), ("gen_slack", ("pgs", "qgs")),
+                               ("dsm", ("pdsm", "dsme")), ("storage", ("ps", "se")),
+                               ("electromobility", ("pcp",)), ("heatpumps", ("php",)),
+                               ("heat_storage", ("phs", "hse")))
+            for (_, c) in net[comp], fld in fields
+                c[fld] = 0.0
+            end
+        end
+        net["gen_slack"]["1"]["pgs"] = -0.7
+        eDisGo_OPF.set_ac_bf_start_values!(net)
+        @test net["gen_slack"]["1"]["pgs_start"] == -0.7
+        pm = vsl_model(net)
+        eDisGo_OPF.variable_slack_gen_real(pm; nw=1)
+        @test_broken JuMP.start_value(PowerModels.var(pm, 1, :pgs)[1]) == -0.7
+    end
+end
