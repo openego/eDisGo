@@ -631,3 +631,7 @@ end
         @test_broken JuMP.start_value(PowerModels.var(pm, 1, :pgs)[1]) == -0.7
     end
 end
+
+@testset "variable_slack_gen_imaginary" begin
+    vsl_check_slack_gen(eDisGo_OPF.variable_slack_gen_imaginary, :qgs, "qgs_start")
+end
