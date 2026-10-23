@@ -1264,11 +1264,11 @@ def determine_grid_connection_capacity(
     elif total_charging_point_capacity >= upper_limit:
         return minimum_factor * total_charging_point_capacity
     else:
-        return (
-            ((minimum_factor - 1) / (upper_limit - lower_limit))
-            * (total_charging_point_capacity - lower_limit)
-            + 1
-        ) * total_charging_point_capacity
+
+       return lower_limit + (
+            (minimum_factor * upper_limit - lower_limit)
+            / (upper_limit - lower_limit)
+            )* (total_charging_point_capacity - lower_limit)
 
 
 def integrate_charging_parks(edisgo_obj):

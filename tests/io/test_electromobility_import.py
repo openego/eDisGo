@@ -176,6 +176,31 @@ class TestElectromobilityImport:
             total_charging_demand, 0
         )
 
+    def test_determine_grid_connection_capacity(self):
+        func = electromobility_import.determine_grid_connection_capacity
+
+        # no reduction up to lower_limit
+        assert func(0.2) == pytest.approx(0.2)
+        assert func(0.3) == pytest.approx(0.3)
+        # linear interpolation of the capacity in between
+        assert func(0.65) == pytest.approx(0.375)
+        # minimum_factor at and above upper_limit
+        assert func(1.0) == pytest.approx(0.45)
+        assert func(2.0) == pytest.approx(0.9)
+
+        # monotonically non-decreasing (issue #650)
+        capacities = [func(p) for p in np.linspace(0.0, 2.0, 201)]
+        assert np.all(np.diff(capacities) >= 0)
+
+        # custom parameters
+        assert func(
+            0.5, lower_limit=0.2, upper_limit=0.8, minimum_factor=0.5
+        ) == pytest.approx(0.3)
+
+        # parameters that would make the capacity decrease are rejected
+        with pytest.raises(ValueError, match="not monotonic"):
+            func(0.5, lower_limit=0.3, upper_limit=1.0, minimum_factor=0.2)
+
     def test_integrate_charging_parks(self):
         electromobility_import.integrate_charging_parks(self.edisgo_obj)
 
