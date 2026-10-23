@@ -135,9 +135,7 @@ function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
     parameters2 = [l[1][i]*c[1][i] for i in keys(c[1])]
     parameters2 = parameters2[parameters2 .>0]
     factor_ll = 0.01
-    println(factor_ll)
     factor_hv_slacks = 7.5 *  exp10(floor(log10(maximum(0.01*parameters2)))+1)
-    println(factor_hv_slacks)
     return JuMP.@objective(pm.model, Min,
         (1 - factor_ll) * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
         + factor_ll * sum((ll[(b,i,j)]-1) * c[1][b] * l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading

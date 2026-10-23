@@ -59,9 +59,7 @@ objective_constant(model::JuMP.Model) = objective_affine(model).constant
 """
 Run `f` with `stdout` redirected and return `(result of f, everything it printed)`.
 
-`objective_min_line_loading_max_OG` writes two debug lines to `stdout` on every
-call (see the `@testset` below); this keeps them out of the test output and makes
-them assertable.
+Used to check that building a model and the objectives print nothing.
 """
 function objective_capture_stdout(f)
     original = stdout
@@ -498,9 +496,8 @@ end
 
 @testset "objective_min_line_loading_max_OG" begin
     # `opf_version` 3 — version 1 plus the overlying-grid (HV) slacks. Building
-    # the model already calls the objective, and that prints (see below), so the
-    # build is wrapped in the stdout capture.
-    pm, _build_output = objective_capture_stdout(
+    # the model already calls the objective; the build output is checked below.
+    pm, build_output = objective_capture_stdout(
         () -> TestUtils.build_small_model(opf_version=3, num_steps=2,
                                           overlying_grid=true))
     factor_ll = 0.01
@@ -511,32 +508,20 @@ end
     factor_hv_slacks = 7.5 * exp10(floor(log10(maximum(0.01 .* weights))) + 1)
     @test factor_hv_slacks == 7.5
 
-    @testset "debug output" begin
-        # BUG (production code): `objective_min_line_loading_max_OG` contains two
-        # leftover `println` calls that write `factor_ll` and `factor_hv_slacks`
-        # to stdout on every invocation. Documented here rather than fixed —
-        # production code is not touched in this work stream.
+    @testset "no output" begin
+        # Neither building the model nor the objective itself prints anything
+        # (it used to print `factor_ll` and `factor_hv_slacks`, #803).
+        @test build_output == ""
         _obj, out = objective_capture_stdout(
             () -> eDisGo_OPF.objective_min_line_loading_max_OG(pm))
-        @test out == "0.01\n7.5\n"
-        # Instantiating the model printed the same two lines.
-        @test _build_output == "0.01\n7.5\n"
-        # None of the other four objectives prints anything.
-        @test last(objective_capture_stdout(
-            () -> eDisGo_OPF.objective_min_line_loading_max(pm))) == ""
-        @test last(objective_capture_stdout(
-            () -> eDisGo_OPF.objective_min_losses(pm))) == ""
-        # Restore the objective for the remaining test sets.
-        objective_capture_stdout(
-            () -> eDisGo_OPF.objective_min_line_loading_max_OG(pm))
+        @test out == ""
     end
 
     @testset "sense, type and return value" begin
         @test JuMP.objective_sense(pm.model) == MOI.MIN_SENSE
         @test JuMP.objective_function_type(pm.model) == JuMP.QuadExpr
         # The function hands back exactly the expression it installed.
-        obj, _out = objective_capture_stdout(
-            () -> eDisGo_OPF.objective_min_line_loading_max_OG(pm))
+        obj = eDisGo_OPF.objective_min_line_loading_max_OG(pm)
         @test obj isa JuMP.QuadExpr
         @test obj == JuMP.objective_function(pm.model)
     end
@@ -578,7 +563,7 @@ end
         for req in values(d["HV_requirements"])
             req["count"] = 9
         end
-        pm_c, _ = objective_capture_stdout(() -> objective_flex_model(d))
+        pm_c = objective_flex_model(d)
         hv_c = objective_hv_ids(pm_c)
         @test objective_quad_coeff(pm_c.model,
                                    PowerModels.var(pm_c, 1, :phvs)[hv_c["cp"]]) ≈
@@ -596,7 +581,7 @@ end
             for (b, cost) in zip(("1", "2", "3"), costs)
                 d["branch"][b]["cost"] = cost
             end
-            pm_f, _ = objective_capture_stdout(() -> objective_flex_model(d))
+            pm_f = objective_flex_model(d)
             hv_f = objective_hv_ids(pm_f)
             phvs = PowerModels.var(pm_f, 1, :phvs)
             @test 7.5 * exp10(floor(log10(0.01 * maximum(costs))) + 1) ≈
@@ -610,9 +595,8 @@ end
 
     @testset "sum over all time steps" begin
         for steps in (1, 3)
-            pm_s, _ = objective_capture_stdout(
-                () -> TestUtils.build_small_model(opf_version=3, num_steps=steps,
-                                                  overlying_grid=true))
+            pm_s = TestUtils.build_small_model(opf_version=3, num_steps=steps,
+                                               overlying_grid=true)
             @test objective_num_quadratic(pm_s.model) == 5 * steps
             # Losses per time step plus the two time-step independent `ll` terms.
             @test objective_num_linear(pm_s.model) == 3 * steps + 2
