@@ -107,10 +107,10 @@ end
 
 "variable: `ll[l,i,j]` for `(l,i,j)` in `arcs_from`"
 function variable_line_loading_max(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
-    branches = [(l, i, j) for (l, i, j) in PowerModels.ref(pm, nw, :arcs_from) if !PowerModels.ref(pm, 1, :branch)[l]["storage"]]
+    branches = [(l, i, j) for (l, i, j) in PowerModels.ref(pm, nw, :arcs_from) if !PowerModels.ref(pm, nw, :branch)[l]["storage"]]
     ll = PowerModels.var(pm, nw)[:ll] = JuMP.@variable(pm.model,
         [(l,i,j) in branches], base_name="$(nw)_ll",
-        start = comp_start_value(PowerModels.ref(pm, nw, :branch, l), "ll_start"),
+        start = comp_start_value(PowerModels.ref(pm, nw, :branch, l), "ll_start", 1.0),
         lower_bound = 1
     )
 
