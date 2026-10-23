@@ -140,9 +140,6 @@ function vsl_check_nw(f, field::Symbol)
     @test all(startswith(JuMP.name(v[i]), "2_$(field)[") for i in vsl_ids(v))
 end
 
-"Run `f` with `stdout` discarded (opf_version 3 prints debug lines, see defect 7)."
-vsl_quiet(f) = redirect_stdout(f, devnull)
-
 # Not `const`: the file may be included more than once per session.
 vsl_built_models = Dict{Int,Any}()
 
@@ -152,8 +149,7 @@ The full `build_mn_opf_bf_flex` model of `TestUtils.small_network` for
 shared by the wrapper tests, which only read it.
 """
 vsl_built(v::Int) = get!(vsl_built_models, v) do
-    vsl_quiet(() -> TestUtils.build_small_model(; opf_version=v,
-                                                overlying_grid=v in (3, 4)))
+    TestUtils.build_small_model(; opf_version=v, overlying_grid=v in (3, 4))
 end
 
 # ---------------------------------------------------------------------------

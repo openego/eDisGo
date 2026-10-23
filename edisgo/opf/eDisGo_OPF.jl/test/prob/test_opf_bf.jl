@@ -38,37 +38,14 @@ const OPF_IPOPT = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" 
 opf_has_og(v::Int) = v in (3, 4)
 
 """
-Run `f` with `stdout` redirected and return `(result of f, everything it printed)`.
-
-The objective of `opf_version` 3 prints two debug lines on every build (known
-defect, see `test/core/test_objective.jl`); this keeps them out of the test log.
-"""
-function opf_capture_stdout(f)
-    original = stdout
-    rd, wr = redirect_stdout()
-    reader = @async read(rd, String)
-    local value
-    try
-        value = f()
-    finally
-        redirect_stdout(original)
-        close(wr)
-    end
-    return value, fetch(reader)
-end
-
-"""
 Instantiate `build_mn_opf_bf_flex` on `TestUtils.small_network` without solving.
 `overlying_grid` defaults to whether the version uses HV requirements.
 """
 function opf_small_model(model_type::Type=eDisGo_OPF.NCBFPowerModelEdisgo;
                          opf_version::Int, overlying_grid::Bool=opf_has_og(opf_version),
                          num_steps::Int=2)
-    pm, _ = opf_capture_stdout() do
-        TestUtils.build_small_model(model_type; opf_version=opf_version,
-                                    overlying_grid=overlying_grid, num_steps=num_steps)
-    end
-    return pm
+    return TestUtils.build_small_model(model_type; opf_version=opf_version,
+                                       overlying_grid=overlying_grid, num_steps=num_steps)
 end
 
 "Solve the multi-network form of `small_network` with Ipopt via `solve_mn_opf_bf_flex`."
@@ -76,9 +53,7 @@ function opf_solve_small(model_type::Type=eDisGo_OPF.NCBFPowerModelEdisgo;
                          opf_version::Int=2, kwargs...)
     data = TestUtils.multinetwork(TestUtils.small_network(
         opf_version=opf_version, overlying_grid=opf_has_og(opf_version)))
-    (result, pm), _ = opf_capture_stdout() do
-        eDisGo_OPF.solve_mn_opf_bf_flex(data, model_type, OPF_IPOPT; kwargs...)
-    end
+    result, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data, model_type, OPF_IPOPT; kwargs...)
     return result, pm, data
 end
 
@@ -523,7 +498,7 @@ end
         built = JuMP.objective_function(pm.model)
         # The installed objective is exactly the one of this version: building it
         # again on the same model gives the same expression.
-        opf_capture_stdout(() -> objective(pm))
+        objective(pm)
         @test JuMP.isequal_canonical(built, JuMP.objective_function(pm.model))
         # Quadratic only through the squared HV slacks of versions 3 and 4.
         @test (built isa JuMP.QuadExpr) == opf_has_og(v)
@@ -559,10 +534,8 @@ end
     end
 
     @testset "eDisGo test grid, opf_version $v" for v in 1:4
-        pm, _ = opf_capture_stdout() do
-            TestUtils.build_model(eDisGo_OPF.NCBFPowerModelEdisgo;
-                                  overlying_grid=opf_has_og(v), opf_version=v)
-        end
+        pm = TestUtils.build_model(eDisGo_OPF.NCBFPowerModelEdisgo;
+                                   overlying_grid=opf_has_og(v), opf_version=v)
         @test sort(collect(PowerModels.nw_ids(pm))) == 1:4
         @test TestUtils.variable_keys(pm, 1) == opf_expected_vars(v, 1)
         @test TestUtils.variable_keys(pm, 4) == opf_expected_vars(v, 4)

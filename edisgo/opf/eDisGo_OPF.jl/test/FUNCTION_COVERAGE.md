@@ -77,9 +77,10 @@ section 6); the tests record the actual behaviour and mark the intended one with
 6. **`constraint_HV_requirements` has no `else` branch** — for an unknown
    `hv_req["name"]`, `pflex` stays undefined and `sum(pflex)` throws
    `UndefVarError(:pflex)`. (#806)
-7. **Debug `println`s in `objective_min_line_loading_max_OG`**
-   (`core/objective.jl:138,140`) write to stdout on every model build with
-   `opf_version` 3. (#803)
+7. ~~**Debug `println`s in `objective_min_line_loading_max_OG`**~~ — **fixed**:
+   the two `println` calls that wrote `factor_ll` and `factor_hv_slacks` to
+   stdout on every model build with `opf_version` 3 are removed, and so are the
+   stdout captures in the tests that only existed because of them. (#803)
 8. **The implicit 1:1 pairing of heat pump and heat storage**:
    `constraint_hp_operation` reads `phs`/`phss` with the heat pump index, so heat
    pump `i` is coupled to heat storage `i`. Since the fix of defect 15, a heat
@@ -267,9 +268,7 @@ measurably above the NC optimum. The docstring of
   heat storage are paired by id without a check, see defect 8)
 - [x] `objective_min_line_loading_max` — AbstractBFModelEdisgo
 - [x] `objective_min_losses_slacks_OG` — AbstractBFModelEdisgo
-- [x] `objective_min_line_loading_max_OG` — AbstractBFModelEdisgo (defect: two
-  leftover `println` calls write `factor_ll` and `factor_hv_slacks` to stdout on
-  every call; pinned in the test by capturing stdout)
+- [x] `objective_min_line_loading_max_OG` — AbstractBFModelEdisgo
 
 ### `src/form/bf.jl` → `test/form/test_bf.jl`
 
