@@ -2,12 +2,13 @@
 Seed warm-start values on a (single-network) data dict: copy each flexibility's
 optimised power/energy results into the corresponding `*_start` fields, so a
 subsequent non-convex (Ipopt) solve can be warm-started from a previous solution.
-Used in the SOC → NC `warm_start` workflow.
+Used in the SOC → NC `warm_start` workflow. The curtailment `pgc` only exists for
+`opf_version` 2, 3 and 4, so a generator without it gets no `pgc_start`.
 """
 function set_ac_bf_start_values!(network::Dict{String,<:Any})
 
     for (i,gen) in network["gen_nd"]
-        gen["pgc_start"] = gen["pgc"]
+        haskey(gen, "pgc") && (gen["pgc_start"] = gen["pgc"])
     end
 
     for (i,gen) in network["gen_slack"]

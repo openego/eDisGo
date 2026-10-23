@@ -126,12 +126,23 @@ end
         @test exception.key == group
     end
 
-    # Likewise for an unsolved network: the result fields have to be in place,
-    # which is what `PowerModels.update_data!` does before the call in `Main.jl`.
+    # The curtailment `pgc` is the one result field that may be missing: it only
+    # exists for `opf_version` 2, 3 and 4, so after an `opf_version` 1 solve the
+    # generators get no `pgc_start`, and everything else is copied as usual.
+    v1_net, _ = data_solved_network()
+    delete!(v1_net["gen_nd"]["1"], "pgc")
+    @test eDisGo_OPF.set_ac_bf_start_values!(v1_net) === nothing
+    @test !haskey(v1_net["gen_nd"]["1"], "pgc_start")
+    @test v1_net["gen_slack"]["1"]["pgs_start"] == expected[("gen_slack", "pgs")]
+    @test v1_net["heat_storage"]["1"]["hse_start"] == expected[("heat_storage", "hse")]
+
+    # Every other result field has to be in place, which is what
+    # `PowerModels.update_data!` does before the call in `Main.jl`: an unsolved
+    # network fails at the first of them, the slack generator's `pgs`.
     unsolved = TestUtils.small_network()
     exception = data_thrown(() -> eDisGo_OPF.set_ac_bf_start_values!(unsolved))
     @test exception isa KeyError
-    @test exception.key == "pgc"
+    @test exception.key == "pgs"
 
     # The call site in `Main.jl` passes a single sub-network of the multi-network
     # dict, so only that one gains start values.
@@ -141,6 +152,26 @@ end
     @test mn["nw"]["1"]["heat_storage"]["1"]["hse_start"] ==
           expected[("heat_storage", "hse")]
     @test !haskey(mn["nw"]["2"]["heat_storage"]["1"], "hse_start")
+
+    # The warm-start chain of `Main.jl` on a real solve: SOC solve, `update_data!`,
+    # start values, warm-started NC solve. Ipopt solves both models here, so this
+    # also runs without a Gurobi licence. `opf_version` 1 has no `pgc` in the
+    # result, 2 has one.
+    ipopt = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "print_level" => 0,
+                                           "sb" => "yes", "tol" => 1e-6)
+    @testset "warm-start chain, opf_version $v" for v in (1, 2)
+        data = TestUtils.multinetwork(TestUtils.small_network(opf_version=v))
+        result_soc, _ = eDisGo_OPF.solve_mn_opf_bf_flex(data, SOCBFPowerModelEdisgo, ipopt)
+        @test result_soc["termination_status"] == MOI.LOCALLY_SOLVED
+        PowerModels.update_data!(data, result_soc["solution"])
+        @test haskey(data["nw"]["1"]["gen_nd"]["1"], "pgc") == (v == 2)
+        @test eDisGo_OPF.set_ac_bf_start_values!(data["nw"]["1"]) === nothing
+        @test haskey(data["nw"]["1"]["gen_nd"]["1"], "pgc_start") == (v == 2)
+        @test data["nw"]["1"]["storage"]["1"]["se_start"] ==
+              data["nw"]["1"]["storage"]["1"]["se"]
+        result_nc, _ = eDisGo_OPF.solve_mn_opf_bf_flex(data, NCBFPowerModelEdisgo, ipopt)
+        @test result_nc["termination_status"] == MOI.LOCALLY_SOLVED
+    end
 end
 
 @testset "correct_bus_types!" begin

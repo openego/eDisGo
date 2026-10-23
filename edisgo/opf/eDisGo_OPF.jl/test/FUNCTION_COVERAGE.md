@@ -89,14 +89,12 @@ section 6); the tests record the actual behaviour and mark the intended one with
    commented out** — a network without a slack bus passes without a warning.
    `check_connectivity` does not check the eDisGo-specific components for valid
    bus references at all. (#806)
-10. **The SOC→NC warm start in `Main.jl` never works.** `Main.jl:127` calls
-    `set_ac_bf_start_values!` without the module prefix, but `eDisGo_OPF` does
-    not export the function. With `method="soc"`, `warm_start=True` and a tight
-    SOC solution, the script dies with `UndefVarError` after the Gurobi solve
-    (exit code 1, no result JSON); Python then reports "Julia process failed!".
-    The prefix alone is not enough: with `opf_version` 1, the default of
-    `EDisGo.pm_optimize`, `set_ac_bf_start_values!` then fails with
-    `KeyError("pgc")`, because `pgc` only exists for versions 2–4. (#800)
+10. ~~**The SOC→NC warm start in `Main.jl` never works.**~~ — **fixed**:
+    `Main.jl` calls `eDisGo_OPF.set_ac_bf_start_values!` with the module prefix,
+    and `set_ac_bf_start_values!` skips `pgc` when the result has none
+    (`opf_version` 1). Before, the script died with `UndefVarError` after the
+    Gurobi solve of a tight SOC relaxation (exit code 1, no result JSON), and
+    with the prefix alone `opf_version` 1 failed with `KeyError("pgc")`. (#800)
 11. **In `opf_version` 3, the curtailment `pgc` is decoupled from the power
     balance.** `build_mn_opf_bf_flex` creates `pgc` for version 3
     (`prob/opf_bf.jl:36-38`), `constraint_HV_requirements` counts it towards the
@@ -147,10 +145,8 @@ measurably above the NC optimum. The docstring of
 
 ### `Main.jl` → `test/test_main.jl`
 
-- [x] `optimize_edisgo` (bug: the SOC path with `warm_start` dies with
-  `UndefVarError(:set_ac_bf_start_values!)` for a tight relaxation, see defect 10
-  — documented as `@test_broken`; the two SOC runs need Gurobi and are skipped
-  without a licence, CI only runs the NC run)
+- [x] `optimize_edisgo` (the three SOC runs, one without and two with warm start,
+  need Gurobi and are skipped without a licence; CI only runs the NC run)
 
 ### `src/core/types.jl` → `test/core/test_types.jl`
 
