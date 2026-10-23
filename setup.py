@@ -53,7 +53,7 @@ requirements = [
     "numpy ==1.26.4",
     "oedialect < 0.2.0",
     "pandas >= 1.4.0, < 2.2.0",
-    "paramiko < 4.0",
+    "paramiko < 6.0",
     "plotly < 6.0",
     "psycopg2-binary < 2.10.0",
     "pydot < 4.1.0",
