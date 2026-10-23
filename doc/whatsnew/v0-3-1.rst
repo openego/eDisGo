@@ -329,3 +329,21 @@ Changes
   during reinforcement, and for MV lines after
   :func:`~.tools.tools.add_line_susceptance` (for all lines with ``mode="all_b"``)
   (openego/eDisGo#654)
+* Fixed the warnings of the Julia OPF package ``eDisGo_OPF.jl``. Its
+  ``Memento.warn``/``Memento.error`` calls referenced a logger ``_LOGGER`` that was
+  never defined in the package, so every path meant to warn raised an
+  ``UndefVarError`` instead: input without ``time_elapsed`` made the OPF build fail
+  instead of falling back to one hour per time step, JSON input with a
+  ``conductors`` entry was rejected, and a grid with more than one reference bus
+  could not be built. The input eDisGo itself sends hit none of these paths. The
+  package now logs through the PowerModels logger. The bus type correction
+  ``_correct_bus_types!`` also called PowerModels' ``_biggest_generator`` without
+  the module prefix; it is not called in the OPF run at the moment
+* Added a test suite written in Julia for the OPF package ``eDisGo_OPF.jl`` in
+  ``edisgo/opf/eDisGo_OPF.jl/test``. It is run from that directory with
+  ``julia --project=. -e 'using Pkg; Pkg.test()'`` and needs Julia 1.12. Tests that
+  need Gurobi skip themselves without a licence. A new GitHub Actions workflow runs
+  the suite on every push that changes the package and fails if the line coverage
+  of ``src/`` drops below 100 %. Known defects of the package that are not fixed
+  yet are marked with ``@test_broken`` and tracked in openego/eDisGo#810
+  (openego/eDisGo#522)

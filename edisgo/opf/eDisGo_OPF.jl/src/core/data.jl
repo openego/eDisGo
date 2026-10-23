@@ -113,7 +113,7 @@ function _correct_bus_types!(pm_data::Dict{String,<:Any})
     end
 
     if !slack_found
-        gen = _biggest_generator(pm_data["gen"])
+        gen = PowerModels._biggest_generator(pm_data["gen"])
         if length(gen) > 0
             gen_bus = gen["gen_bus"]
             ref_bus = pm_data["bus"]["$(gen_bus)"]
