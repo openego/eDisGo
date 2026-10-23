@@ -26,9 +26,11 @@ const DATA_START_FIELDS = [
     "gen_slack" => ["pgs", "qgs"],
     "dsm" => ["pdsm", "dsme"],
     "storage" => ["ps", "se"],
-    "electromobility" => ["pcp"],
+    "electromobility" => ["pcp", "cpe"],
     "heatpumps" => ["php"],
     "heat_storage" => ["phs", "hse"],
+    "bus" => ["w"],
+    "branch" => ["pf", "qf", "ccm", "ll"],
 ]
 
 "Total number of `*_start` fields a complete run has to produce."
@@ -37,9 +39,9 @@ const DATA_NUM_START_FIELDS = sum(length(fields) for (_, fields) in DATA_START_F
 """
 [`TestUtils.small_network`](@ref) with one *result* value per field of
 [`DATA_START_FIELDS`](@ref), as `PowerModels.update_data!` would leave it after a
-solve. Returns the network and a `(group, field) => value` map of the values that
-were injected; every value is distinct, so a test notices when a value ends up in
-the wrong `*_start` field.
+solve, set on every component of the group. Returns the network and a
+`(group, field) => value` map of the values that were injected; every value is
+distinct, so a test notices when a value ends up in the wrong `*_start` field.
 """
 function data_solved_network()
     net = TestUtils.small_network()
@@ -47,7 +49,9 @@ function data_solved_network()
     value = 0.0
     for (group, fields) in DATA_START_FIELDS, field in fields
         value += 0.125
-        net[group]["1"][field] = value
+        for component in values(net[group])
+            component[field] = value
+        end
         expected[(group, field)] = value
     end
     return net, expected
@@ -78,7 +82,7 @@ end
     # … and no others: exactly one `*_start` field per copied result field.
     @test sum(count(endswith("_start"), keys(net[group]["1"]))
               for (group, _) in DATA_START_FIELDS) == DATA_NUM_START_FIELDS
-    @test DATA_NUM_START_FIELDS == 11
+    @test DATA_NUM_START_FIELDS == 17
 
     # Everything that was already there survives untouched — the function only
     # ever adds `*_start` keys.
@@ -89,7 +93,7 @@ end
     # Component types the function does not know about are not visited at all:
     # in particular the dispatchable generators (`gen`), whose set point comes
     # from the time series rather than from the optimisation.
-    for group in ("gen", "load", "bus", "branch", "time_series")
+    for group in ("gen", "load", "time_series")
         @test net[group] == before[group]
     end
 
@@ -126,13 +130,19 @@ end
         @test exception.key == group
     end
 
-    # The curtailment `pgc` is the one result field that may be missing: it only
-    # exists for `opf_version` 2, 3 and 4, so after an `opf_version` 1 solve the
-    # generators get no `pgc_start`, and everything else is copied as usual.
+    # Three result fields may be missing: the curtailment `pgc` only exists for
+    # `opf_version` 2, 3 and 4, the line loading `ll` only for 1 and 3 (and in
+    # network 1), and `w` not at storage buses. Without them, no start field is
+    # written, and everything else is copied as usual.
     v1_net, _ = data_solved_network()
     delete!(v1_net["gen_nd"]["1"], "pgc")
+    delete!(v1_net["branch"]["1"], "ll")
+    delete!(v1_net["bus"]["1"], "w")
     @test eDisGo_OPF.set_ac_bf_start_values!(v1_net) === nothing
     @test !haskey(v1_net["gen_nd"]["1"], "pgc_start")
+    @test !haskey(v1_net["branch"]["1"], "ll_start")
+    @test !haskey(v1_net["bus"]["1"], "w_start")
+    @test v1_net["branch"]["1"]["ccm_start"] == expected[("branch", "ccm")]
     @test v1_net["gen_slack"]["1"]["pgs_start"] == expected[("gen_slack", "pgs")]
     @test v1_net["heat_storage"]["1"]["hse_start"] == expected[("heat_storage", "hse")]
 
@@ -144,8 +154,8 @@ end
     @test exception isa KeyError
     @test exception.key == "pgs"
 
-    # The call site in `Main.jl` passes a single sub-network of the multi-network
-    # dict, so only that one gains start values.
+    # The function works on a single sub-network of the multi-network dict, so
+    # only that one gains start values; `Main.jl` calls it for every network.
     solved, _ = data_solved_network()
     mn = TestUtils.multinetwork(solved)
     eDisGo_OPF.set_ac_bf_start_values!(mn["nw"]["1"])
@@ -165,12 +175,32 @@ end
         @test result_soc["termination_status"] == MOI.LOCALLY_SOLVED
         PowerModels.update_data!(data, result_soc["solution"])
         @test haskey(data["nw"]["1"]["gen_nd"]["1"], "pgc") == (v == 2)
-        @test eDisGo_OPF.set_ac_bf_start_values!(data["nw"]["1"]) === nothing
+        # `Main.jl` seeds every network.
+        for network in values(data["nw"])
+            @test eDisGo_OPF.set_ac_bf_start_values!(network) === nothing
+        end
         @test haskey(data["nw"]["1"]["gen_nd"]["1"], "pgc_start") == (v == 2)
         @test data["nw"]["1"]["storage"]["1"]["se_start"] ==
               data["nw"]["1"]["storage"]["1"]["se"]
-        result_nc, _ = eDisGo_OPF.solve_mn_opf_bf_flex(data, NCBFPowerModelEdisgo, ipopt)
+        result_nc, pm_nc = eDisGo_OPF.solve_mn_opf_bf_flex(data, NCBFPowerModelEdisgo, ipopt)
         @test result_nc["termination_status"] == MOI.LOCALLY_SOLVED
+        # The NC model starts from the SOC result: flexibilities, slack generator
+        # and grid alike, in every network.
+        @test JuMP.start_value(PowerModels.var(pm_nc, 2, :w)[2]) ==
+              data["nw"]["2"]["bus"]["2"]["w"]
+        nw1 = data["nw"]["1"]
+        start(sym, i) = JuMP.start_value(PowerModels.var(pm_nc, 1, sym)[i])
+        @test start(:pgs, 1) == nw1["gen_slack"]["1"]["pgs"]
+        @test start(:qgs, 1) == nw1["gen_slack"]["1"]["qgs"]
+        @test start(:cpe, 1) == nw1["electromobility"]["1"]["cpe"]
+        @test start(:se, 1) == nw1["storage"]["1"]["se"]
+        @test start(:w, 2) == nw1["bus"]["2"]["w"]
+        @test start(:ccm, 1) == nw1["branch"]["1"]["ccm"]
+        @test start(:p, (1, 1, 2)) == nw1["branch"]["1"]["pf"]
+        @test start(:q, (1, 1, 2)) == nw1["branch"]["1"]["qf"]
+        if v == 1
+            @test start(:ll, (1, 1, 2)) == nw1["branch"]["1"]["ll"]
+        end
     end
 end
 

@@ -24,9 +24,6 @@
 # Production defects documented here (actual behaviour tested, intended
 # behaviour kept as `@test_broken`):
 #
-#   * `variable_branch_power_real_radial`/`_imaginary_radial` index `p`/`q` by
-#     `arcs_from` only, but still try to set a start value on the to-arc for
-#     `pt_start`/`qt_start` — that throws a `KeyError`.
 #   * `variable_line_loading_max` decides which branches are storage branches by
 #     looking at network 1 (`ref(pm, 1, :branch)`) instead of network `nw`.
 
@@ -178,22 +175,15 @@ end
         @test JuMP.start_value(p[(3, 3, 4)]) == 0.0
     end
 
-    @testset "pt_start (defect)" begin
-        # Actual: `p` only exists for the from-arcs, but a `pt_start` field still
-        # makes the function set a start value on the to-arc `(1, 2, 1)` — which
-        # is not part of the container, so the call throws.
+    @testset "pt_start is ignored" begin
+        # `p` only exists for the from-arcs (radial model), so there is no to-arc
+        # a `pt_start` field could seed: it is ignored.
         pm = vfc_model()
         PowerModels.ref(pm, 1, :branch, 1)["pt_start"] = 0.2
-        @test_throws KeyError eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1)
-        # Intended: the field is ignored (or rejected with a clear message).
-        pm = vfc_model()
-        PowerModels.ref(pm, 1, :branch, 1)["pt_start"] = 0.2
-        @test_broken try
-            eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1)
-            true
-        catch
-            false
-        end
+        eDisGo_OPF.variable_branch_power_real_radial(pm, nw=1)
+        p = PowerModels.var(pm, 1, :p)
+        @test JuMP.start_value(p[(1, 1, 2)]) == 0.0
+        @test !((1, 2, 1) in axes(p, 1))
     end
 
     @testset "report" begin
@@ -273,19 +263,14 @@ end
         @test JuMP.start_value(q[(3, 3, 4)]) == 0.0
     end
 
-    @testset "qt_start (defect)" begin
-        # Same defect as `pt_start` for the active flow: the to-arc does not exist.
+    @testset "qt_start is ignored" begin
+        # Same as `pt_start` for the active flow: the to-arc does not exist.
         pm = vfc_model()
         PowerModels.ref(pm, 1, :branch, 1)["qt_start"] = 0.2
-        @test_throws KeyError eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1)
-        pm = vfc_model()
-        PowerModels.ref(pm, 1, :branch, 1)["qt_start"] = 0.2
-        @test_broken try
-            eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1)
-            true
-        catch
-            false
-        end
+        eDisGo_OPF.variable_branch_power_imaginary_radial(pm, nw=1)
+        q = PowerModels.var(pm, 1, :q)
+        @test JuMP.start_value(q[(1, 1, 2)]) == 0.0
+        @test !((1, 2, 1) in axes(q, 1))
     end
 
     @testset "report" begin

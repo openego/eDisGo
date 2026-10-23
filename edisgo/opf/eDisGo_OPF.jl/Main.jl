@@ -124,7 +124,9 @@ function optimize_edisgo()
       data_edisgo_mn["solver"] = "Gurobi"
       if soc_tight & warm_start
         println("Starting warm-start non-convex AC-OPF with IPOPT.")
-        eDisGo_OPF.set_ac_bf_start_values!(data_edisgo_mn["nw"]["1"])
+        for network in values(data_edisgo_mn["nw"])
+          eDisGo_OPF.set_ac_bf_start_values!(network)
+        end
         result_nc_ws, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, NCBFPowerModelEdisgo, ipopt)
         PowerModels.update_data!(data_edisgo_mn, result_nc_ws["solution"])
         data_edisgo_mn["solve_time"] = result_nc_ws["solve_time"]

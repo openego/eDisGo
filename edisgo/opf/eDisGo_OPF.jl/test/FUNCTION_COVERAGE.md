@@ -115,18 +115,17 @@ section 6); the tests record the actual behaviour and mark the intended one with
     `overlying_grid_opf.yaml` and `overlying_grid_opf_spatial.yaml` run
     `opf_version: 3`. The two `@test_broken` assume the fix "add `pgc` to the
     balance"; another domain decision means rewriting them. (#801)
-12. **`variable_slack_gen_real`/`_imaginary` ignore the start values**
-    (`core/variables.jl:554-570`). `set_ac_bf_start_values!` writes
-    `pgs_start`/`qgs_start`, but the variables are created without `start` — the
-    slack generator is not initialised in the warm start (once defect 10 is
-    fixed). Likewise, `set_ac_bf_start_values!` sets no `cpe_start`, although
-    `variable_cp_energy` would read it. In addition, `Main.jl` only seeds time
-    step 1, and no start values are written for the grid variables (`w`,
-    `ccm`, `p`, `q`). (#804)
-13. **`variable_branch_power_real_radial`/`_imaginary_radial` throw a `KeyError`
-    for `pt_start`/`qt_start`** (`core/variables.jl:38-41` and `:73-76`): the
-    variables only exist on `arcs_from`, but the start value is set on the to-arc.
-    Latent, because nothing writes branch start values at the moment. (#804)
+12. ~~**`variable_slack_gen_real`/`_imaginary` ignore the start values**~~ —
+    **fixed**: both read `pgs_start`/`qgs_start`, `set_ac_bf_start_values!`
+    also writes `cpe_start` and the grid start values (`w_start`, `pf_start`,
+    `qf_start`, `ccm_start`, `ll_start`), and `Main.jl` seeds every time step,
+    not only the first. Before, the warm start left the slack generator, the
+    charging energy, the grid variables and all later time steps at their
+    defaults. (#804)
+13. ~~**`variable_branch_power_real_radial`/`_imaginary_radial` throw a
+    `KeyError` for `pt_start`/`qt_start`**~~ — **fixed**: the radial model has
+    no to-arc variables, so both fields are ignored. Before, the start value was
+    set on the to-arc, which is not in the container. (#804)
 14. **`variable_line_loading_max` reads the `storage` flag from network 1 instead
     of `nw`** (`core/variables.jl:118`). Without effect as long as it is only
     called with `nw=1`. (#808)
@@ -147,9 +146,7 @@ the unsolved network without `status`/`solver`/`solve_time` and exit code 0;
 depending on whether Python picks up that line, it then misleadingly reports
 "Julia process failed!" or silently writes no results (#806). Because of defect 5,
 the SOC model is not a true relaxation of the NC model; the SOC optimum is
-measurably above the NC optimum. The docstring of
-`variable_branch_power_imaginary_radial` mentions `arcs`, the code uses
-`arcs_from`.
+measurably above the NC optimum.
 
 ### `Main.jl` → `test/test_main.jl`
 
@@ -186,10 +183,8 @@ measurably above the NC optimum. The docstring of
 ### `src/core/variables.jl` → `test/core/test_variables.jl`
 
 - [x] `variable_branch_power_radial` — AbstractPowerModel
-- [x] `variable_branch_power_real_radial` — AbstractPowerModel (defect: `pt_start`
-  throws `KeyError`, see defect 13 — documented as `@test_broken`)
-- [x] `variable_branch_power_imaginary_radial` — AbstractPowerModel (defect:
-  `qt_start` throws `KeyError`, see defect 13 — documented as `@test_broken`)
+- [x] `variable_branch_power_real_radial` — AbstractPowerModel
+- [x] `variable_branch_power_imaginary_radial` — AbstractPowerModel
 - [x] `variable_bus_voltage_magnitude_sqr` — AbstractPowerModel
 - [x] `variable_max_line_loading` — AbstractPowerModel (note: the only wrapper
   that does not accept `bounded`, `MethodError` — pinned with `@test_throws`)
@@ -229,10 +224,8 @@ measurably above the NC optimum. The docstring of
 - [x] `variable_gen_slack` — AbstractBFModelEdisgo
 - [x] `variable_ev_slack` — AbstractBFModelEdisgo
 - [x] `variable_slack_gen` — AbstractBFModelEdisgo
-- [x] `variable_slack_gen_real` — AbstractBFModelEdisgo (defect: `pgs_start` is
-  ignored, see defect 12 — documented as `@test_broken`)
-- [x] `variable_slack_gen_imaginary` — AbstractBFModelEdisgo (defect: `qgs_start`
-  is ignored, see defect 12 — documented as `@test_broken`)
+- [x] `variable_slack_gen_real` — AbstractBFModelEdisgo
+- [x] `variable_slack_gen_imaginary` — AbstractBFModelEdisgo
 - [x] `variable_slack_HV_requirements` — AbstractPowerModel
 - [x] `variable_slack_HV_requirements_real` — AbstractPowerModel
 - [x] `variable_slack_HV_requirements_imaginary` — AbstractPowerModel
