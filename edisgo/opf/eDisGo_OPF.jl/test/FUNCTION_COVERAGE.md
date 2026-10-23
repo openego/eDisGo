@@ -12,12 +12,12 @@ and `constraint_store_state`).
 Legend: `[ ]` open · `[x]` tested · `[~]` partly tested (give the reason after
 the entry)
 
-## Status (as of 2026-10-22)
+## Status (as of 2026-10-23)
 
-**84 of 84 entries done**, suite green: 3458 passing assertions, 18
-`@test_broken`, 0 failures, about 4:20 min with a Gurobi licence (about 2 min of
+**84 of 84 entries done**, suite green: 3620 passing assertions, 6
+`@test_broken`, 0 failures, about 6 to 7 min with a Gurobi licence (about 4 min of
 that are the `Main.jl` subprocesses; without Gurobi, as in CI, the two SOC runs
-are skipped). Line coverage of `src/`: 887 of 887 lines (100 %).
+are skipped). Line coverage of `src/`: 902 of 902 lines (100 %).
 
 | Source file | Status |
 | --- | --- |
