@@ -340,6 +340,23 @@ end
                   0.3)
     end
 
+    @testset "single time step" begin
+        # Network 1 is also the last one, so the end condition (Eq. (3.25) for
+        # t = tau: back to the middle of the band) is added here as well.
+        pm = cst_model(num_steps=1)
+        PowerModels.ref(pm, 1, :electromobility)[1]["e_min"] = -0.2
+        PowerModels.ref(pm, 1, :electromobility)[1]["e_max"] = 0.8
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_cp_state_initial(pm, 1, 1, 0.9)
+        end
+        @test length(cons) == 2
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 1, :cpe, 1) => 1.0,
+                       PowerModels.var(pm, 1, :pcp, 1) => -0.9),
+                  0.3)
+        cst_check(cons[2], Dict(PowerModels.var(pm, 1, :cpe, 1) => 1.0), 0.3)
+    end
+
     @testset "time_elapsed from ref" begin
         pm = cst_model(num_steps=2)
         # 15-minute time steps: the power term is scaled down accordingly.

@@ -136,10 +136,13 @@ section 6); the tests record the actual behaviour and mark the intended one with
     a heat pump whose heat storage is switched off runs without storage
     (`constraint_hp_operation`). Before, a switched-off heat storage got
     `phs`/`hse` with full bounds and could be dispatched. (#805)
-16. **With a single time step, the final-state condition of charging points is
-    missing** (Eq. 3.25 for t = τ): it only lives in `constraint_cp_state`, which
-    `prob/opf_bf.jl:86-92` calls from the second time step on. Battery, heat
-    storage and DSM get both conditions. (#809)
+16. ~~**With a single time step, the final-state condition of charging points is
+    missing**~~ — **fixed**: `constraint_cp_state_initial` adds the end condition
+    (Eq. 3.25 for t = τ) when its network is also the last one, like
+    `constraint_store_state_initial` does for battery, heat storage and DSM.
+    Before, it only lived in `constraint_cp_state`, which `build_mn_opf_bf_flex`
+    calls from the second time step on. Python still rejects fewer than two
+    snapshots. (#809)
 
 Minor findings without `@test_broken`: for an unknown `method`, `Main.jl` prints
 the unsolved network without `status`/`solver`/`solve_time` and exit code 0;
@@ -300,9 +303,8 @@ measurably above the NC optimum. The docstring of
 ### `src/prob/opf_bf.jl` → `test/prob/test_opf_bf.jl`
 
 - [x] `solve_mn_opf_bf_flex`
-- [x] `build_mn_opf_bf_flex` — AbstractBFModelEdisgo (bugs: in version 3 `pgc`
-  has no effect on the power balance, see defect 11; with a single time step the
-  final-state condition of charging points is missing, see defect 16 — both
-  documented as `@test_broken`)
+- [x] `build_mn_opf_bf_flex` — AbstractBFModelEdisgo (bug: in version 3 `pgc`
+  has no effect on the power balance, see defect 11 — documented as
+  `@test_broken`)
 
 <!-- Total number of entries: 84 -->
