@@ -22,10 +22,8 @@
 # 4 time steps with varying charging-point time series) confirms the index sets
 # and the per-time-step bounds on representative data.
 #
-# None of the eDisGo flexibility types is filtered by `ref_add_core!`. For heat
-# storage this means that the `"status"` field carried by every unit is ignored:
-# an inactive unit still gets its variables. The tests pin that behaviour and
-# keep the intended exclusion as `@test_broken` (see test/FUNCTION_COVERAGE.md).
+# `ref_add_core!` filters the eDisGo flexibility types by status and bus, so an
+# inactive heat storage gets no variables.
 
 include(joinpath(@__DIR__, "..", "..", "testsetup.jl"))
 
@@ -260,12 +258,9 @@ end
                                      status=false)
         pm = vfx_bare_model(data)
         eDisGo_OPF.variable_heat_storage_power(pm, nw=1)
-        # Actual behaviour: `ref_add_core!` does not filter `heat_storage` by its
-        # `status` field (unlike battery `storage`), so the inactive unit 2 gets a
-        # variable — and, bounded by ±capacity, may be dispatched.
-        @test vfx_indices(pm, 1, :phs) == Set([1, 2])
-        # Intended behaviour: inactive units are left out of the model.
-        @test_broken vfx_indices(pm, 1, :phs) == Set([1])
+        # `ref_add_core!` filters `heat_storage` by its `status` field, like
+        # battery `storage`, so the inactive unit 2 gets no variable.
+        @test vfx_indices(pm, 1, :phs) == Set([1])
     end
 
     @testset "bounded" begin
@@ -366,9 +361,8 @@ end
                                      status=false)
         pm = vfx_bare_model(data)
         eDisGo_OPF.variable_heat_storage_energy(pm, nw=1)
-        # Same as for `phs`: the `status` field is ignored.
-        @test vfx_indices(pm, 1, :hse) == Set([1, 2])
-        @test_broken vfx_indices(pm, 1, :hse) == Set([1])
+        # Same as for `phs`: the inactive unit is left out.
+        @test vfx_indices(pm, 1, :hse) == Set([1])
     end
 
     @testset "bounded" begin

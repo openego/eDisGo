@@ -252,11 +252,11 @@ end
 end
 
 @testset "variable_hs_slack" begin
-    # A second heat storage with an id no heat pump has, and switched off:
-    # `phss` follows the heat-storage ids, and `ref_add_core!` does not filter
-    # heat storages by status.
+    # A second heat storage with an id no heat pump has: `phss` follows the
+    # heat-storage ids. A third one is switched off, so `ref_add_core!` drops it.
     data = vsl_network()
-    vsl_add!(data, "heat_storage", 7; status=false)
+    vsl_add!(data, "heat_storage", 7)
+    vsl_add!(data, "heat_storage", 8; status=false)
 
     @testset "key, index set and bounds" begin
         for bounded in (true, false)
@@ -561,10 +561,11 @@ Shared body of the `variable_slack_gen_real` / `_imaginary` tests: `f` creates
 the variable `field` with start field `start_field` over the slack generators.
 """
 function vsl_check_slack_gen(f, field::Symbol, start_field::String)
-    # A second slack generator on another bus, switched off: `ref_add_core!`
-    # does not filter `gen_slack` by `gen_status`, so it gets a variable too.
+    # A second slack generator on another bus gets a variable too. A third one is
+    # switched off, so `ref_add_core!` drops it.
     data = vsl_network()
-    vsl_add!(data, "gen_slack", 2; gen_bus=2, gen_status=0)
+    vsl_add!(data, "gen_slack", 2; gen_bus=2)
+    vsl_add!(data, "gen_slack", 3; gen_bus=2, gen_status=0)
 
     @testset "key, index set and bounds" begin
         pm = vsl_model(data)

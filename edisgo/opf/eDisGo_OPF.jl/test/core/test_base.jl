@@ -546,33 +546,83 @@ end
                                           3 => [(1, 3, 1)], 4 => [])
         end
 
-        @testset "eDisGo component types are not filtered" begin
-            # `gen_nd`, `gen_slack`, `heatpumps`, `electromobility` and `dsm` are
-            # eDisGo additions that `ref_add_core!` copies over unfiltered — a
-            # status field on them has no effect.
+        @testset "eDisGo component types" begin
+            # `gen_nd`, `gen_slack`, `heatpumps`, `electromobility`, `dsm` and
+            # `heat_storage` are eDisGo additions. They are filtered like the
+            # PowerModels components, by their own status field …
             data = TestUtils.small_network()
             data["gen_nd"]["1"]["gen_status"] = 0
             data["gen_slack"]["1"]["gen_status"] = 0
             data["heatpumps"]["1"]["status"] = 0
             data["electromobility"]["1"]["status"] = 0
-            data["dsm"]["1"]["status"] = 0
+            data["dsm"]["1"]["status"] = false
             r = base_nw_ref(data)
-            @test base_sorted_keys(r[:gen_nd]) == [1]
-            @test base_sorted_keys(r[:gen_slack]) == [1]
-            @test base_sorted_keys(r[:heatpumps]) == [1]
-            @test base_sorted_keys(r[:electromobility]) == [1]
-            @test base_sorted_keys(r[:dsm]) == [1]
+            for comp in (:gen_nd, :gen_slack, :heatpumps, :electromobility, :dsm)
+                @test isempty(r[comp])
+            end
+            # … and the lookups no longer list them.
+            @test r[:bus_gens_nd][3] == Int[]
+            @test r[:bus_gens_slack][1] == Int[]
+            @test r[:bus_hps][3] == Int[]
+            @test r[:bus_cps][3] == Int[]
+            @test r[:bus_dsm][3] == Int[]
 
-            # BUG: because they are not filtered, an eDisGo component whose bus was
-            # deactivated is not dropped either — building `bus_dsm` (and, further
-            # down, `bus_cps`, `bus_hps`, `bus_gens_nd`, `bus_gens_slack`) then
-            # indexes a bus that no longer exists and throws a `KeyError`.
-            # Bus 3 of the fixture carries one of each.
+            # A missing status field counts as active: the fixture has none on
+            # `heatpumps`, `electromobility` and `dsm`.
+            r_ok = base_nw_ref(TestUtils.small_network())
+            for comp in (:gen_nd, :gen_slack, :heatpumps, :electromobility, :dsm,
+                         :heat_storage)
+                @test base_sorted_keys(r_ok[comp]) == [1]
+            end
+            # Any non-inactive status keeps the component.
+            data_on = TestUtils.small_network()
+            data_on["heatpumps"]["1"]["status"] = 1
+            data_on["dsm"]["1"]["status"] = true
+            r_on = base_nw_ref(data_on)
+            @test base_sorted_keys(r_on[:heatpumps]) == [1]
+            @test base_sorted_keys(r_on[:dsm]) == [1]
+
+            # A deactivated bus drops the eDisGo components on it, like the
+            # PowerModels components. Bus 3 of the fixture carries one of each.
             data_b = TestUtils.small_network()
             data_b["bus"]["3"]["bus_type"] = 4
-            @test_throws KeyError base_nw_ref(data_b)
-            # What it should do instead — drop the components with their bus:
-            @test_broken (r_b = base_nw_ref(data_b); isempty(r_b[:dsm]))
+            r_b = base_nw_ref(data_b)
+            for comp in (:gen_nd, :heatpumps, :electromobility, :dsm, :heat_storage,
+                         :load)
+                @test isempty(r_b[comp])
+            end
+            @test base_sorted_keys(r_b[:gen_slack]) == [1]
+            @test base_sorted_keys(r_b[:bus_hps]) == [1, 2, 4]
+        end
+
+        @testset "heat storage" begin
+            # Switched off: dropped, its heat pump stays (and runs without storage,
+            # see `constraint_hp_operation`).
+            data = TestUtils.small_network()
+            data["heat_storage"]["1"]["status"] = false
+            r = base_nw_ref(data)
+            @test isempty(r[:heat_storage])
+            @test base_sorted_keys(r[:heatpumps]) == [1]
+
+            # Heat storage `i` belongs to heat pump `i`: a heat pump that is
+            # dropped, by status or by its bus, takes its heat storage with it.
+            data_hp = TestUtils.small_network()
+            data_hp["heatpumps"]["1"]["status"] = 0
+            @test isempty(base_nw_ref(data_hp)[:heat_storage])
+            data_bus = TestUtils.small_network()
+            data_bus["heatpumps"]["1"]["hp_bus"] = 2
+            data_bus["bus"]["2"]["bus_type"] = 4
+            r_bus = base_nw_ref(data_bus)
+            @test isempty(r_bus[:heatpumps])
+            @test isempty(r_bus[:heat_storage])
+
+            # A heat storage on a deactivated bus is dropped as well.
+            data_hs = TestUtils.small_network()
+            data_hs["heat_storage"]["1"]["storage_bus"] = 2
+            data_hs["bus"]["2"]["bus_type"] = 4
+            r_hs = base_nw_ref(data_hs)
+            @test isempty(r_hs[:heat_storage])
+            @test base_sorted_keys(r_hs[:heatpumps]) == [1]
         end
     end
 
@@ -664,14 +714,13 @@ end
         @test r0[:ref_buses] isa Dict{Int,Any}
         @test isempty(r0[:ref_buses])
 
-        # A deactivated slack bus should not end up in `:ref_buses` either — but
-        # the slack generator sitting on it is one of the unfiltered eDisGo
-        # component types, so the build dies in `bus_gens_slack` first (see the
-        # "eDisGo component types are not filtered" set above).
+        # A deactivated slack bus does not end up in `:ref_buses` either; the
+        # slack generator sitting on it is dropped with it.
         data_off = TestUtils.small_network()
         data_off["bus"]["1"]["bus_type"] = 4
-        @test_throws KeyError base_nw_ref(data_off)
-        @test_broken (r_off = base_nw_ref(data_off); isempty(r_off[:ref_buses]))
+        r_off = base_nw_ref(data_off)
+        @test isempty(r_off[:ref_buses])
+        @test isempty(r_off[:gen_slack])
 
         # More than one slack bus: both are collected, with a warning that this
         # can make the problem infeasible.

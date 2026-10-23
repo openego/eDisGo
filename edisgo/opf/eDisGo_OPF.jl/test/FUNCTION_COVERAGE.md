@@ -60,10 +60,11 @@ section 6); the tests record the actual behaviour and mark the intended one with
    looks at `gen`, not at `gen_slack`, where eDisGo puts the slack generator.
    Still without effect in production, because `correct_network_data!` has the
    call commented out (defect 9). Tracked in #806.
-3. **`ref_add_core!` throws `KeyError` when a deactivated bus carries an
-   eDisGo-specific component** (`bus_type == 4`): `dsm`, `heatpumps`,
-   `electromobility`, `gen_nd` and `gen_slack` are not filtered along with the
-   bus. A deactivated bus with only PowerModels components works. (#805)
+3. ~~**`ref_add_core!` throws `KeyError` when a deactivated bus carries an
+   eDisGo-specific component**~~ — **fixed**: `ref_add_core!` now drops `dsm`,
+   `heatpumps`, `electromobility`, `gen_nd`, `gen_slack` and `heat_storage`
+   together with their deactivated bus (`bus_type == 4`). Before, the bus lookups
+   indexed the removed bus and threw `KeyError`. (#805)
 4. **`solve_model` silently ignores `multinetwork`/`multiconductor`.**
    PowerModels throws an error for a contradicting flag; here a malformed data
    structure goes unnoticed. (#806)
@@ -79,12 +80,15 @@ section 6); the tests record the actual behaviour and mark the intended one with
 7. **Debug `println`s in `objective_min_line_loading_max_OG`**
    (`core/objective.jl:138,140`) write to stdout on every model build with
    `opf_version` 3. (#803)
-8. **The `phss` term in `objective_min_losses_slacks`/`_OG`** sums over the heat
-   pump indices, although `phss` is created per heat storage. The indices are
-   identical in both fixtures; with different numbering there would be a
-   `KeyError`, already in `constraint_hp_operation`, which also reads
-   `phs`/`phss` with the heat pump index. The underlying issue is the implicit
-   1:1 pairing of heat pump and heat storage. (#807)
+8. **The implicit 1:1 pairing of heat pump and heat storage**:
+   `constraint_hp_operation` reads `phs`/`phss` with the heat pump index, so heat
+   pump `i` is coupled to heat storage `i`. Since the fix of defect 15, a heat
+   pump without a heat storage of the same id runs without storage (needed for a
+   switched-off heat storage), and the `phss` term of
+   `objective_min_losses_slacks`/`_OG` sums over the heat storage ids. With
+   different numbering, heat pumps and heat storages are therefore silently
+   decoupled instead of raising a `KeyError`. Nothing checks the pairing at
+   input. (#807)
 9. **`correct_network_data!` has `check_reference_bus` and `correct_bus_types!`
    commented out** — a network without a slack bus passes without a warning.
    `check_connectivity` does not check the eDisGo-specific components for valid
@@ -127,10 +131,13 @@ section 6); the tests record the actual behaviour and mark the intended one with
 14. **`variable_line_loading_max` reads the `storage` flag from network 1 instead
     of `nw`** (`core/variables.jl:118`). Without effect as long as it is only
     called with `nw=1`. (#808)
-15. **`ref_add_core!` does not filter `heat_storage` by `status`** (nor
-    `gen_slack` by `gen_status`), unlike `storage`. A switched-off heat storage
-    gets `phs`/`hse` with full bounds. Unnoticed in production, because Python
-    always sets `status` to `True`. (#805)
+15. ~~**`ref_add_core!` does not filter `heat_storage` by `status`**~~ —
+    **fixed**: `ref_add_core!` filters the eDisGo components by their status
+    (`gen_status` for `gen_nd`/`gen_slack`, `status` for the others; a missing
+    field counts as active). A heat storage is also dropped with its heat pump;
+    a heat pump whose heat storage is switched off runs without storage
+    (`constraint_hp_operation`). Before, a switched-off heat storage got
+    `phs`/`hse` with full bounds and could be dispatched. (#805)
 16. **With a single time step, the final-state condition of charging points is
     missing** (Eq. 3.25 for t = τ): it only lives in `constraint_cp_state`, which
     `prob/opf_bf.jl:86-92` calls from the second time step on. Battery, heat
@@ -203,11 +210,8 @@ measurably above the NC optimum. The docstring of
 - [x] `variable_dsm_storage_power_imaginary` — AbstractPowerModel
 - [x] `variable_dsm_storage_energy` — AbstractPowerModel
 - [x] `variable_heat_storage` — AbstractPowerModel
-- [x] `variable_heat_storage_power` — AbstractPowerModel (defect: switched-off
-  heat storages still get a variable, see defect 15 — documented as
-  `@test_broken`)
-- [x] `variable_heat_storage_energy` — AbstractPowerModel (defect: the same
-  ignored `status` as for `phs` — documented as `@test_broken`)
+- [x] `variable_heat_storage_power` — AbstractPowerModel
+- [x] `variable_heat_storage_energy` — AbstractPowerModel
 - [x] `variable_heat_pump_power` — AbstractPowerModel
 - [x] `variable_heat_pump_power_real` — AbstractPowerModel
 - [x] `variable_heat_pump_power_imaginary` — AbstractPowerModel (note: created
@@ -263,10 +267,8 @@ measurably above the NC optimum. The docstring of
 ### `src/core/objective.jl` → `test/core/test_objective.jl`
 
 - [x] `objective_min_losses` — AbstractBFModelEdisgo
-- [x] `objective_min_losses_slacks` — AbstractBFModelEdisgo (note: the `phss`
-  term is summed over the `heatpumps` indices, although `phss` is created per
-  `heat_storage` — a `KeyError` with different numbering; the indices match in
-  the fixtures, so this is only noted as a comment)
+- [x] `objective_min_losses_slacks` — AbstractBFModelEdisgo (note: heat pump and
+  heat storage are paired by id without a check, see defect 8)
 - [x] `objective_min_line_loading_max` — AbstractBFModelEdisgo
 - [x] `objective_min_losses_slacks_OG` — AbstractBFModelEdisgo
 - [x] `objective_min_line_loading_max_OG` — AbstractBFModelEdisgo (defect: two

@@ -115,13 +115,20 @@ end
 Heat-pump energy balance for heat pump `i` in network `nw`: the electrical power
 drawn (`php`, plus the operation slack `phps2`) times the coefficient of
 performance `cop` must cover the heat demand `pd` plus the net heat-storage
-(dis)charge (`phss - phs`) — Eq. (3.19) of the eDisGo OPF formulation.
+(dis)charge (`phss - phs`) — Eq. (3.19) of the eDisGo OPF formulation. Heat
+pump `i` is paired with heat storage `i`; if that heat storage is not in the
+model (switched off), the heat pump runs without storage.
 """
 function constraint_hp_operation(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
     hp = PowerModels.ref(pm, nw, :heatpumps, i)
     php = PowerModels.var(pm, nw, :php, i)
-    phs = PowerModels.var(pm, nw, :phs, i)
-    phss = PowerModels.var(pm, nw, :phss, i)
+    if i in PowerModels.ids(pm, nw, :heat_storage)
+        phs = PowerModels.var(pm, nw, :phs, i)
+        phss = PowerModels.var(pm, nw, :phss, i)
+    else
+        phs = 0.0
+        phss = 0.0
+    end
     phps2 = PowerModels.var(pm, nw, :phps2, i)
 
 
