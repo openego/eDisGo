@@ -1,8 +1,7 @@
 # Testing conventions for `eDisGo_OPF.jl`
 
 This file is binding for everyone who writes tests for the Julia package
-`eDisGo_OPF`, humans and AI agents alike (it is linked from `AGENTS.md` in the
-repository root). Changing it changes the rules for every later contribution.
+`eDisGo_OPF`. Changing it changes the rules for every later contribution.
 
 The goal is complete test coverage: **every** function and type of the package
 gets tests. Progress is tracked in [`FUNCTION_COVERAGE.md`](FUNCTION_COVERAGE.md).
@@ -207,10 +206,6 @@ Per function:
 
    If several methods of one function are tested together, one commit for all
    methods of that function is enough.
-
-   **No attribution trailers.** Commits carry only the author from the git
-   configuration — no `Co-Authored-By:` or `Claude-Session:` line, no mention of
-   an AI tool, neither in the subject nor in the body.
 
    **Commit messages in English**, like the rest of the repository history.
 
