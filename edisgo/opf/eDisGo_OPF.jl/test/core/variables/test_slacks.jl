@@ -20,12 +20,6 @@
 # components where an index set has to exclude (or, notably, does *not* exclude)
 # something. The wrappers are additionally checked against the full
 # `build_mn_opf_bf_flex` model of every `opf_version`.
-#
-# Known production bug (see also test/FUNCTION_COVERAGE.md):
-# `variable_slack_gen_real`/`_imaginary` ignore the `pgs_start`/`qgs_start`
-# fields that `set_ac_bf_start_values!` writes for the warm start, so the slack
-# generator is never warm-started. The tests pin the actual behaviour and keep
-# the intended one as `@test_broken`.
 
 include(joinpath(@__DIR__, "..", "..", "testsetup.jl"))
 
@@ -584,15 +578,18 @@ function vsl_check_slack_gen(f, field::Symbol, start_field::String)
 
     @testset "start value" begin
         # `set_ac_bf_start_values!` writes `pgs_start`/`qgs_start` for the warm
-        # start, but the variable is created without `start = ...`.
+        # start, and the variable reads it.
         data_s = vsl_network()
         data_s["gen_slack"]["1"][start_field] = 0.42
         pm = vsl_model(data_s)
         f(pm; nw=1)
         x = PowerModels.var(pm, 1, field)[1]
         @test PowerModels.ref(pm, 1, :gen_slack, 1)[start_field] == 0.42
-        @test JuMP.start_value(x) === nothing          # actual: ignored
-        @test_broken JuMP.start_value(x) == 0.42       # intended: warm start
+        @test JuMP.start_value(x) == 0.42
+        # Without the field, the default start value 0.
+        pm0 = vsl_model()
+        f(pm0; nw=1)
+        @test JuMP.start_value(PowerModels.var(pm0, 1, field)[1]) == 0.0
     end
 
     @testset "has no bounded keyword" begin
@@ -618,8 +615,9 @@ end
         net = vsl_network()
         for (comp, fields) in (("gen_nd", ("pgc",)), ("gen_slack", ("pgs", "qgs")),
                                ("dsm", ("pdsm", "dsme")), ("storage", ("ps", "se")),
-                               ("electromobility", ("pcp",)), ("heatpumps", ("php",)),
-                               ("heat_storage", ("phs", "hse")))
+                               ("electromobility", ("pcp", "cpe")), ("heatpumps", ("php",)),
+                               ("heat_storage", ("phs", "hse")),
+                               ("branch", ("pf", "qf", "ccm")))
             for (_, c) in net[comp], fld in fields
                 c[fld] = 0.0
             end
@@ -629,7 +627,7 @@ end
         @test net["gen_slack"]["1"]["pgs_start"] == -0.7
         pm = vsl_model(net)
         eDisGo_OPF.variable_slack_gen_real(pm; nw=1)
-        @test_broken JuMP.start_value(PowerModels.var(pm, 1, :pgs)[1]) == -0.7
+        @test JuMP.start_value(PowerModels.var(pm, 1, :pgs)[1]) == -0.7
     end
 end
 
