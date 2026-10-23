@@ -283,6 +283,17 @@ Changes
   EDisGo in the scenario year, so the dispatchable generators had no values for any
   time step. Their power was ``NaN``, and the OPF failed with ``The constant in the
   affine expression is NaN`` (openego/eDisGo#787)
+* Added :meth:`~.edisgo.EDisGo.apply_home_storage_operating_strategy`, and made
+  :func:`~.flex_opt.battery_storage_operation.apply_reference_operation` work with home
+  batteries from the eGon database, which come without efficiencies: missing
+  ``efficiency_store`` / ``efficiency_dispatch`` values now default to 0.95. Missing
+  building IDs or time series raise a ``ValueError`` naming the method to call
+  (openego/eDisGo#446)
+* :func:`~.flex_opt.battery_storage_operation.apply_reference_operation` now derives
+  ``freq`` from the time index by default. It defaulted to one hour, so with a
+  15-minute time index the state of energy changed four times too fast. Without
+  ``storage_units_names``, storage units without building ID, e.g. large-scale
+  storage, now keep their time series instead of being overwritten with zeros
 * Removed the dependency on ``egoio``. The legacy OEP imports (``oedb_legacy``
   generators, ``feedin_oedb_legacy``, the legacy weather cells and grid district
   polygon) only used it for the ORM definitions of their tables. These are now

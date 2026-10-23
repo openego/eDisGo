@@ -123,6 +123,15 @@ demand directly from the heat pump:
 
 See :ref:`heat-pumps-flex` for details.
 
+For home batteries, the reference operation charges them from PV surplus of the
+building and discharges them to cover its demand:
+
+.. code-block:: python
+
+    soe_df = edisgo.apply_home_storage_operating_strategy()
+
+See :ref:`storage-flex` for details.
+
 Reactive power
 --------------
 

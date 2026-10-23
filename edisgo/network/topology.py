@@ -389,11 +389,18 @@ class Topology:
 
             efficiency_store : float
                 Efficiency of storage system in case of charging. So far only used in
-                :func:`~.edisgo.flex_opt.battery_storage_operation.apply_reference_operation.`
+                :func:`~.edisgo.flex_opt.battery_storage_operation.apply_reference_operation`,
+                which uses a default value if it is not set.
 
             efficiency_dispatch : float
                 Efficiency of storage system in case of discharging. So far only used in
-                :func:`~.edisgo.flex_opt.battery_storage_operation.apply_reference_operation.`
+                :func:`~.edisgo.flex_opt.battery_storage_operation.apply_reference_operation`,
+                which uses a default value if it is not set.
+
+            building_id : int
+                ID of the building the storage unit is in. Only set for home storage
+                units and used in the reference operation to match them to PV plants
+                and loads in the same building.
 
         Returns
         --------

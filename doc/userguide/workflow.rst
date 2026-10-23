@@ -33,7 +33,8 @@ depending on the scenario):
    :meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined` (or
    ``worst_case`` / manual), then apply operation strategies
    (:meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy`,
-   :meth:`~edisgo.edisgo.EDisGo.apply_heat_pump_operating_strategy`).
+   :meth:`~edisgo.edisgo.EDisGo.apply_heat_pump_operating_strategy`,
+   :meth:`~edisgo.edisgo.EDisGo.apply_home_storage_operating_strategy`).
 #. **Set reactive power time series** —
    :meth:`~edisgo.edisgo.EDisGo.set_time_series_reactive_power_control`. **Always
    last** of the time-series steps.
