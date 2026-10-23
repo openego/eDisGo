@@ -143,7 +143,7 @@ function opf_expected_counts(pm)
     for kind in (:storage, :heat_storage, :dsm)
         eq += length(PowerModels.ids(pm, kind, nw=nws[1])) * (2 + (N - 1))
     end
-    eq += length(PowerModels.ids(pm, :electromobility, nw=nws[1])) * (1 + (N - 1) + (N > 1))
+    eq += length(PowerModels.ids(pm, :electromobility, nw=nws[1])) * (1 + (N - 1) + 1)
     return (eq=eq, quad=quad, nl=nl)
 end
 
@@ -472,20 +472,14 @@ end
 
     @testset "single time step" begin
         pm = opf_small_model(opf_version=2, num_steps=1)
-        # 12 per network + 3 × 2 storage-like + 1 charging point.
-        @test opf_counts(pm) == (eq=19, quad=0, nl=2)
+        # 12 per network + 3 × 2 storage-like + 2 charging point.
+        @test opf_counts(pm) == (eq=20, quad=0, nl=2)
         @test opf_counts(pm) == opf_expected_counts(pm)
-        # Battery, heat storage and DSM get their initial and their end condition
-        # in the same network …
-        for name in ("se", "hse", "dsme")
+        # Battery, heat storage, DSM and the charging point get their initial and
+        # their end condition in the same network.
+        for name in ("se", "hse", "dsme", "cpe")
             @test opf_count_with(pm, 1, name, "1\\]") == 2
         end
-        # BUG: … the charging point only the initial one. Its end condition
-        # (cpe = middle of the band, Eq. (3.25) for t = tau) lives in
-        # `constraint_cp_state`, which is only called from the second step on, so
-        # a single-step OPF leaves the charging-point energy free in its band.
-        @test opf_count_with(pm, 1, "cpe", "1\\]") == 1
-        @test_broken opf_count_with(pm, 1, "cpe", "1\\]") == 2
     end
 
     @testset "objective, opf_version $v" for (v, objective) in (

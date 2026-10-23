@@ -67,7 +67,9 @@ end
 Initial-time-step state constraint for charging park `i`: sets the charged energy
 after the first time step from the midpoint of the flexibility band
 `(e_min+e_max)/2` and the charging power, scaled by the charging efficiency `eta`
-— Eq. (3.25) of the eDisGo OPF formulation.
+— Eq. (3.25) of the eDisGo OPF formulation. If `n` is also the last time step (a
+single-step OPF), the energy is pinned back to the midpoint here, since
+`constraint_cp_state` is not called.
 """
 function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, eta)
     if haskey(PowerModels.ref(pm, n), :time_elapsed)
@@ -82,6 +84,9 @@ function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, 
     pcp_1 = PowerModels.var(pm, n, :pcp, i)
     JuMP.@constraint(pm.model, cpe == 0.5*(cp["e_min"]+cp["e_max"]) + time_elapsed * eta * pcp_1)  # Eq. (3.25)
 
+    if n == length(collect(PowerModels.nw_ids(pm)))
+        JuMP.@constraint(pm.model, cpe == 0.5*(cp["e_min"]+cp["e_max"]))  # Eq. (3.25) für t=tau
+    end
 end
 
 """
