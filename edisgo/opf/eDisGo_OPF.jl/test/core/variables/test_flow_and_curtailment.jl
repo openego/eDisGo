@@ -20,12 +20,6 @@
 # The wrappers (`variable_branch_power_radial`, `variable_gen_power_curt`, ...)
 # are checked for which inner functions they call and that they forward their
 # keyword arguments.
-#
-# Production defects documented here (actual behaviour tested, intended
-# behaviour kept as `@test_broken`):
-#
-#   * `variable_line_loading_max` decides which branches are storage branches by
-#     looking at network 1 (`ref(pm, 1, :branch)`) instead of network `nw`.
 
 include(joinpath(@__DIR__, "..", "..", "testsetup.jl"))
 
@@ -446,8 +440,8 @@ end
         eDisGo_OPF.variable_line_loading_max(pm, nw=1)
         ll = PowerModels.var(pm, 1, :ll)
         @test JuMP.start_value(ll[(1, 1, 2)]) == 1.5
-        # The default start value 0 lies below the lower bound 1.
-        @test JuMP.start_value(ll[(2, 2, 3)]) == 0.0
+        # The default start value is the lower bound 1.
+        @test JuMP.start_value(ll[(2, 2, 3)]) == 1.0
     end
 
     @testset "report" begin
@@ -473,17 +467,16 @@ end
         @test length(vfc_reported(pm, 2, :branch, :ll)) == 2
     end
 
-    @testset "storage flag read from network 1 (defect)" begin
-        # In network 2, branch 3 is turned into an ordinary line. The function
-        # nevertheless looks the `storage` flag up in network 1, so for `nw=2`
-        # branch 3 is still skipped.
+    @testset "storage flag read from network nw" begin
+        # In network 2, branch 3 is turned into an ordinary line: for `nw=2`,
+        # network 2's own branch data decides, so branch 3 gets a variable …
         pm = vfc_model()
         PowerModels.ref(pm, 2, :branch, 3)["storage"] = false
         eDisGo_OPF.variable_line_loading_max(pm, nw=2)
-        ll = PowerModels.var(pm, 2, :ll)
-        @test !((3, 3, 4) in vfc_index(ll))
-        # Intended: network 2's own branch data decides.
-        @test_broken (3, 3, 4) in vfc_index(ll)
+        @test (3, 3, 4) in vfc_index(PowerModels.var(pm, 2, :ll))
+        # … and for `nw=1` it is still the virtual storage branch.
+        eDisGo_OPF.variable_line_loading_max(pm, nw=1)
+        @test !((3, 3, 4) in vfc_index(PowerModels.var(pm, 1, :ll)))
     end
 end
 
