@@ -40,7 +40,7 @@ requirements = [
     "descartes < 1.2.0",
     # pinned: oedialect 0.1.1 requires geoalchemy2<0.7.0, and newer geoalchemy2
     # releases need SQLAlchemy>=1.4, which conflicts with sqlalchemy<1.4.0 below
-    "geoalchemy2 == 0.6.3",
+    "geoalchemy2 == 0.20.0",
     "geopandas >= 0.12.0, < 1.2.0",
     "geopy >= 2.0.0, < 2.5.0",
     "jupyterlab < 4.7.0",
