@@ -375,7 +375,9 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
     return transformers_changes
 
 
-def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
+def reinforce_lines_voltage_issues(
+    edisgo_obj, grid, crit_nodes, choose_cheaper_measure=False
+):
     """
     Reinforce lines in MV and LV topology due to voltage issues.
 
@@ -387,6 +389,10 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         Dataframe with maximum deviations from allowed lower or upper voltage limits
         in p.u. for all buses in specified grid. For more information on dataframe see
         :func:`~.flex_opt.check_tech_constraints.voltage_issues`.
+    choose_cheaper_measure : bool
+        If True, a line is only disconnected if this is cheaper than reinforcing
+        the lines on the path between station and critical node. If False, a line
+        is always disconnected if possible. Default: False.
 
     Returns
     -------
@@ -402,6 +408,15 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     farthest away from the station and install new standard line
     2. If no line can be disconnected, reinforce lines on the path between
     station and critical node (see :func:`_reinforce_lines_on_path`)
+
+    If `choose_cheaper_measure` is True, the costs of both measures are compared
+    before a line is disconnected. The costs of disconnecting are the costs of the
+    new standard line including earthwork. The costs of reinforcing the path are
+    the costs of the lines that need to be reinforced to remove the full share of
+    the voltage difference along the path (see :func:`_plan_lines_on_path`), not
+    only the half that is reinforced per iteration, as disconnecting usually
+    solves the voltage issue at once. If reinforcing the path is cheaper, the
+    lines on the path are reinforced instead of disconnecting the line.
 
     In LV grids lines are only disconnected outside buildings; loads and
     generators in buildings cannot be directly connected to the MV/LV station.
@@ -500,50 +515,52 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         # if node_2_3 is a representative (meaning it is already
         # directly connected to the station), line cannot be
         # disconnected and must therefore be reinforced
-        if node_2_3 in nodes_feeder.keys():
-            # share of the voltage difference between station and critical node
-            # that needs to be removed to solve the voltage issue, used to decide
-            # how many lines on the path are reinforced
-            v_res = edisgo_obj.results.v_res
-            time_step = crit_nodes.at[node, "time_index"]
-            v_diff_path = abs(
-                v_res.at[time_step, node] - v_res.at[time_step, station_node]
+        disconnect = node_2_3 not in nodes_feeder.keys()
+        if disconnect:
+            # get line between node_2_3 and predecessor node (that is
+            # closer to the station)
+            pred_node = path[path.index(node_2_3) - 1]
+            crit_line_name = graph.get_edge_data(node_2_3, pred_node)["branch_name"]
+            crit_line_length = grid.lines_df.at[crit_line_name, "length"]
+        if not disconnect or choose_cheaper_measure:
+            path_lines, share, current = _get_path_lines_share_and_current(
+                edisgo_obj, grid, graph, crit_nodes, node, path
             )
-            if v_diff_path > 0:
-                share = min(
-                    1.0, crit_nodes.at[node, "abs_max_voltage_dev"] / v_diff_path
-                )
-            else:
-                share = 1.0
-            # house connections (lines to buses in buildings) are not reinforced
-            in_building = grid.buses_df.in_building
-            path_lines = [
-                graph.get_edge_data(bus_0, bus_1)["branch_name"]
-                for bus_0, bus_1 in zip(path[:-1], path[1:])
-                if not (in_building[bus_0] or in_building[bus_1])
-            ]
-            # current through each line at the time step of the voltage issue,
-            # all lines are weighted equally if no current is available
-            current = (
-                edisgo_obj.results.i_res.reindex(columns=path_lines)
-                .loc[time_step]
-                .abs()
-                .fillna(0.0)
+
+        # costs of the new line are derived from the costs of the line it replaces,
+        # as costs only depend on line length and voltage level
+        if disconnect and choose_cheaper_measure and crit_line_length > 0:
+            costs = line_expansion_costs(edisgo_obj, [crit_line_name])
+            costs_disconnect = (
+                (costs.costs_earthworks + costs.costs_cable).iat[0]
+                / crit_line_length
+                * path_length_dict[node_2_3]
             )
-            if current.sum() == 0:
-                current[:] = 1.0
+            _, _, costs_path = _plan_lines_on_path(
+                edisgo_obj,
+                grid,
+                path_lines,
+                standard_line,
+                share,
+                current,
+                max_costs=costs_disconnect,
+            )
+            disconnect = costs_path >= costs_disconnect
+            logger.debug(
+                f"Voltage issue at {node}: disconnecting {crit_line_name} costs "
+                f"{costs_disconnect:.1f} kEUR, reinforcing the path costs "
+                f"{costs_path:.1f} kEUR."
+            )
+
+        if not disconnect:
             lines_changes.update(
                 _reinforce_lines_on_path(
                     edisgo_obj, grid, path_lines, standard_line, share, current
                 )
             )
 
-        # if node_2_3 is not a representative, disconnect line
+        # disconnect line
         else:
-            # get line between node_2_3 and predecessor node (that is
-            # closer to the station)
-            pred_node = path[path.index(node_2_3) - 1]
-            crit_line_name = graph.get_edge_data(node_2_3, pred_node)["branch_name"]
             if grid.lines_df.at[crit_line_name, "bus0"] == pred_node:
                 edisgo_obj.topology._lines_df.at[crit_line_name, "bus0"] = station_node
             elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
@@ -565,6 +582,61 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         )
 
     return lines_changes
+
+
+def _get_path_lines_share_and_current(edisgo_obj, grid, graph, crit_nodes, node, path):
+    """
+    Get lines on the path to a critical node and the voltage issue on the path.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    grid : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+    graph : :networkx:`networkx.Graph<>`
+        Graph of the grid the path was determined in.
+    crit_nodes : :pandas:`pandas.DataFrame<DataFrame>`
+        See parameter `crit_nodes` in :func:`reinforce_lines_voltage_issues`.
+    node : str
+        Name of critical node.
+    path : list(str)
+        Buses on the path from the station to the critical node.
+
+    Returns
+    -------
+    (list(str), float, :pandas:`pandas.Series<Series>`)
+        Names of lines on the path that may be reinforced, share of the voltage
+        difference along the path that needs to be removed and current through each
+        of these lines. See :func:`_reinforce_lines_on_path` for more information.
+
+    """
+    # share of the voltage difference between station and critical node
+    # that needs to be removed to solve the voltage issue, used to decide
+    # how many lines on the path are reinforced
+    v_res = edisgo_obj.results.v_res
+    time_step = crit_nodes.at[node, "time_index"]
+    v_diff_path = abs(v_res.at[time_step, node] - v_res.at[time_step, path[0]])
+    if v_diff_path > 0:
+        share = min(1.0, crit_nodes.at[node, "abs_max_voltage_dev"] / v_diff_path)
+    else:
+        share = 1.0
+    # house connections (lines to buses in buildings) are not reinforced
+    in_building = grid.buses_df.in_building
+    path_lines = [
+        graph.get_edge_data(bus_0, bus_1)["branch_name"]
+        for bus_0, bus_1 in zip(path[:-1], path[1:])
+        if not (in_building[bus_0] or in_building[bus_1])
+    ]
+    # current through each line at the time step of the voltage issue,
+    # all lines are weighted equally if no current is available
+    current = (
+        edisgo_obj.results.i_res.reindex(columns=path_lines)
+        .loc[time_step]
+        .abs()
+        .fillna(0.0)
+    )
+    if current.sum() == 0:
+        current[:] = 1.0
+    return path_lines, share, current
 
 
 def _reinforce_lines_on_path(
@@ -618,17 +690,72 @@ def _reinforce_lines_on_path(
         lines added as values.
 
     """
+    lines_changes, lines, _ = _plan_lines_on_path(
+        edisgo_obj, grid, path_lines, standard_line, share / 2, current
+    )
+    lines_before = grid.lines_df.loc[path_lines]
+    # a line is replaced at most once and before parallel lines are added to it
+    replaced = lines.index[
+        (lines.type_info == standard_line) & (lines_before.type_info != standard_line)
+    ]
+    if not replaced.empty:
+        edisgo_obj.topology.change_line_type(list(replaced), standard_line)
+    lines_before = grid.lines_df.loc[path_lines]
+    num_parallel = lines.num_parallel[lines.num_parallel != lines_before.num_parallel]
+    if not num_parallel.empty:
+        edisgo_obj.topology.update_number_of_parallel_lines(num_parallel)
+
+    return lines_changes
+
+
+def _plan_lines_on_path(
+    edisgo_obj, grid, path_lines, standard_line, reduction, current, max_costs=np.inf
+):
+    """
+    Determine the lines on the path to reinforce, without changing the topology.
+
+    Lines are chosen one at a time as described in :func:`_reinforce_lines_on_path`
+    until the voltage difference along the path, estimated as the sum of resistance
+    times current, is reduced by `reduction`.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    grid : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+    path_lines : list(str)
+        Names of lines on the path from the station to the critical node.
+    standard_line : str
+        Name of standard line type.
+    reduction : float
+        Share by which the voltage difference along the path is reduced. Between 0
+        and 1.
+    current : :pandas:`pandas.Series<Series>`
+        Current through each line on the path at the time step of the voltage
+        issue. Index contains the names of the lines in `path_lines`.
+    max_costs : float
+        Planning stops once the costs reach this value, in kEUR. Default: inf.
+
+    Returns
+    -------
+    (dict, :pandas:`pandas.DataFrame<DataFrame>`, float)
+        Dictionary with name of lines as keys and the corresponding number of lines
+        added as values, lines on the path with their resistance, number of parallel
+        lines and type after the reinforcement, and costs of the reinforcement in
+        kEUR. The costs are inf if the reduction is not reached within `max_costs`.
+
+    """
     cables = "lv_cables" if isinstance(grid, LVGrid) else "mv_cables"
     r_per_km_standard = edisgo_obj.topology.equipment_data[cables].at[
         standard_line, "R_per_km"
     ]
     costs = line_expansion_costs(edisgo_obj, path_lines)
     reinforced_before = edisgo_obj.results.equipment_changes.index
-    lines = grid.lines_df.loc[path_lines]
-    v_target = (lines.r * current).sum() * (1 - share / 2)
+    lines = grid.lines_df.loc[path_lines, ["length", "r", "num_parallel", "type_info"]]
+    v_target = (lines.r * current).sum() * (1 - reduction)
 
     lines_changes = {}
-    while (lines.r * current).sum() > v_target:
+    total_costs = 0.0
+    while (lines.r * current).sum() > v_target and total_costs < max_costs:
         r_standard = r_per_km_standard * lines.length
         replace = (lines.type_info != standard_line) & (r_standard < lines.r)
         r_reduction = (lines.r / (lines.num_parallel + 1)).where(
@@ -643,19 +770,18 @@ def _reinforce_lines_on_path(
         measure_costs = costs.costs_cable + costs.costs_earthworks.where(new_line, 0.0)
         line_name = (v_reduction / measure_costs).fillna(0.0).idxmax()
 
+        lines.at[line_name, "r"] -= r_reduction[line_name]
         if replace[line_name]:
-            edisgo_obj.topology.change_line_type([line_name], standard_line)
+            lines.at[line_name, "type_info"] = standard_line
+            lines.at[line_name, "num_parallel"] = 1
         else:
-            edisgo_obj.topology.update_number_of_parallel_lines(
-                pd.Series(
-                    index=[line_name],
-                    data=[lines.at[line_name, "num_parallel"] + 1],
-                )
-            )
+            lines.at[line_name, "num_parallel"] += 1
         lines_changes[line_name] = lines_changes.get(line_name, 0) + 1
-        lines = grid.lines_df.loc[path_lines]
+        total_costs += measure_costs[line_name]
 
-    return lines_changes
+    if (lines.r * current).sum() > v_target:
+        total_costs = np.inf
+    return lines_changes, lines, total_costs
 
 
 def reinforce_lines_overloading(edisgo_obj, crit_lines):

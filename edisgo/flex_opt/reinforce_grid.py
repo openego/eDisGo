@@ -128,6 +128,10 @@ def reinforce_grid(
         See parameter `weight_by_costs` in
         :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
         for more information. Default: False.
+    choose_cheaper_voltage_measure : bool
+        Determines how lines are reinforced due to voltage issues. See parameter
+        `choose_cheaper_voltage_measure` in function :attr:`~.EDisGo.reinforce` for
+        more information. Default: False.
 
     Returns
     -------
@@ -182,6 +186,7 @@ def reinforce_grid(
     iteration_step = 1
     lv_grid_id = kwargs.get("lv_grid_id", None)
     scale_timeseries = kwargs.get("scale_timeseries", None)
+    choose_cheaper_voltage_measure = kwargs.get("choose_cheaper_voltage_measure", False)
     if mode == "lv" and lv_grid_id:
         analyze_mode = "lv"
     elif mode == "lv":
@@ -368,6 +373,7 @@ def reinforce_grid(
             edisgo,
             edisgo.topology.mv_grid,
             crit_nodes,
+            choose_cheaper_measure=choose_cheaper_voltage_measure,
         )
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes(edisgo, lines_changes, iteration_step)
@@ -497,6 +503,7 @@ def reinforce_grid(
                     edisgo,
                     edisgo.topology.get_lv_grid(int(grid_id)),
                     crit_nodes[crit_nodes.lv_grid_id == grid_id],
+                    choose_cheaper_measure=choose_cheaper_voltage_measure,
                 )
                 # write changed lines to results.equipment_changes
                 _add_lines_changes_to_equipment_changes(
