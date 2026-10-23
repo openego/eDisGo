@@ -18,9 +18,9 @@
 # `opf_version` 2, 4 time steps), i.e. what `to_powermodels` produces. Every run
 # loads the whole package in a fresh process, so the number of runs is kept
 # minimal: one non-convex Ipopt run (`method="nc"`), which always runs (CI), and
-# two SOC runs with Gurobi (`method="soc"`, without and with warm start), which
-# need a Gurobi licence and are skipped without one (TESTING_CONVENTIONS.md,
-# section 4).
+# three SOC runs with Gurobi (`method="soc"`, without warm start, and with warm
+# start for `opf_version` 2 and 1), which need a Gurobi licence and are skipped
+# without one (TESTING_CONVENTIONS.md, section 4).
 
 include(joinpath(@__DIR__, "testsetup.jl"))
 
@@ -143,6 +143,39 @@ function main_check_result(out, input)
     @test isempty(missing_values)
 end
 
+"""
+Run `Main.jl` with `method="soc"` and `warm_start="True"` on `json_line` and check
+the result. If the SOC relaxation is tight, the Gurobi result is polished by a
+warm-started Ipopt run, which then provides the result. Otherwise the warm start
+is skipped and the Gurobi result is returned.
+"""
+function main_check_warm_start(json_line, input)
+    run_ws = main_run(json_line, "soc"; warm_start="True")
+    @info "Main.jl subprocess, method soc + warm start" opf_version = input["opf_version"] elapsed_s = round(run_ws.elapsed, digits=1)
+    if run_ws.exitcode != 0
+        println(stderr, "Main.jl stderr:\n", run_ws.stderr)
+    end
+    @test run_ws.exitcode == 0
+    @test occursin("Starting convex SOC AC-OPF with Gurobi.", run_ws.stdout)
+    @test length(main_result_lines(run_ws.stdout)) == 1
+    out = main_parse_result(run_ws.stdout)
+    @test out isa Dict
+    out isa Dict || return
+    main_check_result(out, input)
+    if isempty(readdir(run_ws.results_path))
+        # Tight relaxation: the Gurobi result is polished by a warm-started
+        # Ipopt run.
+        @test occursin("Starting warm-start non-convex AC-OPF with IPOPT.", run_ws.stdout)
+        @test out["solver"] == "Ipopt"
+        @test out["status"] == "LOCALLY_SOLVED"
+    else
+        # Not tight: no warm start, the Gurobi result is returned.
+        @test occursin("SOC solution is not tight!", run_ws.stdout)
+        @test !occursin("Starting warm-start", run_ws.stdout)
+        @test out["solver"] == "Gurobi"
+    end
+end
+
 # ---------------------------------------------------------------------------
 # tests
 # ---------------------------------------------------------------------------
@@ -233,39 +266,20 @@ end
 
     @testset "method soc (Gurobi) with warm start" begin
         if TestUtils.gurobi_available()
-            run_ws = main_run(json_line, "soc"; warm_start="True")
-            @info "Main.jl subprocess, method soc + warm start" elapsed_s = round(run_ws.elapsed, digits=1)
-            @test occursin("Starting convex SOC AC-OPF with Gurobi.", run_ws.stdout)
-            if isempty(readdir(run_ws.results_path))
-                # Tight relaxation, so the Gurobi result is to be polished by a
-                # warm-started Ipopt run.
-                # BUG: Main.jl:127 calls `set_ac_bf_start_values!` unqualified, but
-                # `eDisGo_OPF` does not export it. The script dies with an
-                # `UndefVarError` right after the SOC solve and prints no result,
-                # so Python raises "Julia process failed!".
-                @test run_ws.exitcode != 0
-                @test occursin("UndefVarError", run_ws.stderr)
-                @test occursin("set_ac_bf_start_values!", run_ws.stderr)
-                @test_broken run_ws.exitcode == 0
-                # The warm start is announced right before the failing call.
-                @test occursin("Starting warm-start non-convex AC-OPF with IPOPT.",
-                               run_ws.stdout)
-                out = main_parse_result(run_ws.stdout)
-                @test out === nothing
-                if out isa Dict
-                    main_check_result(out, input)
-                    @test out["solver"] == "Ipopt"
-                    @test out["status"] == "LOCALLY_SOLVED"
-                end
-            else
-                # Not tight: no warm start, the Gurobi result is returned.
-                @test run_ws.exitcode == 0
-                @test occursin("SOC solution is not tight!", run_ws.stdout)
-                @test !occursin("Starting warm-start", run_ws.stdout)
-                out = main_parse_result(run_ws.stdout)
-                @test out isa Dict
-                out isa Dict && @test out["solver"] == "Gurobi"
-            end
+            main_check_warm_start(json_line, input)
+        else
+            @test_skip false
+        end
+    end
+
+    @testset "method soc (Gurobi) with warm start, opf_version 1" begin
+        if TestUtils.gurobi_available()
+            # Version 1 is the default of `EDisGo.pm_optimize`. It has no
+            # curtailment `pgc`, so Python leaves "curt" out of the flexibilities.
+            input_v1 = deepcopy(input)
+            input_v1["opf_version"] = 1
+            filter!(!=("curt"), input_v1["flexibilities"])
+            main_check_warm_start(JSON.json(input_v1), input_v1)
         else
             @test_skip false
         end
