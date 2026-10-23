@@ -296,6 +296,27 @@ end
         opf_check_plausible(result["solution"], data, 2; exact_current=false)
     end
 
+    @testset "heat storage switched off, opf_version $v" for v in 1:4
+        # `ref_add_core!` drops the heat storage; the heat pump then covers its
+        # demand without storage, and the objectives of versions 2 and 4 sum
+        # `phss` over the remaining heat storages only.
+        data = TestUtils.multinetwork(TestUtils.small_network(
+            opf_version=v, overlying_grid=opf_has_og(v)))
+        for nw in values(data["nw"])
+            nw["heat_storage"]["1"]["status"] = false
+        end
+        result, pm = eDisGo_OPF.solve_mn_opf_bf_flex(
+            data, eDisGo_OPF.NCBFPowerModelEdisgo, OPF_IPOPT)
+        @test result["termination_status"] == MOI.LOCALLY_SOLVED
+        @test isempty(PowerModels.var(pm, 1, :phs))
+        for (n, nw) in result["solution"]["nw"]
+            @test !haskey(nw, "heat_storage")
+            hp = data["nw"][n]["heatpumps"]["1"]
+            php = nw["heatpumps"]["1"]["php"] + nw["heatpumps"]["1"]["phps2"]
+            @test hp["cop"] * php ≈ hp["pd"] atol = 1e-6
+        end
+    end
+
     @testset "keyword arguments" begin
         # Everything else is passed on to `solve_model`; requesting duals makes the
         # power balance report its multipliers.

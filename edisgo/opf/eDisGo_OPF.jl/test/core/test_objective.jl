@@ -290,11 +290,9 @@ end
         end
     end
 
-    # NOTE (production code): the `phss` term is indexed by the *heat pump* ids
-    # (`for i in keys(ref(pm, 1, :heatpumps))`) although `phss` is created per
-    # `heat_storage`. Both fixtures happen to use identical ids, so the mismatch
-    # is invisible here — a grid whose heat storages are numbered differently
-    # from its heat pumps would raise a `KeyError` in the objective.
+    # NOTE (production code): the `phss` term is summed over the heat storage
+    # ids and `phps2` over the heat pump ids. Heat pump `i` and heat storage `i`
+    # are paired by id without a check (#807); both fixtures use identical ids.
 end
 
 @testset "objective_min_line_loading_max" begin

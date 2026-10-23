@@ -527,6 +527,24 @@ end
         @test cst_rhs(cons[1]) == 0.0
     end
 
+    @testset "heat storage switched off" begin
+        # `ref_add_core!` drops the heat storage, so heat pump 1 runs without one:
+        # cop * (php + phps2) == pd, no `phs`/`phss` terms.
+        data = TestUtils.small_network(num_steps=2)
+        data["heat_storage"]["1"]["status"] = false
+        pm = eDisGo_OPF.instantiate_model(TestUtils.multinetwork(data),
+                                          eDisGo_OPF.NCBFPowerModelEdisgo, cst_build_vars)
+        @test isempty(PowerModels.ids(pm, 1, :heat_storage))
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_hp_operation(pm, 1, 1)
+        end
+        @test length(cons) == 1
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 1, :php, 1) => 5.0,
+                       PowerModels.var(pm, 1, :phps2, 1) => 5.0),
+                  1.0)
+    end
+
     @testset "one constraint per heat pump" begin
         # The real grid has several heat pumps; each constraint must reference the
         # variables of its own unit and no other.
