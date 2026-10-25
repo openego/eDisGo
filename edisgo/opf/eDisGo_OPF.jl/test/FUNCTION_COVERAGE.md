@@ -12,12 +12,12 @@ and `constraint_store_state`).
 Legend: `[ ]` open · `[x]` tested · `[~]` partly tested (give the reason after
 the entry)
 
-## Status (as of 2026-10-22)
+## Status (as of 2026-10-23)
 
-**84 of 84 entries done**, suite green: 3458 passing assertions, 18
-`@test_broken`, 0 failures, about 4:20 min with a Gurobi licence (about 2 min of
+**84 of 84 entries done**, suite green: 3620 passing assertions, 6
+`@test_broken`, 0 failures, about 6 to 7 min with a Gurobi licence (about 4 min of
 that are the `Main.jl` subprocesses; without Gurobi, as in CI, the two SOC runs
-are skipped). Line coverage of `src/`: 887 of 887 lines (100 %).
+are skipped). Line coverage of `src/`: 902 of 902 lines (100 %).
 
 | Source file | Status |
 | --- | --- |
@@ -126,9 +126,10 @@ section 6); the tests record the actual behaviour and mark the intended one with
     `KeyError` for `pt_start`/`qt_start`**~~ — **fixed**: the radial model has
     no to-arc variables, so both fields are ignored. Before, the start value was
     set on the to-arc, which is not in the container. (#804)
-14. **`variable_line_loading_max` reads the `storage` flag from network 1 instead
-    of `nw`** (`core/variables.jl:118`). Without effect as long as it is only
-    called with `nw=1`. (#808)
+14. ~~**`variable_line_loading_max` reads the `storage` flag from network 1
+    instead of `nw`**~~ — **fixed**: the flag is read from network `nw`, and the
+    default start value is the lower bound 1 instead of 0. The defect had no
+    effect in production, where the function is only called with `nw=1`. (#808)
 15. ~~**`ref_add_core!` does not filter `heat_storage` by `status`**~~ —
     **fixed**: `ref_add_core!` filters the eDisGo components by their status
     (`gen_status` for `gen_nd`/`gen_slack`, `status` for the others; a missing
@@ -191,9 +192,7 @@ measurably above the NC optimum.
 - [x] `variable_bus_voltage_magnitude_sqr` — AbstractPowerModel
 - [x] `variable_max_line_loading` — AbstractPowerModel (note: the only wrapper
   that does not accept `bounded`, `MethodError` — pinned with `@test_throws`)
-- [x] `variable_line_loading_max` — AbstractPowerModel (defect: the `storage` flag
-  is read from network 1 instead of `nw`, see defect 14 — documented as
-  `@test_broken`; note: the default start value 0 is below the lower bound 1)
+- [x] `variable_line_loading_max` — AbstractPowerModel
 - [x] `variable_gen_power_curt` — AbstractPowerModel
 - [x] `variable_gen_power_curt_real` — AbstractPowerModel
 - [x] `variable_gen_power_curt_imaginary` — AbstractPowerModel
