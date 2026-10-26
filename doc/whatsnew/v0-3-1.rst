@@ -6,6 +6,17 @@ Release date: not yet released
 Changes
 -------
 
+* Made :func:`~.io.electromobility_import.determine_grid_connection_capacity`
+  monotonically non-decreasing. Between ``lower_limit`` and ``upper_limit`` it
+  interpolated the simultaneity factor linearly and multiplied it with the gross
+  capacity, so the returned capacity was quadratic and, with the default parameters,
+  peaked at about 0.486 MW for a 0.79 MW park before dropping to 0.45 MW at 1 MW. A
+  larger charging park could thus get a smaller grid connection capacity. The
+  capacity itself is now interpolated linearly between ``lower_limit`` and
+  ``minimum_factor * upper_limit``; values outside that range are unchanged, values
+  inside it are lower than before. Parameters with
+  ``minimum_factor * upper_limit < lower_limit`` now raise a ``ValueError``
+  (`#650 <https://github.com/openego/eDisGo/issues/650>`_)
 * Corrected the Julia version documented in ``config_opf_julia.cfg``, which still
   pointed at ``julia-1.1.0/bin`` while the bundled ``eDisGo_OPF.jl`` package targets
   Julia 1.12. The file is included verbatim in the configuration reference, so the
@@ -174,6 +185,12 @@ Changes
   this changes allocation results once compared to earlier versions, and that
   :attr:`~.network.electromobility.Electromobility.charging_processes_df` is now
   indexed from zero in that sorted order (openego/eDisGo#742)
+* Fixed :func:`~.io.electromobility_import.distribute_private_charging_demand`
+  booking the capacity of each home charging point to the charging park drawn for
+  the last work car instead of the home park drawn for it. The capacity weights of
+  the following draws therefore never saw the home capacity already assigned, and
+  one work park collected it all. This changes which home charging park a car is
+  assigned to (openego/eDisGo#679)
 * Fixed :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction`
   giving a line that stands for several parallel systems ``num_parallel`` times its
   impedance. The per-km values the aggregation rebuilds ``r`` and ``x`` from describe
