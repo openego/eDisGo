@@ -3870,12 +3870,7 @@ class EDisGo:
         """
         Reduces timeseries data in this EDisGo object to given time index.
 
-        Thin wrapper around
-        :func:`edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex`,
-        exposed here for discoverability - the underlying implementation is
-        otherwise only importable directly from ``edisgo.tools.tools``, which
-        made it easy to miss for anyone using :class:`~.EDisGo` outside the
-        ``run`` pipeline (its only prior callers).
+        Calls :func:`edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex`.
 
         Parameters
         -----------

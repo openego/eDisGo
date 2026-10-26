@@ -68,10 +68,8 @@ class TestDSM:
 
     def test_resample(self):
         """
-        Regression test for eDisGo#703: DSM had no resample() method, so
-        EDisGo.resample_timeseries silently left DSM data at its original
-        frequency while every sibling container (TimeSeries, Electromobility,
-        HeatPump, OverlyingGrid) was resampled.
+        DSM time series are resampled like those of TimeSeries, Electromobility,
+        HeatPump and OverlyingGrid.
         """
         # test up-sampling with default parameters
         self.dsm.resample()

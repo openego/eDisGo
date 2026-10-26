@@ -166,7 +166,7 @@ class TestChargingStrategy:
         self, timeindex, park_start_timesteps, park_end_timesteps, chargingdemand_kWh
     ):
         """
-        Helper for the ADR 0001 regression tests below: imports the real
+        Helper for the tests of the residual strategy below: imports the real
         SimBEV/TracBEV fixture (so charging park integration/topology wiring
         is realistic), then overwrites charging_processes_df with a single,
         fully controlled synthetic event on one of the fixture's own
@@ -209,7 +209,7 @@ class TestChargingStrategy:
 
     def test_residual_drops_fully_out_of_window_events(self):
         """
-        Regression test for ADR 0001: a charging event whose parking window
+        A charging event whose parking window
         has zero overlap with the active timeindex must contribute nothing -
         not be tiled/fabricated against repeated residual_load data.
         """
@@ -232,7 +232,7 @@ class TestChargingStrategy:
 
     def test_residual_prorates_boundary_straddling_event(self):
         """
-        Regression test for ADR 0001: a charging event whose parking window
+        A charging event whose parking window
         straddles the active timeindex boundary must have its charging
         demand prorated by the in-window fraction of its parking time, not
         fully charged (which would require tiled/fabricated residual_load
@@ -281,7 +281,7 @@ class TestChargingStrategy:
 
     def test_residual_fully_inside_event_unaffected(self):
         """
-        Regression test for ADR 0001: an event whose parking window is
+        An event whose parking window is
         entirely inside the active timeindex must be scheduled exactly the
         same regardless of how much longer the active timeindex extends
         beyond the event's own window - proration must not affect
@@ -317,7 +317,7 @@ class TestChargingStrategy:
 
     def test_residual_no_tiling_across_gapped_timeindex(self):
         """
-        Regression test for ADR 0001: with a gapped active timeindex, an
+        With a gapped active timeindex, an
         event that overlaps both disjoint runs must only ever be scheduled
         into steps actually present in the active timeindex - never into the
         gap, and never against fabricated/tiled residual_load data.
@@ -351,7 +351,7 @@ class TestChargingStrategy:
 
     def test_residual_dumb_subbucket_respects_internal_gap(self):
         """
-        Regression test for ADR 0001: a "dumb-charged" event within the
+        A "dumb-charged" event within the
         residual strategy (use_case in {public, hpc} or flex_time == 0)
         whose deterministic charging interval spans a gap in the active
         timeindex must only ever write to in-window positions - never a
@@ -407,7 +407,7 @@ class TestChargingStrategy:
     @pytest.mark.parametrize("strategy", ["dumb", "reduced"])
     def test_dumb_reduced_clip_placement_to_active_timeindex(self, strategy):
         """
-        Regression test for ADR 0002: dumb/reduced must clip their
+        Dumb/reduced must clip their
         deterministic charging placement slice to the active timeindex
         instead of building the full-SimBEV-length series and relying on a
         later crop - a charging interval that extends beyond the active
@@ -468,7 +468,7 @@ class TestChargingStrategy:
     @pytest.mark.parametrize("strategy", ["dumb", "reduced"])
     def test_dumb_reduced_fully_out_of_window_event_contributes_nothing(self, strategy):
         """
-        Regression test for ADR 0002: an event whose deterministic charging
+        An event whose deterministic charging
         interval has zero overlap with the active timeindex must contribute
         nothing.
         """
@@ -491,7 +491,7 @@ class TestChargingStrategy:
     @pytest.mark.parametrize("strategy", ["dumb", "reduced"])
     def test_dumb_reduced_respect_internal_gap(self, strategy):
         """
-        Regression test for ADR 0002: if an event's deterministic charging
+        If an event's deterministic charging
         interval itself spans a gap in a non-contiguous active timeindex,
         every in-window sub-slice of that interval must be written
         independently, at full unscaled power - never a blind contiguous

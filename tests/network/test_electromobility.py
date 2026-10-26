@@ -219,7 +219,7 @@ class TestElectromobility:
 
     def test_get_flexibility_bands_carries_forward_true_start_end(self):
         """
-        Regression test for ADR 0002: upper_energy/lower_energy must reflect
+        Upper_energy/lower_energy must reflect
         each event's TRUE park_start_timesteps/park_end_timesteps, even when
         the active timeindex's window starts after (or ends before) that
         true start/end - the bands must not be reset to zero / re-anchored
@@ -273,7 +273,7 @@ class TestElectromobility:
 
     def test_get_flexibility_bands_reflects_partial_progress_for_unfinished_event(self):
         """
-        Regression test for ADR 0002: even though get_flexibility_bands now
+        Even though get_flexibility_bands now
         filters out charging processes with zero overlap with the active
         timeindex (see test_get_flexibility_bands_excludes_events_and_limits_
         array_size below), a RETAINED event that straddles the window
@@ -345,7 +345,7 @@ class TestElectromobility:
 
     def test_get_flexibility_bands_excludes_events_and_limits_array_size(self):
         """
-        Regression test for ADR 0002: get_flexibility_bands must not build
+        Get_flexibility_bands must not build
         over SimBEV's entire simulated range (nor over every charging
         process) regardless of how much shorter the active timeindex is -
         this was the actual "build full, then crop" waste this ADR targets,
@@ -422,7 +422,7 @@ class TestElectromobility:
 
     def test_get_flexibility_bands_clips_independently_per_gapped_interval(self):
         """
-        Regression test for ADR 0002: with a non-contiguous active
+        With a non-contiguous active
         timeindex, each disjoint interval's bands must match exactly what a
         standalone run scoped to just that interval would produce - i.e.
         clipping the true, full band per interval, with no interaction

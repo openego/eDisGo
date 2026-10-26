@@ -489,10 +489,8 @@ class Electromobility:
                 start=start_date, periods=t_max + 1, freq=f"{stepsize}min"
             )
 
-        # Reduce to only the charging processes actually needed for
-        # edisgo_obj.timeseries.timeindex, instead of always building over
-        # every process regardless of how much shorter the active timeindex
-        # is (see ADR 0002). SimBEV's calendar (start_date) is typically a
+        # Only build the bands from the charging processes that overlap
+        # edisgo_obj.timeseries.timeindex. SimBEV's calendar (start_date) is typically a
         # fixed reference year independent of the scenario year, so the
         # active timeindex is inverse year-shifted onto that calendar to
         # find which SimBEV steps are actually relevant - this mirrors the

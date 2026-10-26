@@ -73,12 +73,9 @@ class TestHeatPumpOperation:
 
     def test_operating_strategy_trims_to_short_timeindex(self):
         """
-        Regression test for eDisGo#703: operating_strategy used to write
-        loads_active_power over the full span of heat_demand_df/cop_df
-        regardless of the active edisgo.timeseries.timeindex. When those are
-        wider or shifted relative to the active timeindex (e.g. because the
-        timeindex changed after import_heat_pumps ran), the written series
-        must be trimmed to exactly edisgo.timeseries.timeindex.
+        If heat_demand_df and cop_df span more time steps than the time index
+        (e.g. because the time index changed after import_heat_pumps ran), the
+        written load time series cover exactly edisgo.timeseries.timeindex.
         """
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         wide_timeindex = pd.date_range("1/1/2011", periods=24, freq="H")

@@ -2302,8 +2302,7 @@ class TestEDisGo:
             },
             index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
         )
-        # regression test for eDisGo#703: DSM data used to be silently left
-        # at its original frequency by resample_timeseries
+        # DSM data is resampled as well
         self.edisgo.dsm.p_max = pd.DataFrame(
             data={
                 "load_1": [5.0, 6.0],
@@ -2318,10 +2317,9 @@ class TestEDisGo:
 
     def test_reduce_timeseries_data_to_given_timeindex(self):
         """
-        EDisGo.reduce_timeseries_data_to_given_timeindex is a thin wrapper
-        around edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex,
-        added for discoverability (eDisGo#703 checklist item 7). Must produce
-        the same result as calling the free function directly.
+        EDisGo.reduce_timeseries_data_to_given_timeindex gives the same result
+        as edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex, which
+        it calls.
         """
         self.setup_worst_case_time_series()
         target_timeindex = self.edisgo.timeseries.timeindex[:2]

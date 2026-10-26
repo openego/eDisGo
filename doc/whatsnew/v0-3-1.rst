@@ -6,6 +6,29 @@ Release date: not yet released
 Changes
 -------
 
+* Time series that eDisGo writes or reads now follow the time index
+  (:attr:`~.network.timeseries.TimeSeries.timeindex`), also if the input data span a
+  longer period or the time index has gaps (openego/eDisGo#703):
+
+  * The charging strategies and :meth:`~.edisgo.EDisGo.apply_heat_pump_operating_strategy`
+    store their time series for the time index only. ``dumb`` and ``reduced`` place
+    the charging demand on the time steps of the time index, and ``residual`` no
+    longer repeats the residual load to cover charging events outside of it
+    (openego/eDisGo#724, openego/eDisGo#725).
+  * :func:`~.io.powermodels_io.to_powermodels` reads the flexibility bands of the
+    charging points for the time index instead of by position, and raises a
+    ``KeyError`` if they do not cover it (openego/eDisGo#718).
+  * Resampling keeps the gaps of a non-contiguous time index instead of filling
+    them (openego/eDisGo#720), and :meth:`~.edisgo.EDisGo.resample_timeseries`
+    resamples the DSM time series as well (new :meth:`~.network.dsm.DSM.resample`).
+  * :meth:`~.edisgo.EDisGo.set_time_series_manual` and the ``predefined_*`` methods of
+    :class:`~.network.timeseries.TimeSeries` raise a ``ValueError`` if a given
+    DataFrame misses time steps of the time index, instead of leaving ``NaN``.
+  * New :meth:`~.edisgo.EDisGo.reduce_timeseries_data_to_given_timeindex`.
+
+  The runner presets reduce all time series to the selected time steps after the
+  strategies ran, so their results are mostly unaffected; direct use of these
+  methods is.
 * :func:`~.tools.plots.plot_plotly` accepts a :pandas:`pandas.Series<Series>` or
   dict as ``line_color`` and ``node_color`` that gives the color of each line or bus
   by name. Lines and buses that are not given are grey (`#639

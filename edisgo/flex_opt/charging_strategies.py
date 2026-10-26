@@ -178,26 +178,17 @@ def charging_strategy(
 
         edisgo_obj.timeseries.resample(freq=simbev_timedelta)
 
-    # Map each SimBEV step position (0 .. len_ts - 1, the same positional
-    # space as park_start_timesteps/the placement slices below) to whether it
-    # is present in the active timeindex (`target_timeindex`). `dumb` and
-    # `reduced` place each event's demand deterministically at
-    # [start, start+stop) - rather than building the full-SimBEV-length
-    # series unconditionally and cropping the *output* down to the active
-    # timeindex afterwards (as before), the placement itself is now clipped
-    # to whatever of that interval is actually in-window, so an event's
-    # reported energy is a direct consequence of which positions get
-    # written, not a separate proration calculation (see ADR 0002).
-    # `resample=True` means `target_timeindex` predates an internal
-    # frequency round-trip and is no longer in the same step space as
-    # `park_start_timesteps` - the crop-after-build step already skips
-    # trimming in that case (see the module docstring), so this reduction is
-    # skipped here too and every step is treated as in-window, preserving
-    # today's (build-full) behavior only for that known limitation.
+    # Mark each step of the charging processes (0 .. len_ts - 1, the step space
+    # of park_start_timesteps) that is in the time index. `dumb` and `reduced`
+    # only write the part of an event's charging interval [start, start + stop)
+    # that is in the time index, so an event's energy follows from the steps
+    # written. If the time series were resampled to the frequency of the
+    # charging processes, the time index is in a different step space; then
+    # every step counts and the result is reduced to the time index at the end.
     if resample:
         step_in_window = np.ones(len_ts, dtype=bool)
     else:
-        step_in_window = np.isin(timeindex, target_timeindex)
+        step_in_window = np.isin(timeindex, timeindex_orig)
 
     if strategy == "dumb":
         # "dumb" charging
@@ -224,8 +215,8 @@ def charging_strategy(
                 # Write only to in-window positions of the deterministic
                 # charging interval [start, start+stop) - if the active
                 # timeindex has a gap inside this interval, every in-window
-                # sub-slice still gets the event's full, unscaled power (see
-                # ADR 0002); out-of-window positions are simply not written.
+                # sub-slice still gets the event's full, unscaled power;
+                # positions outside the time index are not written.
                 in_window_idx = (
                     np.flatnonzero(step_in_window[start : start + stop]) + start
                 )
@@ -312,43 +303,31 @@ def charging_strategy(
         len_residual_load = int(charging_processes_df.park_end_timesteps.max())
 
         if not resample:
-            # The active timeindex can extend past the last charging event
-            # (e.g. a trailing gapped run with no events in it at all) - the
-            # step-space array built below must cover at least as far as
-            # target_timeindex itself, or the crop-after-build step later
-            # would reindex into positions that were never built, producing
-            # NaN rather than a legitimate zero.
+            # The time index can extend past the last charging event, so the
+            # steps have to cover the whole time index; otherwise reducing the
+            # result to the time index at the end gives NaN instead of zero.
             target_span_steps = int(
-                (target_timeindex[-1] - target_timeindex[0])
+                (timeindex_orig[-1] - timeindex_orig[0])
                 / pd.Timedelta(f"{edisgo_obj.electromobility.stepsize}min")
             )
             len_residual_load = max(len_residual_load, target_span_steps)
 
-        # Map each SimBEV step position (0 .. len_residual_load, the same
-        # positional space as park_start_timesteps/park_end_timesteps) to
-        # whether it is present in the active timeindex (`target_timeindex`).
-        # Real residual_load only exists for `target_timeindex`. Rather than
-        # tiling (cyclically repeating) it to cover steps beyond the active
-        # timeindex - which would rank timesteps against a fabricated,
-        # non-periodic-in-reality signal (see ADR 0001) - steps outside the
-        # active timeindex are simply marked as having no usable data.
-        # `resample=True` means `target_timeindex` predates an internal
-        # frequency round-trip and is no longer in the same step space as
-        # `park_start_timesteps` - the crop-after-build step already skips
-        # trimming in that case (see the module docstring), so this reduction
-        # is skipped here too and every step is treated as in-window,
-        # preserving today's (tiling) behavior only for that known
-        # limitation.
+        # Mark each step of the charging processes (0 .. len_residual_load, the
+        # step space of park_start_timesteps and park_end_timesteps) that is in
+        # the time index. The residual load only exists for the time index, so
+        # steps outside of it have no residual load to rank by. If the time
+        # series were resampled to the frequency of the charging processes,
+        # every step counts (see the same case for `dumb` and `reduced` above).
         if resample:
             step_in_window = np.ones(len_residual_load + 1, dtype=bool)
         else:
             step_in_window = np.isin(
                 pd.date_range(
-                    target_timeindex[0],
+                    timeindex_orig[0],
                     periods=len_residual_load + 1,
                     freq=f"{edisgo_obj.electromobility.stepsize}min",
                 ),
-                target_timeindex,
+                timeindex_orig,
             )
         in_window_steps_cumsum = np.concatenate(([0], np.cumsum(step_in_window)))
 
@@ -444,8 +423,8 @@ def charging_strategy(
                 # Write only to in-window positions of the deterministic
                 # charging interval [start, start+stop) - if the active
                 # timeindex has a gap inside this interval, every in-window
-                # sub-slice still gets the event's full, unscaled power (see
-                # ADR 0002); out-of-window positions are simply not written.
+                # sub-slice still gets the event's full, unscaled power;
+                # positions outside the time index are not written.
                 in_window_idx = (
                     np.flatnonzero(step_in_window[start : start + stop]) + start
                 )
