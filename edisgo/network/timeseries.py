@@ -31,6 +31,161 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _parse_float_list(value: str) -> np.ndarray:
+    """
+    Parse a comma-separated config string into a float array.
+
+    Used to read simultaneity curve support points (``n`` and factor values)
+    from the ``[simultaneity_curves]`` config section, where eDisGo's config
+    parser keeps comma-separated values as raw strings.
+
+    Parameters
+    ----------
+    value : str
+        Comma-separated string, e.g. ``"1, 5, 10, 20, 50, 150"``.
+
+    Returns
+    -------
+    :numpy:`numpy.ndarray<ndarray>`
+        Parsed float values.
+    """
+    return np.array([float(x.strip()) for x in value.split(",")])
+
+
+def _interp_log_n(n: int, ns: np.ndarray, factors: np.ndarray) -> float:
+    """
+    Interpolate a simultaneity factor in log-space over device count ``n``.
+
+    Shared by :func:`_cp_simultaneity_factor` and
+    :func:`_hp_simultaneity_factor`.  Interpolation is performed on
+    ``log(n)`` because the underlying support points are logarithmically
+    spaced and simultaneity factors decay roughly logarithmically with
+    device count.  ``numpy.interp`` clamps to ``factors[0]`` / ``factors[-1]``
+    for ``n`` outside the range of ``ns`` (no extrapolation).
+
+    Parameters
+    ----------
+    n : int
+        Device count to interpolate at.  Must be >= 1.
+    ns : :numpy:`numpy.ndarray<ndarray>`
+        Support points for device count (ascending).
+    factors : :numpy:`numpy.ndarray<ndarray>`
+        Simultaneity factor at each support point in `ns`.
+
+    Returns
+    -------
+    float
+        Interpolated (or clamped) simultaneity factor.
+    """
+    return float(np.interp(np.log(n), np.log(ns), factors))
+
+
+def _cp_simultaneity_factor(n: int, charging_power_kw: float, config) -> float:
+    """
+    Return the simultaneity factor for *n* charging points at a given nominal
+    charging power.
+
+    Simultaneity factors are read from the ``[simultaneity_curves]`` section of
+    the eDisGo config and express the ratio of peak collective demand to the sum
+    of individual nominal powers as a function of device count.
+
+    Interpolation is performed in log-space (``numpy.interp`` on ``log(n)``).
+    Clamping: for ``n`` below the smallest support point the factor of that
+    point is used; for ``n`` above the largest support point (n = 150 in the
+    default config) the factor at that point is used.  This matches the
+    validity range of the source data.
+
+    Source
+    ------
+    VDE FNN (2021): "Ermittlung von Gleichzeitigkeitsfaktoren für Ladevorgänge
+    an privaten Ladepunkten", Planungshilfe.  Chosen scenario: suburban
+    residential area, evening peak (highest simultaneity = conservative worst
+    case).
+
+    Parameters
+    ----------
+    n : int
+        Number of charging points in the group (same voltage level and use
+        case).  Must be >= 1.
+    charging_power_kw : float
+        Nominal charging power per charging point in **kW**.  The nearest
+        available power class from ``cp_simultaneity_power_classes`` is
+        selected.
+    config : :class:`~edisgo.tools.config.Config`
+        eDisGo configuration object containing section
+        ``simultaneity_curves`` with keys ``cp_simultaneity_n``,
+        ``cp_simultaneity_power_classes``, and one curve entry per power class
+        (e.g. ``cp_simultaneity_11kw``).
+
+    Returns
+    -------
+    float
+        Simultaneity factor in [0, 1].
+    """
+    curves = config["simultaneity_curves"]
+
+    ns = _parse_float_list(curves["cp_simultaneity_n"])
+    power_classes = _parse_float_list(curves["cp_simultaneity_power_classes"])
+
+    nearest_class = power_classes[np.argmin(np.abs(power_classes - charging_power_kw))]
+    key = f"cp_simultaneity_{nearest_class:g}kw"
+    factors = _parse_float_list(curves[key])
+
+    return _interp_log_n(n, ns, factors)
+
+
+def _hp_simultaneity_factor(n: int, config) -> float:
+    """
+    Return the simultaneity factor for *n* heat pumps.
+
+    One-dimensional analogue of :func:`_cp_simultaneity_factor`: heat pumps
+    have no equivalent of a charging-power class, so the factor depends only
+    on device count. Simultaneity factors are read from the
+    ``[simultaneity_curves]`` section of the eDisGo config and express the
+    ratio of peak collective demand to the sum of individual nominal powers
+    as a function of device count.
+
+    Interpolation is performed in log-space (``numpy.interp`` on ``log(n)``),
+    using the same method as for charging points. Clamping: for ``n`` below
+    the smallest support point the factor of that point is used; for ``n``
+    above the largest support point (n = 150 in the default config) the
+    factor at that point is used (no extrapolation).
+
+    Source
+    ------
+    Support points are derived from the Kerber simultaneity function::
+
+        g(n) = g_inf + (1 - g_inf) * n ** (-3 / 4)
+
+    (Kerber, G. (2011): "Aufnahmefähigkeit von Niederspannungsverteilnetzen
+    für die Einspeisung aus Photovoltaikkleinanlagen", TU München, eq. 3.2,
+    p. 23). The asymptotic value ``g_inf = 0.9`` is based on the
+    Consentec/E.ON distribution grid study assumption for the peak load case
+    on a cold winter day.
+
+    Parameters
+    ----------
+    n : int
+        Number of heat pumps in the group (same voltage level). Must be
+        >= 1.
+    config : :class:`~edisgo.tools.config.Config`
+        eDisGo configuration object containing section
+        ``simultaneity_curves`` with keys ``hp_simultaneity_n`` and
+        ``hp_simultaneity_factor``.
+
+    Returns
+    -------
+    float
+        Simultaneity factor in [0, 1].
+    """
+    curves = config["simultaneity_curves"]
+
+    ns = _parse_float_list(curves["hp_simultaneity_n"])
+    factors = _parse_float_list(curves["hp_simultaneity_factor"])
+
+    return _interp_log_n(n, ns, factors)
+
+
 class TimeSeries:
     """
     Holds component-specific active and reactive power time series.
@@ -996,9 +1151,32 @@ class TimeSeries:
         for s in sectors:
             for case in cases:
                 for voltage_level in ["mv", "lv"]:
-                    power_scaling.at[f"{case}_{voltage_level}", s] = (
-                        worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
-                    )
+                    if case == "feed-in_case":
+                        # feed-in case unchanged: assumed 0.0 per config
+                        power_scaling.at[f"{case}_{voltage_level}", s] = (
+                            worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
+                        )
+                    else:
+                        # load_case: simultaneity factor depends on group size and
+                        # mean charging power (source: VDE FNN 2021).
+                        group = df[
+                            (df.voltage_level == voltage_level) & (df.sector == s)
+                        ]
+                        n = len(group)
+                        if n == 0:
+                            # 0.0 here means "no charging point exists for this
+                            # voltage_level/sector combination", not the
+                            # feed-in case's deliberately-zero config factor
+                            # above; this is just an empty-group placeholder.
+                            power_scaling.at[f"{case}_{voltage_level}", s] = 0.0
+                        else:
+                            # For mixed-power groups the mean p_set is used for
+                            # power-class selection (VDE FNN 2021, simplified
+                            # assignment over mean charging power).
+                            charging_power_kw = group["p_set"].mean() * 1000
+                            power_scaling.at[f"{case}_{voltage_level}", s] = (
+                                _cp_simultaneity_factor(n, charging_power_kw, configs)
+                            )
 
         # calculate active power of charging points
         active_power = pd.concat(
@@ -1082,9 +1260,25 @@ class TimeSeries:
         power_scaling = pd.Series(dtype=float)
         for case in cases:
             for voltage_level in ["mv", "lv"]:
-                power_scaling.at[f"{case}_{voltage_level}"] = worst_case_scale_factors[
-                    f"{voltage_level}_{case}_hp"
-                ]
+                if case == "feed-in_case":
+                    # feed-in case unchanged: assumed 0.0 per config
+                    power_scaling.at[f"{case}_{voltage_level}"] = (
+                        worst_case_scale_factors[f"{voltage_level}_{case}_hp"]
+                    )
+                else:
+                    # load_case: simultaneity factor depends on group size
+                    # (source: Kerber 2011 / Consentec, see _hp_simultaneity_factor).
+                    n = len(df[df.voltage_level == voltage_level])
+                    if n == 0:
+                        # 0.0 here means "no heat pump exists in this
+                        # voltage_level", not the feed-in case's
+                        # deliberately-zero config factor above; this is just
+                        # an empty-group placeholder.
+                        power_scaling.at[f"{case}_{voltage_level}"] = 0.0
+                    else:
+                        power_scaling.at[f"{case}_{voltage_level}"] = (
+                            _hp_simultaneity_factor(n, configs)
+                        )
 
         # calculate active power of heat pumps
         active_power = power_scaling.to_frame("p_set").dot(df.loc[:, ["p_set"]].T)
