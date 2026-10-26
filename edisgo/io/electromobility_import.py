@@ -974,13 +974,6 @@ def distribute_private_charging_demand(edisgo_obj: EDisGo) -> None:
     assigned_park_id = {}
     assigned_point_id = {}
 
-    # NOTE: in the home branch below `charging_park_id` is intentionally not
-    # updated per car; it keeps the value drawn for the last work car. This
-    # reproduces a pre-existing bug in the capacity bookkeeping (home capacity is
-    # booked to a stale charging park) so this performance refactor leaves the
-    # output unchanged. The bug is tracked separately in #679.
-    charging_park_id = None
-
     for destination in private_charging_df.destination.sort_values().unique():
         private_charging_destination_df = private_charging_df.loc[
             private_charging_df.destination == destination
@@ -1049,7 +1042,6 @@ def distribute_private_charging_demand(edisgo_obj: EDisGo) -> None:
 
                     charging_capacity = capacity_per_car.at[car_id]
 
-                    # booked to the stale charging_park_id (see NOTE above, #679)
                     designated_charging_point_capacity_df.at[
                         drawn_charging_park_id, "designated_charging_point_capacity"
                     ] += charging_capacity

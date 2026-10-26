@@ -176,6 +176,52 @@ class TestElectromobilityImport:
             total_charging_demand, 0
         )
 
+    def test_distribute_private_charging_demand_books_home_capacity(self, monkeypatch):
+        """
+        The capacity of a home car is booked to the charging park drawn for it,
+        so that the capacity weights of later draws see it (#679).
+
+        """
+        edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+
+        booked = []
+        combine_weights = electromobility_import.combine_weights
+
+        def combine_weights_spy(indices, capacity_df, weights_df):
+            booked.append(capacity_df)
+            return combine_weights(indices, capacity_df, weights_df)
+
+        monkeypatch.setattr(
+            electromobility_import, "combine_weights", combine_weights_spy
+        )
+        electromobility_import.distribute_private_charging_demand(edisgo_obj)
+
+        processes = edisgo_obj.electromobility.charging_processes_df
+        home = processes.loc[
+            (processes.use_case == "home") & (processes.chargingdemand_kWh > 0)
+        ]
+        assert not home.empty
+        expected = (
+            home.groupby("car_id")
+            .agg(
+                park=("charging_park_id", "first"),
+                capacity=("nominal_charging_capacity_kW", "first"),
+            )
+            .groupby("park")
+            .capacity.sum()
+        )
+        # all draws update the same DataFrame
+        capacity = booked[-1].designated_charging_point_capacity
+        pd.testing.assert_series_equal(
+            capacity.loc[expected.index],
+            expected,
+            check_names=False,
+            check_index_type=False,
+        )
+
     def test_integrate_charging_parks(self):
         electromobility_import.integrate_charging_parks(self.edisgo_obj)
 
