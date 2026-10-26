@@ -50,7 +50,7 @@ requirements = [
     "networkx >= 2.5.0, < 3.7.0",
     # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
     # sqlalchemy leads to new errors.. should be fixed at some point
-    "numpy ==1.26.4",
+    "numpy ==2.2.6",
     "oedialect < 0.2.0",
     "pandas >= 1.4.0, < 2.2.0",
     "paramiko < 4.0",
