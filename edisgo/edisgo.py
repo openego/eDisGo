@@ -1704,6 +1704,22 @@ class EDisGo:
 
         Other Parameters
         ------------------
+        max_distance_from_target_bus : float
+            Only used for components in voltage level 6 or 7 in geo-referenced LV
+            grids. See
+            :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+            Default: 0.02.
+        connect_to_load_bus : bool
+            Only used for components in voltage level 7 in geo-referenced LV grids.
+            If True, the component is preferably connected to a bus with a matching
+            load. See
+            :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+            Default: False.
+        allowed_number_of_comp_per_bus : int
+            Maximum number of components of the same type at one bus in the LV grid.
+            See :attr:`~.network.topology.Topology.connect_to_lv` and
+            :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+            Default: 2.
         kwargs :
             Attributes of added component.
             See :attr:`~.network.topology.Topology.add_generator`,
@@ -1742,6 +1758,11 @@ class EDisGo:
         if type(geolocation) is not Point:
             geolocation = Point(geolocation)
 
+        # options of the LV connection functions must not end up in the component data
+        max_distance_from_target_bus = kwargs.pop("max_distance_from_target_bus", 0.02)
+        connect_to_load_bus = kwargs.pop("connect_to_load_bus", False)
+        allowed_number_of_comp_per_bus = kwargs.pop("allowed_number_of_comp_per_bus", 2)
+
         # write voltage level and geolocation to kwargs
         kwargs["geom"] = geolocation
         kwargs["voltage_level"] = voltage_level
@@ -1765,14 +1786,18 @@ class EDisGo:
                     ]
                     nearest_substation, _ = find_nearest_bus(geolocation, substations)
                     kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
-                comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
+                comp_name = self.topology.connect_to_lv(
+                    self, kwargs, comp_type, allowed_number_of_comp_per_bus
+                )
 
             else:
-                max_distance_from_target_bus = kwargs.pop(
-                    "max_distance_from_target_bus", 0.02
-                )
                 comp_name = self.topology.connect_to_lv_based_on_geolocation(
-                    self, kwargs, comp_type, max_distance_from_target_bus
+                    self,
+                    kwargs,
+                    comp_type,
+                    max_distance_from_target_bus,
+                    connect_to_load_bus,
+                    allowed_number_of_comp_per_bus,
                 )
 
         if add_ts:
@@ -1962,6 +1987,7 @@ class EDisGo:
         potential_charging_points_dir: PurePath | str = None,
         import_electromobility_data_kwds=None,
         allocate_charging_demand_kwds=None,
+        connect_to_load_bus: bool = False,
     ):
         """
         Imports electromobility data and integrates charging points into grid.
@@ -2068,6 +2094,13 @@ class EDisGo:
                 Weighting factor of the user-friendly weight in comparison to the
                 grid friendly weight. Default: 0.5.
 
+        connect_to_load_bus : bool
+            If True, charging points in voltage level 7 in geo-referenced LV grids are
+            preferably connected to a bus with a matching load, e.g. home charging
+            points to a bus with a residential load. See
+            :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+            Default: False.
+
         """
         if import_electromobility_data_kwds is None:
             import_electromobility_data_kwds = {}
@@ -2097,7 +2130,7 @@ class EDisGo:
 
         distribute_charging_demand(self, **allocate_charging_demand_kwds)
 
-        integrate_charging_parks(self)
+        integrate_charging_parks(self, connect_to_load_bus=connect_to_load_bus)
 
     def apply_charging_strategy(
         self,

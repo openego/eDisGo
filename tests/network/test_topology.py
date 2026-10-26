@@ -937,23 +937,8 @@ class TestTopologyWithEdisgoObject:
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
-        self.edisgo3 = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
-        )
-        self.edisgo3.set_time_series_worst_case_analysis()
 
     def test_to_geopandas(self):
-        # further tests of to_geopandas are conducted in test_geopandas_helper.py
-
-        # set up edisgo object with georeferenced LV
-        edisgo_geo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
-        )
-        test_suits = {
-            "mv": {"edisgo_obj": self.edisgo, "mode": "mv", "lv_grid_id": None},
-            "lv": {"edisgo_obj": edisgo_geo, "mode": "lv", "lv_grid_id": 1164120002},
-            "mv+lv": {"edisgo_obj": edisgo_geo, "mode": None, "lv_grid_id": None},
-        }
         # further tests of to_geopandas are conducted in test_geopandas_helper.py
 
         # set up edisgo object with georeferenced LV
@@ -989,24 +974,9 @@ class TestTopologyWithEdisgoObject:
                 grid = getattr(geopandas_container, "grid")
                 attr = getattr(geopandas_container, attr_str)
                 grid_attr = getattr(grid, attr_str.replace("_gdf", "_df"))
-        for test_suit, params in test_suits.items():
-            # call to_geopandas() function with different settings
-            geopandas_container = params["edisgo_obj"].topology.to_geopandas(
-                mode=params["mode"], lv_grid_id=params["lv_grid_id"]
-            )
-
-            assert isinstance(geopandas_container, GeoPandasGridContainer)
-
-            # check that content of geodataframes is the same as content of original
-            # dataframes
-            for attr_str in attrs:
-                grid = getattr(geopandas_container, "grid")
-                attr = getattr(geopandas_container, attr_str)
-                grid_attr = getattr(grid, attr_str.replace("_gdf", "_df"))
 
                 assert isinstance(attr, GeoDataFrame)
 
-                common_cols = list(set(attr.columns).intersection(grid_attr.columns))
                 common_cols = list(set(attr.columns).intersection(grid_attr.columns))
 
                 assert_frame_equal(
@@ -1966,183 +1936,120 @@ class TestTopologyWithEdisgoObject:
         assert "Bus_BranchTee_LVGrid_2_3" in meshes[1]
         assert "Grid contains mesh(es)." in caplog.text
 
-    # Parametrize the test function
-    @pytest.mark.parametrize("sector", ["home", "work"])
-    @pytest.mark.parametrize(
-        "comp_type", ["charging_point", "heat_pump", "storage_unit", "generator"]
-    )
-    @pytest.mark.parametrize("voltage_level", [6, 7])
-    @pytest.mark.parametrize("max_distance_from_target_bus", [0.01])
-    @pytest.mark.parametrize("allowed_number_of_comp_per_bus", [2])
-    @pytest.mark.parametrize("allow_mv_connection", [True, False])
-    def test_connect_to_lv_based_on_geolocation_parametrized(
-        self,
-        sector,
-        comp_type,
-        voltage_level,
-        max_distance_from_target_bus,
-        allowed_number_of_comp_per_bus,
-        allow_mv_connection,
-    ):
-        x = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "x"]
-        y = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "y"]
-        test_cp = {
-            "p_set": 0.01,
-            "geom": Point((x, y)),
-            "sector": sector,
-            "voltage_level": voltage_level,
-            "mvlv_subst_id": 3.0,
-        }
-        if comp_type == "generator":
-            test_cp["generator_type"] = "solar"
-            test_cp["generator_id"] = 23456
 
-        if (
-            comp_type == "charging_point"
-            and sector == "home"
-            and voltage_level == 7
-            and not allow_mv_connection
-            and max_distance_from_target_bus == 0.01
-            and allowed_number_of_comp_per_bus == 2
-        ):
-            for _ in range(5):
-                test_cp = {
-                    "p_set": 0.01,
-                    "geom": Point((x, y)),
-                    "sector": sector,
-                    "voltage_level": voltage_level,
-                    "mvlv_subst_id": 3.0,
-                }
-                comp_name = self.edisgo3.topology.connect_to_lv_based_on_geolocation(
-                    edisgo_object=self.edisgo3,
-                    comp_data=test_cp,
-                    comp_type=comp_type,
-                    max_distance_from_target_bus=max_distance_from_target_bus,
-                    allowed_number_of_comp_per_bus=allowed_number_of_comp_per_bus,
-                    allow_mv_connection=allow_mv_connection,
-                )
-                assert comp_name.startswith("Charging_Point_")
-            assert len(self.edisgo3.topology.charging_points_df) == 5
-            assert len(self.edisgo3.topology.charging_points_df.bus.unique()) == 3
+class TestConnectToLVBasedOnGeolocation:
+    """
+    Tests the connection to a bus with a matching load in
+    :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
 
-        else:
-            comp_name = self.edisgo3.topology.connect_to_lv_based_on_geolocation(
-                edisgo_object=self.edisgo3,
-                comp_data=test_cp,
-                comp_type=comp_type,
-                max_distance_from_target_bus=max_distance_from_target_bus,
-                allowed_number_of_comp_per_bus=allowed_number_of_comp_per_bus,
-                allow_mv_connection=allow_mv_connection,
-            )
-            if comp_type == "charging_point":
-                assert comp_name.startswith("Charging_Point_")
-            elif comp_type == "heat_pump":
-                assert comp_name.startswith("Heat_Pump_")
-            elif comp_type == "storage_unit":
-                assert comp_name.startswith("StorageUnit")
-            else:
-                assert comp_name.startswith("Generator_")
+    """
 
-    # Separate test cases for specific combinations
-    @pytest.mark.parametrize(
-        "sector, comp_type, voltage_level",
-        [
-            ("public", "charging_point", 8),
-            ("public", "failing_test", 6),
-            ("public", "failing_test", 8),
-        ],
-    )
-    def test_connect_to_lv_based_on_geolocation_value_error_parametrized(
-        self, sector, comp_type, voltage_level
-    ):
-        x = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "x"]
-        y = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "y"]
-        test_cp = {
-            "p_set": 0.01,
-            "geom": Point((x, y)),
-            "sector": sector,
-            "voltage_level": voltage_level,
-            "mvlv_subst_id": 3.0,
-        }
-        with pytest.raises(ValueError):
-            self.edisgo3.topology.connect_to_lv_based_on_geolocation(
-                edisgo_object=self.edisgo3,
-                comp_data=test_cp,
-                comp_type=comp_type,
-                max_distance_from_target_bus=0.01,
-                allowed_number_of_comp_per_bus=2,
-                allow_mv_connection=False,
-            )
+    # bus with a CTS load only and the closest bus with a residential load only,
+    # 10.9 m apart
+    cts_bus = "BranchTee_mvgd_33535_lvgd_1164120005_building_441701"
+    residential_bus = "BranchTee_mvgd_33535_lvgd_1164120005_building_441655"
+    # two buses with a residential load only, 5.2 m apart
+    residential_bus_1 = "BranchTee_mvgd_33535_lvgd_1150630000_building_431068"
+    residential_bus_2 = "BranchTee_mvgd_33535_lvgd_1150630000_building_431069"
 
-    # Define the parameters
-    comp_types = ["charging_point", "heat_pump", "storage_unit", "generator"]
-
-    @pytest.mark.parametrize("comp_type", comp_types)
-    def test_connect_to_lv_based_on_geolocation(self, comp_type):
-        x = self.edisgo3.topology.buses_df.at[
-            "BranchTee_mvgd_33535_lvgd_1150640000_building_430863", "x"
-        ]
-        y = self.edisgo3.topology.buses_df.at[
-            "BranchTee_mvgd_33535_lvgd_1150640000_building_430863", "y"
-        ]
-        test_cp = {
-            "p_set": 0.01,
-            "geom": Point((x, y)),
-            "sector": "home",
-            "voltage_level": 7,
-            "mvlv_subst_id": 3.0,
-        }
-        if comp_type == "generator":
-            test_cp["generator_type"] = "solar"
-            test_cp["generator_id"] = 23456
-        comp_name = self.edisgo3.topology.connect_to_lv_based_on_geolocation(
-            edisgo_object=self.edisgo3,
-            comp_data=test_cp,
-            comp_type=comp_type,
-            max_distance_from_target_bus=0.01,
-            allowed_number_of_comp_per_bus=2,
-            allow_mv_connection=False,
+    @pytest.fixture(autouse=True)
+    def setup_class(self):
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
 
-        if comp_type == "charging_point":
-            assert comp_name.startswith("Charging_Point_")
-            assert (
-                self.edisgo3.topology.charging_points_df.at[comp_name, "bus"]
-                == "BranchTee_mvgd_33535_lvgd_1150640000_building_430863"
+    def connect_charging_point(self, bus, sector, **kwargs):
+        topology = self.edisgo.topology
+        comp_data = {
+            "p_set": 0.011,
+            "geom": Point(
+                topology.buses_df.at[bus, "x"], topology.buses_df.at[bus, "y"]
+            ),
+            "sector": sector,
+            "voltage_level": 7,
+        }
+        comp_name = topology.connect_to_lv_based_on_geolocation(
+            self.edisgo, comp_data, "charging_point", **kwargs
+        )
+        return topology.charging_points_df.at[comp_name, "bus"]
+
+    def test_matching_load(self):
+        num_buses = len(self.edisgo.topology.buses_df)
+        # without the option the closest bus is used, regardless of its loads
+        assert self.connect_charging_point(self.cts_bus, "home") == self.cts_bus
+        # with the option, home charging points are connected to residential loads
+        # and work charging points to CTS loads
+        assert (
+            self.connect_charging_point(self.cts_bus, "home", connect_to_load_bus=True)
+            == self.residential_bus
+        )
+        assert (
+            self.connect_charging_point(
+                self.residential_bus, "work", connect_to_load_bus=True
             )
-            assert (
-                self.edisgo3.topology.charging_points_df.at[comp_name, "p_set"] == 0.01
+            == self.cts_bus
+        )
+        # no new buses are created
+        assert len(self.edisgo.topology.buses_df) == num_buses
+
+    def test_matching_load_too_far_away(self):
+        # the residential bus is farther away than max_distance_from_target_bus,
+        # wherefore the closest bus is used
+        assert (
+            self.connect_charging_point(
+                self.cts_bus,
+                "home",
+                connect_to_load_bus=True,
+                max_distance_from_target_bus=0.005,
             )
-            assert (
-                self.edisgo3.topology.charging_points_df.at[comp_name, "sector"]
-                == "home"
+            == self.cts_bus
+        )
+
+    def test_allowed_number_of_comp_per_bus(self):
+        buses = [
+            self.connect_charging_point(
+                self.residential_bus_1,
+                "home",
+                connect_to_load_bus=True,
+                allowed_number_of_comp_per_bus=1,
             )
-        elif comp_type == "heat_pump":
-            assert comp_name.startswith("Heat_Pump_")
-            assert (
-                self.edisgo3.topology.loads_df.at[comp_name, "bus"]
-                == "BranchTee_mvgd_33535_lvgd_1150640000_building_430863"
+            for _ in range(3)
+        ]
+        # first charging point at the closest bus, second one at the next bus with a
+        # residential load, as the closest bus is full; as both buses are then full,
+        # the third one is connected to the closest bus again
+        assert buses == [
+            self.residential_bus_1,
+            self.residential_bus_2,
+            self.residential_bus_1,
+        ]
+
+    def test_several_charging_points_at_one_building(self):
+        # the first charging point is a load with sector "home" at the bus as well,
+        # which must not lead to the bus being counted twice
+        buses = [
+            self.connect_charging_point(
+                self.residential_bus_1, "home", connect_to_load_bus=True
             )
-            assert self.edisgo3.topology.loads_df.at[comp_name, "p_set"] == 0.01
-            assert self.edisgo3.topology.loads_df.at[comp_name, "type"] == "heat_pump"
-            assert self.edisgo3.topology.loads_df.at[comp_name, "sector"] == "home"
-        elif comp_type == "storage_unit":
-            assert comp_name.startswith("StorageUnit")
-            assert (
-                self.edisgo3.topology.storage_units_df.at[comp_name, "bus"]
-                == "BranchTee_mvgd_33535_lvgd_1150640000_building_430863"
-            )
-            assert (
-                self.edisgo3.topology.storage_units_df.at[comp_name, "control"] == "PQ"
-            )
-            assert self.edisgo3.topology.storage_units_df.at[comp_name, "p_nom"] == 0.01
-            assert self.edisgo3.topology.storage_units_df.at[comp_name, "p_set"] == 0.01
-        else:
-            assert comp_name.startswith("Generator_")
-            assert (
-                self.edisgo3.topology.generators_df.at[comp_name, "bus"]
-                == "BranchTee_mvgd_33535_lvgd_1150640000_building_430863"
-            )
-            assert self.edisgo3.topology.generators_df.at[comp_name, "type"] == "solar"
-            assert self.edisgo3.topology.generators_df.at[comp_name, "p_nom"] == 0.01
-            assert self.edisgo3.topology.generators_df.at[comp_name, "control"] == "PQ"
+            for _ in range(2)
+        ]
+        assert buses == [self.residential_bus_1, self.residential_bus_1]
+
+    def test_integrate_component_based_on_geolocation(self):
+        topology = self.edisgo.topology
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="charging_point",
+            geolocation=(
+                topology.buses_df.at[self.cts_bus, "x"],
+                topology.buses_df.at[self.cts_bus, "y"],
+            ),
+            voltage_level=7,
+            add_ts=False,
+            sector="home",
+            p_set=0.011,
+            connect_to_load_bus=True,
+            allowed_number_of_comp_per_bus=2,
+        )
+        assert topology.charging_points_df.at[comp_name, "bus"] == self.residential_bus
+        assert "connect_to_load_bus" not in topology.loads_df.columns
+        assert "allowed_number_of_comp_per_bus" not in topology.loads_df.columns

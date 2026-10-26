@@ -353,3 +353,16 @@ Changes
   of ``src/`` drops below 100 %. Known defects of the package that are not fixed
   yet are marked with ``@test_broken`` and tracked in openego/eDisGo#810
   (openego/eDisGo#522)
+* Components integrated into voltage level 7 of geo-referenced LV grids can now be
+  connected to a bus with a matching load, e.g. home charging points to a bus with a
+  residential load and work charging points to a bus with a CTS, industrial or
+  agricultural load. The option ``connect_to_load_bus`` of
+  :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`,
+  :attr:`~.edisgo.EDisGo.integrate_component_based_on_geolocation` and
+  :attr:`~.edisgo.EDisGo.import_electromobility` switches this on; it is off by
+  default, so results do not change. A matching bus is only used if it lies within
+  ``max_distance_from_target_bus`` and has fewer than
+  ``allowed_number_of_comp_per_bus`` components of the same type connected to it;
+  otherwise the component is connected to the closest LV bus as before. Which loads
+  match which component is the same as in
+  :attr:`~.network.topology.Topology.connect_to_lv` (openego/eDisGo#413)
