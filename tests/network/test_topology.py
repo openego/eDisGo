@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 import pytest
@@ -1952,19 +1953,23 @@ class TestConnectToLVBasedOnGeolocation:
     residential_bus_1 = "BranchTee_mvgd_33535_lvgd_1150630000_building_431068"
     residential_bus_2 = "BranchTee_mvgd_33535_lvgd_1150630000_building_431069"
 
+    # point about 55 m away from an MV line and about 1.9 km away from the closest
+    # LV bus
+    point_far_from_lv_grid = Point(10.092002, 47.494141)
+
     @pytest.fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
 
-    def connect_charging_point(self, bus, sector, **kwargs):
+    def connect_charging_point(self, bus, sector, geom=None, **kwargs):
         topology = self.edisgo.topology
+        if geom is None:
+            geom = Point(topology.buses_df.at[bus, "x"], topology.buses_df.at[bus, "y"])
         comp_data = {
             "p_set": 0.011,
-            "geom": Point(
-                topology.buses_df.at[bus, "x"], topology.buses_df.at[bus, "y"]
-            ),
+            "geom": geom,
             "sector": sector,
             "voltage_level": 7,
         }
@@ -2053,3 +2058,42 @@ class TestConnectToLVBasedOnGeolocation:
         assert topology.charging_points_df.at[comp_name, "bus"] == self.residential_bus
         assert "connect_to_load_bus" not in topology.loads_df.columns
         assert "allowed_number_of_comp_per_bus" not in topology.loads_df.columns
+
+    @pytest.mark.parametrize(
+        "sector, kwargs, v_nom",
+        [
+            # without the option, a new LV bus is created
+            ("public", {}, 0.4),
+            # with the option, public charging points are connected to the MV grid
+            ("public", {"allow_mv_connection": True}, 20.0),
+            ("hpc", {"allow_mv_connection": True}, 20.0),
+            # but not other charging points
+            ("home", {"allow_mv_connection": True}, 0.4),
+            # and not if the MV grid is not much closer than the LV grid
+            ("public", {"allow_mv_connection": True, "mv_connection_factor": 100}, 0.4),
+        ],
+    )
+    def test_mv_connection(self, sector, kwargs, v_nom):
+        topology = self.edisgo.topology
+        bus = self.connect_charging_point(
+            None, sector, geom=self.point_far_from_lv_grid, **kwargs
+        )
+        assert topology.buses_df.at[bus, "v_nom"] == v_nom
+        # the new bus is connected to the grid
+        assert nx.is_connected(topology.to_graph())
+
+    def test_mv_connection_integrate_component_based_on_geolocation(self):
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="charging_point",
+            geolocation=self.point_far_from_lv_grid,
+            voltage_level=7,
+            add_ts=False,
+            sector="public",
+            p_set=0.011,
+            allow_mv_connection=True,
+        )
+        topology = self.edisgo.topology
+        bus = topology.charging_points_df.at[comp_name, "bus"]
+        assert bus in topology.mv_grid.buses_df.index
+        assert topology.charging_points_df.at[comp_name, "type"] == "charging_point"
+        assert "allow_mv_connection" not in topology.loads_df.columns

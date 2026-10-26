@@ -2300,6 +2300,8 @@ class Topology:
         max_distance_from_target_bus=0.02,
         connect_to_load_bus=False,
         allowed_number_of_comp_per_bus=2,
+        allow_mv_connection=False,
+        mv_connection_factor=3.0,
     ):
         """
         Add and connect new component to LV grid topology based on its geolocation.
@@ -2330,6 +2332,15 @@ class Topology:
         `max_distance_from_target_bus`. In that case, the component is connected
         directly to that bus. If no bus qualifies, the component is connected as
         described above, i.e. to the closest LV bus or via a new bus.
+
+        If `allow_mv_connection` is True, a public charging point (sector 'public' or
+        'hpc') that would be connected via a new bus is connected to the MV grid
+        instead, if the MV grid is much closer than the LV target bus, i.e. if
+        the distance to the MV grid multiplied by `mv_connection_factor` is smaller
+        than the distance to the LV target bus. The charging point is then connected
+        as a component in voltage level 5 using
+        :attr:`~.network.topology.Topology.connect_to_mv`. As in voltage level 5, a
+        transformer between the charging point and the MV grid is not modelled.
 
         Parameters
         ----------
@@ -2365,6 +2376,13 @@ class Topology:
             Only used if `connect_to_load_bus` is True. Specifies how many components
             of the same type may at most be connected to a bus with a matching load.
             Default: 2.
+        allow_mv_connection : bool
+            If True, public charging points far away from the LV grid may be connected
+            to the MV grid, see above. Default: False.
+        mv_connection_factor : float
+            Only used if `allow_mv_connection` is True. Factor by which the MV grid
+            must be closer than the LV target bus for a public charging point to be
+            connected to the MV grid. Default: 3.0.
 
         Returns
         -------
@@ -2439,6 +2457,20 @@ class Topology:
 
         # check distance from target bus
         if target_bus_distance > max_distance_from_target_bus:
+            # a public charging point far away from the LV grid is connected to the
+            # MV grid instead, if the MV grid is much closer
+            if (
+                allow_mv_connection
+                and comp_type == "charging_point"
+                and comp_data.get("sector") in ["public", "hpc"]
+                and self._get_distance_to_mv_grid(edisgo_object, geolocation)
+                * mv_connection_factor
+                < target_bus_distance
+            ):
+                # connect_to_mv sets the type of the load itself
+                comp_data.pop("type")
+                comp_data["voltage_level"] = 5
+                return self.connect_to_mv(edisgo_object, comp_data, comp_type)
             # if target bus is too far away from the component, connect the component
             # via a new bus
             bus = self._connect_to_lv_bus(
@@ -2523,6 +2555,52 @@ class Topology:
                 return buses_df[~buses_df.in_building.astype(bool)].index
             else:
                 return buses_df.index
+
+    def _get_distance_to_mv_grid(self, edisgo_object, geolocation):
+        """
+        Returns the distance to the point a component in voltage level 5 would be
+        connected to.
+
+        The connection point is determined as in
+        :attr:`~.network.topology.Topology.connect_to_mv`, i.e. it is the closest MV
+        line or MV bus within the connection buffer set in the config section
+        `grid_connection`, except for virtual buses.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        geolocation : :shapely:`Shapely Point object<points>`
+            Geolocation of the component.
+
+        Returns
+        -------
+        float
+            Distance in km. Infinite if there is no possible connection point.
+
+        """
+        bus = pd.Series({"x": geolocation.x, "y": geolocation.y})
+        config = edisgo_object.config["grid_connection"]
+        lines = geo.calc_geo_lines_in_buffer(
+            grid_topology=self,
+            bus=bus,
+            grid=self.mv_grid,
+            buffer_radius=int(config["conn_buffer_radius"]),
+            buffer_radius_inc=int(config["conn_buffer_radius_inc"]),
+        )
+        conn_objects = geo.find_nearest_conn_objects(
+            grid_topology=self,
+            bus=bus,
+            lines=lines,
+            conn_diff_tolerance=config["conn_diff_tolerance"],
+        )
+        # distances of the connection objects are given in m
+        return (
+            min(
+                (obj["dist"] for obj in conn_objects if "virtual" not in obj["repr"]),
+                default=np.inf,
+            )
+            / 1e3
+        )
 
     def _get_components_of_type(self, comp_type):
         """

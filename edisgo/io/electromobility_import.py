@@ -1271,7 +1271,7 @@ def determine_grid_connection_capacity(
         ) * total_charging_point_capacity
 
 
-def integrate_charging_parks(edisgo_obj, connect_to_load_bus=False):
+def integrate_charging_parks(edisgo_obj, **kwargs):
     """
     Integrates all designated charging parks into the grid.
 
@@ -1280,11 +1280,13 @@ def integrate_charging_parks(edisgo_obj, connect_to_load_bus=False):
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    connect_to_load_bus : bool
-        If True, charging parks in voltage level 7 in geo-referenced LV grids are
-        preferably connected to a bus with a matching load. See
-        :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
-        Default: False.
+
+    Other Parameters
+    ----------------
+    kwargs :
+        Options of the grid connection, e.g. `connect_to_load_bus` or
+        `allow_mv_connection`, that are passed on to
+        :attr:`~.edisgo.EDisGo.integrate_component_based_on_geolocation`.
 
     """
     charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
@@ -1308,7 +1310,7 @@ def integrate_charging_parks(edisgo_obj, connect_to_load_bus=False):
             sector=cp.use_case,
             add_ts=False,
             p_set=cp.grid_connection_capacity,
-            connect_to_load_bus=connect_to_load_bus,
+            **kwargs,
         )
         for cp in designated_charging_parks
     ]
