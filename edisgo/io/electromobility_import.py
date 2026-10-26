@@ -188,6 +188,36 @@ def import_electromobility_from_dir(
     )
 
 
+def sort_charging_processes(charging_processes_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Sorts charging processes by content and re-indexes them from zero.
+
+    The sort key spans all columns of
+    :attr:`~.network.electromobility.Electromobility.charging_processes_df`, so that
+    the order does not depend on the row order of the input (neither the database nor
+    os.listdir guarantee any order). Using all columns also orders rows sharing car,
+    park start and park end, e.g. the driving rows imported with
+    ``mode_parking_times`` "not_frugal". Rows that still tie are identical in all
+    columns, so their order does not matter.
+
+    Parameters
+    ----------
+    charging_processes_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Charging processes as described in
+        :attr:`~.network.electromobility.Electromobility.charging_processes_df`.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Sorted charging processes with an index starting at zero.
+
+    """
+    first = ["car_id", "park_start_timesteps", "park_end_timesteps"]
+    by = first + [c for c in COLUMNS["charging_processes_df"] if c not in first]
+
+    return charging_processes_df.sort_values(by=by).reset_index(drop=True)
+
+
 def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
     """
     Reads all CSVs in a given path and returns a DataFrame with all
@@ -246,7 +276,9 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
 
     df = df.rename(columns={"location": "destination"})
 
-    df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
+    df = sort_charging_processes(
+        df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
+    )
 
     return pd.merge(
         df,
@@ -415,6 +447,19 @@ def assure_minimum_potential_charging_parks(
         and reprojected to the grid's coordinate reference system.
 
     """
+    # sort by content so that the result does not depend on the row order of the
+    # input (the database and os.listdir do not guarantee any order)
+    potential_charging_parks_gdf = (
+        potential_charging_parks_gdf.assign(
+            wkt=potential_charging_parks_gdf.geometry.to_wkt()
+        )
+        .sort_values(
+            by=["use_case", "ags", "user_centric_weight", "wkt"],
+            ascending=[True, True, False, True],
+        )
+        .drop(columns="wkt")
+    )
+
     # ensure minimum number of potential charging parks per car
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
@@ -534,6 +579,10 @@ def assure_minimum_potential_charging_parks(
 def distribute_charging_demand(edisgo_obj, **kwargs):
     """
     Distribute charging demand from SimBEV onto potential charging parks from TracBEV.
+
+    The charging processes are not re-sorted here. The readers return them sorted by
+    :func:`sort_charging_processes`, so that the result does not depend on the row
+    order of the input; a frame set by hand should be sorted the same way.
 
     Parameters
     ----------
@@ -1336,6 +1385,14 @@ def simbev_config_from_oedb(
         more information.
 
     """
+    df = _query_simbev_config_from_oedb(scenario=scenario, engine=engine)
+
+    return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
+
+
+def _query_simbev_config_from_oedb(scenario: str, engine: Engine):
+    """Query SimBEV metadata from the OEP."""
+
     config = Config()
     (egon_ev_metadata,) = config.import_tables_from_oep(
         engine, ["egon_ev_metadata"], "demand"
@@ -1346,9 +1403,7 @@ def simbev_config_from_oedb(
             egon_ev_metadata.scenario == scenario
         )
 
-        df = pd.read_sql(sql=query.statement, con=query.session.bind)
-
-    return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
+        return pd.read_sql(sql=query.statement, con=query.session.bind)
 
 
 def potential_charging_parks_from_oedb(
@@ -1373,12 +1428,26 @@ def potential_charging_parks_from_oedb(
         for more information.
 
     """
+    crs = edisgo_obj.topology.grid_district["srid"]
+    gdf = _query_potential_charging_parks_from_oedb(
+        edisgo_obj=edisgo_obj,
+        engine=engine,
+    )
+
+    return gdf.to_crs(crs).assign(ags=0)
+
+
+def _query_potential_charging_parks_from_oedb(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    limit: int | None = None,
+):
+    """Query potential charging parks from the OEP."""
+
     config = Config()
     (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
         engine, ["egon_emob_charging_infrastructure"], "grid"
     )
-
-    crs = edisgo_obj.topology.grid_district["srid"]
 
     with session_scope_egon_data(engine) as session:
         srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
@@ -1389,16 +1458,16 @@ def potential_charging_parks_from_oedb(
             egon_emob_charging_infrastructure.weight.label("user_centric_weight"),
             egon_emob_charging_infrastructure.geometry.label("geom"),
         ).filter(egon_emob_charging_infrastructure.mv_grid_id == edisgo_obj.topology.id)
+        if limit is not None:
+            query = query.limit(limit)
 
-        gdf = gpd.read_postgis(
+        return gpd.read_postgis(
             sql=query.statement,
             con=query.session.bind,
             geom_col="geom",
             crs=f"EPSG:{srid}",
             index_col="cp_id",
-        ).to_crs(crs)
-
-    return gdf.assign(ags=0)
+        )
 
 
 def charging_processes_from_oedb(
@@ -1431,42 +1500,12 @@ def charging_processes_from_oedb(
         more information.
 
     """
-    config = Config()
-    egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
-        engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
+    pool, ev_trips_df = _query_charging_processes_from_oedb(
+        edisgo_obj=edisgo_obj,
+        engine=engine,
+        scenario=scenario,
+        mode_parking_times=kwargs.get("mode_parking_times", "frugal"),
     )
-
-    # get EV pool in grid
-    scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}
-    with session_scope_egon_data(engine) as session:
-        query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
-            egon_ev_mv_grid_district.scenario == scenario,
-            egon_ev_mv_grid_district.scenario_variation == scenario_variation[scenario],
-            egon_ev_mv_grid_district.bus_id == edisgo_obj.topology.id,
-        )
-
-        pool = Counter(pd.read_sql(sql=query.statement, con=engine).egon_ev_pool_ev_id)
-
-    # get charging processes for each EV ID
-    with session_scope_egon_data(engine) as session:
-        query = session.query(
-            egon_ev_trip.egon_ev_pool_ev_id.label("car_id"),
-            egon_ev_trip.use_case,
-            egon_ev_trip.location.label("destination"),
-            egon_ev_trip.charging_capacity_nominal.label(
-                "nominal_charging_capacity_kW"
-            ),
-            egon_ev_trip.charging_capacity_grid.label("grid_charging_capacity_kW"),
-            egon_ev_trip.charging_demand.label("chargingdemand_kWh"),
-            egon_ev_trip.park_start.label("park_start_timesteps"),
-            egon_ev_trip.park_end.label("park_end_timesteps"),
-        ).filter(
-            egon_ev_trip.scenario == scenario,
-            egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
-        )
-        if kwargs.get("mode_parking_times", "frugal") == "frugal":
-            query = query.filter(egon_ev_trip.charging_demand > 0)
-        ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
 
     # duplicate EVs that were chosen more than once from EV pool
     df_list = []
@@ -1485,9 +1524,64 @@ def charging_processes_from_oedb(
     if df.park_start_timesteps.min() == 1:
         df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
 
-    return df.assign(
-        ags=0,
-        park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
-        charging_park_id=np.nan,
-        charging_point_id=np.nan,
-    ).astype(DTYPES["charging_processes_df"])
+    return sort_charging_processes(
+        df.assign(
+            ags=0,
+            park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
+            charging_park_id=np.nan,
+            charging_point_id=np.nan,
+        ).astype(DTYPES["charging_processes_df"])
+    )
+
+
+def _query_charging_processes_from_oedb(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    scenario: str,
+    mode_parking_times: str | None = "frugal",
+    pool_limit: int | None = None,
+    trip_limit: int | None = None,
+):
+    """Query the EV pool and its charging processes from the OEP."""
+
+    config = Config()
+    egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
+        engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
+    )
+
+    scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}
+    with session_scope_egon_data(engine) as session:
+        query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
+            egon_ev_mv_grid_district.scenario == scenario,
+            egon_ev_mv_grid_district.scenario_variation == scenario_variation[scenario],
+            egon_ev_mv_grid_district.bus_id == edisgo_obj.topology.id,
+        )
+        if pool_limit is not None:
+            query = query.limit(pool_limit)
+
+        pool = Counter(pd.read_sql(sql=query.statement, con=engine).egon_ev_pool_ev_id)
+
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_ev_trip.egon_ev_pool_ev_id.label("car_id"),
+            egon_ev_trip.use_case,
+            egon_ev_trip.location.label("destination"),
+            egon_ev_trip.charging_capacity_nominal.label(
+                "nominal_charging_capacity_kW"
+            ),
+            egon_ev_trip.charging_capacity_grid.label("grid_charging_capacity_kW"),
+            egon_ev_trip.charging_demand.label("chargingdemand_kWh"),
+            egon_ev_trip.park_start.label("park_start_timesteps"),
+            egon_ev_trip.park_end.label("park_end_timesteps"),
+        ).filter(
+            egon_ev_trip.scenario == scenario,
+            egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
+        )
+        if mode_parking_times == "frugal":
+            query = query.filter(egon_ev_trip.charging_demand > 0)
+        if trip_limit is not None:
+            query = query.limit(trip_limit)
+
+        ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
+
+    return pool, ev_trips_df

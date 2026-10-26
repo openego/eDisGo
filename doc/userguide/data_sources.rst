@@ -88,6 +88,8 @@ argument is omitted a default OEP engine is created automatically:
    ``data_source="oedb"`` it does **not** create a default engine, so you must pass an
    explicit ``engine``.
 
+.. _oep-token:
+
 **OEP token.** To authenticate, place a file named ``OEP_TOKEN.txt`` containing your
 personal access token in the directory ``edisgo/config/`` (or set the environment
 variable ``OEP_TOKEN``). A token can be requested at

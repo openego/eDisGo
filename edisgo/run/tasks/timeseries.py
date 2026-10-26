@@ -27,9 +27,30 @@ attached to the EDisGo object. The order inside a pipeline matters:
 4. Finally call :func:`task_reactive_power` to fix reactive power
    control — this MUST come last because it overwrites whatever
    reactive power was set by the earlier steps.
+
+A pipeline may contain both time-step selection tasks (1 and 3). The
+optional top-level ``timestep_selection`` config block then picks the one
+that runs; the other is skipped (it stays in the pipeline and does
+nothing)::
+
+    timestep_selection:
+      task: select_critical_timesteps   # or set_timeindex, or none
+      select_critical_timesteps: {method: power_flow}
+      set_timeindex: {start: "2035-01-15 00:00", periods: 24}
+
+Each task takes its parameters from the sub-block named after it, so a
+config that ``extends`` a preset can switch the task or change single
+parameters without mixing the parameters of the two tasks. ``task: none``
+runs neither and keeps the time index as loaded. While the block is set,
+the steps of both tasks take no inline params (parameters written on the
+pipeline step itself, e.g. ``- set_timeindex: {periods: 24}``). Without the
+block (or with ``timestep_selection: null``) both tasks run with their
+inline params.
 """
 
 from __future__ import annotations
+
+import inspect
 
 import pandas as pd
 
@@ -84,17 +105,103 @@ def task_worst_case_ts(
     return edisgo
 
 
+SELECTION_TASKS = ("set_timeindex", "select_critical_timesteps")
+
+
+def check_timestep_selection(selection):
+    """
+    Check a ``timestep_selection`` config block (see the module docstring).
+
+    Called by the validator, so a wrong block is reported before the
+    pipeline runs.
+
+    Raises
+    ------
+    ValueError
+        If the block is not a mapping, has unknown keys, names no valid
+        ``task``, or a sub-block holds parameters its task does not accept.
+
+    """
+    if not isinstance(selection, dict):
+        raise ValueError(
+            f"timestep_selection must be a mapping with a 'task', got "
+            f"{selection!r}."
+        )
+    unknown = set(selection) - {"task", *SELECTION_TASKS}
+    if unknown:
+        raise ValueError(
+            f"Unknown timestep_selection keys {sorted(unknown)}. Task "
+            f"parameters go under timestep_selection.<task>, e.g. "
+            f"timestep_selection.select_critical_timesteps.method."
+        )
+    if selection.get("task") not in (*SELECTION_TASKS, "none"):
+        raise ValueError(
+            f"timestep_selection 'task' must be 'set_timeindex', "
+            f"'select_critical_timesteps' or 'none', got "
+            f"{selection.get('task')!r}."
+        )
+    for task in SELECTION_TASKS:
+        params = selection.get(task)
+        if params is None:
+            continue
+        if not isinstance(params, dict):
+            raise ValueError(
+                f"timestep_selection.{task} must be a mapping of task "
+                f"parameters, got {params!r}."
+            )
+        _check_param_names(task, params)
+
+
+def check_selection_params(task, params):
+    """
+    Check the parameters a time-step selection task will run with.
+
+    Raises a ValueError for parameters ``task`` does not accept and, for
+    ``set_timeindex``, for a missing or conflicting time-step range.
+
+    """
+    _check_param_names(task, params)
+    if task == "set_timeindex":
+        _timeindex_from_params(**params)
+
+
+def _check_param_names(task, params):
+    implementation = {
+        "set_timeindex": _set_timeindex,
+        "select_critical_timesteps": _select_critical_timesteps,
+    }[task]
+    accepted = set(inspect.signature(implementation).parameters) - {"edisgo", "ctx"}
+    unknown = set(params) - accepted
+    if unknown:
+        raise ValueError(
+            f"Unknown parameters {sorted(unknown)} for {task}. Accepted: "
+            f"{sorted(accepted)}."
+        )
+
+
+def _selection_params(ctx, task, params):
+    """
+    Return the parameters to run time-step selection ``task`` with, or
+    None if the ``timestep_selection`` block skips it.
+
+    Without the block the inline step params are used. The validator has
+    already checked the block and that the steps have no inline params
+    when it is set.
+
+    """
+    selection = ctx.raw_config.get("timestep_selection")
+    if selection is None:
+        return params
+    if selection["task"] != task:
+        ctx.logger.info(
+            f"Skipping {task} (timestep_selection 'task' is {selection['task']!r})."
+        )
+        return None
+    return selection.get(task) or {}
+
+
 @register_task("set_timeindex", provides={"timeseries"}, ts_altering=True)
-def task_set_timeindex(
-    edisgo,
-    ctx,
-    *,
-    timestamps=None,
-    start=None,
-    periods=None,
-    end=None,
-    freq="h",
-):
+def task_set_timeindex(edisgo, ctx, **params):
     """
     Manually fix the time index (and reduce existing data to it).
 
@@ -109,14 +216,18 @@ def task_set_timeindex(
     scenario year) are shifted to the year of the existing index so
     date-based slicing matches.
 
+    Takes its parameters from ``timestep_selection.set_timeindex`` if that
+    config block is set, otherwise from the inline step params (see the
+    module docstring).
+
     Parameters
     ----------
     edisgo : edisgo.EDisGo
         EDisGo instance to modify in place.
     ctx : RunContext
-        Run context. Stashes the selected index in
-        ``ctx.flags['selected_timeindex']`` so subsequent data imports
-        can restrict their downloads to it.
+        Run context. Reads ``ctx.raw_config['timestep_selection']``.
+        Stashes the selected index in ``ctx.flags['selected_timeindex']``
+        so subsequent data imports can restrict their downloads to it.
     timestamps : list of str or pandas.Timestamp, optional
         Explicit time steps to select; mutually exclusive with the
         ``start``/``periods``/``end`` range.
@@ -138,22 +249,30 @@ def task_set_timeindex(
     ------
     ValueError
         If neither ``timestamps`` nor a ``start`` plus
-        ``periods``/``end`` range is provided.
+        ``periods``/``end`` range is provided, or if ``timestamps`` is
+        combined with a range, or ``periods`` with ``end``.
 
     """
+    params = _selection_params(ctx, "set_timeindex", params)
+    if params is None:
+        return edisgo
+    return _set_timeindex(edisgo, ctx, **params)
+
+
+def _set_timeindex(
+    edisgo,
+    ctx,
+    *,
+    timestamps=None,
+    start=None,
+    periods=None,
+    end=None,
+    freq="h",
+):
+    """Implementation of :func:`task_set_timeindex`."""
     from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
 
-    if timestamps is not None:
-        timeindex = pd.DatetimeIndex(pd.to_datetime(list(timestamps)))
-    elif start is not None and end is not None:
-        timeindex = pd.date_range(start=start, end=end, freq=freq)
-    elif start is not None and periods is not None:
-        timeindex = pd.date_range(start=start, periods=periods, freq=freq)
-    else:
-        raise ValueError(
-            "set_timeindex needs 'timestamps' or a 'start' plus 'periods'/'end' range."
-        )
-    timeindex = timeindex.sort_values().unique()
+    timeindex = _timeindex_from_params(timestamps, start, periods, end, freq)
 
     if edisgo.timeseries.timeindex.empty:
         edisgo.set_timeindex(timeindex)
@@ -173,25 +292,47 @@ def task_set_timeindex(
     return edisgo
 
 
+def _timeindex_from_params(
+    timestamps=None, start=None, periods=None, end=None, freq="h"
+):
+    """Build the time index of :func:`task_set_timeindex` from its params."""
+    given = [
+        name
+        for name, value in (
+            ("timestamps", timestamps),
+            ("start", start),
+            ("periods", periods),
+            ("end", end),
+        )
+        if value is not None
+    ]
+    if ("timestamps" in given and len(given) > 1) or {"periods", "end"} <= set(given):
+        raise ValueError(
+            f"set_timeindex takes either 'timestamps' or 'start' plus 'periods' "
+            f"or 'end', got {given}. When a config extends a preset, its "
+            f"parameters are merged with the preset's, so set the ones you "
+            f"don't use to null (e.g. 'periods: null' when setting 'end')."
+        )
+    if timestamps is not None:
+        timeindex = pd.DatetimeIndex(pd.to_datetime(list(timestamps)))
+    elif start is not None and end is not None:
+        timeindex = pd.date_range(start=start, end=end, freq=freq)
+    elif start is not None and periods is not None:
+        timeindex = pd.date_range(start=start, periods=periods, freq=freq)
+    else:
+        raise ValueError(
+            "set_timeindex needs 'timestamps' or a 'start' plus 'periods' or 'end'."
+        )
+    return timeindex.sort_values().unique()
+
+
 @register_task(
     "select_critical_timesteps",
     requires={"timeseries"},
     provides={"timeseries"},
     ts_altering=True,
 )
-def task_select_critical_timesteps(
-    edisgo,
-    ctx,
-    *,
-    method="power_flow",
-    time_steps_per_time_interval=168,
-    time_step_day_start=4,
-    percentage=1.0,
-    save_steps=True,
-    use_troubleshooting_mode=True,
-    overloading_factor=0.95,
-    voltage_deviation_factor=0.95,
-):
+def task_select_critical_timesteps(edisgo, ctx, **params):
     """
     Automatically reduce the time index to the most critical intervals.
 
@@ -200,6 +341,10 @@ def task_select_critical_timesteps(
     overlying-grid dispatch, if any) to be set, and must run before
     ``reactive_power``. The manual counterpart is
     :func:`task_set_timeindex`, which runs early.
+
+    Takes its parameters from
+    ``timestep_selection.select_critical_timesteps`` if that config block is
+    set, otherwise from the inline step params (see the module docstring).
 
     Two ``method`` options:
 
@@ -234,7 +379,8 @@ def task_select_critical_timesteps(
     edisgo : edisgo.EDisGo
         EDisGo instance to modify in place.
     ctx : RunContext
-        Run context. Sets ``ctx.flags['timesteps_selected'] = True``.
+        Run context. Reads ``ctx.raw_config['timestep_selection']``.
+        Sets ``ctx.flags['timesteps_selected'] = True``.
     method : str, optional
         ``"power_flow"`` (default) or ``"residual_load"``.
     time_steps_per_time_interval : int, optional
@@ -269,6 +415,26 @@ def task_select_critical_timesteps(
         data, or if no critical intervals are found.
 
     """
+    params = _selection_params(ctx, "select_critical_timesteps", params)
+    if params is None:
+        return edisgo
+    return _select_critical_timesteps(edisgo, ctx, **params)
+
+
+def _select_critical_timesteps(
+    edisgo,
+    ctx,
+    *,
+    method="power_flow",
+    time_steps_per_time_interval=168,
+    time_step_day_start=4,
+    percentage=1.0,
+    save_steps=True,
+    use_troubleshooting_mode=True,
+    overloading_factor=0.95,
+    voltage_deviation_factor=0.95,
+):
+    """Implementation of :func:`task_select_critical_timesteps`."""
     from edisgo.tools.temporal_complexity_reduction import (
         get_most_critical_time_intervals,
         select_two_intervals,
@@ -305,7 +471,8 @@ def task_select_critical_timesteps(
             raise ValueError(
                 "select_critical_timesteps method 'residual_load' needs "
                 "overlying-grid data to be present (run "
-                "import_overlying_grid_data before it)."
+                "import_overlying_grid_data before it), or use method "
+                "'power_flow'."
             )
         col_a, col_b = "time_steps_load_case", "time_steps_feedin_case"
     else:  # power_flow

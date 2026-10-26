@@ -147,9 +147,9 @@ autodoc_mock_imports = [
     "sqlalchemy.engine",
     "sqlalchemy.engine.base",
     "sqlalchemy.orm",
-    "egoio",
-    "egoio.tools",
-    "egoio.tools.db",
+    "geoalchemy2",
+    "geoalchemy2.types",
+    "oedialect",
     "saio",
     # Machine learning
     "sklearn",

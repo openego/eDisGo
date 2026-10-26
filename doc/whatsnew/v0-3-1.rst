@@ -163,3 +163,204 @@ Changes
   (openego/eGo#227). A grid that is not fully connected no longer runs the queue dry
   either; the unreachable buses keep their original coordinates and are named in a
   warning
+* Made the allocation of charging demand to charging parks reproducible. The random
+  draws were seeded, but the result still depended on the row order of the input:
+  :func:`~.io.electromobility_import.assure_minimum_potential_charging_parks`
+  renumbered the potential charging parks by position after a sort with many ties,
+  and duplicated parks were sampled by position, so a different row order let the
+  same seeded draw pick a different park. Neither source guarantees an order — the
+  database queries have no ``ORDER BY`` and the TracBEV files are read in
+  ``os.listdir`` order — so the same data could yield a different grid on another
+  run or machine. The potential charging parks are now sorted by use case, ``ags``,
+  weight and location before they are used, and the charging processes are sorted
+  by car, park start, park end and then all remaining columns as soon as they are
+  read from the database or from the SimBEV files, which also fixes which capacity
+  is taken for a car charging with different capacities at the same destination and
+  the order of public charging processes with identical parking times. Note that
+  this changes allocation results once compared to earlier versions, and that
+  :attr:`~.network.electromobility.Electromobility.charging_processes_df` is now
+  indexed from zero in that sorted order (openego/eDisGo#742)
+* Fixed :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction`
+  giving a line that stands for several parallel systems ``num_parallel`` times its
+  impedance. The per-km values the aggregation rebuilds ``r`` and ``x`` from describe
+  one system, and the factor was left out, while ``num_parallel`` and ``s_nom`` were
+  carried over intact — so nothing in the reduced grid showed that its impedance no
+  longer matched. Few lines carry parallel systems, but they sit where a feeder leaves
+  the station and are therefore on the path of everything behind them: on MV grid
+  32064 an eight-system feeder came out at 0.164 Ohm/km instead of 0.0205, the
+  load-weighted path resistance of the whole grid doubled, and
+  :attr:`~.edisgo.EDisGo.reinforce` aborted with ``MaximumIterationError`` on a grid
+  that has no voltage issues at all before the reduction. Correcting 35 of 2421 lines
+  brings the voltage band back from 0.818–1.136 to 0.895–1.040 and lets the expansion
+  run through (openego/eDisGo#767)
+* Fixed the time step length handed to the OPF. ``time_elapsed`` drives every
+  inter-time-step coupling of the PowerModels problem — battery, thermal storage, DSM
+  and electromobility energy balances — and was computed as
+  ``int((snapshots[1] - snapshots[0]).seconds / 3600)``. Both parts were wrong:
+  ``.seconds`` is the seconds *component* of the difference rather than its total, so a
+  step of exactly one day came out as 0 and one of 25 h as 1 h; and the ``int()``
+  truncated any sub-hourly step to 0, which degenerates the couplings to
+  ``energy_2 == energy_1`` and decouples power from energy entirely. The value is now
+  derived from ``total_seconds()`` and returned as a float. The snapshots are also
+  checked: fewer than two, non-equidistant or non-increasing steps raise instead of
+  silently producing a meaningless global value (openego/eDisGo#693)
+* Fixed the standing loss of a thermal storage being applied per hour regardless of the
+  time step length. ``p_loss`` is a loss per day (4 % of the state of charge for
+  individual heating), and the decay between two time steps was written as
+  ``(1 - p_loss) ** (1/24)`` — correct at hourly resolution and wrong at every other
+  one: four times too much loss per 15-minute step, four times too little per four-hour
+  step. The exponent is now ``time_elapsed / 24``, which reproduces the previous value
+  exactly for hourly steps and gives the full daily loss for a daily one. This only
+  takes effect together with the ``time_elapsed`` fix of openego/eDisGo#693, without
+  which a sub-hourly step still arrives as 0 (openego/eDisGo#697)
+* Added the runner config block ``timestep_selection``. It picks which time-step
+  selection task (``set_timeindex`` or ``select_critical_timesteps``) runs and holds
+  each task's parameters, so a config extending a preset can change the preset's
+  selection (openego/eGo#222)::
+
+      timestep_selection:
+        task: select_critical_timesteps   # or set_timeindex, or none
+        select_critical_timesteps: {method: power_flow}
+
+  The presets ``overlying_grid_opf``, ``overlying_grid_opf_spatial`` and
+  ``spatial_reduction_opf`` use it with unchanged results.
+  **Breaking:** a config that extends one of these presets and gives parameters on
+  its own ``set_timeindex`` / ``select_critical_timesteps`` step (e.g.
+  ``- set_timeindex: {start: ...}``) now fails validation. Move the parameters to
+  ``timestep_selection.<task>`` or set ``timestep_selection: null``
+* The runner validator now rejects, before the run: unknown step parameters, invalid
+  ``set_timeindex`` / ``select_critical_timesteps`` parameters (e.g. ``timestamps``
+  with a range, ``periods`` with ``end``), and a ``spatial_reduction`` block that is
+  not a mapping or is enabled without a ``spatial_reduce`` step
+* Fixed ``apply_charging_strategy`` filling the gaps of a non-contiguous time index:
+  it resamples the time series to the frequency of the charging processes and back,
+  which covered the whole range from the first to the last time step. A time index of
+  e.g. two separate weeks became one long interval, so a later OPF ran over months
+  instead of two weeks
+* Connected the legacy OEP imports (``oedb_legacy`` generators, ``feedin_oedb_legacy``,
+  the legacy weather cells and grid district polygon) with the OEP token. They used an
+  anonymous ``egoio`` connection, and the OEP limits all anonymous clients together to
+  4 open connections, so they failed with ``HTTP 429`` as soon as other anonymous
+  clients held them. :func:`~.tools.session_scope` now uses
+  :func:`~.io.db.engine` with ``ssh=False``, which reads the token like the other OEP
+  imports (openego/eDisGo#739)
+* Fixed :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` when no
+  line can be disconnected because the node at two thirds of the feeder length is the
+  feeder representative. Only the first line of the feeder got one more parallel line
+  per iteration, which reduces the voltage deviation less with every iteration and
+  never touches the rest of the path, so grid reinforcement could abort with
+  :class:`~.flex_opt.exceptions.MaximumIterationError`. This happens e.g. after a long
+  first line was installed by disconnecting the feeder in a previous iteration. Now
+  lines on the path to the critical node are reinforced one at a time, each time
+  choosing the measure with the largest reduction of resistance times current per
+  cost, until the voltage difference along the path is reduced by an estimate of the
+  share needed to solve the voltage issue. Lines thicker than the standard line are no
+  longer replaced by a single standard line but get a parallel line of the same type.
+  House connections, i.e. lines to buses in buildings, are not reinforced, as they
+  often do not belong to the grid operator.
+  In the test grids this solves voltage issues that previously could not be solved and
+  does not increase grid expansion costs where reinforcement already
+  converged (openego/eDisGo#738)
+* :func:`~.flex_opt.reinforce_measures.separate_lv_grid` connects the rear half of
+  each feeder to the new station with as many parallel standard lines as needed to be
+  at least as strong as the line it replaces. Before, this was always one standard
+  line, even where the replaced line was e.g. two parallel standard lines, so the
+  separation could create a new overload. The new MV/LV transformer now has the type
+  of the standard transformer instead of ``None`` in ``type_info`` (adopted from
+  openego/eDisGo#391)
+* Rewrote the grid reinforcement methodology page with interactive examples for the
+  order of the reinforcement steps, the split voltage band, line and station
+  overloading, the iterations of the line reinforcement due to voltage issues in LV
+  feeders, the separation of LV grids and the grid expansion costs
+* Stopped grid reinforcement aborting with ``ValueError: Power flow analysis did not
+  converge`` after splitting a feeder due to voltage issues.
+  :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` connects the
+  rear part of a split feeder to the station by one standard line. Where the bypassed
+  path consists of thicker or parallel lines, this line has a higher resistance than
+  the path, and with enough load behind the split the power flow has no solution, as
+  in an LV grid of MV grid 34632 after the spatial complexity reduction. If the power
+  flow then does not converge, the split lines in LV grids that do not converge on
+  their own get a parallel line and the power flow is repeated, in up to four rounds,
+  before the error is raised. Grids whose power flow converges are not affected. The
+  methodology docs now describe the feeder split with an interactive example and the
+  limits of line reinforcement due to voltage issues (openego/eDisGo#777)
+* Added the option ``choose_cheaper_voltage_measure`` to
+  :meth:`~.EDisGo.reinforce`. If True,
+  :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` only splits a
+  feeder due to voltage issues if the new line is cheaper than reinforcing the lines
+  on the path to the critical node, e.g. replacing a single short, thin cable. The
+  default (False) keeps splitting the feeder whenever possible (openego/eDisGo#781)
+* OEP connections are closed right after use instead of being kept open in a
+  connection pool. The OEP limits open connections per account to 8, and each process
+  kept at least one pooled connection open per engine, so a few processes with the
+  same token, e.g. parallel CI jobs, failed with ``HTTP 429``
+* With ``overlying_grid.source: etrago``, ``import_overlying_grid_data`` now shifts the
+  dispatchable generator time series from eTraGo onto the EDisGo time index, like all
+  other overlying-grid data. eTraGo data is indexed in its weather year (2011) and
+  EDisGo in the scenario year, so the dispatchable generators had no values for any
+  time step. Their power was ``NaN``, and the OPF failed with ``The constant in the
+  affine expression is NaN`` (openego/eDisGo#787)
+* Removed the dependency on ``egoio``. The legacy OEP imports (``oedb_legacy``
+  generators, ``feedin_oedb_legacy``, the legacy weather cells and grid district
+  polygon) only used it for the ORM definitions of their tables. These are now
+  reflected from the OEP with ``saio`` via :func:`~.tools.legacy_oep_table`.
+  ``oedialect`` and ``psycopg2-binary``, which came in through ``egoio`` before, are
+  now direct dependencies. ``res_feedin_data`` in ``config_db_tables.cfg`` now names
+  the table (``ego_renewable_feedin``); the former value ``EgoRenewableFeedin`` is
+  still accepted
+* The example notebooks ``edisgo_simple_example`` and ``full_workflow_walkthrough``
+  draw their MV grid plots without a background map. Downloading the map tiles could
+  take tens of minutes or fail without a good internet connection. The simple example
+  explains how to switch the map back on with ``background_map=True``. The graph of
+  an LV grid is now drawn for the LV grid selected earlier in the notebook instead of
+  a second one picked by position (openego/eDisGo#276)
+* The background map of the MV grid plots is now the grey TopPlusOpen map of the
+  German Federal Agency for Cartography and Geodesy (BKG) instead of CartoDB Positron.
+  CartoDB requires an API key, without which every map tile only showed the text "API
+  KEY REQUIRED". TopPlusOpen needs no key and covers Germany in detail. The plot shows
+  the source note required by its licence (dl-de/by-2-0)
+* :func:`~.tools.plots.add_basemap` gives up on a map tile if the tile server does not
+  respond within 10 seconds (new ``timeout`` parameter). Before, a slow or missing
+  internet connection blocked MV grid plots with ``background_map=True`` without
+  limit. A failed download is logged as a warning and the plot is drawn without the
+  map. eDisGo now needs contextily 1.7.1 or newer
+* Central heat pumps and resistive heaters imported with
+  :meth:`~.edisgo.EDisGo.import_heat_pumps` are now always assigned to the nearest
+  district heating area, measured in meters in EPSG:3035. Before, the distance was
+  measured in units of the grid CRS and limited to 1000 units: in grids in EPSG:4326
+  this was 1000 degrees, i.e. no limit, but the nearest area in degrees can differ
+  from the nearest area in meters; in grids in a projected CRS, heat buses farther
+  than about 1000 m from every area got no ``district_heating_id`` and ``area_id``,
+  which made the heat demand import and the OPF fail later on. This removes the
+  geopandas warning about distances in a geographic CRS
+* Fixed pandas ``FutureWarning`` messages in the heat pump import, the heat demand
+  import and the OPF heat storage, and no longer calculate the unused centroids of the
+  district heating areas. Results do not change (openego/eDisGo#634)
+* :func:`~.io.pypsa_io.to_pypsa` now passes the line shunt susceptance ``b`` to PyPSA
+  also when exporting a single grid (``mode="mv"``, ``"mvlv"`` or ``"lv"``). Before,
+  these exports dropped ``b``, so PyPSA set it to zero. This changes the results of
+  power flow analyses and grid reinforcements run per grid, e.g. in
+  :func:`~.flex_opt.reinforce_grid.enhanced_reinforce_grid`, for lines with ``b``
+  other than zero: ``b`` is calculated from the equipment data for lines added with a
+  ``type_info`` or changed by :meth:`~.network.topology.Topology.change_line_type`
+  during reinforcement, and for MV lines after
+  :func:`~.tools.tools.add_line_susceptance` (for all lines with ``mode="all_b"``)
+  (openego/eDisGo#654)
+* Fixed the warnings of the Julia OPF package ``eDisGo_OPF.jl``. Its
+  ``Memento.warn``/``Memento.error`` calls referenced a logger ``_LOGGER`` that was
+  never defined in the package, so every path meant to warn raised an
+  ``UndefVarError`` instead: input without ``time_elapsed`` made the OPF build fail
+  instead of falling back to one hour per time step, JSON input with a
+  ``conductors`` entry was rejected, and a grid with more than one reference bus
+  could not be built. The input eDisGo itself sends hit none of these paths. The
+  package now logs through the PowerModels logger. The bus type correction
+  ``_correct_bus_types!`` also called PowerModels' ``_biggest_generator`` without
+  the module prefix; it is not called in the OPF run at the moment
+* Added a test suite written in Julia for the OPF package ``eDisGo_OPF.jl`` in
+  ``edisgo/opf/eDisGo_OPF.jl/test``. It is run from that directory with
+  ``julia --project=. -e 'using Pkg; Pkg.test()'`` and needs Julia 1.12. Tests that
+  need Gurobi skip themselves without a licence. A new GitHub Actions workflow runs
+  the suite on every push that changes the package and fails if the line coverage
+  of ``src/`` drops below 100 %. Known defects of the package that are not fixed
+  yet are marked with ``@test_broken`` and tracked in openego/eDisGo#810
+  (openego/eDisGo#522)

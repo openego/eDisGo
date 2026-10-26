@@ -38,9 +38,7 @@ def task_spatial_reduce(edisgo, ctx, **overrides):
     object.
 
     Configuration is read from the top-level ``spatial_reduction:`` config
-    block (so eGo can inject it the same way it injects
-    ``timeseries_selection``); inline step params override individual keys
-    of that block.
+    block; inline step params override individual keys of that block.
 
     A no-op when ``enabled`` is not true — ``edisgo`` is returned unchanged
     and ``ctx.full_grid_stash`` is left ``None``, so a downstream
@@ -70,7 +68,7 @@ def task_spatial_reduce(edisgo, ctx, **overrides):
         The (possibly) spatially-reduced EDisGo instance.
 
     """
-    cfg = {**ctx.raw_config.get("spatial_reduction", {}), **overrides}
+    cfg = {**(ctx.raw_config.get("spatial_reduction") or {}), **overrides}
     if not cfg.get("enabled", False):
         return edisgo
 

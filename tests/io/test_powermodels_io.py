@@ -1,9 +1,13 @@
+import copy
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from edisgo import EDisGo
 from edisgo.io import powermodels_io
+from edisgo.io.powermodels_io import _get_time_elapsed_in_hours
 from edisgo.tools.tools import aggregate_district_heating_components
 
 
@@ -304,6 +308,29 @@ class TestPowermodelsIO:
             )
         )
 
+    def test_to_powermodels_flexible_hps_without_thermal_storage(self):
+        # flexible heat pumps without thermal storage get a storage with zero
+        # capacity, also if no thermal storage is defined at all
+        edisgo = copy.deepcopy(self.edisgo)
+        flexible_hps = edisgo.heat_pump.thermal_storage_units_df.index.values
+        edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
+            columns=["capacity", "efficiency", "state_of_charge_initial"]
+        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "error",
+                message="The behavior of DataFrame concatenation with empty",
+                category=FutureWarning,
+            )
+            powermodels_network, _ = powermodels_io.to_powermodels(
+                edisgo, opf_version=1, flexible_hps=flexible_hps
+            )
+
+        heat_storage = powermodels_network["heat_storage"].values()
+        assert len(heat_storage) == len(flexible_hps)
+        assert all(storage["capacity"] == 0.0 for storage in heat_storage)
+        assert all(storage["charge_efficiency"] == 0.0 for storage in heat_storage)
+
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
@@ -427,3 +454,61 @@ class TestOverlyingGridTimeindexAlignment:
         self._set_overlying_grid(edisgo_obj, full[:1], [1.0])
         pm, hv_flex_dict = powermodels_io.to_powermodels(edisgo_obj, opf_version=2)
         assert pm["opf_version"] == 2
+
+
+# test _get_time_elapsed_in_hours for inter-timestep couplings in
+# Julia to simulate
+# 1) timesteps <1h, 1h, 2h, >24h and
+# 2) whether too few, non-equidistant or
+#    negative timestamps raise an error
+def _snapshots(*timestamps):
+    return pd.to_datetime(timestamps)
+
+
+# 1) test various snapshot intervals and expected time elapsed in hours
+@pytest.mark.parametrize(
+    ("snapshots", "expected"),
+    [
+        (pd.date_range("2035-01-01", periods=3, freq="15min"), 0.25),
+        (pd.date_range("2035-01-01", periods=3, freq="h"), 1.0),
+        (pd.date_range("2035-01-01", periods=3, freq="2h"), 2.0),
+        (_snapshots("2035-01-01 00:00", "2035-01-02 01:00"), 25.0),
+    ],
+)
+# test expected time elapsed in hours for above defined snapshot intervals
+def test_get_time_elapsed_in_hours(snapshots, expected):
+    assert _get_time_elapsed_in_hours(snapshots) == pytest.approx(expected)
+
+
+# 2) test three other cases:
+# 1. not enough snapshots (1 snapshot)
+# 2. non-equidistant snapshots (15min, 1h, 1h 15min)
+# 3. negative time elapsed (snapshots in reverse order)
+@pytest.mark.parametrize(
+    ("snapshots", "error_message"),
+    [
+        (
+            _snapshots("2035-01-01 00:00"),
+            "At least two snapshots",
+        ),
+        (
+            _snapshots(
+                "2035-01-01 00:00",
+                "2035-01-01 00:15",
+                "2035-01-01 01:15",
+            ),
+            "equidistant",
+        ),
+        (
+            _snapshots(
+                "2035-01-01 01:00",
+                "2035-01-01 00:00",
+            ),
+            "positive",
+        ),
+    ],
+)
+# test that ValueError is raised for the above three cases
+def test_get_time_elapsed_in_hours_raises(snapshots, error_message):
+    with pytest.raises(ValueError, match=error_message):
+        _get_time_elapsed_in_hours(snapshots)
