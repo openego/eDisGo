@@ -1374,6 +1374,12 @@ class EDisGo:
             See parameter `weight_by_costs` in
             :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
             for more information. Default: False.
+        choose_cheaper_voltage_measure : bool
+            If True, a line is only disconnected due to a voltage issue if this is
+            cheaper than reinforcing the lines on the path between station and
+            critical node. If False, a line is always disconnected if possible.
+            See :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`
+            for more information. Default: False.
 
         Returns
         --------

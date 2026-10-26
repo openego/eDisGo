@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import datetime
 import logging
-import os
 
 import numpy as np
 import pandas as pd
@@ -25,11 +24,8 @@ from sqlalchemy.engine.base import Engine
 from workalendar.europe import Germany
 
 from edisgo.io.db import session_scope_egon_data
-from edisgo.tools import session_scope, tools
+from edisgo.tools import legacy_oep_table, session_scope, tools
 from edisgo.tools.config import Config
-
-if "READTHEDOCS" not in os.environ:
-    from egoio.db_tables import model_draft, supply
 
 logger = logging.getLogger(__name__)
 
@@ -139,13 +135,20 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
 def _query_feedin_oedb_legacy(edisgo_object, weather_cell_ids, engine=None):
     """Query annual legacy wind and solar feed-in arrays from the OEP."""
 
+    # config files copied before egoio was dropped still name the egoio ORM class
+    # instead of the table
+    egoio_class_names = {"EgoRenewableFeedin": "ego_renewable_feedin"}
     if edisgo_object.config["data_source"]["oedb_data_source"] == "model_draft":
         orm_feedin_name = edisgo_object.config["model_draft"]["res_feedin_data"]
-        orm_feedin = model_draft.__getattribute__(orm_feedin_name)
+        orm_feedin = legacy_oep_table(
+            "model_draft", egoio_class_names.get(orm_feedin_name, orm_feedin_name)
+        )
         orm_feedin_version = 1 == 1
     else:
         orm_feedin_name = edisgo_object.config["versioned"]["res_feedin_data"]
-        orm_feedin = supply.__getattribute__(orm_feedin_name)
+        orm_feedin = legacy_oep_table(
+            "supply", egoio_class_names.get(orm_feedin_name, orm_feedin_name)
+        )
         orm_feedin_version = (
             orm_feedin.version == edisgo_object.config["versioned"]["version"]
         )
@@ -483,11 +486,11 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         # drop CTS profiles for buildings without a heat pump
         buildings_no_hp = [_ for _ in cts_profiles_df.columns if _ not in building_ids]
         cts_profiles_df = cts_profiles_df.drop(columns=buildings_no_hp)
-        # add residential and CTS profiles
-        individual_heating_df = pd.concat(
-            [residential_profiles_df, cts_profiles_df], axis=1
-        )
-        individual_heating_df = individual_heating_df.groupby(axis=1, level=0).sum()
+        # add residential and CTS profiles per building; a missing profile counts
+        # as zero, e.g. if there is no residential heat demand at all
+        individual_heating_df = residential_profiles_df.add(
+            cts_profiles_df, fill_value=0
+        ).fillna(0.0)
         # set column names to be heat pump names instead of building IDs
         individual_heating_df = pd.DataFrame(
             {
@@ -828,7 +831,7 @@ def _query_residential_heat_profile_data(building_ids, scenario, engine):
         # unnest array of profile values per ID
         df_profiles = df_profiles.explode("idp")
         # add column for hour of day
-        df_profiles["hour"] = df_profiles.groupby(axis=0, level=0).cumcount() + 1
+        df_profiles["hour"] = df_profiles.groupby(level=0).cumcount() + 1
 
         return df_profiles
 
