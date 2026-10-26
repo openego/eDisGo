@@ -117,81 +117,65 @@ class TestTimeseriesImport:
     def test__timeindex_helper_func(self, caplog):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
-        # ### Fall c) neither an explicit timeindex nor TimeSeries.timeindex is
-        # set: the full year for the configured reference year (default 2011) is
-        # built and TimeSeries.timeindex is set to it
+        timeindex_full = pd.date_range("1/1/2011", periods=8760, freq="h")
+
+        # test without timeindex and without TimeSeries.timeindex: the full
+        # reference year is used and set as TimeSeries.timeindex
         caplog.clear()
         with caplog.at_level(logging.WARNING):
             ind, ind_full = timeseries_import._timeindex_helper_func(
                 edisgo, timeindex=None
             )
         assert "No timeindex was set" in caplog.text
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="h")
-        assert_index_equal(ind, timeindex)
-        assert_index_equal(ind_full, timeindex)
-        assert_index_equal(edisgo.timeseries.timeindex, timeindex)
+        assert_index_equal(ind, timeindex_full)
+        assert_index_equal(ind_full, timeindex_full)
+        assert_index_equal(edisgo.timeseries.timeindex, timeindex_full)
 
-        # ### Fall b) timeindex=None, TimeSeries.timeindex already set (non-leap
-        # year): it is used unchanged and TimeSeries.timeindex is not touched
-        edisgo_index = pd.date_range("1/1/2010", periods=5, freq="h")
+        # test without timeindex, TimeSeries.timeindex set in the reference year:
+        # it is used unchanged
+        edisgo_index = pd.date_range("3/1/2011", periods=5, freq="h")
         edisgo.timeseries.timeindex = edisgo_index
-        caplog.clear()
         ind, ind_full = timeseries_import._timeindex_helper_func(edisgo, timeindex=None)
-        timeindex = pd.date_range("1/1/2010", periods=8760, freq="h")
         assert_index_equal(ind, edisgo_index)
-        assert_index_equal(ind_full, timeindex)
+        assert_index_equal(ind_full, timeindex_full)
         assert_index_equal(edisgo.timeseries.timeindex, edisgo_index)
 
-        # ### Fall b) TimeSeries.timeindex is set to a leap year: it is shifted
-        # to the reference year, a warning is logged, and TimeSeries.timeindex is
-        # updated to the shifted index.
-        # TimeSeries.timeindex is set directly here (not via EDisGo.set_timeindex,
-        # which by now does its own leap year shifting) to isolate
-        # _timeindex_helper_func's own leap year handling on this path.
-        edisgo_index_leap = pd.date_range("1/1/2020", periods=5, freq="h")
-        edisgo.timeseries.timeindex = edisgo_index_leap
+        # test without timeindex, TimeSeries.timeindex set in another year: it is
+        # relabelled to the reference year and TimeSeries.timeindex is updated
+        edisgo.timeseries.timeindex = pd.date_range("3/1/2020", periods=5, freq="h")
         caplog.clear()
         with caplog.at_level(logging.WARNING):
             ind, ind_full = timeseries_import._timeindex_helper_func(
                 edisgo, timeindex=None
             )
-        assert "TimeSeries.timeindex is set in leap year 2020" in caplog.text
-        assert len(ind) == 5
-        assert ind[0].year == 2011
-        assert not ind.has_duplicates
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="h")
-        assert_index_equal(ind_full, timeindex)
-        assert_index_equal(edisgo.timeseries.timeindex, ind)
+        assert "is set in year 2020" in caplog.text
+        assert_index_equal(ind, edisgo_index)
+        assert_index_equal(ind_full, timeindex_full)
+        assert_index_equal(edisgo.timeseries.timeindex, edisgo_index)
 
-        # ### Fall a) timeindex given, no leap year: used unchanged,
-        # TimeSeries.timeindex is not touched
+        # test with timeindex in another year: it is relabelled to the reference
+        # year, TimeSeries.timeindex is not changed
         edisgo.timeseries.timeindex = pd.DatetimeIndex([])
-        given_index = pd.date_range("1/1/2013", periods=5, freq="h")
-        caplog.clear()
-        ind, ind_full = timeseries_import._timeindex_helper_func(
-            edisgo, timeindex=given_index
-        )
-        timeindex = pd.date_range("1/1/2013", periods=8760, freq="h")
-        assert_index_equal(ind, given_index)
-        assert_index_equal(ind_full, timeindex)
-        assert edisgo.timeseries.timeindex.empty
-
-        # ### Fall a) timeindex given, leap year: shifted to the reference year,
-        # a warning is logged; TimeSeries.timeindex is NOT touched (only Fall b
-        # updates TimeSeries.timeindex)
-        given_index_leap = pd.date_range("1/1/2012", periods=5, freq="h")
         caplog.clear()
         with caplog.at_level(logging.WARNING):
             ind, ind_full = timeseries_import._timeindex_helper_func(
-                edisgo, timeindex=given_index_leap
+                edisgo, timeindex=pd.date_range("3/1/2013", periods=5, freq="h")
             )
-        assert "The given timeindex is set in leap year 2012" in caplog.text
-        assert len(ind) == 5
-        assert ind[0].year == 2011
-        assert not ind.has_duplicates
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="h")
-        assert_index_equal(ind_full, timeindex)
+        assert "is set in year 2013" in caplog.text
+        assert_index_equal(ind, edisgo_index)
+        assert_index_equal(ind_full, timeindex_full)
         assert edisgo.timeseries.timeindex.empty
+
+        # test leap reference year: the full year keeps each date of the model
+        # data, 29 February is left out
+        edisgo.config["timeindex"]["reference_year"] = 2020
+        ind, ind_full = timeseries_import._timeindex_helper_func(
+            edisgo, timeindex=pd.date_range("3/1/2020", periods=5, freq="h")
+        )
+        assert len(ind_full) == 8760
+        assert ind_full.get_loc(pd.Timestamp("3/1/2020 00:00")) == 1416
+        assert ind_full.get_loc(pd.Timestamp("12/31/2020 23:00")) == 8759
+        assert ind[0] == pd.Timestamp("3/1/2020 00:00")
 
     @pytest.mark.oep
     def test_query_feedin_oedb_legacy_live(self, oep_engine):
@@ -268,14 +252,15 @@ class TestTimeseriesImport:
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        timeindex = pd.date_range("1/2/2018", periods=6, freq="H")
-        edisgo_object.set_timeindex(timeindex)
+        edisgo_object.set_timeindex(pd.date_range("1/2/2018", periods=6, freq="H"))
         feedin_df = timeseries_import.feedin_oedb(
             edisgo_object,
             engine=oep_engine,
         )
         assert feedin_df.shape == (6, 4)
-        assert_index_equal(feedin_df.index, timeindex)
+        assert_index_equal(
+            feedin_df.index, pd.date_range("1/2/2011", periods=6, freq="H")
+        )
 
     def test_feedin_oedb_offline(self, monkeypatch):
         """Test feed-in reshaping and slicing with synthetic query data."""
@@ -331,16 +316,20 @@ class TestTimeseriesImport:
 
     def test_load_time_series_demandlib(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        timeindex = pd.date_range("1/1/2018", periods=8760, freq="H")
-        load = timeseries_import.load_time_series_demandlib(edisgo, timeindex)
+        # the given timeindex is relabelled to the reference year 2011, so the
+        # profiles are created for the weekdays and holidays of 2011
+        load = timeseries_import.load_time_series_demandlib(
+            edisgo, pd.date_range("1/1/2018", periods=8760, freq="H")
+        )
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
         assert (
             load.columns == ["cts", "residential", "agricultural", "industrial"]
         ).all()
-        assert len(load) == 8760
-        assert np.isclose(load.loc[timeindex[453], "cts"], 8.33507e-05)
-        assert np.isclose(load.loc[timeindex[13], "residential"], 1.73151e-04)
-        assert np.isclose(load.loc[timeindex[6328], "agricultural"], 1.01346e-04)
-        assert np.isclose(load.loc[timeindex[4325], "industrial"], 9.87654320e-05)
+        assert_index_equal(load.index, timeindex)
+        assert np.isclose(load.loc[timeindex[453], "cts"], 8.30772e-05)
+        assert np.isclose(load.loc[timeindex[13], "residential"], 1.73199e-04)
+        assert np.isclose(load.loc[timeindex[6328], "agricultural"], 1.01342e-04)
+        assert np.isclose(load.loc[timeindex[4325], "industrial"], 9.86598701e-05)
         assert np.isclose(load.sum()["cts"], 1.0)
         assert np.isclose(load.sum()["residential"], 1.0)
         assert np.isclose(load.sum()["agricultural"], 1.0)
@@ -474,7 +463,7 @@ class TestTimeseriesImport:
                 ),
             )
 
-        assert "is set in leap year 2020" in caplog.text
+        assert "is set in year 2020" in caplog.text
         assert df.shape == (8736, 3)
         assert df.index[0].year == 2011
 
@@ -602,7 +591,7 @@ class TestTimeseriesImport:
                 ),
             )
 
-        assert "is set in leap year 2020" in caplog.text
+        assert "is set in year 2020" in caplog.text
         assert df.shape == (4, 3)
         assert df.index[0].year == 2011
         assert set(df.columns) == set(selected_loads)

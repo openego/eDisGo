@@ -274,10 +274,10 @@ class EDisGo:
         The time index is for example used as default for time steps considered in
         the power flow analysis and when checking the integrity of the network.
 
-        In case `timeindex` falls in a leap year, this is currently not supported.
-        A warning is logged and `timeindex` is shifted (see
-        :func:`~.tools.tools.shift_timeindex_to_year`) to the configured reference
-        year (see :func:`~.tools.tools.get_reference_year`) before it is set.
+        In case `timeindex` is set in a different year than the configured
+        reference year (see :func:`~.tools.tools.get_reference_year`), a warning is
+        logged and `timeindex` is relabelled to the reference year before it is
+        set (see :func:`~.tools.tools.shift_timeindex_to_reference_year`).
 
         Parameters
         -----------
@@ -285,15 +285,9 @@ class EDisGo:
             Time index to set.
 
         """
-        if len(timeindex) > 0 and pd.Timestamp(timeindex.year[0], 1, 1).is_leap_year:
-            reference_year = tools.get_reference_year(self)
-            logger.warning(
-                f"The given timeindex is set in leap year {timeindex.year[0]}. "
-                f"This is currently not valid. The data is therefore indexed "
-                f"using the configured reference year {reference_year} instead."
-            )
-            timeindex = tools.shift_timeindex_to_year(timeindex, reference_year)
-        self.timeseries.timeindex = timeindex
+        self.timeseries.timeindex = tools.shift_timeindex_to_reference_year(
+            self, timeindex
+        )
 
     def set_time_series_manual(
         self,

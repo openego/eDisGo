@@ -35,21 +35,20 @@ def _timeindex_helper_func(edisgo_object, timeindex=None):
     Helper function to set up a timeindex for an entire year to initially set an index
     on the imported data and timeindex to select certain time steps.
 
-    The time index to use is determined as follows, checked in this order:
+    The time index to select time steps is determined as follows:
 
-    1. `timeindex` is given by the caller: if it falls in a leap year, this is
-       currently not supported. A warning is logged and it is shifted (see
-       :func:`~.tools.tools.shift_timeindex_to_year`) to the configured reference
-       year (see :func:`~.tools.tools.get_reference_year`) instead.
+    1. `timeindex` is given: it is relabelled to the configured reference year
+       (see :func:`~.tools.tools.shift_timeindex_to_reference_year`).
     2. `timeindex` is not given, but
-       :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set: it is
-       used instead. If it falls in a leap year, a warning is logged, it is
-       shifted to the reference year, and
-       :py:attr:`~.network.timeseries.TimeSeries.timeindex` is updated to the
-       shifted index.
-    3. Neither is given: a warning is logged and a full year, hourly time index
-       for the reference year is created and set as
-       :py:attr:`~.network.timeseries.TimeSeries.timeindex`.
+       :py:attr:`~.network.timeseries.TimeSeries.timeindex` is set: it is used
+       instead and set again via :attr:`~.EDisGo.set_timeindex`, which relabels it
+       to the reference year.
+    3. Neither is given: a warning is logged and the full year in the reference
+       year is used and set as :py:attr:`~.network.timeseries.TimeSeries.timeindex`.
+
+    The time index for the entire year contains the 8760 hours of the model data
+    (weather year 2011), relabelled to the reference year by date, so that each
+    time step keeps its date also in case the reference year is a leap year.
 
     Parameters
     ----------
@@ -64,41 +63,24 @@ def _timeindex_helper_func(edisgo_object, timeindex=None):
         Returns timeindex to select certain time steps and timeindex for entire year.
 
     """
-    ref_year = tools.get_reference_year(edisgo_object)
+    reference_year = tools.get_reference_year(edisgo_object)
+    timeindex_full = tools.shift_timeindex_to_year(
+        pd.date_range("1/1/2011", periods=8760, freq="h"), reference_year
+    )
 
     if timeindex is not None:
-        year = timeindex.year[0]
-        if pd.Timestamp(year, 1, 1).is_leap_year:
-            logger.warning(
-                f"The given timeindex is set in leap year {year}. This is "
-                f"currently not valid. The data is therefore indexed using the "
-                f"configured reference year {ref_year} instead."
-            )
-            timeindex = tools.shift_timeindex_to_year(timeindex, ref_year)
-            year = ref_year
+        timeindex = tools.shift_timeindex_to_reference_year(edisgo_object, timeindex)
     elif not edisgo_object.timeseries.timeindex.empty:
+        edisgo_object.set_timeindex(edisgo_object.timeseries.timeindex)
         timeindex = edisgo_object.timeseries.timeindex
-        year = timeindex.year[0]
-        if pd.Timestamp(year, 1, 1).is_leap_year:
-            logger.warning(
-                f"TimeSeries.timeindex is set in leap year {year}. This is "
-                f"currently not valid. The data is therefore indexed using the "
-                f"configured reference year {ref_year} instead, and "
-                f"TimeSeries.timeindex is updated accordingly."
-            )
-            timeindex = tools.shift_timeindex_to_year(timeindex, ref_year)
-            edisgo_object.timeseries.timeindex = timeindex
-            year = ref_year
     else:
-        year = ref_year
-        timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="h")
-        edisgo_object.timeseries.timeindex = timeindex
         logger.warning(
             f"No timeindex was set. TimeSeries.timeindex is set to reference "
-            f"year {year}."
+            f"year {reference_year}."
         )
+        edisgo_object.set_timeindex(timeindex_full)
+        timeindex = timeindex_full
 
-    timeindex_full = pd.date_range(f"1/1/{year}", periods=8760, freq="h")
     return timeindex, timeindex_full
 
 

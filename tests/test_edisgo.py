@@ -1693,7 +1693,7 @@ class TestEDisGo:
                 import_types=["individual_heat_pumps", "central_heat_pumps"],
             )
 
-        assert "leap year" in caplog.text
+        assert "is set in year 2020" in caplog.text
 
         loads_df = edisgo_object.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]

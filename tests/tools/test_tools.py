@@ -684,7 +684,7 @@ class TestTools:
         assert ((source_leap.month == 2) & (source_leap.day == 29)).sum() == 24
         with caplog.at_level(logging.WARNING):
             shifted = tools.shift_timeindex_to_year(source_leap, 2035)
-        assert "not a leap year" in caplog.text
+        assert "29 February" in caplog.text
         assert ((shifted.month == 2) & (shifted.day == 29)).sum() == 0
         assert len(shifted) == 8760
         assert not shifted.has_duplicates
@@ -692,15 +692,51 @@ class TestTools:
             shifted, pd.date_range("1/1/2035", periods=8760, freq="H")
         )
 
-        # test that shifting onto a leap year target keeps 29 February
+        # test that shifting onto a leap year target also drops 29 February and
+        # keeps each date
         shifted = tools.shift_timeindex_to_year(source_leap, 2032)
-        assert ((shifted.month == 2) & (shifted.day == 29)).sum() == 24
-        assert len(shifted) == 8784
-        assert not shifted.has_duplicates
+        assert ((shifted.month == 2) & (shifted.day == 29)).sum() == 0
+        assert len(shifted) == 8760
+        assert shifted[59 * 24] == pd.Timestamp("2032-03-01")
+        shifted = tools.shift_timeindex_to_year(source, 2032)
+        assert len(shifted) == 8760
+        assert shifted[-1] == pd.Timestamp("2032-12-31 23:00")
 
         # test with empty index
         empty_index = pd.DatetimeIndex([])
         assert tools.shift_timeindex_to_year(empty_index, 2035).empty
+
+    def test_shift_timeindex_to_reference_year(self, caplog):
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+
+        # test index in a different year is relabelled with a warning
+        with caplog.at_level(logging.WARNING):
+            shifted = tools.shift_timeindex_to_reference_year(
+                edisgo_obj, pd.date_range("1/1/2035", periods=3, freq="H")
+            )
+        assert "relabelled to the reference year 2011" in caplog.text
+        assert_index_equal(shifted, pd.date_range("1/1/2011", periods=3, freq="H"))
+
+        # test worst-case index is not changed
+        worst_case_index = pd.date_range("1/1/1970", periods=4, freq="H")
+        assert tools.shift_timeindex_to_reference_year(
+            edisgo_obj, worst_case_index
+        ).equals(worst_case_index)
+
+        # test leap reference year
+        edisgo_obj.config["timeindex"]["reference_year"] = 2020
+        shifted = tools.shift_timeindex_to_reference_year(
+            edisgo_obj, pd.date_range("1/1/2020", periods=8784, freq="H")
+        )
+        assert len(shifted) == 8760
+        assert shifted[0].year == 2020
+
+        # test index across the year boundary
+        with pytest.raises(ValueError, match="year boundary"):
+            tools.shift_timeindex_to_reference_year(
+                edisgo_obj,
+                pd.date_range("12/31/2011 22:00", "1/1/2012 01:00", freq="H"),
+            )
 
     def test_validate_scenario(self):
         # valid scenarios are returned unchanged

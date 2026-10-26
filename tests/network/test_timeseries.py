@@ -1618,7 +1618,7 @@ class TestTimeSeries:
         # fmt: on
 
     def test_predefined_conventional_loads_by_sector(self, caplog):
-        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        index = pd.date_range("1/1/2011", periods=3, freq="H")
         self.edisgo.timeseries.timeindex = index
 
         # test assertion error
@@ -1632,9 +1632,9 @@ class TestTimeSeries:
             index=index,
             columns=["cts", "residential", "agricultural", "industrial"],
             data=[
-                [0.000059711, 0.0000782190, 0.00006540, 0.00009876],
-                [0.000052590, 0.0000563428, 0.00006110, 0.00009876],
-                [0.000045927, 0.0000451043, 0.00005843, 0.00009876],
+                [0.000059515, 0.0000782408, 0.00006540, 0.00009866],
+                [0.000052418, 0.0000563582, 0.00006110, 0.00009866],
+                [0.000045776, 0.0000451166, 0.00005843, 0.00009866],
             ],
         )
 
@@ -1723,19 +1723,19 @@ class TestTimeSeries:
             self.edisgo.timeseries.loads_active_power[
                 "Load_industrial_LVGrid_6_1"
             ].values,
-            [0.05728395] * 3,
+            [0.05722272] * 3,
         ).all()
         assert np.isclose(
             self.edisgo.timeseries.loads_active_power.loc[
                 index[1], "Load_agricultural_LVGrid_5_2"
             ],
-            0.0274958,
+            0.0274945,
         )
         assert np.isclose(
             self.edisgo.timeseries.loads_active_power.loc[
                 index, "Load_residential_LVGrid_9_2"
             ].values,
-            [0.00038328, 0.00027608, 0.00022101],
+            [0.00038338, 0.00027616, 0.00022107],
         ).all()
         # test assertion error
         with pytest.raises(ValueError) as exc_info:
@@ -1882,7 +1882,7 @@ class TestTimeSeries:
         )
 
     def test_predefined_charging_points_by_use_case(self, caplog):
-        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        index = pd.date_range("1/1/2011", periods=3, freq="H")
         self.edisgo.timeseries.timeindex = index
 
         # test assertion error
@@ -2200,7 +2200,7 @@ class TestTimeSeries:
         # fmt: on
 
     def test_to_csv(self):
-        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=2, freq="H")
         self.edisgo.set_timeindex(timeindex)
 
         # create dummy time series
@@ -2268,7 +2268,7 @@ class TestTimeSeries:
         shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-        timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=2, freq="H")
         self.edisgo.set_timeindex(timeindex)
 
         # create dummy time series
