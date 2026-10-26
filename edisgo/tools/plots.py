@@ -936,8 +936,8 @@ def color_map_color(
 def plot_plotly(
     edisgo_obj: EDisGo,
     grid: Grid | None = None,
-    line_color: None | str = "relative_loading",
-    node_color: None | str = "voltage_deviation",
+    line_color: None | str | pd.Series | dict = "relative_loading",
+    node_color: None | str | pd.Series | dict = "voltage_deviation",
     line_result_selection: str = "max",
     node_result_selection: str = "max",
     selected_timesteps: pd.Timestamp | list | None = None,
@@ -957,7 +957,7 @@ def plot_plotly(
     grid : :class:`~.network.grids.Grid`
         Grid to plot. If None, the MVGrid of the edisgo_obj is plotted. Default: None.
 
-    line_color : str or None
+    line_color : str or :pandas:`pandas.Series<Series>` or dict or None
         Defines whereby to choose line colors. Possible options are:
 
         * 'loading'
@@ -966,10 +966,14 @@ def plot_plotly(
             Line color is set according to relative loading of the line.
         * 'reinforce'
             Line color is set according to investment costs of the line.
+        * :pandas:`pandas.Series<Series>` or dict
+            Color of each line, with the line name as key and a plotly color
+            (e.g. 'red' or '#ff0000') as value. Lines that are not given are grey.
+            No color bar is shown.
         * None
             Line color is black. This is also the fallback, in case other options fail.
 
-    node_color : str or None
+    node_color : str or :pandas:`pandas.Series<Series>` or dict or None
         Defines whereby to choose node colors. Possible options are:
 
         * 'adjacencies'
@@ -977,6 +981,9 @@ def plot_plotly(
             neighbors.
         * 'voltage_deviation' (default)
             Node color is set according to voltage deviation from 1 p.u..
+        * :pandas:`pandas.Series<Series>` or dict
+            Color of each node, with the bus name as key and a plotly color as value.
+            Nodes that are not given are grey. No color bar is shown.
         * None
             Nodes are colored grey. This is also the fallback, in case other
             options fail.

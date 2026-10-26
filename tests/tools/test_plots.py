@@ -106,49 +106,35 @@ class TestPlots:
             )
 
     def test_plot_plotly_custom_colors(self):
-        # partial Series: 2 lines explicitly colored, rest fall back to grey
-        line_colors = pd.Series(
-            {"Line_10003": "red", "Line_10004": "blue"}
-        )
+        def line_colors(fig):
+            return {t.line.color for t in fig.data if t.mode == "lines"}
+
+        def node_colors(fig):
+            # the node trace has one color per node, other marker traces only one
+            return [
+                c
+                for t in fig.data
+                if t.mode == "markers" and isinstance(t.marker.color, tuple)
+                for c in t.marker.color
+            ]
+
+        # lines and nodes that are not in the Series or dict are grey
         fig = plot_plotly(
             edisgo_obj=self.edisgo_root,
-            line_color=line_colors,
+            line_color=pd.Series({"Line_10003": "red", "Line_10004": "blue"}),
+            node_color=pd.Series({"Bus_MVStation_1": "orange"}),
         )
-        assert fig is not None
-        assert len(fig.data) > 0
+        assert line_colors(fig) == {"red", "blue", "grey"}
+        assert "orange" in node_colors(fig)
+        assert set(node_colors(fig)) == {"orange", "grey"}
 
-        # dict input for line_color
         fig = plot_plotly(
             edisgo_obj=self.edisgo_root,
             line_color={"Line_10003": "green"},
-        )
-        assert fig is not None
-
-        # partial Series for node_color
-        node_colors = pd.Series(
-            {"Bus_MVStation_1": "orange", "Bus_Generator_1": "purple"}
-        )
-        fig = plot_plotly(
-            edisgo_obj=self.edisgo_root,
-            node_color=node_colors,
-        )
-        assert fig is not None
-
-        # dict input for node_color
-        fig = plot_plotly(
-            edisgo_obj=self.edisgo_root,
             node_color={"Bus_MVStation_1": "cyan"},
         )
-        assert fig is not None
-
-        # both line_color and node_color as Series simultaneously
-        fig = plot_plotly(
-            edisgo_obj=self.edisgo_root,
-            line_color=line_colors,
-            node_color=node_colors,
-        )
-        assert fig is not None
-        assert len(fig.data) > 0
+        assert line_colors(fig) == {"green", "grey"}
+        assert set(node_colors(fig)) == {"cyan", "grey"}
 
     def test_chosen_graph(self):
         chosen_graph(edisgo_obj=self.edisgo_root, selected_grid="Grid")
