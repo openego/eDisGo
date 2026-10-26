@@ -123,6 +123,9 @@ Useful options of :meth:`~edisgo.edisgo.EDisGo.reinforce`:
 * ``reduced_analysis`` — only analyse the most critical time steps to save time.
 * ``catch_convergence_problems=True`` — handle a power flow that does not converge,
   see :ref:`catch-convergence`.
+* ``choose_cheaper_voltage_measure=True`` — split a feeder due to voltage issues only
+  if this is cheaper than reinforcing the lines on the path, see
+  :ref:`cheaper-voltage-measure`.
 
 Identifying problems
 ~~~~~~~~~~~~~~~~~~~~
@@ -290,6 +293,24 @@ measure affects the whole feeder. There are two measures:
   station, so there is nothing to split, the **lines on the path** to the critical
   node are reinforced (:ref:`path-reinforcement`).
 
+.. _cheaper-voltage-measure:
+
+By default, the feeder is always split if possible. With
+``choose_cheaper_voltage_measure=True`` in :meth:`~edisgo.edisgo.EDisGo.reinforce`,
+the costs of both measures are compared first and the cheaper one is applied:
+
+* the split costs the new standard line, cable and earthwork, over the length of the
+  path to the split node;
+* the path reinforcement costs the lines that :ref:`path-reinforcement` would
+  reinforce to reduce :math:`\sum r \cdot I` by the full *share*, not only by the
+  half that is reinforced per iteration, as a split usually solves the voltage issue
+  at once. If even reinforcing the path that far does not reach the full share, the
+  feeder is split.
+
+This avoids e.g. splitting a feeder and installing a long new line where replacing a
+single short, thin cable on the path would solve the voltage issue
+(openego/eDisGo#781). Whether the split solves the voltage issue is not estimated.
+
 In LV grids, the feeder is only split outside buildings, and **house connections**,
 the lines to buses in buildings, are never reinforced due to voltage issues. House
 connections often do not belong to the grid operator, and as short lines they would
@@ -301,11 +322,12 @@ Both measures are rules of thumb; what they cannot do is summarised in
 .. only:: html
 
    The example below runs the iterations on three small LV feeders. Choose a feeder,
-   change the load and step through the iterations. It uses a simplified model
-   (resistance only, :math:`\cos\varphi = 1`) and the default configuration values.
-   The log names the measures with the terms *share* and :math:`\sum r \cdot I`, which
-   are explained in :ref:`path-reinforcement`. The next section shows the split with a
-   full power flow.
+   change the load, switch ``choose_cheaper_voltage_measure`` and step through the
+   iterations; the final costs of both settings are shown side by side. It uses a
+   simplified model (resistance only, :math:`\cos\varphi = 1`) and the default
+   configuration values. The log names the measures with the terms *share* and
+   :math:`\sum r \cdot I`, which are explained in :ref:`path-reinforcement`. The next
+   section shows the split with a full power flow.
 
    .. raw:: html
       :file: reinforcement_lv_voltage.html
@@ -503,9 +525,11 @@ Both measures follow rules of thumb of grid planning and are corrected by the po
 flow of the next iteration; they are not optimised. This keeps reinforcement fast and
 close to what a grid operator would do, but has limits:
 
-* **Splitting is not compared with other measures.** If the node at two thirds can be
-  split, the feeder is split, even where replacing a single short, thin cable on the
-  path would be much cheaper (openego/eDisGo#781).
+* **Splitting is not compared with other measures by default.** If the node at two
+  thirds can be split, the feeder is split, even where replacing a single short, thin
+  cable on the path would be much cheaper. With ``choose_cheaper_voltage_measure=True``
+  the costs are compared, but only by the costs of the measures, not by whether the
+  split solves the voltage issue (see :ref:`cheaper-voltage-measure`).
 * **House connections are never reinforced due to voltage issues.** If a voltage issue
   is caused mainly by a long house connection, reinforcing the other lines on the path
   cannot solve it, and the reinforcement ends with

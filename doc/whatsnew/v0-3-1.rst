@@ -6,6 +6,17 @@ Release date: not yet released
 Changes
 -------
 
+* Made :func:`~.io.electromobility_import.determine_grid_connection_capacity`
+  monotonically non-decreasing. Between ``lower_limit`` and ``upper_limit`` it
+  interpolated the simultaneity factor linearly and multiplied it with the gross
+  capacity, so the returned capacity was quadratic and, with the default parameters,
+  peaked at about 0.486 MW for a 0.79 MW park before dropping to 0.45 MW at 1 MW. A
+  larger charging park could thus get a smaller grid connection capacity. The
+  capacity itself is now interpolated linearly between ``lower_limit`` and
+  ``minimum_factor * upper_limit``; values outside that range are unchanged, values
+  inside it are lower than before. Parameters with
+  ``minimum_factor * upper_limit < lower_limit`` now raise a ``ValueError``
+  (`#650 <https://github.com/openego/eDisGo/issues/650>`_)
 * Corrected the Julia version documented in ``config_opf_julia.cfg``, which still
   pointed at ``julia-1.1.0/bin`` while the bundled ``eDisGo_OPF.jl`` package targets
   Julia 1.12. The file is included verbatim in the configuration reference, so the
@@ -169,6 +180,12 @@ Changes
   this changes allocation results once compared to earlier versions, and that
   :attr:`~.network.electromobility.Electromobility.charging_processes_df` is now
   indexed from zero in that sorted order (openego/eDisGo#742)
+* Fixed :func:`~.io.electromobility_import.distribute_private_charging_demand`
+  booking the capacity of each home charging point to the charging park drawn for
+  the last work car instead of the home park drawn for it. The capacity weights of
+  the following draws therefore never saw the home capacity already assigned, and
+  one work park collected it all. This changes which home charging park a car is
+  assigned to (openego/eDisGo#679)
 * Fixed :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction`
   giving a line that stands for several parallel systems ``num_parallel`` times its
   impedance. The per-km values the aggregation rebuilds ``r`` and ``x`` from describe
@@ -273,6 +290,12 @@ Changes
   before the error is raised. Grids whose power flow converges are not affected. The
   methodology docs now describe the feeder split with an interactive example and the
   limits of line reinforcement due to voltage issues (openego/eDisGo#777)
+* Added the option ``choose_cheaper_voltage_measure`` to
+  :meth:`~.EDisGo.reinforce`. If True,
+  :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` only splits a
+  feeder due to voltage issues if the new line is cheaper than reinforcing the lines
+  on the path to the critical node, e.g. replacing a single short, thin cable. The
+  default (False) keeps splitting the feeder whenever possible (openego/eDisGo#781)
 * OEP connections are closed right after use instead of being kept open in a
   connection pool. The OEP limits open connections per account to 8, and each process
   kept at least one pooled connection open per engine, so a few processes with the
@@ -291,3 +314,59 @@ Changes
   now direct dependencies. ``res_feedin_data`` in ``config_db_tables.cfg`` now names
   the table (``ego_renewable_feedin``); the former value ``EgoRenewableFeedin`` is
   still accepted
+* The example notebooks ``edisgo_simple_example`` and ``full_workflow_walkthrough``
+  draw their MV grid plots without a background map. Downloading the map tiles could
+  take tens of minutes or fail without a good internet connection. The simple example
+  explains how to switch the map back on with ``background_map=True``. The graph of
+  an LV grid is now drawn for the LV grid selected earlier in the notebook instead of
+  a second one picked by position (openego/eDisGo#276)
+* The background map of the MV grid plots is now the grey TopPlusOpen map of the
+  German Federal Agency for Cartography and Geodesy (BKG) instead of CartoDB Positron.
+  CartoDB requires an API key, without which every map tile only showed the text "API
+  KEY REQUIRED". TopPlusOpen needs no key and covers Germany in detail. The plot shows
+  the source note required by its licence (dl-de/by-2-0)
+* :func:`~.tools.plots.add_basemap` gives up on a map tile if the tile server does not
+  respond within 10 seconds (new ``timeout`` parameter). Before, a slow or missing
+  internet connection blocked MV grid plots with ``background_map=True`` without
+  limit. A failed download is logged as a warning and the plot is drawn without the
+  map. eDisGo now needs contextily 1.7.1 or newer
+* Central heat pumps and resistive heaters imported with
+  :meth:`~.edisgo.EDisGo.import_heat_pumps` are now always assigned to the nearest
+  district heating area, measured in meters in EPSG:3035. Before, the distance was
+  measured in units of the grid CRS and limited to 1000 units: in grids in EPSG:4326
+  this was 1000 degrees, i.e. no limit, but the nearest area in degrees can differ
+  from the nearest area in meters; in grids in a projected CRS, heat buses farther
+  than about 1000 m from every area got no ``district_heating_id`` and ``area_id``,
+  which made the heat demand import and the OPF fail later on. This removes the
+  geopandas warning about distances in a geographic CRS
+* Fixed pandas ``FutureWarning`` messages in the heat pump import, the heat demand
+  import and the OPF heat storage, and no longer calculate the unused centroids of the
+  district heating areas. Results do not change (openego/eDisGo#634)
+* :func:`~.io.pypsa_io.to_pypsa` now passes the line shunt susceptance ``b`` to PyPSA
+  also when exporting a single grid (``mode="mv"``, ``"mvlv"`` or ``"lv"``). Before,
+  these exports dropped ``b``, so PyPSA set it to zero. This changes the results of
+  power flow analyses and grid reinforcements run per grid, e.g. in
+  :func:`~.flex_opt.reinforce_grid.enhanced_reinforce_grid`, for lines with ``b``
+  other than zero: ``b`` is calculated from the equipment data for lines added with a
+  ``type_info`` or changed by :meth:`~.network.topology.Topology.change_line_type`
+  during reinforcement, and for MV lines after
+  :func:`~.tools.tools.add_line_susceptance` (for all lines with ``mode="all_b"``)
+  (openego/eDisGo#654)
+* Fixed the warnings of the Julia OPF package ``eDisGo_OPF.jl``. Its
+  ``Memento.warn``/``Memento.error`` calls referenced a logger ``_LOGGER`` that was
+  never defined in the package, so every path meant to warn raised an
+  ``UndefVarError`` instead: input without ``time_elapsed`` made the OPF build fail
+  instead of falling back to one hour per time step, JSON input with a
+  ``conductors`` entry was rejected, and a grid with more than one reference bus
+  could not be built. The input eDisGo itself sends hit none of these paths. The
+  package now logs through the PowerModels logger. The bus type correction
+  ``_correct_bus_types!`` also called PowerModels' ``_biggest_generator`` without
+  the module prefix; it is not called in the OPF run at the moment
+* Added a test suite written in Julia for the OPF package ``eDisGo_OPF.jl`` in
+  ``edisgo/opf/eDisGo_OPF.jl/test``. It is run from that directory with
+  ``julia --project=. -e 'using Pkg; Pkg.test()'`` and needs Julia 1.12. Tests that
+  need Gurobi skip themselves without a licence. A new GitHub Actions workflow runs
+  the suite on every push that changes the package and fails if the line coverage
+  of ``src/`` drops below 100 %. Known defects of the package that are not fixed
+  yet are marked with ``@test_broken`` and tracked in openego/eDisGo#810
+  (openego/eDisGo#522)

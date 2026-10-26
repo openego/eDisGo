@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 import dash
@@ -175,17 +176,33 @@ def histogram(data, **kwargs):
         plt.close()
 
 
-def add_basemap(ax, zoom=12):
+def add_basemap(ax, zoom=12, timeout=10):
     """
     Adds map to a plot.
 
+    The map is the grey TopPlusOpen map of the German Federal Agency for
+    Cartography and Geodesy (BKG). It covers Germany in detail and needs no API
+    key. Its licence requires the source note that is added to the plot.
+
+    The map tiles are downloaded from the internet. If the tile server does not
+    respond within `timeout` seconds, the download fails.
+
     """
-    url = ctx.providers.CartoDB.Positron
+    url = ctx.providers.TopPlusOpen.Grey
     xmin, xmax, ymin, ymax = ax.axis()
-    basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=url)
+    basemap, extent = ctx.bounds2img(
+        xmin, ymin, xmax, ymax, zoom=zoom, source=url, timeout=timeout
+    )
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
     # restore original x/y limits
     ax.axis((xmin, xmax, ymin, ymax))
+    # source note in the form required by the TopPlusOpen terms of use
+    ctx.add_attribution(
+        ax,
+        f"© BKG ({date.today().year}) dl-de/by-2-0, Datenquellen: "
+        "https://sgx.geodatenzentrum.de/web_public/gdz/datenquellen/"
+        "datenquellen_topplusopen.html",
+    )
 
 
 def get_grid_district_polygon(config, subst_id=None, projection=4326):
@@ -326,7 +343,12 @@ def mv_grid_topology(
         requires the geopandas package to be installed. Default: True.
     background_map : :obj:`Boolean`
         If True map is drawn in the background. This also requires the
-        contextily package to be installed. Default: True.
+        contextily package to be installed and internet access to download the
+        map tiles. If the tile server does not respond within 10 seconds or the
+        download fails for another reason, the plot is drawn without the map and
+        a warning is logged. The map is the TopPlusOpen map of the German
+        Federal Agency for Cartography and Geodesy (BKG), see
+        :func:`add_basemap`. Default: True.
     limits_cb_lines : :obj:`tuple`
         Tuple with limits for colorbar of line color. First entry is the
         minimum and second entry the maximum value. Only needs to be provided
