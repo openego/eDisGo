@@ -180,6 +180,12 @@ Changes
   this changes allocation results once compared to earlier versions, and that
   :attr:`~.network.electromobility.Electromobility.charging_processes_df` is now
   indexed from zero in that sorted order (openego/eDisGo#742)
+* Fixed :func:`~.io.electromobility_import.distribute_private_charging_demand`
+  booking the capacity of each home charging point to the charging park drawn for
+  the last work car instead of the home park drawn for it. The capacity weights of
+  the following draws therefore never saw the home capacity already assigned, and
+  one work park collected it all. This changes which home charging park a car is
+  assigned to (openego/eDisGo#679)
 * Fixed :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction`
   giving a line that stands for several parallel systems ``num_parallel`` times its
   impedance. The per-km values the aggregation rebuilds ``r`` and ``x`` from describe
