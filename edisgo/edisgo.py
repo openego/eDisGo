@@ -64,7 +64,10 @@ from edisgo.opf.results.opf_result_class import OPFResults
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
-from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
+from edisgo.tools.spatial_complexity_reduction import (
+    apply_reduced_results_to_full_grid,
+    spatial_complexity_reduction,
+)
 from edisgo.tools.tools import (
     determine_grid_integration_voltage_level,
     get_path_length_to_station,
@@ -1011,12 +1014,12 @@ class EDisGo:
             keyword arguments.
 
         """
-        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
         if self.legacy_grids is True:
             generators_import.oedb_legacy(
                 edisgo_object=self, generator_scenario=generator_scenario, **kwargs
             )
         else:
+            engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
             generators_import.oedb(
                 edisgo_object=self,
                 engine=engine,
@@ -1370,6 +1373,12 @@ class EDisGo:
             to specify whether to weight time steps by estimated grid expansion costs.
             See parameter `weight_by_costs` in
             :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
+            for more information. Default: False.
+        choose_cheaper_voltage_measure : bool
+            If True, a line is only disconnected due to a voltage issue if this is
+            cheaper than reinforcing the lines on the path between station and
+            critical node. If False, a line is always disconnected if possible.
+            See :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`
             for more information. Default: False.
 
         Returns
@@ -3550,6 +3559,65 @@ class EDisGo:
             **kwargs,
         )
         return edisgo_obj, busmap_df, linemap_df
+
+    def map_reduced_results_to_full_grid(
+        self,
+        reduced_grid: EDisGo,
+        flexible_cps: list | None = None,
+        flexible_hps: list | None = None,
+        flexible_loads: list | None = None,
+        flexible_storage_units: list | None = None,
+    ) -> EDisGo:
+        """
+        Writes optimized flexible-component dispatch from a spatially-reduced
+        grid back onto this (full) grid.
+
+        Counterpart to :meth:`spatial_complexity_reduction`: where that
+        method shrinks this grid for a faster OPF, this method maps the OPF's
+        active-power results from ``reduced_grid`` back onto ``self`` so
+        reinforcement can run on the full topology. Only components the OPF
+        actually rewrites are touched — flexible charging points, heat pumps,
+        DSM loads, and storage units. Inflexible loads/generators are
+        untouched, since the OPF never changed their series and ``self``
+        already holds the correct values for them.
+
+        See
+        :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
+        for the full matching/disaggregation rules and the reactive-power
+        recompute this method triggers as a side effect.
+
+        Parameters
+        ----------
+        reduced_grid : :class:`~.EDisGo`
+            The spatially-reduced EDisGo instance the OPF ran on. Supplies
+            the optimized active-power series and, if aggregated, the
+            ``old_name`` provenance for disaggregation.
+        flexible_cps : list of str, optional
+            Names of flexible charging points in ``reduced_grid`` to map
+            back.
+        flexible_hps : list of str, optional
+            Names of flexible heat-pump loads in ``reduced_grid`` to map
+            back.
+        flexible_loads : list of str, optional
+            Names of flexible DSM loads in ``reduced_grid`` to map back.
+        flexible_storage_units : list of str, optional
+            Names of flexible storage units in ``reduced_grid`` to map back.
+
+        Returns
+        -------
+        :class:`~.EDisGo`
+            ``self``, with active power written for the given flexible
+            components and reactive power recomputed.
+
+        """
+        return apply_reduced_results_to_full_grid(
+            full_grid=self,
+            reduced_grid=reduced_grid,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+        )
 
     def check_integrity(self):
         """

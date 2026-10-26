@@ -1,0 +1,107 @@
+_comment: |
+  OPF with a time-step selection (set_timeindex by default, see
+  `timestep_selection`), PLUS spatial complexity reduction bracketing the
+  OPF step.
+
+  Spatial complexity reduction (spatial_reduce / spatial_restore) brackets
+  `optimize` only:
+  - spatial_reduce (before optimize): deepcopies and stashes the full grid on
+    ctx, then spatially reduces the working object so `optimize` runs on a
+    smaller grid.
+  - spatial_restore (after optimize): writes the optimized flexible-component
+    dispatch back onto the stashed full grid (by name, or disaggregated onto
+    `old_name` members if aggregation_mode is true), recomputes reactive power
+    for those components, and makes the full grid active again for `reinforce`.
+  Both are no-ops when `spatial_reduction.enabled` is false, so `reinforce`
+  then runs on the same grid `optimize` used. `reactive_power` runs before
+  the bracket on the full grid; spatial_restore recomputes it only for the
+  optimized components.
+  Reinforcement always runs on the full topology, regardless of the flag.
+
+_workflow:
+  - setup_grid: load ding0 topology
+  - import_generators / import_home_batteries
+  - set_timeindex: if picked by timestep_selection — set explicit time index
+  - import_heat_pumps / import_dsm: fetch only the steps set by set_timeindex
+  - import_electromobility: dumb charging, flex bands
+  - oedb_ts: real wind/solar + load time series
+  - apply_charging_strategy / apply_heat_pump_strategy
+  - build_flexibility_bands: EV bands on the current time index
+  - import_overlying_grid_data: HV constraints from CSV dir
+  - select_critical_timesteps: if picked by timestep_selection — most
+      critical intervals
+  - reactive_power: fixed cosphi on the current time index
+  - spatial_reduce: no-op unless spatial_reduction.enabled — stash full grid,
+      reduce working object
+  - optimize: pm_optimize with flex assets, on the (possibly) reduced grid
+  - spatial_restore: no-op unless spatial_reduction.enabled — write dispatch
+      back onto the stashed full grid, recompute reactive power
+  - reinforce / save: always on the full topology
+
+# Self-contained (no `extends`): this preset can be run on its own via
+#   run_edisgo({"extends": "spatial_reduction_opf", "grid": {"ding0_path": ...}})
+scenario: eGon2035
+
+grid:
+  ding0_path: "/path/to/ding0_grid"
+  legacy_ding0_grids: false
+
+database:
+  source: egon-data      # "egon-data" (local egon-data via ~/.ssh config), "oep", or empty to auto-detect
+
+overlying_grid:
+  enabled: true          # set false to skip import_overlying_grid_data
+  source: csv            # "csv" (load from path) or "etrago" (kwarg)
+  path: "/path/to/overlying_grid_csvs"
+
+results:
+  directory: results/spatial_reduction_opf
+
+# Picks the time-step selection task that runs; documented in the module
+# docstring of edisgo/run/tasks/timeseries.py.
+timestep_selection:
+  task: set_timeindex
+  set_timeindex: {start: "2035-01-15 00:00", periods: 24, freq: h}
+
+# Top-level block read by the spatial_reduce / spatial_restore tasks.
+spatial_reduction:
+  enabled: true          # set false to no-op spatial_reduce/spatial_restore
+  mode: kmeansdijkstra               # clustering mode for spatial_complexity_reduction
+  cluster_area: feeder
+  reduction_factor: 0.3
+  reduction_factor_not_focused: False
+  aggregation_mode: false  # start with false; true enables load/generator merging
+
+pipeline:
+  - setup_grid
+  - import_generators
+  - import_home_batteries
+  - set_timeindex                              # runs if picked by timestep_selection
+  - import_heat_pumps
+  - import_dsm
+  - import_electromobility:
+      charging_strategy: null
+      # flexibility bands are built later (build_flexibility_bands), once the
+      # analysis time index is fixed, so they are resampled to it
+  - oedb_ts:
+      dispatchable: {other: 0.7}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - build_flexibility_bands                    # bands on the current time index
+  - import_overlying_grid_data
+  # merge each district heating area's PtH units and subtract the overlying
+  # grid's other heat feed-in from its demand; no-op without district heating
+  - aggregate_district_heating
+  - select_critical_timesteps                  # runs if picked by timestep_selection
+  - reactive_power
+  - spatial_reduce                             # no-op unless spatial_reduction.enabled
+  - optimize:
+      flexible: [heat_pumps, storage, charging_points, dsm]
+      method: soc
+      opf_version: 2
+  - spatial_restore                            # no-op unless spatial_reduction.enabled
+  - reinforce:
+      catch_convergence_problems: true
+  - save:
+      archive: true
+      save_opf_results: true
