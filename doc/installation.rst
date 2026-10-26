@@ -74,7 +74,7 @@ solvers. These are **only** needed if you call
 :meth:`~edisgo.edisgo.EDisGo.pm_optimize`; the rest of eDisGo works without them.
 
 #. **Julia** — install Julia (the bundled ``eDisGo_OPF.jl`` package targets Julia
-   ``1.6``) from the `Julia downloads page <https://julialang.org/downloads/>`_ and
+   ``1.12``) from the `Julia downloads page <https://julialang.org/downloads/>`_ and
    make sure ``julia`` is on your system ``PATH``.
 #. **Solvers** — install the **Gurobi** solver and a valid licence following the
    `Gurobi getting-started guide

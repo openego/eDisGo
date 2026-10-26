@@ -18,4 +18,15 @@ PowerModels = "c36e90e8-916a-50a6-bd94-075b64ef4655"
 
 [compat]
 PowerModels = "0.19.6"
-julia = "1.6"
+julia = "1.12"
+
+# Test-only dependencies. `Test` is a standard library, so `Pkg.test()` keeps
+# using the checked-in Manifest.toml — the test suite runs against exactly the
+# package versions the OPF runs against in production. Deliberately no
+# test/Project.toml: that would resolve a fresh environment and silently test
+# against different solver/PowerModels versions.
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

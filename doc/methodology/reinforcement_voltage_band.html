@@ -1,0 +1,63 @@
+<div class="rw" id="rw-vb">
+<div class="rw-row" id="rw-vb-ctl"></div>
+<div class="rw-box"><svg id="rw-vb-svg" role="img" aria-label="Allowed voltage band from the HV/MV station to the end of an LV feeder"></svg></div>
+<div class="rw-stats" id="rw-vb-stats"></div>
+<p class="rw-note" id="rw-vb-note"></p>
+<script>
+(function () {
+  var RW = window.RW, svg = document.getElementById("rw-vb-svg");
+  // default config_grid_expansion: grid_expansion_allowed_voltage_deviations (load case, voltage drop)
+  var C = { mv: 0.015, st: 0.02, lv: 0.065, comb: 0.10 };
+  var split = true, mvDrop = 0.012, stDrop = 0.01, lvDrop = 0.06;
+  var ctl = document.getElementById("rw-vb-ctl");
+  ctl.appendChild(RW.seg([{ id: "1", label: "split_voltage_band=True" }, { id: "0", label: "False" }], "1", function (id) { split = id === "1"; draw(); }, "Voltage band"));
+  var pc = function (v) { return RW.f(v * 100, 1) + " %"; };
+  var row2 = RW.h("div", "rw-row"); row2.style.width = "100%";
+  row2.appendChild(RW.slider("rw-vb-mv", "drop in MV", 0, 0.05, 0.001, mvDrop, pc, function (v) { mvDrop = v; draw(); }));
+  row2.appendChild(RW.slider("rw-vb-st", "drop in MV/LV station", 0, 0.04, 0.001, stDrop, pc, function (v) { stDrop = v; draw(); }));
+  row2.appendChild(RW.slider("rw-vb-lv", "drop in LV feeder", 0, 0.1, 0.001, lvDrop, pc, function (v) { lvDrop = v; draw(); }));
+  ctl.parentNode.insertBefore(row2, ctl.nextSibling);
+  function draw() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var W = 800, H = 240, L = 60, R = 20, T = 18, B = 40, lo = 0.85;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    var xs = [L, L + 220, L + 330, W - R], names = ["HV/MV station", "station MV side", "station LV side", "end of LV feeder"];
+    var v = [1, 1 - mvDrop, 1 - mvDrop - stDrop, 1 - mvDrop - stDrop - lvDrop];
+    function Y(u) { return T + (1 - u) / (1 - lo) * (H - T - B); }
+    for (var u = 1; u >= lo - 1e-9; u -= 0.025) { RW.el("line", { x1: L, x2: W - R, y1: Y(u), y2: Y(u), stroke: "var(--grid)" }, null, svg); RW.el("text", { x: L - 6, y: Y(u) + 4, "text-anchor": "end", "class": "rw-sm" }, RW.f(u, 3), svg); }
+    // allowed lower limits per section
+    var lim, ok;
+    if (split) {
+      lim = [[xs[0], xs[1], 1 - C.mv], [xs[1], xs[2], v[1] - C.st], [xs[2], xs[3], v[2] - C.lv]];
+      ok = [mvDrop <= C.mv + 1e-12, stDrop <= C.st + 1e-12, lvDrop <= C.lv + 1e-12];
+    } else {
+      lim = [[xs[0], xs[3], 1 - C.comb]];
+      ok = [v[3] >= 1 - C.comb - 1e-12];
+    }
+    lim.forEach(function (s, i) {
+      RW.el("rect", { x: s[0], y: Y(s[2]), width: s[1] - s[0], height: Math.max(0, Y(lo) - Y(s[2])), fill: ok[i] ? "var(--grid)" : "var(--bad-soft)" }, null, svg);
+      RW.el("line", { x1: s[0], x2: s[1], y1: Y(s[2]), y2: Y(s[2]), stroke: "var(--bad)", "stroke-width": 1.5, "stroke-dasharray": "5 3" }, null, svg);
+      RW.el("text", { x: (s[0] + s[1]) / 2, y: Y(s[2]) + 14, "text-anchor": "middle", "font-size": 11, fill: "var(--bad)" }, "lower limit " + RW.f(s[2], 3), svg);
+    });
+    RW.el("polyline", { points: xs.map(function (x, i) { return x + "," + Y(v[i]); }).join(" "), fill: "none", stroke: "var(--acc)", "stroke-width": 2.5 }, null, svg);
+    xs.forEach(function (x, i) {
+      RW.el("circle", { cx: x, cy: Y(v[i]), r: 4, fill: "var(--acc)" }, null, svg);
+      RW.el("text", { x: x, y: Y(v[i]) - 8, "text-anchor": i === 3 ? "end" : "middle", "font-size": 11 }, RW.f(v[i], 3), svg);
+      RW.el("text", { x: x, y: H - 22, "text-anchor": i === 0 || i === 2 ? "start" : "end", "class": "rw-sm" }, names[i], svg);
+    });
+    var allOk = ok.every(Boolean);
+    var cells = split ? [
+      ["MV", pc(mvDrop) + " / " + pc(C.mv), ok[0] ? "ok" : "bad"],
+      ["MV/LV station", pc(stDrop) + " / " + pc(C.st), ok[1] ? "ok" : "bad"],
+      ["LV", pc(lvDrop) + " / " + pc(C.lv), ok[2] ? "ok" : "bad"]
+    ] : [["total drop", pc(mvDrop + stDrop + lvDrop) + " / " + pc(C.comb), ok[0] ? "ok" : "bad"]];
+    cells.push(["reinforcement", allOk ? "not needed" : "needed", allOk ? "ok" : "bad"]);
+    RW.stats(document.getElementById("rw-vb-stats"), cells);
+    document.getElementById("rw-vb-note").innerHTML = split
+      ? "Each voltage level gets its own share of the 10 % band, so the LV feeders keep 6.5 % no matter how much the MV already uses. A problem is assigned to the level where it occurs: a too large drop in the MV is solved in the MV, not in the LV."
+      : "Without the split, all buses are checked against 0.9 p.u. An MV grid that already uses most of the band leaves little room for the LV feeders, and a problem in the MV can show up as an LV voltage issue.";
+  }
+  draw();
+})();
+</script>
+</div>
