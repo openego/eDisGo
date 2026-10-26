@@ -1720,16 +1720,6 @@ class EDisGo:
             See :attr:`~.network.topology.Topology.connect_to_lv` and
             :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
             Default: 2.
-        allow_mv_connection : bool
-            Only used for public charging points in voltage level 6 or 7 in
-            geo-referenced LV grids. If True, they may be connected to the MV grid in
-            case it is much closer than the LV grid. See
-            :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
-            Default: False.
-        mv_connection_factor : float
-            See
-            :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
-            Default: 3.0.
         kwargs :
             Attributes of added component.
             See :attr:`~.network.topology.Topology.add_generator`,
@@ -1772,8 +1762,6 @@ class EDisGo:
         max_distance_from_target_bus = kwargs.pop("max_distance_from_target_bus", 0.02)
         connect_to_load_bus = kwargs.pop("connect_to_load_bus", False)
         allowed_number_of_comp_per_bus = kwargs.pop("allowed_number_of_comp_per_bus", 2)
-        allow_mv_connection = kwargs.pop("allow_mv_connection", False)
-        mv_connection_factor = kwargs.pop("mv_connection_factor", 3.0)
 
         # write voltage level and geolocation to kwargs
         kwargs["geom"] = geolocation
@@ -1810,8 +1798,6 @@ class EDisGo:
                     max_distance_from_target_bus,
                     connect_to_load_bus,
                     allowed_number_of_comp_per_bus,
-                    allow_mv_connection,
-                    mv_connection_factor,
                 )
 
         if add_ts:
@@ -2117,9 +2103,6 @@ class EDisGo:
                 If True, charging parks in voltage level 7 in geo-referenced LV grids
                 are preferably connected to a bus with a matching load, e.g. home
                 charging points to a bus with a residential load. Default: False.
-            allow_mv_connection : bool
-                If True, public charging parks far away from the LV grid may be
-                connected to the MV grid. Default: False.
 
             See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
             for these and further options.

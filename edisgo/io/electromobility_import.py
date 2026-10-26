@@ -1284,8 +1284,8 @@ def integrate_charging_parks(edisgo_obj, **kwargs):
     Other Parameters
     ----------------
     kwargs :
-        Options of the grid connection, e.g. `connect_to_load_bus` or
-        `allow_mv_connection`, that are passed on to
+        Options of the grid connection, e.g. `connect_to_load_bus`, that are passed
+        on to
         :attr:`~.edisgo.EDisGo.integrate_component_based_on_geolocation`.
 
     """

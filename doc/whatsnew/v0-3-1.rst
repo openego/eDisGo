@@ -361,13 +361,15 @@ Changes
   ``allowed_number_of_comp_per_bus`` components of the same type connected to it;
   otherwise the component is connected to the closest LV bus as before. Which loads
   match which component is the same as in
-  :attr:`~.network.topology.Topology.connect_to_lv`. Furthermore, public charging
-  points (sector ``public`` or ``hpc``) far away from the LV grid can now be connected
-  to the MV grid in voltage level 5, if the MV grid is closer than the LV grid by the
-  factor ``mv_connection_factor`` (default 3). Both are switched on through the
-  options ``connect_to_load_bus`` and ``allow_mv_connection`` of
+  :attr:`~.network.topology.Topology.connect_to_lv`. The option
+  ``connect_to_load_bus`` of
   :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation` and
-  :attr:`~.edisgo.EDisGo.integrate_component_based_on_geolocation`, and through the
-  new parameter ``integrate_charging_parks_kwds`` of
-  :attr:`~.edisgo.EDisGo.import_electromobility`. Both are off by default, so results
-  do not change (openego/eDisGo#413)
+  :attr:`~.edisgo.EDisGo.integrate_component_based_on_geolocation` switches this on,
+  and for charging parks the new parameter ``integrate_charging_parks_kwds`` of
+  :attr:`~.edisgo.EDisGo.import_electromobility`. It is off by default, so results do
+  not change (openego/eDisGo#413)
+* Fixed :attr:`~.network.topology.Topology.connect_to_mv`, which connected a new
+  component to an existing bus if the name of the new MV bus, e.g.
+  ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
+  the component and the new MV line were connected to the existing bus. This could
+  happen after components were removed or aggregated (openego/eDisGo#413)
