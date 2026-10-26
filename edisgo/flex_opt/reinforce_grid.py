@@ -196,12 +196,7 @@ def reinforce_grid(
                 )
 
     iteration_step = 1
-    existing_reinforce_log = edisgo.results.reinforce_log
-    run_id = (
-        0
-        if existing_reinforce_log.empty
-        else int(existing_reinforce_log["run_id"].max()) + 1
-    )
+    run_id = _next_reinforce_log_run_id(edisgo)
     lv_grid_id = kwargs.get("lv_grid_id", None)
     scale_timeseries = kwargs.get("scale_timeseries", None)
     choose_cheaper_voltage_measure = kwargs.get("choose_cheaper_voltage_measure", False)
@@ -464,6 +459,9 @@ def reinforce_grid(
             edisgo,
             buses_before,
             iteration_step,
+            stage="mv_voltage",
+            run_id=run_id,
+            log_reinforcement=log_reinforcement,
             mode=analyze_mode,
             timesteps=timesteps_pfa,
             lv_grid_id=lv_grid_id,
@@ -622,6 +620,9 @@ def reinforce_grid(
                 edisgo,
                 buses_before,
                 iteration_step,
+                stage="lv_voltage",
+                run_id=run_id,
+                log_reinforcement=log_reinforcement,
                 mode=analyze_mode,
                 timesteps=timesteps_pfa,
                 lv_grid_id=lv_grid_id,
@@ -1085,6 +1086,7 @@ def enhanced_reinforce_grid(
 
     """
     kwargs.pop("skip_mv_reinforcement", False)
+    log_reinforcement = kwargs.get("log_reinforcement", True)
 
     num_lv_grids_standard_lines = 0
     num_lv_grids_aggregated = 0
@@ -1094,7 +1096,11 @@ def enhanced_reinforce_grid(
             "Separating lv grids. Set the parameter 'separate_lv_grids' to False if "
             "this is not desired."
         )
-        run_separate_lv_grids(edisgo_object, threshold=separation_threshold)
+        run_separate_lv_grids(
+            edisgo_object,
+            threshold=separation_threshold,
+            log_reinforcement=log_reinforcement,
+        )
 
     logger.info("Run initial grid reinforcement for single LV grids.")
     for lv_grid in list(edisgo_object.topology.mv_grid.lv_grids):
@@ -1107,15 +1113,9 @@ def enhanced_reinforce_grid(
                 f"Not all time steps converged in initial power flow analysis for "
                 f"{lv_grid=}. It is therefore tried to be split."
             )
-            transformers_changes, lines_changes = separate_lv_grid(
-                edisgo_object, lv_grid
+            _separate_lv_grid_not_converged(
+                edisgo_object, lv_grid, ts_not_converged, log_reinforcement
             )
-            if len(lines_changes) > 0:
-                _add_lines_changes_to_equipment_changes(edisgo_object, lines_changes, 1)
-            if len(transformers_changes) > 0:
-                _add_transformer_changes_to_equipment_changes(
-                    edisgo_object, transformers_changes, 1, "added"
-                )
         try:
             logger.info(f"Try initial mode 'lv' reinforcement for {lv_grid=}.")
             edisgo_object.reinforce(
@@ -1164,17 +1164,9 @@ def enhanced_reinforce_grid(
                     f"Not all time steps converged in power flow analysis for "
                     f"{lv_grid=}. It is therefore tried to be split."
                 )
-                transformers_changes, lines_changes = separate_lv_grid(
-                    edisgo_object, lv_grid
+                _separate_lv_grid_not_converged(
+                    edisgo_object, lv_grid, ts_not_converged, log_reinforcement
                 )
-                if len(lines_changes) > 0:
-                    _add_lines_changes_to_equipment_changes(
-                        edisgo_object, lines_changes, 1
-                    )
-                if len(transformers_changes) > 0:
-                    _add_transformer_changes_to_equipment_changes(
-                        edisgo_object, transformers_changes, 1, "added"
-                    )
             try:
                 logger.info(f"Try mode 'lv' reinforcement for {lv_grid=}.")
                 edisgo_object.reinforce(
@@ -1271,6 +1263,79 @@ def enhanced_reinforce_grid(
     return edisgo_object
 
 
+def _separate_lv_grid_not_converged(
+    edisgo_obj: EDisGo,
+    lv_grid: LVGrid,
+    timesteps_not_converged: pd.DatetimeIndex,
+    log_reinforcement: bool,
+) -> None:
+    """
+    Separate an LV grid whose power flow does not converge.
+
+    The new lines and transformers are written to
+    :attr:`~.network.results.Results.equipment_changes` and, with trigger
+    "non_convergence", to :attr:`~.network.results.Results.reinforce_log`.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    lv_grid : :class:`~.network.grids.LVGrid`
+        LV grid to separate.
+    timesteps_not_converged : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time steps the power flow analysis of the LV grid did not converge for.
+    log_reinforcement : bool
+        See parameter `log_reinforcement` in :func:`reinforce_grid`.
+
+    """
+    transformers_changes, lines_changes = separate_lv_grid(edisgo_obj, lv_grid)
+
+    run_id = _next_reinforce_log_run_id(edisgo_obj)
+    criterion_component = f"{lv_grid}_station"
+    issues = pd.DataFrame(
+        {
+            "time_index": [timesteps_not_converged[0]],
+            "value": [len(timesteps_not_converged)],
+            "lv_grid_id": [lv_grid.id],
+        },
+        index=[criterion_component],
+    )
+    mapping = {
+        name: criterion_component
+        for names in transformers_changes.get("added", {}).values()
+        for name in names
+    }
+    mapping.update({name: criterion_component for name in lines_changes})
+
+    if len(lines_changes) > 0:
+        _add_lines_changes_to_equipment_changes(edisgo_obj, lines_changes, 1)
+        _add_reinforcement_log_entries(
+            edisgo_obj,
+            1,
+            "separate_lv_grid_not_converged",
+            "non_convergence",
+            issues,
+            lines_changes,
+            run_id=run_id,
+            mapping=mapping,
+            log_reinforcement=log_reinforcement,
+        )
+    if len(transformers_changes) > 0:
+        _add_transformer_changes_to_equipment_changes(
+            edisgo_obj, transformers_changes, 1, "added"
+        )
+        _add_reinforcement_log_entries(
+            edisgo_obj,
+            1,
+            "separate_lv_grid_not_converged",
+            "non_convergence",
+            issues,
+            transformers_changes["added"],
+            run_id=run_id,
+            mapping=mapping,
+            log_reinforcement=log_reinforcement,
+        )
+
+
 def run_separate_lv_grids(
     edisgo_obj: EDisGo,
     threshold: int | float = 2,
@@ -1305,12 +1370,7 @@ def run_separate_lv_grids(
         The reinforced eDisGo object.
 
     """
-    existing_reinforce_log = edisgo_obj.results.reinforce_log
-    run_id = (
-        0
-        if existing_reinforce_log.empty
-        else int(existing_reinforce_log["run_id"].max()) + 1
-    )
+    run_id = _next_reinforce_log_run_id(edisgo_obj)
 
     lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
     n_grids_init = len(lv_grids)
@@ -1451,6 +1511,10 @@ def _analyze_after_voltage_reinforcement(
     buses_before: pd.DataFrame,
     iteration_step: int,
     max_rounds: int = 4,
+    *,
+    stage: str | None = None,
+    run_id: int | None = None,
+    log_reinforcement: bool = True,
     **kwargs,
 ) -> None:
     """
@@ -1482,6 +1546,17 @@ def _analyze_after_voltage_reinforcement(
     max_rounds : int
         Maximum number of rounds. Each round adds one parallel line to each selected
         split line. Default: 4.
+    stage : str or None
+        Reinforcement stage the voltage issues were solved in, e.g. "mv_voltage".
+        The parallel lines are logged in
+        :attr:`~.network.results.Results.reinforce_log` with stage
+        "<stage>_not_converged". Default: None.
+    run_id : int or None
+        `run_id` of the :func:`reinforce_grid` call. If None, the parallel lines
+        are not logged in :attr:`~.network.results.Results.reinforce_log`.
+        Default: None.
+    log_reinforcement : bool
+        See parameter `log_reinforcement` in :func:`reinforce_grid`. Default: True.
     kwargs : dict
         Parameters passed to :attr:`~.EDisGo.analyze`.
 
@@ -1509,9 +1584,25 @@ def _analyze_after_voltage_reinforcement(
         edisgo.topology.update_number_of_parallel_lines(
             edisgo.topology.lines_df.loc[lines, "num_parallel"] + 1
         )
-        _add_lines_changes_to_equipment_changes(
-            edisgo, dict.fromkeys(lines, 1), iteration_step
-        )
+        lines_changes = dict.fromkeys(lines, 1)
+        _add_lines_changes_to_equipment_changes(edisgo, lines_changes, iteration_step)
+        if run_id is not None:
+            _add_reinforcement_log_entries(
+                edisgo,
+                iteration_step,
+                f"{stage}_not_converged",
+                "non_convergence",
+                pd.DataFrame(
+                    {
+                        "time_index": timesteps_not_converged[0],
+                        "value": len(timesteps_not_converged),
+                    },
+                    index=lines,
+                ),
+                lines_changes,
+                run_id=run_id,
+                log_reinforcement=log_reinforcement,
+            )
         _, timesteps_not_converged = edisgo.analyze(
             raise_not_converged=count == max_rounds, **kwargs
         )
@@ -1568,6 +1659,19 @@ def _split_lines_not_converged(
         if len(timesteps_not_converged) > 0:
             lines_not_converged.extend(lines.index)
     return lines_not_converged
+
+
+def _next_reinforce_log_run_id(edisgo: EDisGo) -> int:
+    """
+    Returns the next free `run_id` in :attr:`~.network.results.Results.reinforce_log`.
+
+    """
+    existing_reinforce_log = edisgo.results.reinforce_log
+    return (
+        0
+        if existing_reinforce_log.empty
+        else int(existing_reinforce_log["run_id"].max()) + 1
+    )
 
 
 def _add_lines_changes_to_equipment_changes(
@@ -1659,7 +1763,11 @@ def _add_reinforcement_log_entries(
     :func:`~.flex_opt.reinforce_grid.run_separate_lv_grids`, `issues` indexed
     by the original LV grid's station and carrying 'value'/'threshold'),
     'value'/'limit' are taken directly from those columns, since both are
-    already known exactly and need no arithmetic derivation.
+    already known exactly and need no arithmetic derivation. For trigger
+    "non_convergence" (lines or LV grids added because the power flow did not
+    converge, `issues` carrying 'value'), 'value' is the number of time steps
+    that did not converge and 'limit' is NaN; 'time_index' is the first of
+    them.
 
     `run_id` distinguishes separate calls to
     :func:`~.flex_opt.reinforce_grid.reinforce_grid` (e.g. from
@@ -1809,6 +1917,10 @@ def _add_reinforcement_log_entries(
             issue_value = issue["value"]
             limit = issue["threshold"]
             issue_type = "overloading"
+        elif trigger == "non_convergence":
+            issue_value = issue["value"]
+            limit = np.nan
+            issue_type = "non_convergence"
         else:
             raise ValueError(f"Trigger '{trigger}' is not a valid option.")
 
@@ -1888,6 +2000,8 @@ def _add_reinforcement_log_entries(
             headline = f"{issue_type} {abs(voltage_dev):.3f} p.u."
         elif trigger == "grid_separation":
             headline = f"overloading {issue_value:.3f} MVA > {limit:.3f} MVA threshold"
+        elif trigger == "non_convergence":
+            headline = f"power flow did not converge for {issue_value:g} time step(s)"
         elif "max_rel_overload" in issues.columns:
             headline = f"overloading {relative_load:.3f} p.u. > 1.000 p.u."
         else:

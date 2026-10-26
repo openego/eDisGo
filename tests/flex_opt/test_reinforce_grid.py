@@ -12,6 +12,7 @@ from edisgo.flex_opt import reinforce_measures
 from edisgo.flex_opt.costs import grid_expansion_costs, line_expansion_costs
 from edisgo.flex_opt.reinforce_grid import (
     _analyze_after_voltage_reinforcement,
+    _separate_lv_grid_not_converged,
     reinforce_grid,
     run_separate_lv_grids,
 )
@@ -343,6 +344,72 @@ class TestReinforceGrid:
         added = edisgo.topology.lines_df.num_parallel - num_parallel_before
         assert sorted(added[added > 0].index) == sorted(expected)
         assert sorted(edisgo.results.equipment_changes.index) == sorted(expected)
+
+    def test_analyze_after_voltage_reinforcement_reinforce_log(self, monkeypatch):
+        edisgo = copy.deepcopy(self.edisgo)
+        grid = edisgo.topology.mv_grid
+        lines = ["Line_10007", "Line_10023"]
+        buses_before = self._split(edisgo, grid, lines)
+        calls = []
+        monkeypatch.setattr(edisgo, "analyze", self._fake_analyze(edisgo, calls, 1))
+
+        # without a run_id, the parallel lines are not logged
+        _analyze_after_voltage_reinforcement(edisgo, buses_before, 3, mode="mv")
+        assert edisgo.results.reinforce_log.empty
+
+        edisgo = copy.deepcopy(self.edisgo)
+        buses_before = self._split(edisgo, grid, lines)
+        calls = []
+        monkeypatch.setattr(edisgo, "analyze", self._fake_analyze(edisgo, calls, 1))
+        _analyze_after_voltage_reinforcement(
+            edisgo, buses_before, 3, stage="mv_voltage", run_id=0, mode="mv"
+        )
+
+        log = edisgo.results.reinforce_log
+        assert sorted(log.changed_component) == lines
+        assert sorted(log.criterion_component) == lines
+        assert (log.reinforcement_stage == "mv_voltage_not_converged").all()
+        assert (log.trigger == "non_convergence").all()
+        # the fake power flow does not converge for one time step
+        assert (log.value == 1).all()
+        assert (log.time_index == edisgo.timeseries.timeindex[0]).all()
+        assert log.costs.sum() == pytest.approx(
+            grid_expansion_costs(edisgo).total_costs.sum()
+        )
+
+    def test_separate_lv_grid_not_converged_reinforce_log(self):
+        edisgo = copy.deepcopy(self.edisgo)
+        edisgo.timeseries.scale_timeseries(p_scaling_factor=5, q_scaling_factor=5)
+        lv_grid = max(edisgo.topology.mv_grid.lv_grids, key=lambda g: len(g.loads_df))
+        timesteps = edisgo.timeseries.timeindex[:2]
+
+        _separate_lv_grid_not_converged(edisgo, lv_grid, timesteps, True)
+
+        log = edisgo.results.reinforce_log
+        changes = edisgo.results.equipment_changes
+        assert not changes.empty
+        # every new line and transformer is logged, all caused by the station of
+        # the separated grid
+        new_lines = changes.index[changes.index.isin(edisgo.topology.lines_df.index)]
+        new_transformers = changes.loc[changes.change == "added", "equipment"]
+        assert sorted(log.changed_component) == sorted(
+            list(new_lines) + list(new_transformers)
+        )
+        assert (log.criterion_component == f"{lv_grid}_station").all()
+        assert (log.trigger == "non_convergence").all()
+        assert (log.value == 2).all()
+        assert (log.lv_grid_id == lv_grid.id).all()
+        assert log.costs.sum() == pytest.approx(
+            grid_expansion_costs(edisgo).total_costs.sum()
+        )
+
+        # with log_reinforcement=False, nothing is logged
+        edisgo = copy.deepcopy(self.edisgo)
+        edisgo.timeseries.scale_timeseries(p_scaling_factor=5, q_scaling_factor=5)
+        lv_grid = edisgo.topology.get_lv_grid(lv_grid.id)
+        _separate_lv_grid_not_converged(edisgo, lv_grid, timesteps, False)
+        assert not edisgo.results.equipment_changes.empty
+        assert edisgo.results.reinforce_log.empty
 
     def test_analyze_after_voltage_reinforcement_max_rounds(self, monkeypatch):
         edisgo = copy.deepcopy(self.edisgo)
