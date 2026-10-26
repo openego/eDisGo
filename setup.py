@@ -42,7 +42,7 @@ requirements = [
     # releases need SQLAlchemy>=1.4, which conflicts with sqlalchemy<1.4.0 below
     "geoalchemy2 == 0.6.3",
     "geopandas >= 0.12.0, < 1.2.0",
-    "geopy >= 2.0.0, < 2.5.0",
+    "geopy >= 2.0.0, < 2.6.0",
     "jupyterlab < 4.7.0",
     "jupyter_dash < 0.5.0",
     "matplotlib >= 3.3.0, < 3.11.0",
