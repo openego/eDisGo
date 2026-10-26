@@ -52,7 +52,7 @@ jobs:
           version: ${{ matrix.julia-version }}
 
       - name: Cache Julia depot
-        uses: julia-actions/cache@v2
+        uses: julia-actions/cache@v3
 
       - name: Instantiate package environment
         run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
