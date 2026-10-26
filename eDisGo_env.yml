@@ -15,7 +15,7 @@ dependencies:
   - conda-forge::rasterio
   - conda-forge::geoalchemy2
   - conda-forge::pygeos
-  - conda-forge::contextily
+  - conda-forge::contextily >= 1.7.1
   - conda-forge::descartes
   - conda-forge::pypsa == 0.26.2
   - pip:

@@ -1,0 +1,46 @@
+<div class="rw" id="rw-cost">
+<div class="rw-row" id="rw-cost-ctl"></div>
+<div class="rw-row" id="rw-cost-ctl2"></div>
+<div class="rw-box"><svg id="rw-cost-svg" role="img" aria-label="Cost of a reinforced line split into earthwork and cable"></svg></div>
+<div class="rw-stats" id="rw-cost-stats"></div>
+<p class="rw-note">Unit costs from <code>costs_cables</code> and <code>costs_transformers</code> in <code>config_grid_expansion_default.cfg</code>. A grid district counts as rural up to 500 inhabitants/km².</p>
+<script>
+(function () {
+  var RW = window.RW, svg = document.getElementById("rw-cost-svg");
+  var C = RW.DATA.costs, TNAME = { lv: "MV/LV", mv: "HV/MV" };
+  var st = { lvl: "lv", area: "rural", len: 0.4, q: 2, tr: 1 };
+  var c1 = document.getElementById("rw-cost-ctl"), c2 = document.getElementById("rw-cost-ctl2");
+  c1.appendChild(RW.seg([{ id: "lv", label: "LV" }, { id: "mv", label: "MV" }], st.lvl, function (id) { st.lvl = id; draw(); }, "Voltage level"));
+  c1.appendChild(RW.seg([{ id: "rural", label: "rural" }, { id: "urban", label: "urban" }], st.area, function (id) { st.area = id; draw(); }, "Area"));
+  c2.appendChild(RW.slider("rw-cost-len", "line length", 0.05, 3, 0.05, st.len, function (v) { return Math.round(v * 1000) + " m"; }, function (v) { st.len = v; draw(); }));
+  c2.appendChild(RW.slider("rw-cost-q", "cables added to this line", 1, 6, 1, st.q, function (v) { return String(v); }, function (v) { st.q = v; draw(); }));
+  c2.appendChild(RW.slider("rw-cost-tr", "transformers added", 0, 4, 1, st.tr, function (v) { return String(v); }, function (v) { st.tr = v; draw(); }));
+  function draw() {
+    var c = C[st.lvl], earth = (c[st.area] - c.cable) * st.len, cable = c.cable * st.len, line = earth + cable * st.q, tr = c.trafo * st.tr;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var W = 800, H = 130, L = 20, R = 20, max = Math.max(line + tr, 1);
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    function X(v) { return L + v / max * (W - L - R); }
+    var x = 0;
+    function seg(v, col, label) {
+      if (v <= 0) return;
+      RW.el("rect", { x: X(x), y: 30, width: Math.max(1, X(x + v) - X(x)), height: 40, fill: col, stroke: "#fff" }, null, svg);
+      if (X(x + v) - X(x) > 60) RW.el("text", { x: (X(x) + X(x + v)) / 2, y: 55, "text-anchor": "middle", "font-size": 11, fill: "#fff" }, label, svg);
+      x += v;
+    }
+    seg(earth, "var(--muted)", "earthwork " + RW.f(earth, 1));
+    for (var i = 0; i < st.q; i++) seg(cable, "var(--acc)", "cable " + RW.f(cable, 1));
+    for (var j = 0; j < st.tr; j++) seg(c.trafo, "var(--thick)", "transformer " + c.trafo);
+    RW.el("text", { x: L, y: 20, "class": "rw-sm" }, "kEUR", svg);
+    RW.el("text", { x: L, y: 100, "font-size": 12 }, "line: " + RW.f(c[st.area] - c.cable, 0) + " kEUR/km earthwork once + " + st.q + " × " + c.cable + " kEUR/km cable; " + TNAME[st.lvl] + " transformer " + c.trafo + " kEUR each", svg);
+    RW.stats(document.getElementById("rw-cost-stats"), [
+      ["line", RW.f(line, 1) + " kEUR", ""],
+      ["of which earthwork", RW.f(earth, 1) + " kEUR", ""],
+      ["transformers", RW.f(tr, 0) + " kEUR", ""],
+      ["total", RW.f(line + tr, 1) + " kEUR", "ok"]
+    ]);
+  }
+  draw();
+})();
+</script>
+</div>
