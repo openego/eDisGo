@@ -14,7 +14,7 @@ dependencies:
   - conda-forge::shapely
   - conda-forge::rasterio
   - conda-forge::geoalchemy2
-  - conda-forge::contextily
+  - conda-forge::contextily >= 1.7.1
   - conda-forge::descartes
   - conda-forge::pypsa >= 1.3.0, < 1.4.0
   - pip:

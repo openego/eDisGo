@@ -19,7 +19,8 @@ the pipeline" into a clear ``ValueError`` at startup.
 Checked rules (driven by the ``requires``/``provides``/``ts_altering``
 metadata each task declares on registration):
 
-* every step maps to a known, registered task name;
+* every step maps to a known, registered task name and passes only
+  parameters the task accepts;
 * ``reactive_power`` comes after every time-series task, never
   before — ``set_time_series_reactive_power_control`` overwrites
   reactive power on the currently set active-power time series;
@@ -29,14 +30,21 @@ metadata each task declares on registration):
   import earlier in the pipeline — OPF without flexibility is
   meaningless;
 * flex imports (``import_flex``, ``import_heat_pumps``, …) require a
-  loaded grid, i.e. an earlier ``setup_grid`` / ``load_from_base``.
+  loaded grid, i.e. an earlier ``setup_grid`` / ``load_from_base``;
+* the parameters of the time-step selection tasks are valid, and a
+  ``timestep_selection`` block names a task of the pipeline; the task it
+  skips is ignored by the rules above;
+* a ``spatial_reduction`` block is a mapping and, if enabled, has a
+  ``spatial_reduce`` step.
 """
 
 from __future__ import annotations
 
+import inspect
+
 from typing import Any
 
-from edisgo.run.registry import get_task_meta, known_tasks
+from edisgo.run.registry import get_task, get_task_meta, known_tasks
 
 # Human-readable message per required capability. The wording keeps the
 # substrings the validator tests assert on ("loaded grid", "time series",
@@ -72,22 +80,28 @@ def validate(cfg: dict) -> None:
         If the pipeline is empty, contains an unknown task name, or
         violates an ordering rule (reactive before TS, reinforce
         without TS, optimize without flex, flex import without grid,
-        …).
+        …), passes unknown task parameters, or if the time-step
+        selection or ``spatial_reduction`` settings are invalid.
 
     """
     pipeline = cfg.get("pipeline") or []
     if not pipeline:
         raise ValueError("Config has no pipeline to run.")
 
+    steps = [_split_step(step) for step in pipeline]
     known = set(known_tasks())
+    for task_name, params in steps:
+        if task_name not in known:
+            raise ValueError(f"Unknown task '{task_name}'. Known: {sorted(known)}")
+        _check_param_names(task_name, params)
+
+    skipped = _check_timestep_selection(cfg, steps)
     satisfied: set[str] = set()
     reactive_set = False
 
-    for step in pipeline:
-        task_name, _params = _split_step(step)
-        if task_name not in known:
-            raise ValueError(f"Unknown task '{task_name}'. Known: {sorted(known)}")
-
+    for task_name, _params in steps:
+        if task_name in skipped:
+            continue
         meta = get_task_meta(task_name)
 
         # reactive_power must be the last time-series-altering step.
@@ -113,6 +127,77 @@ def validate(cfg: dict) -> None:
         satisfied |= meta.provides
         if task_name == "reactive_power":
             reactive_set = True
+
+    spatial_reduction = cfg.get("spatial_reduction") or {}
+    if not isinstance(spatial_reduction, dict):
+        raise ValueError(
+            f"spatial_reduction must be a mapping, got {spatial_reduction!r}."
+        )
+    if spatial_reduction.get("enabled") and "spatial_reduce" not in dict(steps):
+        raise ValueError(
+            "spatial_reduction is enabled, but the pipeline has no "
+            "'spatial_reduce' step. Add one or set 'enabled: false'."
+        )
+
+
+def _check_param_names(task_name: str, params: dict) -> None:
+    """
+    Reject step params the task does not accept. Tasks taking ``**kwargs``
+    check their params themselves.
+    """
+    signature = inspect.signature(get_task(task_name)).parameters
+    if any(p.kind is p.VAR_KEYWORD for p in signature.values()):
+        return
+    accepted = set(signature) - {"edisgo", "ctx"}
+    unknown = set(params) - accepted
+    if unknown:
+        raise ValueError(
+            f"Unknown parameters {sorted(unknown)} for task '{task_name}'. "
+            f"Accepted: {sorted(accepted)}."
+        )
+
+
+def _check_timestep_selection(cfg: dict, steps: list) -> set:
+    """
+    Check the parameters of the time-step selection steps and the
+    ``timestep_selection`` block (see :mod:`edisgo.run.tasks.timeseries`).
+
+    Returns the selection tasks the block skips.
+
+    """
+    from edisgo.run.tasks.timeseries import (
+        SELECTION_TASKS,
+        check_selection_params,
+        check_timestep_selection,
+    )
+
+    selection_steps = [
+        (name, params) for name, params in steps if name in SELECTION_TASKS
+    ]
+    selection = cfg.get("timestep_selection")
+    if selection is None:
+        for name, params in selection_steps:
+            check_selection_params(name, params)
+        return set()
+
+    check_timestep_selection(selection)
+    for name, params in selection_steps:
+        if params:
+            raise ValueError(
+                f"Step '{name}' has inline params, but a timestep_selection "
+                f"block is set. Move them into timestep_selection.{name}, or "
+                f"set timestep_selection to null to drop the block."
+            )
+    task = selection["task"]
+    if task == "none":
+        return set(SELECTION_TASKS)
+    if task not in dict(selection_steps):
+        raise ValueError(
+            f"timestep_selection 'task' is {task!r}, but the pipeline has no "
+            f"'{task}' step."
+        )
+    check_selection_params(task, selection.get(task) or {})
+    return set(SELECTION_TASKS) - {task}
 
 
 def _split_step(step: Any) -> tuple[str, dict]:

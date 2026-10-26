@@ -1,14 +1,205 @@
 import logging
 
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
 
-from shapely.geometry import Point
+from shapely.geometry import Point, box
 
 from edisgo import EDisGo
 from edisgo.io import heat_pump_import
 from edisgo.tools.tools import determine_bus_voltage_level
+
+
+@pytest.fixture
+def mock_oep_heat_pump_query(monkeypatch):
+    """Replace one heat-pump OEP query with synthetic return data."""
+
+    def install_mock(function_name, result):
+        query_mock = Mock(return_value=result)
+        monkeypatch.setattr(heat_pump_import, function_name, query_mock)
+        return query_mock
+
+    return install_mock
+
+
+def _central_query_data(plants, crs):
+    """Small raw spatial tables; do not precompute the production joins."""
+    locations = {
+        5: Point(10.02178787570608, 47.55650888787377),
+        6: Point(10.04178787570608, 47.55650888787377),
+    }
+    buses = [locations[district] for district in plants.district_heating_id]
+    return {
+        "plants": pd.DataFrame(
+            {"bus0": 33535, "bus1": range(len(plants)), "p_set": plants.p_set.values}
+        ),
+        "heat_buses": gpd.GeoDataFrame(
+            {"bus1": range(len(plants)), "geom": buses}, geometry="geom", crs=4326
+        ).to_crs(crs),
+        "weather_cells": gpd.GeoDataFrame(
+            {"weather_cell_id": [11051], "geom": [box(9, 47, 11, 48)]},
+            geometry="geom",
+            crs=4326,
+        ).to_crs(crs),
+        "district_heating_areas": gpd.GeoDataFrame(
+            {
+                "district_heating_id": [5, 6],
+                "area_id": [4, 5],
+                "geom_polygon": [point.buffer(0.005) for point in locations.values()],
+            },
+            geometry="geom_polygon",
+            crs=4326,
+        ).to_crs(crs),
+        "chp_plants": gpd.GeoDataFrame(
+            {"district_heating_id": [], "geom": []}, geometry="geom", crs=crs
+        ),
+    }
+
+
+@pytest.mark.parametrize("source_crs", [3857, 4326])
+def test_prepare_central_heat_sources_offline(source_crs):
+    """Check reprojection, spatial assignments and all three location choices."""
+    grid = SimpleNamespace(
+        topology=SimpleNamespace(
+            grid_district={"srid": 3857, "geom": box(0, 0, 10000, 10000)},
+            mv_grid=SimpleNamespace(station=pd.DataFrame({"x": [100], "y": [100]})),
+        )
+    )
+    data = {
+        "plants": pd.DataFrame(
+            {"bus0": [1] * 4, "bus1": [1, 2, 3, 4], "p_set": [0.1, 0.2, 0.3, 0.4]}
+        ),
+        "heat_buses": gpd.GeoDataFrame(
+            {
+                "bus1": [1, 2, 3, 4],
+                "geom": [
+                    Point(1000, 1000),
+                    Point(5100, 4000),
+                    Point(11000, 7000),
+                    Point(7000, 7000),
+                ],
+            },
+            geometry="geom",
+            crs=3857,
+        ),
+        "weather_cells": gpd.GeoDataFrame(
+            {
+                "weather_cell_id": [11, 22],
+                "geom": [box(0, 0, 6000, 10000), box(10000, 6000, 12000, 8000)],
+            },
+            geometry="geom",
+            crs=3857,
+        ),
+        "district_heating_areas": gpd.GeoDataFrame(
+            {
+                "district_heating_id": [5, 6, 7],
+                "area_id": [50, 60, 70],
+                "geom_polygon": [
+                    box(500, 500, 2500, 2500),
+                    box(3500, 3500, 5000, 5000),
+                    box(10500, 6500, 11500, 7500),
+                ],
+            },
+            geometry="geom_polygon",
+            crs=3857,
+        ),
+        "chp_plants": gpd.GeoDataFrame(
+            {
+                "district_heating_id": [5, 6, 99],
+                "geom": [Point(1500, 1200), Point(-1000, 1000), Point(8000, 8000)],
+            },
+            geometry="geom",
+            crs=3857,
+        ),
+    }
+    for name, frame in data.items():
+        if isinstance(frame, gpd.GeoDataFrame):
+            data[name] = frame.to_crs(source_crs)
+
+    result = heat_pump_import._prepare_central_heat_sources(grid, data)
+
+    np.testing.assert_allclose(result.p_set, [0.1, 0.2, 0.3, 0.4])
+    np.testing.assert_allclose(result.weather_cell_id, [11, 11, 22, np.nan])
+    # Every heat bus gets its nearest area, also the second bus, which lies 100 m
+    # outside area 6, and the fourth bus, which lies about 2.8 km from area 6.
+    np.testing.assert_allclose(result.district_heating_id, [5, 6, 7, 6])
+    np.testing.assert_allclose(result.area_id, [50, 60, 70, 60])
+    # Valid CHP; out-of-grid CHP of area 6, so the bus; station; again the bus.
+    expected = [
+        Point(1500, 1200),
+        Point(5100, 4000),
+        Point(100, 100),
+        Point(7000, 7000),
+    ]
+    for actual, location in zip(result.geom, expected):
+        assert actual.distance(location) < 1e-6
+    assert result.crs.to_epsg() == 3857
+    # the input frames are not modified
+    assert "centroid" not in data["district_heating_areas"]
+
+
+def test_prepare_central_heat_sources_geographic_grid_crs():
+    """In a grid in EPSG:4326, the nearest district heating area is found in meters."""
+    # At 50 degrees latitude, one degree of longitude is about 64 % of one degree
+    # of latitude. Area 5 lies 800 m east and area 6 900 m north of heat bus 1, so
+    # area 6 is nearer in degrees, but area 5 is nearer in meters.
+    bus = Point(10.0, 50.0)
+    east = 800 / (111320 * np.cos(np.radians(50.0)))
+    north = 900 / 111195
+    areas = [
+        box(bus.x + east, bus.y - 1e-4, bus.x + east + 2e-4, bus.y + 1e-4),
+        box(bus.x - 1e-4, bus.y + north, bus.x + 1e-4, bus.y + north + 2e-4),
+    ]
+    # heat bus 2 lies about 6.7 km from area 5 and 7.6 km from area 6 and still gets
+    # the nearest area
+    heat_buses = gpd.GeoDataFrame(
+        {"bus1": [1, 2], "geom": [bus, Point(bus.x, bus.y - 0.06)]},
+        geometry="geom",
+        crs=4326,
+    )
+    grid_district = box(9.9, 49.9, 10.1, 50.1)
+    grid = SimpleNamespace(
+        topology=SimpleNamespace(
+            grid_district={"srid": 4326, "geom": grid_district},
+            mv_grid=SimpleNamespace(station=pd.DataFrame({"x": [10.0], "y": [50.0]})),
+        )
+    )
+    data = {
+        "plants": pd.DataFrame({"bus0": [1, 1], "bus1": [1, 2], "p_set": [0.1, 0.2]}),
+        "heat_buses": heat_buses,
+        "weather_cells": gpd.GeoDataFrame(
+            {"weather_cell_id": [11], "geom": [grid_district]},
+            geometry="geom",
+            crs=4326,
+        ),
+        "district_heating_areas": gpd.GeoDataFrame(
+            {"district_heating_id": [5, 6], "area_id": [50, 60], "geom_polygon": areas},
+            geometry="geom_polygon",
+            crs=4326,
+        ),
+        "chp_plants": gpd.GeoDataFrame(
+            {"district_heating_id": [], "geom": []}, geometry="geom", crs=4326
+        ),
+    }
+
+    result = heat_pump_import._prepare_central_heat_sources(grid, data)
+
+    np.testing.assert_allclose(result.district_heating_id, [5, 5])
+    assert result.crs.to_epsg() == 4326
+    # the heat bus locations are returned unchanged
+    for actual, expected in zip(result.geom, heat_buses.geometry):
+        assert actual.equals_exact(expected, tolerance=0)
+
+
+def test_prepare_central_heat_sources_empty_offline():
+    plants = pd.DataFrame(columns=["bus0", "bus1", "p_set"])
+    result = heat_pump_import._prepare_central_heat_sources(None, {"plants": plants})
+    pd.testing.assert_frame_equal(result, plants)
 
 
 class TestHeatPumpImport:
@@ -57,45 +248,157 @@ class TestHeatPumpImport:
         )
         return hp_df
 
-    def test_oedb(self, caplog):
-        with caplog.at_level(logging.DEBUG):
-            heat_pump_import.oedb(
-                self.edisgo, scenario="eGon2035", engine=pytest.engine
-            )
-        loads_df = self.edisgo.topology.loads_df
-        hp_df = loads_df[loads_df.type == "heat_pump"]
-        assert "Capacity of individual heat pumps" not in caplog.text
-        assert len(hp_df) == 152
-        assert len(hp_df[hp_df.sector == "individual_heating"]) == 150
-        assert np.isclose(
-            hp_df[hp_df.sector == "individual_heating"].p_set.sum(), 2.97316
+    @pytest.mark.parametrize(
+        "import_types, expected_counts",
+        [
+            (None, (3, 3, 2)),
+            ([], (0, 0, 0)),
+            (["individual_heat_pumps"], (3, 0, 0)),
+            (["central_heat_pumps"], (0, 3, 0)),
+            (["central_resistive_heaters"], (0, 0, 2)),
+            (["individual_heat_pumps", "central_heat_pumps"], (3, 3, 0)),
+            (["individual_heat_pumps", "central_resistive_heaters"], (3, 0, 2)),
+            (["central_heat_pumps", "central_resistive_heaters"], (0, 3, 2)),
+            (
+                [
+                    "individual_heat_pumps",
+                    "central_heat_pumps",
+                    "central_resistive_heaters",
+                ],
+                (3, 3, 2),
+            ),
+        ],
+        ids=[
+            "default",
+            "none",
+            "individual",
+            "central",
+            "resistive",
+            "individual-central",
+            "individual-resistive",
+            "central-resistive",
+            "all",
+        ],
+    )
+    def test_oedb_offline(
+        self, caplog, mock_oep_heat_pump_query, import_types, expected_counts
+    ):
+        hp_individual = self.setup_heat_pump_data_individual_heating()
+        hp_central = self.setup_heat_pump_data_dh()
+        resistive_heaters_central = self.setup_resistive_heater_data_dh()
+        resistive_heaters_central.at[1, "p_set"] = 0.1
+        datasets = (hp_individual, hp_central, resistive_heaters_central)
+        crs = self.edisgo.topology.grid_district["srid"]
+        query_results = (
+            hp_individual.copy(deep=True),
+            _central_query_data(hp_central, crs),
+            _central_query_data(resistive_heaters_central, crs),
         )
-        dh_hp = hp_df[hp_df.sector == "district_heating"]
-        assert len(dh_hp) == 1
-        assert np.isclose(dh_hp.p_set.sum(), 0.095202)
-        dh_rh = hp_df[hp_df.sector == "district_heating_resistive_heater"]
-        assert len(dh_rh) == 1
-        assert np.isclose(dh_rh.p_set.sum(), 0.042807)
-        # assert central heat pump and resistive heater at same bus in voltage level 6
-        assert determine_bus_voltage_level(self.edisgo, dh_hp.bus.iloc[0]) == 6
-        assert dh_hp.bus.iloc[0] == dh_rh.bus.iloc[0]
+        sectors = (
+            "individual_heating",
+            "district_heating",
+            "district_heating_resistive_heater",
+        )
+        query_names = (
+            "_query_individual_heat_pumps_oedb",
+            "_query_central_heat_pumps_oedb",
+            "_query_central_resistive_heaters_oedb",
+        )
+        # Each mock returns fixed data. The real importer chooses which to call.
+        query_mocks = [
+            mock_oep_heat_pump_query(name, data)
+            for name, data in zip(query_names, query_results)
+        ]
+        capacity_mock = mock_oep_heat_pump_query(
+            "_query_individual_heat_pump_capacity_oedb", hp_individual.p_set.sum()
+        )
 
-        # test without resistive heaters and individual heat pumps
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
-        )
-        heat_pump_import.oedb(
-            self.edisgo,
-            scenario="eGon2035",
-            engine=pytest.engine,
-            import_types=["central_heat_pumps"],
-        )
+        with caplog.at_level(logging.DEBUG):
+            imported = heat_pump_import.oedb(
+                self.edisgo, scenario="eGon2035", engine=None, import_types=import_types
+            )
+
         loads_df = self.edisgo.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
-        assert len(hp_df) == 1
-        assert len(hp_df[hp_df.sector == "district_heating"]) == 1
-        # assert central heat pump in voltage level 7
-        assert determine_bus_voltage_level(self.edisgo, hp_df.bus.iloc[0]) == 7
+        assert len(hp_df) == sum(expected_counts)
+        assert set(imported) == set(hp_df.index)
+        assert "Capacity of individual heat pumps" not in caplog.text
+        for sector, count, data, query_mock in zip(
+            sectors, expected_counts, datasets, query_mocks
+        ):
+            selected = hp_df[hp_df.sector == sector]
+            assert len(selected) == count
+            if count:
+                assert np.isclose(selected.p_set.sum(), data.p_set.sum())
+                query_mock.assert_called_once_with(
+                    edisgo_object=self.edisgo, scenario="eGon2035", engine=None
+                )
+            else:
+                query_mock.assert_not_called()
+        if expected_counts[0]:
+            capacity_mock.assert_called_once_with(
+                edisgo_object=self.edisgo, scenario="eGon2035", engine=None
+            )
+        else:
+            capacity_mock.assert_not_called()
+
+        if expected_counts[1] and expected_counts[2]:
+            dh_hp = hp_df[hp_df.sector == "district_heating"]
+            dh_rh = hp_df[hp_df.sector == "district_heating_resistive_heater"]
+            assert dh_rh[dh_rh.district_heating_id == 5].bus.iat[0] in (
+                dh_hp[dh_hp.district_heating_id == 5].bus.values
+            )
+        if expected_counts == (0, 3, 0):
+            small_hp = hp_df[hp_df.p_set == 0.05]
+            assert determine_bus_voltage_level(self.edisgo, small_hp.bus.iat[0]) == 7
+
+    @pytest.mark.oep
+    def test_query_heat_pump_data_oedb_live(self, oep_engine):
+        hp_individual = heat_pump_import._query_individual_heat_pumps_oedb(
+            edisgo_object=self.edisgo,
+            scenario="eGon2035",
+            engine=oep_engine,
+            query_limit=2,
+        )
+        hp_central = heat_pump_import._query_central_heat_pumps_oedb(
+            edisgo_object=self.edisgo,
+            scenario="eGon2035",
+            engine=oep_engine,
+            query_limit=2,
+        )
+        resistive_heaters_central = (
+            heat_pump_import._query_central_resistive_heaters_oedb(
+                edisgo_object=self.edisgo,
+                scenario="eGon2035",
+                engine=oep_engine,
+                query_limit=2,
+            )
+        )
+        hp_individual_cap = heat_pump_import._query_individual_heat_pump_capacity_oedb(
+            edisgo_object=self.edisgo, scenario="eGon2035", engine=oep_engine
+        )
+
+        assert 0 < len(hp_individual) <= 2
+        assert {"building_id", "p_set", "weather_cell_id"}.issubset(
+            hp_individual.columns
+        )
+        for central_data in [hp_central, resistive_heaters_central]:
+            assert len(central_data["plants"]) <= 2
+            assert {"bus0", "bus1", "p_set"}.issubset(central_data["plants"].columns)
+            if not central_data["plants"].empty:
+                for name, columns in {
+                    "heat_buses": {"bus1", "geom"},
+                    "weather_cells": {"weather_cell_id", "geom"},
+                    "district_heating_areas": {
+                        "district_heating_id",
+                        "area_id",
+                        "geom_polygon",
+                    },
+                    "chp_plants": {"district_heating_id", "geom"},
+                }.items():
+                    assert columns.issubset(central_data[name].columns)
+                    assert central_data[name].crs is not None
+        assert hp_individual_cap > 0
 
     def test__grid_integration(self, caplog):
         # ############# test integration of central heat pumps ####################
@@ -195,9 +498,42 @@ class TestHeatPumpImport:
         bus_rh = hp_df[hp_df.p_set == 0.17].bus.iloc[0]
         assert determine_bus_voltage_level(self.edisgo, bus_rh) == 6
 
-    def test_efficiency_resistive_heaters_oedb(self):
-        eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
-            scenario="eGon2035", engine=pytest.engine
+    def test_efficiency_resistive_heaters_oedb_offline(
+        self,
+        mock_oep_heat_pump_query,
+    ):
+        query_mock = mock_oep_heat_pump_query(
+            "_query_resistive_heater_efficiency_oedb",
+            {
+                "efficiency": {
+                    "central_resistive_heater": 0.99,
+                    "rural_resistive_heater": 0.9,
+                }
+            },
         )
+
+        eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
+            scenario="eGon2035",
+            engine=None,
+        )
+
         assert eta_dict["central_resistive_heater"] == 0.99
         assert eta_dict["rural_resistive_heater"] == 0.9
+        query_mock.assert_called_once_with(scenario="eGon2035", engine=None)
+
+    @pytest.mark.oep
+    def test_query_resistive_heater_efficiency_oedb_live(self, oep_engine):
+        heat_parameters = heat_pump_import._query_resistive_heater_efficiency_oedb(
+            scenario="eGon2035",
+            engine=oep_engine,
+        )
+
+        assert "efficiency" in heat_parameters
+        assert {
+            "central_resistive_heater",
+            "rural_resistive_heater",
+        }.issubset(heat_parameters["efficiency"])
+        assert all(
+            0 < heat_parameters["efficiency"][key] <= 1
+            for key in ["central_resistive_heater", "rural_resistive_heater"]
+        )

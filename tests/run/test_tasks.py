@@ -27,7 +27,9 @@ from edisgo.run.tasks.flex import (
     task_import_flex,
 )
 from edisgo.run.tasks.io import task_import_overlying_grid_data
+from edisgo.run.tasks.spatial import task_spatial_reduce, task_spatial_restore
 from edisgo.run.tasks.timeseries import (
+    _selection_params,
     task_manual_ts,
     task_select_critical_timesteps,
     task_set_timeindex,
@@ -180,6 +182,36 @@ class TestImportOverlyingGridData:
         # must simply return without AttributeError
         assert task_import_overlying_grid_data(edisgo_obj, ctx) is edisgo_obj
 
+    def test_etrago_dispatchable_ts_aligned_to_timeindex(self):
+        """
+        eTraGo data is indexed in its weather year (2011), the EDisGo object in
+        the scenario year. The dispatchable generator time series must be
+        shifted onto the EDisGo time index like all other overlying-grid data
+        (regression: it was passed on unaligned, which left the dispatchable
+        generators without time series and the OPF failed on NaN).
+        """
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        timeindex = pd.date_range("2035-01-15", periods=3, freq="h")
+        edisgo.set_timeindex(timeindex)
+        etrago_index = pd.date_range("2011-01-01", periods=8760, freq="h")
+        disp_ts = pd.DataFrame({"gas": 0.5}, index=etrago_index)
+        ctx = self._ctx(
+            {"enabled": True, "source": "etrago"},
+            overlying_grid_data={"dispatchable_generators_active_power": disp_ts},
+        )
+
+        task_import_overlying_grid_data(edisgo, ctx)
+
+        gens = edisgo.topology.generators_df
+        gas_gens = gens.index[gens.type == "gas"]
+        ts = edisgo.timeseries.generators_active_power.loc[:, gas_gens]
+        pd.testing.assert_index_equal(ts.index, timeindex)
+        assert not ts.isna().any().any()
+        expected = 0.5 * gens.loc[gas_gens, "p_nom"]
+        pd.testing.assert_series_equal(
+            ts.iloc[0], expected, check_names=False, check_index_type=False
+        )
+
     def test_csv_without_path_warns(self, edisgo_obj, caplog):
         ctx = self._ctx({"enabled": True, "source": "csv"})
         result = task_import_overlying_grid_data(edisgo_obj, ctx)
@@ -210,9 +242,7 @@ def _grid_with_district_heating():
             bus=edisgo.topology.buses_df.index[bus_i],
             p_set=p_set,
         )
-    hps = edisgo.topology.loads_df.index[
-        edisgo.topology.loads_df.type == "heat_pump"
-    ]
+    hps = edisgo.topology.loads_df.index[edisgo.topology.loads_df.type == "heat_pump"]
     ti = edisgo.timeseries.timeindex
     edisgo.heat_pump.cop_df = pd.DataFrame(
         {hp: [3.0, 3.0, 3.0] for hp in hps}, index=ti
@@ -578,6 +608,94 @@ class TestSelectCriticalTimesteps:
             task_select_critical_timesteps(edisgo_obj, ctx, method="residual_load")
 
 
+class TestTimestepSelectionBlock:
+    """The top-level timestep_selection block picks and configures the
+    time-step selection task (its checks are tested in test_validator.py).
+    The edisgo_obj fixture has 3 time steps, so an unchanged length means the
+    task was skipped."""
+
+    def _ctx(self, selection):
+        ctx = RunContext(raw_config={"timestep_selection": selection})
+        # select_critical_timesteps requires active-power time series
+        ctx.flags["timeseries_set"] = True
+        return ctx
+
+    def test_picked_set_timeindex_runs_with_block_params(self, edisgo_obj):
+        ctx = self._ctx(
+            {
+                "task": "set_timeindex",
+                "set_timeindex": {"start": "2011-01-01 00:00", "periods": 2},
+            }
+        )
+        task_set_timeindex(edisgo_obj, ctx)
+        assert len(edisgo_obj.timeseries.timeindex) == 2
+
+    def test_other_task_is_skipped(self, edisgo_obj):
+        # would raise for the unknown method if it ran
+        ctx = self._ctx(
+            {
+                "task": "set_timeindex",
+                "select_critical_timesteps": {"method": "bogus"},
+            }
+        )
+        assert task_select_critical_timesteps(edisgo_obj, ctx) is edisgo_obj
+        assert len(edisgo_obj.timeseries.timeindex) == 3
+
+    def test_picked_select_critical_timesteps_runs_with_block_params(self, edisgo_obj):
+        ctx = self._ctx(
+            {
+                "task": "select_critical_timesteps",
+                "select_critical_timesteps": {"method": "bogus"},
+            }
+        )
+        with pytest.raises(ValueError, match="got 'bogus'"):
+            task_select_critical_timesteps(edisgo_obj, ctx)
+
+    def test_task_none_skips_both(self, edisgo_obj):
+        ctx = self._ctx({"task": "none"})
+        task_set_timeindex(edisgo_obj, ctx)
+        task_select_critical_timesteps(edisgo_obj, ctx)
+        assert len(edisgo_obj.timeseries.timeindex) == 3
+
+    def test_null_block_uses_inline_params(self, edisgo_obj):
+        task_set_timeindex(
+            edisgo_obj, self._ctx(None), start="2011-01-01 00:00", periods=2
+        )
+        assert len(edisgo_obj.timeseries.timeindex) == 2
+
+    def test_extending_config_switches_task_without_mixing_params(self):
+        """Switching spatial_reduction_opf (set_timeindex) to
+        select_critical_timesteps must not pass the preset's set_timeindex
+        parameters to select_critical_timesteps."""
+        cfg = load_config(
+            {
+                "extends": "spatial_reduction_opf",
+                "timestep_selection": {
+                    "task": "select_critical_timesteps",
+                    "select_critical_timesteps": {"method": "power_flow"},
+                },
+            }
+        )
+        validate(cfg)
+        ctx = RunContext(raw_config=cfg)
+        assert _selection_params(ctx, "select_critical_timesteps", {}) == {
+            "method": "power_flow"
+        }
+        assert _selection_params(ctx, "set_timeindex", {}) is None
+
+    @pytest.mark.parametrize(
+        "preset",
+        ["overlying_grid_opf", "overlying_grid_opf_spatial", "spatial_reduction_opf"],
+    )
+    def test_presets_contain_both_tasks_without_step_params(self, preset):
+        cfg = load_config({"extends": preset})
+        validate(cfg)
+        # bare task names, so the timestep_selection block alone configures
+        # them
+        assert "set_timeindex" in cfg["pipeline"]
+        assert "select_critical_timesteps" in cfg["pipeline"]
+
+
 class TestOptimizeTaskDelegation:
     """task_optimize is thin: expand the flexibility selection and call
     edisgo.pm_optimize. The multi-interval split lives in pm_optimize and is
@@ -623,6 +741,71 @@ class TestOptimizeTaskDelegation:
         assert captured["flexible_hps"] == []
 
 
+class TestSpatialRestoreCarriesOPFResults:
+    """
+    spatial_restore swaps the working object back to the pre-OPF full-grid
+    stash. That stash was deepcopied *before* the solve, so it carries a
+    pristine, empty OPFResults; the results must be carried over explicitly
+    or the run saves an empty opf_results/ directory (issue #760).
+
+    map_reduced_results_to_full_grid is stubbed out here: it needs
+    flexibility envelopes and a matching time index, and what is under test
+    is the object swap, not the dispatch mapping.
+    """
+
+    @staticmethod
+    def _stub_mapping(full_grid):
+        """Neutralise the dispatch mapping, recording that it was called."""
+        calls = []
+
+        def fake_map(**kw):
+            calls.append(kw)
+            return full_grid
+
+        full_grid.map_reduced_results_to_full_grid = fake_map
+        return calls
+
+    def test_opf_results_are_carried_onto_the_full_grid(self, edisgo_obj):
+        full_grid = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        calls = self._stub_mapping(full_grid)
+
+        # stand in for what from_powermodels writes onto the reduced grid
+        slacks = pd.DataFrame({"cp": [0.1, 0.2], "hp": [0.3, 0.4]})
+        edisgo_obj.opf_results.hv_requirement_slacks_t = slacks
+        edisgo_obj.opf_results.status = "OPTIMAL"
+
+        ctx = RunContext()
+        ctx.full_grid_stash = full_grid
+        result = task_spatial_restore(edisgo_obj, ctx)
+
+        # the stash is what the pipeline continues with ...
+        assert result is full_grid
+        assert len(calls) == 1
+        # ... and it no longer carries the empty pre-OPF results
+        assert not result.opf_results.hv_requirement_slacks_t.empty
+        pd.testing.assert_frame_equal(
+            result.opf_results.hv_requirement_slacks_t, slacks
+        )
+        assert result.opf_results.status == "OPTIMAL"
+        # the stash is cleared so a second restore is a no-op
+        assert ctx.full_grid_stash is None
+
+    def test_without_a_stash_the_optimized_grid_is_returned_unchanged(self, edisgo_obj):
+        """
+        Spatial reduction disabled: spatial_reduce left no stash, so the
+        object optimize ran on is returned as-is - it already holds its own
+        opf_results.
+        """
+        edisgo_obj.opf_results.status = "OPTIMAL"
+        ctx = RunContext()
+        assert ctx.full_grid_stash is None
+
+        result = task_spatial_restore(edisgo_obj, ctx)
+
+        assert result is edisgo_obj
+        assert result.opf_results.status == "OPTIMAL"
+
+
 def test_all_bundled_presets_validate():
     """
     Every bundled preset must pass the (metadata-driven) validator — this
@@ -633,3 +816,11 @@ def test_all_bundled_presets_validate():
     assert presets, "no bundled presets found"
     for path in presets:
         validate(load_config(path))
+
+
+def test_spatial_reduce_with_null_block_is_a_noop():
+    """``spatial_reduction: null`` (e.g. set by a config extending a preset)
+    must behave like an absent block instead of crashing."""
+    sentinel = object()
+    ctx = RunContext(raw_config={"spatial_reduction": None})
+    assert task_spatial_reduce(sentinel, ctx) is sentinel

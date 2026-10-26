@@ -12,31 +12,31 @@
 from contextlib import contextmanager
 from functools import cache
 
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 
 
 @cache
-def _session_factory():
+def _oep_engine():
     """
-    Return a session factory for the OEP, created on first use.
+    Engine for the tables of the legacy open_eGo data model on the OEP.
 
-    The legacy open_eGo tables (schemas ``supply`` and ``model_draft``, mapped
-    by :mod:`egoio.db_tables`) are read from the OEP. The engine is built on
-    the first query rather than at import time, so that importing eDisGo does
-    not open a connection.
+    Uses the OEP token (see :func:`edisgo.io.db.engine`), so the connection does
+    not count against the limit of open connections that all anonymous OEP
+    clients share. The engine is created on the first query, so that importing
+    eDisGo does not open a connection.
 
     """
     from edisgo.io.db import engine
 
     # ssh=False pins the source to the OEP: the legacy tables do not exist in
     # an egon-data database, which engine() would otherwise auto-detect.
-    return sessionmaker(bind=engine(ssh=False))
+    return engine(ssh=False)
 
 
 @contextmanager
 def session_scope():
     """Function to ensure that sessions are closed properly."""
-    session = _session_factory()()
+    session = Session(bind=_oep_engine())
     try:
         yield session
     except Exception:
@@ -44,3 +44,23 @@ def session_scope():
         raise
     finally:
         session.close()
+
+
+def legacy_oep_table(schema, table):
+    """
+    ORM class of a table of the legacy open_eGo data model on the OEP.
+
+    The table definition is reflected from the OEP with the engine of
+    :func:`session_scope` and cached, see :class:`~.tools.config._ReflectedSchema`.
+
+    Parameters
+    ----------
+    schema : str
+        Database schema of the table, e.g. 'supply'.
+    table : str
+        Name of the table, e.g. 'ego_dp_res_powerplant'.
+
+    """
+    from edisgo.tools.config import _ReflectedSchema
+
+    return _ReflectedSchema.get(_oep_engine(), schema).orm_class(table)

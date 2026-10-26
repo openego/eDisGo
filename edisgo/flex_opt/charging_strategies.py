@@ -55,10 +55,11 @@ RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
 logger = logging.getLogger(__name__)
 
 
-# TODO: the dummy timeseries should be as long as the simulated days and not
-#  the timeindex of the edisgo object. At the moment this would result into
-#  wrong results if the timeindex of the edisgo object is not continuously
-#  (e.g. 2 weeks of the year)
+# TODO: the dummy timeseries should start with the simulated period and not
+#  with the first time step of the edisgo object. At the moment the charging
+#  processes are counted from the first time step of the edisgo object, so their
+#  time series are shifted if the edisgo time index does not start at the
+#  beginning of the simulated period
 def charging_strategy(
     edisgo_obj: EDisGo,
     strategy: str = "dumb",
@@ -156,6 +157,7 @@ def charging_strategy(
     simbev_timedelta = timeindex[1] - timeindex[0]
 
     resample = edisgo_timedelta != simbev_timedelta
+    timeindex_orig = edisgo_obj.timeseries.timeindex
 
     if resample:
         logger.warning(
@@ -369,6 +371,10 @@ def charging_strategy(
 
     if resample:
         edisgo_obj.timeseries.resample(freq=edisgo_timedelta)
+        # resampling covers the whole range from the first to the last time step,
+        # which fills the gaps of a non-contiguous time index (e.g. two separate
+        # weeks), so restore the original time steps
+        edisgo_obj.timeseries.timeindex = timeindex_orig
 
     # set reactive power time series to 0 Mvar
     # fmt: off

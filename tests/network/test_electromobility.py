@@ -76,8 +76,8 @@ class TestElectromobility:
         charging_processes_df = self.edisgo_obj.electromobility.charging_processes_df
         assert len(charging_processes_df) == 48
         assert isinstance(charging_processes_df, pd.DataFrame)
-        assert charging_processes_df.at[45, "park_end_timesteps"] == 232
-        assert charging_processes_df.at[216, "charging_park_id"] == 1466
+        assert charging_processes_df.at[45, "park_end_timesteps"] == 655
+        assert charging_processes_df.at[45, "charging_park_id"] == 1391
 
     def test_potential_charging_parks_gdf(self):
         potential_charging_parks_gdf = (
@@ -103,7 +103,7 @@ class TestElectromobility:
         )
         assert (
             integrated_charging_parks_df.at[1466, "edisgo_id"]
-            == "Charging_Point_LVGrid_362451_public_1"
+            == "Charging_Point_LVGrid_170174_public_1"
         )
         assert (
             integrated_charging_parks_df.at[1602, "edisgo_id"]
@@ -153,7 +153,7 @@ class TestElectromobility:
         # check charging demand
         for cp in [
             "Charging_Point_LVGrid_131957_public_1",
-            "Charging_Point_LVGrid_362451_public_1",
+            "Charging_Point_LVGrid_170174_public_1",
             "Charging_Point_LVGrid_136124_work_1",
         ]:
             charging_park_id = integrated_charging_parks.loc[

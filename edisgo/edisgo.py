@@ -1014,12 +1014,12 @@ class EDisGo:
             keyword arguments.
 
         """
-        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
         if self.legacy_grids is True:
             generators_import.oedb_legacy(
                 edisgo_object=self, generator_scenario=generator_scenario, **kwargs
             )
         else:
+            engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
             generators_import.oedb(
                 edisgo_object=self,
                 engine=engine,
@@ -1373,6 +1373,12 @@ class EDisGo:
             to specify whether to weight time steps by estimated grid expansion costs.
             See parameter `weight_by_costs` in
             :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
+            for more information. Default: False.
+        choose_cheaper_voltage_measure : bool
+            If True, a line is only disconnected due to a voltage issue if this is
+            cheaper than reinforcing the lines on the path between station and
+            critical node. If False, a line is always disconnected if possible.
+            See :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`
             for more information. Default: False.
 
         Returns
