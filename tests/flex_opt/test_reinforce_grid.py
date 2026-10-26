@@ -11,6 +11,7 @@ from edisgo import EDisGo
 from edisgo.flex_opt import reinforce_measures
 from edisgo.flex_opt.costs import grid_expansion_costs, line_expansion_costs
 from edisgo.flex_opt.reinforce_grid import (
+    _add_reinforcement_log_entries,
     _analyze_after_voltage_reinforcement,
     _separate_lv_grid_not_converged,
     reinforce_grid,
@@ -376,6 +377,43 @@ class TestReinforceGrid:
         assert log.costs.sum() == pytest.approx(
             grid_expansion_costs(edisgo).total_costs.sum()
         )
+
+    def test_reinforce_log_one_info_line_per_violation(self, caplog):
+        # a voltage issue solved by reinforcing several lines on the path to the
+        # critical node gives one row per line, but one INFO line
+        edisgo = copy.deepcopy(self.edisgo)
+        edisgo.analyze()
+        node = edisgo.topology.mv_grid.buses_df.index[-1]
+        lines = edisgo.topology.mv_grid.lines_df.index[:2].tolist()
+        time_step = edisgo.timeseries.timeindex[0]
+        issues = pd.DataFrame(
+            {
+                "abs_max_voltage_dev": [0.01],
+                "max_voltage_dev": [-0.01],
+                "time_index": [time_step],
+                "lv_grid_id": [None],
+            },
+            index=[node],
+        )
+
+        with caplog.at_level("INFO", logger="edisgo.flex_opt.reinforce_grid"):
+            _add_reinforcement_log_entries(
+                edisgo,
+                1,
+                "mv_voltage",
+                "voltage",
+                issues,
+                dict.fromkeys(lines, 1),
+                run_id=0,
+                mapping=dict.fromkeys(lines, node),
+            )
+
+        log = edisgo.results.reinforce_log
+        assert sorted(log.changed_component) == sorted(lines)
+        assert (log.criterion_component == node).all()
+        info_lines = [r for r in caplog.records if r.getMessage().startswith("Iter")]
+        assert len(info_lines) == 1
+        assert "2 line(s)" in info_lines[0].getMessage()
 
     def test_separate_lv_grid_not_converged_reinforce_log(self):
         edisgo = copy.deepcopy(self.edisgo)

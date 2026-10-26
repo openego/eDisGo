@@ -1839,6 +1839,16 @@ def _add_reinforcement_log_entries(
             )
         entries.append((criterion_component, changed_components_quantities))
 
+    # merge entries of the same critical component, so that a violation solved by
+    # several changed components (e.g. all lines reinforced on the path to a
+    # critical node) is logged in one human-readable line
+    grouped_entries = {}
+    for criterion_component, changed_components_quantities in entries:
+        grouped_entries.setdefault(criterion_component, []).extend(
+            changed_components_quantities
+        )
+    entries = list(grouped_entries.items())
+
     # batch the cost lookups once per call instead of once per changed
     # component: line_expansion_costs() rebuilds a pyproj transformer and
     # recomputes the grid district area on every call, which is wasteful
