@@ -1,6 +1,6 @@
 dash < 4.5.0
 demandlib < 0.3.0
-geopy >= 2.4.1, < 2.5.0
+geopy >= 2.5.0, < 2.6.0
 jupyter_dash < 0.5.0
 matplotlib < 3.11.0
 multiprocess < 0.71.0
