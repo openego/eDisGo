@@ -11,6 +11,7 @@ from edisgo import EDisGo
 from edisgo.flex_opt import reinforce_measures
 from edisgo.flex_opt.costs import grid_expansion_costs, line_expansion_costs
 from edisgo.flex_opt.reinforce_grid import (
+    _add_lines_changes_to_equipment_changes,
     _add_reinforcement_log_entries,
     _analyze_after_voltage_reinforcement,
     _separate_lv_grid_not_converged,
@@ -414,6 +415,46 @@ class TestReinforceGrid:
         info_lines = [r for r in caplog.records if r.getMessage().startswith("Iter")]
         assert len(info_lines) == 1
         assert "2 line(s)" in info_lines[0].getMessage()
+
+    def test_reinforce_log_earthworks_once_over_runs(self):
+        # a line reinforced in two calls of reinforce_grid is charged earthworks
+        # only once, as in grid_expansion_costs
+        edisgo = copy.deepcopy(self.edisgo)
+        edisgo.analyze()
+        line = edisgo.topology.mv_grid.lines_df.index[0]
+        issues = pd.DataFrame(
+            {
+                "max_rel_overload": [1.5],
+                "time_index": [edisgo.timeseries.timeindex[0]],
+            },
+            index=[line],
+        )
+        for run_id in (0, 1):
+            edisgo.topology.update_number_of_parallel_lines(
+                edisgo.topology.lines_df.loc[[line], "num_parallel"] + 1
+            )
+            _add_lines_changes_to_equipment_changes(edisgo, {line: 1}, 1)
+            _add_reinforcement_log_entries(
+                edisgo,
+                1,
+                "mv_line_overload",
+                "overloading",
+                issues,
+                {line: 1},
+                run_id=run_id,
+            )
+
+        log = edisgo.results.reinforce_log
+        costs = line_expansion_costs(edisgo, [line])
+        assert log.costs.tolist() == pytest.approx(
+            [
+                costs.at[line, "costs_earthworks"] + costs.at[line, "costs_cable"],
+                costs.at[line, "costs_cable"],
+            ]
+        )
+        assert log.costs.sum() == pytest.approx(
+            grid_expansion_costs(edisgo).total_costs.sum()
+        )
 
     def test_separate_lv_grid_not_converged_reinforce_log(self):
         edisgo = copy.deepcopy(self.edisgo)

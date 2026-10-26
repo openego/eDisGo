@@ -1786,19 +1786,15 @@ def _add_reinforcement_log_entries(
         [edisgo.topology.transformers_hvmv_df, edisgo.topology.transformers_df]
     )
 
-    # a line reinforced across several iterations (e.g. one more parallel
-    # standard line added per iteration until a voltage issue is resolved)
-    # is logged once per iteration, but earthworks are only incurred once
-    # per line - grid_expansion_costs() reflects this by summing quantity
-    # per line across the whole run before costing; replicate that here by
-    # only charging earthworks on a line's first appearance in this run_id
+    # a line reinforced several times (e.g. one more parallel standard line per
+    # iteration, or again in a later call of reinforce_grid) is logged each time,
+    # but earthworks are only incurred once per line - grid_expansion_costs()
+    # reflects this by summing quantity per line over all equipment changes before
+    # costing; replicate that here by only charging earthworks on a line's first
+    # appearance in the log, whatever its run_id
     existing_log = edisgo.results.reinforce_log
     lines_already_costed = (
-        set()
-        if existing_log.empty
-        else set(
-            existing_log.loc[existing_log["run_id"] == run_id, "changed_component"]
-        )
+        set() if existing_log.empty else set(existing_log["changed_component"])
     )
 
     # resolve criterion_component/changed_components_quantities for every
