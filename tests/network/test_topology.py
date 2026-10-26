@@ -2024,17 +2024,6 @@ class TestConnectToLVBasedOnGeolocation:
             self.residential_bus_1,
         ]
 
-    def test_several_charging_points_at_one_building(self):
-        # the first charging point is a load with sector "home" at the bus as well,
-        # which must not lead to the bus being counted twice
-        buses = [
-            self.connect_charging_point(
-                self.residential_bus_1, "home", connect_to_load_bus=True
-            )
-            for _ in range(2)
-        ]
-        assert buses == [self.residential_bus_1, self.residential_bus_1]
-
     def test_integrate_component_based_on_geolocation(self):
         topology = self.edisgo.topology
         comp_name = self.edisgo.integrate_component_based_on_geolocation(

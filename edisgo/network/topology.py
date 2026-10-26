@@ -2417,9 +2417,8 @@ class Topology:
             if connect_to_load_bus:
                 # prefer the closest bus with a matching load, if it is close enough
                 # and has room for another component of the same type
-                lv_loads = self.loads_df[self.loads_df.bus.isin(lv_buses.index)]
                 suitable_buses = self._get_suitable_lv_buses(
-                    comp_type, comp_data, comp_data["p"], lv_buses, lv_loads
+                    comp_type, comp_data, comp_data["p"], lv_buses, self.loads_df
                 )
                 comps_per_bus = (
                     self._get_components_of_type(comp_type)
@@ -2480,8 +2479,9 @@ class Topology:
             Candidate buses in the format of
             :attr:`~.network.topology.Topology.buses_df`.
         loads_df : :pandas:`pandas.DataFrame<DataFrame>`
-            Loads at the candidate buses in the format of
-            :attr:`~.network.topology.Topology.loads_df`.
+            Loads to match the new component with in the format of
+            :attr:`~.network.topology.Topology.loads_df`. Buses of loads that are not
+            in `buses_df` are returned as well.
 
         Returns
         -------

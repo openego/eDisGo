@@ -1705,21 +1705,11 @@ class EDisGo:
         Other Parameters
         ------------------
         max_distance_from_target_bus : float
-            Only used for components in voltage level 6 or 7 in geo-referenced LV
-            grids. See
-            :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
-            Default: 0.02.
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
         connect_to_load_bus : bool
-            Only used for components in voltage level 7 in geo-referenced LV grids.
-            If True, the component is preferably connected to a bus with a matching
-            load. See
-            :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
-            Default: False.
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
         allowed_number_of_comp_per_bus : int
-            Maximum number of components of the same type at one bus in the LV grid.
-            See :attr:`~.network.topology.Topology.connect_to_lv` and
-            :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
-            Default: 2.
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
         kwargs :
             Attributes of added component.
             See :attr:`~.network.topology.Topology.add_generator`,
