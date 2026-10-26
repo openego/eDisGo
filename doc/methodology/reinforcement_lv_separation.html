@@ -1,0 +1,88 @@
+<div class="rw" id="rw-sep">
+<div class="rw-row" id="rw-sep-ctl"></div>
+<div class="rw-box"><svg id="rw-sep-svg" role="img" aria-label="LV grid before and after separation"></svg></div>
+<div class="rw-stats" id="rw-sep-stats"></div>
+<div class="rw-scroll"><table id="rw-sep-tbl"></table></div>
+<p class="rw-note">Illustrative feeders with cos&nbsp;φ = 1, so kW equals kVA. Feeders are treated from the one with the fewest buses to the one with the most. The 630 kVA standard transformer (<code>mv_lv_transformer</code>) and NAYY 4x1x150 (<code>lv_line</code>, 275 A) are the defaults; the new station gets standard transformers until its rated power is at least that of the old station.</p>
+<script>
+(function () {
+  var RW = window.RW, svg = document.getElementById("rw-sep-svg");
+  // feeders: number of buses, line between buses, residual load per bus (kW)
+  var FEEDERS = [
+    { id: "F1", buses: 6, len: 0.06, kw: 22 },
+    { id: "F2", buses: 4, len: 0.07, kw: 25 },
+    { id: "F3", buses: 1, len: 0.05, kw: 40 },
+    { id: "F4", buses: 1, len: 0.05, kw: 40 }
+  ];
+  var I = function (t) { return Math.round(RW.DATA.lvCables["NAYY 4x1x" + t][1] * 1000); };
+  var LINES = { "1x150": [1, I(150)], "2x150": [2, I(150)], "1x240": [1, I(240)], "1x95": [1, I(95)] };
+  var st = { scale: 2.8, line: "2x150" }, TRAFO = 400;
+  var ctl = document.getElementById("rw-sep-ctl");
+  ctl.appendChild(RW.slider("rw-sep-sc", "load", 0.6, 3.5, 0.05, st.scale, function (v) { return "× " + RW.f(v, 2); }, function (v) { st.scale = v; draw(); }));
+  var sel = RW.h("select"); sel.id = "rw-sep-line";
+  Object.keys(LINES).forEach(function (k) { var o = RW.h("option", null, "feeder cables " + k.replace("x", "× NAYY ")); o.value = k; if (k === st.line) o.selected = true; sel.appendChild(o); });
+  sel.onchange = function () { st.line = sel.value; draw(); };
+  ctl.appendChild(sel);
+  function draw() {
+    var Ln = LINES[st.line], total = 0;
+    FEEDERS.forEach(function (fd) { total += fd.buses * fd.kw * st.scale; });
+    var sep = total > 2 * TRAFO;
+    // order by number of buses, find bus at half length, every second inept feeder moves
+    var order = FEEDERS.slice().sort(function (a, b) { return a.buses - b.buses; }), inept = 0, plan = {};
+    order.forEach(function (fd) {
+      var half = Math.ceil(fd.buses / 2 - 1e-9), first = half <= 1;
+      var moves = !first || inept % 2 === 1;
+      if (first) inept++;
+      var from = first ? 1 : half, kwBehind = (fd.buses - from + 1) * fd.kw * st.scale;
+      plan[fd.id] = { moves: sep && moves, from: from, inept: first, kw: kwBehind };
+    });
+    var stdA = I(150), nNew = Math.max(1, Math.ceil(Ln[0] * Ln[1] / stdA - 1e-9)), oldA = Ln[0] * Ln[1], newA = nNew * stdA;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var W = 800, H = 330; svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    var sx = 60, sy = 130, nsx = 60, nsy = 290, x0 = 190, dx = 92, ROWY = [40, 100, 165, 215];
+    function station(x, y, txt, label, isNew, bad) {
+      RW.el("rect", { x: x - 24, y: y - 16, width: 48, height: 32, rx: 3, fill: isNew ? "var(--ok-soft)" : "#fff", stroke: isNew ? "var(--new)" : bad ? "var(--bad)" : "var(--ink)", "stroke-width": 1.6 }, null, svg);
+      RW.el("text", { x: x, y: y + 4, "text-anchor": "middle", "font-size": 11 }, txt, svg);
+      RW.el("text", { x: x - 24, y: y + 30, "class": "rw-sm" }, label, svg);
+    }
+    FEEDERS.forEach(function (fd, k) {
+      var y = ROWY[k], p = plan[fd.id], col = st.line === "1x150" ? "var(--std)" : Ln[1] * Ln[0] > stdA ? "var(--thick)" : "var(--thin)", w = 2 + 1.8 * (Ln[0] - 1);
+      var xs = []; for (var i = 0; i < fd.buses; i++) xs.push(x0 + i * dx);
+      var px = sx + 24, py = sy;
+      xs.forEach(function (x, i) {
+        var busNo = i + 1, moved = p.moves && busNo >= p.from, removed = p.moves && busNo === p.from;
+        if (removed) RW.el("line", { x1: px, y1: py, x2: x, y2: y, stroke: "var(--bad)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }, null, svg);
+        else RW.el("line", { x1: px, y1: py, x2: x, y2: y, stroke: moved ? "var(--new)" : col, "stroke-width": w, opacity: moved ? 0.6 : 1 }, null, svg);
+        px = x; py = y;
+      });
+      xs.forEach(function (x, i) {
+        var moved = p.moves && i + 1 >= p.from;
+        RW.el("circle", { cx: x, cy: y, r: 5, fill: moved ? "var(--ok-soft)" : "#fff", stroke: moved ? "var(--new)" : "var(--ink)", "stroke-width": 1.3 }, null, svg);
+      });
+      RW.el("text", { x: xs[xs.length - 1] + 12, y: y + 4, "font-size": 12, "font-weight": 600 }, fd.id + (p.inept ? " (short)" : ""), svg);
+      if (p.moves) {
+        var tx = xs[p.from - 1];
+        RW.el("path", { d: "M" + (nsx + 24) + "," + nsy + " C" + (tx - 40) + "," + nsy + " " + tx + "," + (nsy - 30) + " " + tx + "," + (y + 6), fill: "none", stroke: "var(--new)", "stroke-width": 2 + 1.8 * (nNew - 1) }, null, svg);
+      }
+    });
+    station(sx, sy, TRAFO + " kVA", "old station", false, sep);
+    if (sep) station(nsx, nsy, "630 kVA", "new station (standard transformer)", true);
+    RW.stats(document.getElementById("rw-sep-stats"), [
+      ["residual load", Math.round(total) + " kVA", sep ? "bad" : "ok"],
+      ["threshold", "2 × " + TRAFO + " = " + 2 * TRAFO + " kVA", ""],
+      ["separation", sep ? "yes" : "no", sep ? "warn" : "ok"],
+      ["new line to new station", nNew + "× NAYY 150 (" + newA + " A)", newA >= oldA ? "ok" : "bad"]
+    ]);
+    var rows = FEEDERS.map(function (fd) {
+      var p = plan[fd.id], I = p.kw * 1000 / (Math.sqrt(3) * 400);
+      if (!sep) return "<tr><td>" + fd.id + "</td><td>stays</td><td></td><td></td></tr>";
+      if (!p.moves) return "<tr><td>" + fd.id + "</td><td>stays" + (p.inept ? " (of the feeders too short to split, every second moves as a whole)" : "") + "</td><td></td><td></td></tr>";
+      var u = I / newA, col = u > 1 ? "var(--bad)" : u > 0.8 ? "var(--warn)" : "var(--new)";
+      return "<tr><td>" + fd.id + "</td><td>" + (p.inept ? "whole feeder moves (second short feeder)" : "buses " + p.from + "–" + fd.buses + " move") + "</td><td class=\"num\">" + nNew + "× 150, was " + st.line.replace("x", "× ") + "</td><td><div class=\"rw-bar\"><span style=\"width:" + Math.min(100, u * 100) + "%;background:" + col + "\"></span></div> " + Math.round(u * 100) + " %</td></tr>";
+    }).join("");
+    document.getElementById("rw-sep-tbl").innerHTML = "<thead><tr><th>feeder</th><th>result</th><th>line to new station</th><th>loading of that line</th></tr></thead><tbody>" + rows + "</tbody>";
+  }
+  draw();
+})();
+</script>
+</div>

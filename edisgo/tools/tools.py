@@ -27,11 +27,8 @@ from sqlalchemy.engine.base import Engine
 
 from edisgo.flex_opt import exceptions, q_control
 from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
-from edisgo.tools import session_scope
+from edisgo.tools import legacy_oep_table, session_scope
 from edisgo.tools.config import Config
-
-if "READTHEDOCS" not in os.environ:
-    from egoio.db_tables import climate
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -953,6 +950,7 @@ def get_weather_cells_intersecting_with_grid_district(
     edisgo_obj : :class:`~.EDisGo`
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine. Only needed when using new egon_data data.
+        Ignored for legacy grids, which use the legacy database connection.
 
     Returns
     -------
@@ -965,7 +963,7 @@ def get_weather_cells_intersecting_with_grid_district(
     srid = edisgo_obj.topology.grid_district["srid"]
 
     if edisgo_obj.legacy_grids is True:
-        table = climate.Cosmoclmgrid
+        table = legacy_oep_table("climate", "cosmoclmgrid")
         with session_scope() as session:
             query = session.query(
                 table.gid,

@@ -176,14 +176,10 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
     graph_copy.remove_node(start_node)
     # ``next_nodes`` is a FIFO queue; using a deque with ``popleft`` preserves the
     # exact processing order of the previous ``list``/``remove`` implementation.
-    # A node is enqueued at most once. The traversal assumes a tree, where every
-    # node is reached from exactly one neighbour. A meshed grid breaks that: a node
-    # on a ring is discovered from both sides, and its second queue entry would be
-    # processed after the node has already been removed from ``graph_copy``, so
-    # ``nx.neighbors`` raises "The node ... is not in the graph". Skipping the
-    # duplicate keeps the coordinates of the first discovery, which is the one the
-    # breadth-first order reaches over the shorter path. In a tree nothing is ever
-    # skipped, so tree-shaped grids keep their previous coordinates exactly.
+    # The layout assumes a tree, where every node is reached from exactly one
+    # neighbour. On a ring a node is reachable from both sides, so it is enqueued
+    # at most once and keeps the position of its first discovery, which the
+    # breadth-first order reaches over the shorter path.
     enqueued = set(next_nodes)
     while graph_copy.number_of_nodes() > 0 and next_nodes:
         next_node = next_nodes[0]
@@ -228,8 +224,7 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
 
     if graph_copy.number_of_nodes() > 0:
         # Only reachable if the graph is disconnected: the queue runs dry while
-        # nodes are left over. Those keep the coordinates they came in with
-        # rather than aborting the run.
+        # nodes are left over. Those keep the coordinates they came in with.
         logger.warning(
             f"Pseudo coordinates: {graph_copy.number_of_nodes()} bus(es) are not "
             f"reachable from {start_node} and keep their original coordinates."

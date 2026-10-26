@@ -128,6 +128,10 @@ def reinforce_grid(
         See parameter `weight_by_costs` in
         :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
         for more information. Default: False.
+    choose_cheaper_voltage_measure : bool
+        Determines how lines are reinforced due to voltage issues. See parameter
+        `choose_cheaper_voltage_measure` in function :attr:`~.EDisGo.reinforce` for
+        more information. Default: False.
 
     Returns
     -------
@@ -182,6 +186,7 @@ def reinforce_grid(
     iteration_step = 1
     lv_grid_id = kwargs.get("lv_grid_id", None)
     scale_timeseries = kwargs.get("scale_timeseries", None)
+    choose_cheaper_voltage_measure = kwargs.get("choose_cheaper_voltage_measure", False)
     if mode == "lv" and lv_grid_id:
         analyze_mode = "lv"
     elif mode == "lv":
@@ -363,10 +368,12 @@ def reinforce_grid(
     while_counter = 0
     while not crit_nodes.empty and while_counter < max_while_iterations:
         # reinforce lines
+        buses_before = edisgo.topology.lines_df[["bus0", "bus1"]].copy()
         lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
             edisgo,
             edisgo.topology.mv_grid,
             crit_nodes,
+            choose_cheaper_measure=choose_cheaper_voltage_measure,
         )
         # write changed lines to results.equipment_changes
         _add_lines_changes_to_equipment_changes(edisgo, lines_changes, iteration_step)
@@ -374,7 +381,10 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-voltage problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo.analyze(
+        _analyze_after_voltage_reinforcement(
+            edisgo,
+            buses_before,
+            iteration_step,
             mode=analyze_mode,
             timesteps=timesteps_pfa,
             lv_grid_id=lv_grid_id,
@@ -485,6 +495,7 @@ def reinforce_grid(
 
         while_counter = 0
         while not crit_nodes.empty and while_counter < max_while_iterations:
+            buses_before = edisgo.topology.lines_df[["bus0", "bus1"]].copy()
             # for every topology in crit_nodes do reinforcement
             for grid_id in crit_nodes.lv_grid_id.unique():
                 # reinforce lines
@@ -492,6 +503,7 @@ def reinforce_grid(
                     edisgo,
                     edisgo.topology.get_lv_grid(int(grid_id)),
                     crit_nodes[crit_nodes.lv_grid_id == grid_id],
+                    choose_cheaper_measure=choose_cheaper_voltage_measure,
                 )
                 # write changed lines to results.equipment_changes
                 _add_lines_changes_to_equipment_changes(
@@ -501,7 +513,10 @@ def reinforce_grid(
             # run power flow analysis again (after updating pypsa object)
             # and check if all over-voltage problems were solved
             logger.debug("==> Run power flow analysis.")
-            edisgo.analyze(
+            _analyze_after_voltage_reinforcement(
+                edisgo,
+                buses_before,
+                iteration_step,
                 mode=analyze_mode,
                 timesteps=timesteps_pfa,
                 lv_grid_id=lv_grid_id,
@@ -1199,6 +1214,130 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
                     f"The overloading in {lv_grid} does not surpass the set threshold "
                     f"of {threshold}. The grid is therefore not separated."
                 )
+
+
+def _analyze_after_voltage_reinforcement(
+    edisgo: EDisGo,
+    buses_before: pd.DataFrame,
+    iteration_step: int,
+    max_rounds: int = 4,
+    **kwargs,
+) -> None:
+    """
+    Run power flow analysis after reinforcing lines due to voltage issues.
+
+    When a feeder is split, its split line, the line ending at the split node, is
+    connected to the station and becomes one standard line. If the path it bypasses
+    consists of thicker or parallel lines, the split line can have a higher
+    resistance than that path, and with enough load behind the split node the power
+    flow has no solution.
+
+    Therefore, if the power flow does not converge and feeders were split in this
+    step, split lines get a parallel line and the power flow is repeated, in up to
+    `max_rounds` rounds. Only split lines in LV grids that do not converge on their
+    own get one, see :func:`_split_lines_not_converged`. If the power flow then still
+    does not converge, or if no feeder was split, the error of
+    :attr:`~.EDisGo.analyze` is raised.
+
+    Parameters
+    ----------
+    edisgo : :class:`~.EDisGo`
+    buses_before : :pandas:`pandas.DataFrame<DataFrame>`
+        Columns bus0 and bus1 of :attr:`~.network.topology.Topology.lines_df` before
+        lines were reinforced in this step. Split lines are the lines whose buses
+        changed since then.
+    iteration_step : int
+        Iteration step the parallel lines are written to
+        :attr:`~.network.results.Results.equipment_changes` with.
+    max_rounds : int
+        Maximum number of rounds. Each round adds one parallel line to each selected
+        split line. Default: 4.
+    kwargs : dict
+        Parameters passed to :attr:`~.EDisGo.analyze`.
+
+    """
+    buses = edisgo.topology.lines_df.loc[buses_before.index, ["bus0", "bus1"]]
+    split_lines = buses.index[(buses != buses_before).any(axis=1)].tolist()
+    _, timesteps_not_converged = edisgo.analyze(
+        raise_not_converged=not split_lines, **kwargs
+    )
+    lines = split_lines
+    for count in range(1, max_rounds + 1):
+        if len(timesteps_not_converged) == 0:
+            return
+        lines = (
+            _split_lines_not_converged(
+                edisgo, lines, timesteps_not_converged, kwargs.get("scale_timeseries")
+            )
+            or split_lines
+        )
+        logger.warning(
+            f"Power flow did not converge for {len(timesteps_not_converged)} time "
+            f"step(s) after splitting feeders due to voltage issues. Adding parallel "
+            f"line {count} of at most {max_rounds} to split line(s) {lines}."
+        )
+        edisgo.topology.update_number_of_parallel_lines(
+            edisgo.topology.lines_df.loc[lines, "num_parallel"] + 1
+        )
+        _add_lines_changes_to_equipment_changes(
+            edisgo, dict.fromkeys(lines, 1), iteration_step
+        )
+        _, timesteps_not_converged = edisgo.analyze(
+            raise_not_converged=count == max_rounds, **kwargs
+        )
+
+
+def _split_lines_not_converged(
+    edisgo: EDisGo,
+    split_lines: list,
+    timesteps: pd.DatetimeIndex,
+    scale_timeseries: float | None,
+) -> list:
+    """
+    Get split lines in LV grids whose power flow does not converge on their own.
+
+    Many LV grids are reinforced in one step, but usually only a few of them have no
+    power flow solution. To find them, the power flow is conducted for each LV grid
+    with split lines on its own, with the slack at the station's secondary side. This
+    overwrites the power flow results of these time steps.
+
+    If all split lines are in one grid, e.g. the MV grid, they are returned without
+    this check, as it cannot narrow them down.
+
+    Parameters
+    ----------
+    edisgo : :class:`~.EDisGo`
+    split_lines : list(str)
+        Names of split lines.
+    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time steps the power flow analysis did not converge for.
+    scale_timeseries : float or None
+        See parameter `scale_timeseries` in :attr:`~.EDisGo.analyze`.
+
+    Returns
+    -------
+    list(str)
+        Names of split lines in LV grids that do not converge on their own. Empty if
+        every LV grid converges on its own.
+
+    """
+    lv_grid_ids = edisgo.topology.buses_df.loc[
+        edisgo.topology.lines_df.loc[split_lines, "bus0"], "lv_grid_id"
+    ].set_axis(split_lines)
+    if lv_grid_ids.nunique(dropna=False) <= 1:
+        return split_lines
+    lines_not_converged = []
+    for lv_grid_id, lines in lv_grid_ids.groupby(lv_grid_ids):
+        _, timesteps_not_converged = edisgo.analyze(
+            mode="lv",
+            lv_grid_id=int(lv_grid_id),
+            timesteps=timesteps,
+            raise_not_converged=False,
+            scale_timeseries=scale_timeseries,
+        )
+        if len(timesteps_not_converged) > 0:
+            lines_not_converged.extend(lines.index)
+    return lines_not_converged
 
 
 def _add_lines_changes_to_equipment_changes(
