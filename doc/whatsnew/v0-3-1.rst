@@ -6,6 +6,10 @@ Release date: not yet released
 Changes
 -------
 
+* :func:`~.tools.plots.plot_plotly` accepts a :pandas:`pandas.Series<Series>` or
+  dict as ``line_color`` and ``node_color`` that gives the color of each line or bus
+  by name. Lines and buses that are not given are grey (`#639
+  <https://github.com/openego/eDisGo/pull/639>`_)
 * Made :func:`~.io.electromobility_import.determine_grid_connection_capacity`
   monotonically non-decreasing. Between ``lower_limit`` and ``upper_limit`` it
   interpolated the simultaneity factor linearly and multiplied it with the gross
