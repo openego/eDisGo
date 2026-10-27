@@ -36,6 +36,13 @@ class TestImportFromDing0:
         lv_grid = self.topology.get_lv_grid(3)
         assert len(lv_grid.buses_df) == 9
 
+        # original topology
+        assert self.topology.original_grid_topology.buses_df.shape[0] == 142
+        # check that original topology does not change when Topology object is changed
+        self.topology.add_generator("Bus_GeneratorFluctuating_2", 3.0, "solar")
+        assert self.topology.original_grid_topology.generators_df.shape[0] == 28
+        assert self.topology.original_grid_topology.original_grid_topology is None
+
     def test_path_error(self):
         """Test catching error when path to network does not exist."""
         msg = "Directory wrong_directory does not exist."
