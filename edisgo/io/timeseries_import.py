@@ -158,6 +158,7 @@ def _query_feedin_oedb_legacy(edisgo_object, weather_cell_ids, engine=None):
     session_context = (
         session_scope() if engine is None else session_scope_egon_data(engine)
     )
+    reference_year = tools.get_reference_year(edisgo_object)
     with session_context as session:
         query = session.query(
             orm_feedin.w_id.label("weather_cell_id"),
@@ -167,9 +168,22 @@ def _query_feedin_oedb_legacy(edisgo_object, weather_cell_ids, engine=None):
             orm_feedin.w_id.in_(weather_cell_ids),
             orm_feedin.power_class.in_([0, 4]),
             orm_feedin_version,
-            orm_feedin.weather_year == tools.get_reference_year(edisgo_object),
+            orm_feedin.weather_year == reference_year,
         )
-        return pd.read_sql_query(query.statement, session.bind)
+        feedin_df = pd.read_sql_query(query.statement, session.bind)
+        if feedin_df.empty:
+            available_years = sorted(
+                year
+                for (year,) in session.query(orm_feedin.weather_year)
+                .filter(orm_feedin_version)
+                .distinct()
+            )
+            raise ValueError(
+                f"The legacy feed-in data contains no data for weather year "
+                f"{reference_year}, the configured reference year. Available "
+                f"weather years are: {', '.join(map(str, available_years))}."
+            )
+    return feedin_df
 
 
 def feedin_oedb(
@@ -331,6 +345,13 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
 
     # Resample 15-minute values to hourly values and sum across sectors
     elec_demand = elec_demand.resample("H").mean()
+
+    # time series are indexed without 29 February, see shift_timeindex_to_year, so
+    # in a leap year it is dropped and the profiles are normalized again
+    feb_29 = (elec_demand.index.month == 2) & (elec_demand.index.day == 29)
+    if feb_29.any():
+        elec_demand = elec_demand.loc[~feb_29]
+        elec_demand = elec_demand / elec_demand.sum()
 
     elec_demand.rename(
         columns={

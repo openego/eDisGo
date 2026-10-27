@@ -1785,6 +1785,41 @@ def validate_scenario(scenario, valid=("eGon2035", "eGon100RE")):
     return scenario
 
 
+def get_year_based_on_timeindex(edisgo_obj):
+    """
+    Checks if :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set and
+    if so, returns the year of the time index.
+
+    .. deprecated::
+        All time series are indexed in the reference year (see
+        :func:`get_reference_year`), which should be used instead. This function is
+        kept for backwards compatibility and will be removed in a future release.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    Returns
+    --------
+    int or None
+        If a time index is available returns the year of the time index,
+        otherwise it returns None.
+
+    """
+    warnings.warn(
+        "get_year_based_on_timeindex is deprecated and will be removed in a "
+        "future release. All time series are indexed in the reference year, use "
+        "get_reference_year instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    year = edisgo_obj.timeseries.timeindex.year
+    if len(year) == 0:
+        return None
+    else:
+        return year[0]
+
+
 def get_year_based_on_scenario(scenario):
     """
     Returns the year the given scenario was set up for.

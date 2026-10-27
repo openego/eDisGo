@@ -600,26 +600,17 @@ class Electromobility:
         # sanity check
         self.check_integrity()
 
-        # Scope the bands to edisgo_obj's own timeindex, so this method is
-        # correct regardless of caller (not just the run pipeline, which
-        # previously had to patch this up itself via
-        # reduce_timeseries_data_to_given_timeindex right after calling this
-        # method). The bands built above always span SimBEV's own native
-        # calendar (its start_date, typically a fixed reference year like
-        # 2011) and simulated range - independent of edisgo_obj.timeseries
-        # .timeindex, which is why this can't just be a `.loc[timeindex]`
-        # here: a year mismatch alone would raise KeyError, and a
-        # shorter/different-range timeindex would too. align_to_edisgo_
-        # timeindex year-shifts and reindexes (filling any still-missing
-        # steps with NaN rather than raising), setting up
-        # edisgo_obj.timeseries.timeindex on the configured reference year
-        # first if it is still empty - the bands are therefore always
-        # aligned, never left in SimBEV's own calendar.
-        for key, df in self.flexibility_bands.items():
-            if not df.empty:
-                self.flexibility_bands[key] = align_to_edisgo_timeindex(
-                    edisgo_obj, df, name=f"flexibility_bands['{key}']"
-                )
+        # In case a time index is set, align the bands to it. The bands are built
+        # in SimBEV's own calendar and simulated range, so they are relabelled to
+        # the year of the time index and reindexed onto it, see
+        # align_to_edisgo_timeindex. Without a time index the bands are kept as
+        # they are.
+        if not edisgo_timeindex.empty:
+            for key, df in self.flexibility_bands.items():
+                if not df.empty:
+                    self.flexibility_bands[key] = align_to_edisgo_timeindex(
+                        edisgo_obj, df, name=f"flexibility_bands['{key}']"
+                    )
 
         return self.flexibility_bands
 

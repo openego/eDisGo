@@ -277,11 +277,10 @@ class Config:
                 demandlib[key] = self._parse_time(demandlib[key])
 
     def _normalize_reference_year(self, config_dict: dict) -> None:
-        if "timeindex" not in config_dict:
-            return
-        timeindex = config_dict["timeindex"]
-        if "reference_year" in timeindex:
-            timeindex["reference_year"] = int(timeindex["reference_year"])
+        # config files created before the reference year was introduced do not
+        # contain it, in which case the weather year of the model data is used
+        timeindex = config_dict.setdefault("timeindex", {})
+        timeindex["reference_year"] = int(timeindex.get("reference_year", 2011))
 
     def import_tables_from_oep(
         self, engine: sa.engine.Engine, table_names: list[str], schema_name: str

@@ -114,7 +114,7 @@ class TestTimeseriesImport:
     def setup_class(self):
         self.config = Config(config_path=None)
 
-    def test__timeindex_helper_func(self, caplog):
+    def test__timeindex_helper_func(self, caplog, monkeypatch):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
         timeindex_full = pd.date_range("1/1/2011", periods=8760, freq="h")
@@ -168,7 +168,7 @@ class TestTimeseriesImport:
 
         # test leap reference year: the full year keeps each date of the model
         # data, 29 February is left out
-        edisgo.config["timeindex"]["reference_year"] = 2020
+        monkeypatch.setitem(edisgo.config["timeindex"], "reference_year", 2020)
         ind, ind_full = timeseries_import._timeindex_helper_func(
             edisgo, timeindex=pd.date_range("3/1/2020", periods=5, freq="h")
         )
@@ -178,7 +178,7 @@ class TestTimeseriesImport:
         assert ind[0] == pd.Timestamp("3/1/2020 00:00")
 
     @pytest.mark.oep
-    def test_query_feedin_oedb_legacy_live(self, oep_engine):
+    def test_query_feedin_oedb_legacy_live(self, oep_engine, monkeypatch):
         """Test the legacy OEP query contract for one weather cell."""
 
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
@@ -197,6 +197,16 @@ class TestTimeseriesImport:
         assert set(database_data.weather_cell_id) == {1122074}
         assert set(database_data.carrier) == {"solar", "wind_onshore"}
         assert database_data.feedin.map(len).eq(8760).all()
+
+        # test reference year without legacy feed-in data
+        monkeypatch.setitem(edisgo.config["timeindex"], "reference_year", 2013)
+        msg = "no data for weather year 2013.*Available weather years are: 2011"
+        with pytest.raises(ValueError, match=msg):
+            timeseries_import._query_feedin_oedb_legacy(
+                edisgo,
+                weather_cell_ids={1122074},
+                engine=oep_engine,
+            )
 
     def test_feedin_oedb_legacy_offline(self, monkeypatch):
         """Test legacy feed-in transformation with synthetic query data."""
@@ -314,7 +324,7 @@ class TestTimeseriesImport:
         assert feedin_df[("wind", 11051)].tolist() == [0.005, 0.01]
         query_mock.assert_called_once_with(None, [11051])
 
-    def test_load_time_series_demandlib(self):
+    def test_load_time_series_demandlib(self, monkeypatch):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         # the given timeindex is relabelled to the reference year 2011, so the
         # profiles are created for the weekdays and holidays of 2011
@@ -334,6 +344,16 @@ class TestTimeseriesImport:
         assert np.isclose(load.sum()["residential"], 1.0)
         assert np.isclose(load.sum()["agricultural"], 1.0)
         assert np.isclose(load.sum()["industrial"], 1.0)
+
+        # test leap reference year: 29 February is left out and the profiles are
+        # still normalized to 1
+        monkeypatch.setitem(edisgo.config["timeindex"], "reference_year", 2020)
+        load = timeseries_import.load_time_series_demandlib(
+            edisgo, pd.date_range("1/1/2020", periods=8784, freq="H")
+        )
+        assert len(load) == 8760
+        assert load.index[0].year == 2020
+        assert np.isclose(load.sum(), 1.0).all()
 
     @pytest.mark.oep
     def test_cop_oedb_live(self, oep_engine):

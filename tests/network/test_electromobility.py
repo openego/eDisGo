@@ -222,13 +222,10 @@ class TestElectromobility:
             # must not raise KeyError
             edisgo_obj.electromobility.flexibility_bands[key].loc[short_timeindex]
 
-    def test_get_flexibility_bands_empty_timeindex_sets_up_reference_year(self):
+    def test_get_flexibility_bands_without_timeindex(self):
         """
-        With no timeindex set at all, get_flexibility_bands must no longer
-        leave the bands untouched in SimBEV's own native calendar/range.
-        Instead, TimeSeries.timeindex is set up on the configured reference
-        year (via align_to_edisgo_timeindex -> _timeindex_helper_func) and the
-        bands are aligned/trimmed to exactly that full-year, hourly index.
+        Without a time index, the flexibility bands are kept in SimBEV's own
+        calendar and resolution, and no time index is set.
         """
         edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         electromobility_import.import_electromobility_from_dir(
@@ -243,14 +240,12 @@ class TestElectromobility:
             edisgo_obj, ["work", "public"]
         )
 
-        assert not edisgo_obj.timeseries.timeindex.empty
-        reference_timeindex = edisgo_obj.timeseries.timeindex
-        assert len(reference_timeindex) == 8760
-        assert reference_timeindex[0] == pd.Timestamp("2011-01-01")
+        assert edisgo_obj.timeseries.timeindex.empty
+        simbev_timeindex = pd.date_range("2011-01-01", periods=672, freq="15min")
         for key in ("upper_power", "lower_energy", "upper_energy"):
-            assert_index_equal(bands[key].index, reference_timeindex)
-            # only the first 7 days (SimBEV's simulated range) carry data
-            assert bands[key].iloc[7 * 24 :].isna().all().all()
+            assert_index_equal(bands[key].index, simbev_timeindex, check_names=False)
+            assert bands[key].notna().all().all()
+        edisgo_obj.electromobility.check_integrity()
 
     def test_fix_flexibility_bands_rounding_errors(self, caplog):
         # set up test data

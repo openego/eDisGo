@@ -2502,9 +2502,8 @@ class TestEDisGo:
 
     def test_check_integrity_warns_on_timeseries_year_mismatch(self, caplog):
         """
-        TimeSeries.check_integrity must warn (not raise) when a non-empty
-        attribute's underlying data is indexed in a different calendar year
-        than TimeSeries.timeindex.
+        Reading time series indexed in another year than TimeSeries.timeindex
+        gives one warning that names both years.
         """
         self.edisgo.set_timeindex(pd.date_range("2011-01-01", periods=3, freq="h"))
         gen = self.edisgo.topology.generators_df.index[0]
@@ -2516,30 +2515,13 @@ class TestEDisGo:
         with caplog.at_level(logging.WARNING):
             self.edisgo.timeseries.check_integrity()
 
-        assert (
-            "generators_active_power is indexed in year 2019, which does not "
-            "match the year of TimeSeries.timeindex (2011)." in caplog.text
+        msg = (
+            "Timeindex and generators_active_power have deviating indices. "
+            "generators_active_power is indexed in year 2019, the time index in "
+            "year 2011."
         )
-
-    def test_check_integrity_skips_year_mismatch_warning_for_worst_case(self, caplog):
-        """
-        The year-mismatch check must not fire for worst-case time series
-        (timeindex starting before 1971, see TimeSeries.is_worst_case), even
-        if the underlying data genuinely differs in year.
-        """
-        self.setup_worst_case_time_series()
-        assert self.edisgo.timeseries.is_worst_case
-
-        gen = self.edisgo.topology.generators_df.index[0]
-        self.edisgo.timeseries._generators_active_power = pd.DataFrame(
-            {gen: [0.1, 0.2]},
-            index=pd.date_range("2019-01-01", periods=2, freq="h"),
-        )
-
-        with caplog.at_level(logging.WARNING):
-            self.edisgo.timeseries.check_integrity()
-
-        assert "does not match the year of TimeSeries.timeindex" not in caplog.text
+        assert caplog.text.count(msg) == 1
+        assert caplog.text.count("generators_active_power") == 2
 
     def test_resample_timeseries(self):
         self.setup_worst_case_time_series()

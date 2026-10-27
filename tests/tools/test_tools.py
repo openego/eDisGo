@@ -1,5 +1,7 @@
 import copy
 import logging
+import os
+import shutil
 
 from unittest.mock import MagicMock, Mock
 
@@ -12,6 +14,7 @@ from pandas.testing import assert_index_equal
 
 from edisgo import EDisGo
 from edisgo.tools import tools
+from edisgo.tools.config import Config
 
 
 def _district_heating_grid(cop_rh=1.0):
@@ -706,7 +709,7 @@ class TestTools:
         empty_index = pd.DatetimeIndex([])
         assert tools.shift_timeindex_to_year(empty_index, 2035).empty
 
-    def test_shift_timeindex_to_reference_year(self, caplog):
+    def test_shift_timeindex_to_reference_year(self, caplog, monkeypatch):
         edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
         # test index in a different year is relabelled with a warning
@@ -724,7 +727,7 @@ class TestTools:
         ).equals(worst_case_index)
 
         # test leap reference year
-        edisgo_obj.config["timeindex"]["reference_year"] = 2020
+        monkeypatch.setitem(edisgo_obj.config["timeindex"], "reference_year", 2020)
         shifted = tools.shift_timeindex_to_reference_year(
             edisgo_obj, pd.date_range("1/1/2020", periods=8784, freq="H")
         )
@@ -737,6 +740,34 @@ class TestTools:
                 edisgo_obj,
                 pd.date_range("12/31/2011 22:00", "1/1/2012 01:00", freq="H"),
             )
+
+    def test_get_reference_year_config_without_timeindex(self, tmp_path):
+        # config files without section 'timeindex' fall back to 2011
+        default_dir = os.path.join(os.path.dirname(tools.__file__), "..", "config")
+        for filename in os.listdir(default_dir):
+            if filename.endswith("_default.cfg"):
+                shutil.copy(
+                    os.path.join(default_dir, filename),
+                    tmp_path / filename.replace("_default", ""),
+                )
+        timeseries_cfg = tmp_path / "config_timeseries.cfg"
+        content = timeseries_cfg.read_text()
+        start = content.index("[timeindex]")
+        end = content.index("[", start + 1)
+        timeseries_cfg.write_text(content[:start] + content[end:])
+
+        config = Config(config_path=str(tmp_path))
+        assert config["timeindex"]["reference_year"] == 2011
+
+    def test_deprecated_year_helpers(self):
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        with pytest.deprecated_call():
+            assert tools.get_year_based_on_timeindex(edisgo_obj) is None
+        edisgo_obj.set_timeindex(pd.date_range("1/1/2011", periods=2, freq="H"))
+        with pytest.deprecated_call():
+            assert tools.get_year_based_on_timeindex(edisgo_obj) == 2011
+        with pytest.deprecated_call():
+            assert tools.get_year_based_on_scenario("eGon2035") == 2035
 
     def test_validate_scenario(self):
         # valid scenarios are returned unchanged

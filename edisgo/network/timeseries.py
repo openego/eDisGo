@@ -123,8 +123,19 @@ class TimeSeries:
         except AttributeError:
             return pd.DataFrame(index=self.timeindex)
         except KeyError:
+            data_index = getattr(self, f"_{attribute}").index
+            cause = ""
+            if (
+                isinstance(data_index, pd.DatetimeIndex)
+                and len(data_index) > 0
+                and data_index[0].year != self.timeindex[0].year
+            ):
+                cause = (
+                    f" {attribute} is indexed in year {data_index[0].year}, the "
+                    f"time index in year {self.timeindex[0].year}."
+                )
             logger.warning(
-                f"Timeindex and {attribute} have deviating indices. "
+                f"Timeindex and {attribute} have deviating indices.{cause} "
                 "Empty dataframe will be returned."
             )
             return pd.DataFrame(index=self.timeindex)
@@ -2176,13 +2187,6 @@ class TimeSeries:
     def check_integrity(self):
         """
         Check for NaN, duplicated indices or columns and if time series is empty.
-
-        Also checks, unless :py:attr:`is_worst_case`, whether the underlying data of
-        every non-empty attribute is indexed in the same calendar year as
-        :py:attr:`timeindex` - a mismatch is not raised as an error (the public
-        getters already fall back to an empty DataFrame with their own warning in
-        that case, see :attr:`_internal_getter`), but is worth surfacing explicitly,
-        as it means the attribute effectively went missing.
         """
         if len(self.timeindex) == 0:
             logger.warning("No time index set. Empty time series will be returned.")
@@ -2204,20 +2208,6 @@ class TimeSeries:
                     logger.warning(
                         f"{attr} has duplicated columns: {duplicated_labels}"
                     )
-
-                if not self.is_worst_case:
-                    raw_df = getattr(self, f"_{attr}", None)
-                    year_mismatch = (
-                        raw_df is not None
-                        and not raw_df.empty
-                        and raw_df.index[0].year != self.timeindex[0].year
-                    )
-                    if year_mismatch:
-                        logger.warning(
-                            f"{attr} is indexed in year {raw_df.index[0].year}, "
-                            f"which does not match the year of TimeSeries.timeindex "
-                            f"({self.timeindex[0].year})."
-                        )
 
     def drop_component_time_series(self, df_name, comp_names):
         """
