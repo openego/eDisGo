@@ -2015,14 +2015,28 @@ class TestConnectToLVBasedOnGeolocation:
             )
             for _ in range(3)
         ]
-        # first charging point at the closest bus, second one at the next bus with a
-        # residential load, as the closest bus is full; as both buses are then full,
-        # the third one is connected to the closest bus again
+        # a bus qualifies as long as no more than one charging point is connected to
+        # it, so the first two charging points are connected to the closest bus and
+        # the third one to the next bus with a residential load
         assert buses == [
             self.residential_bus_1,
-            self.residential_bus_2,
             self.residential_bus_1,
+            self.residential_bus_2,
         ]
+
+    def test_public_charging_point_not_affected(self):
+        # in this grid no bus is marked as inside a building, so public charging
+        # points must not be moved away from the closest bus
+        buses = [
+            self.connect_charging_point(
+                self.cts_bus,
+                "public",
+                connect_to_load_bus=True,
+                allowed_number_of_comp_per_bus=0,
+            )
+            for _ in range(2)
+        ]
+        assert buses == [self.cts_bus, self.cts_bus]
 
     def test_integrate_component_based_on_geolocation(self):
         topology = self.edisgo.topology

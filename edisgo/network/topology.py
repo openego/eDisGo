@@ -2322,14 +2322,18 @@ class Topology:
         connected to the nearest bus.
 
         If `connect_to_load_bus` is True, a component in voltage level 7 is
-        preferably connected to a bus with a matching load, e.g. a home charging point
-        to a bus with a residential load. Which loads match which component is the
-        same as in :attr:`~.network.topology.Topology.connect_to_lv`. A bus only
-        qualifies if fewer than `allowed_number_of_comp_per_bus` components of the
-        same type are already connected to it, and if it is not farther away than
-        `max_distance_from_target_bus`. In that case, the component is connected
-        directly to that bus. If no bus qualifies, the component is connected as
-        described above, i.e. to the closest LV bus or via a new bus.
+        preferably connected to a bus with a matching load. This applies to home
+        charging points (residential loads), work charging points (CTS, industrial
+        or agricultural loads), generators and storage units (residential loads up
+        to 30 kW, CTS, industrial or agricultural loads above) and heat pumps for
+        individual heating (any load), as in
+        :attr:`~.network.topology.Topology.connect_to_lv`. All other components,
+        e.g. public charging points, are not affected. A bus only qualifies if it is
+        not farther away than `max_distance_from_target_bus` and if no more than
+        `allowed_number_of_comp_per_bus` components of the same type are already
+        connected to it. In that case, the component is connected directly to that
+        bus. If no bus qualifies, the component is connected as described above,
+        i.e. to the closest LV bus or via a new bus.
 
         Parameters
         ----------
@@ -2359,12 +2363,12 @@ class Topology:
             target bus. Default: 0.02.
         connect_to_load_bus : bool
             If True, a component in voltage level 7 is preferably connected to a bus
-            with a matching load, see above. Charging points and heat pumps then need
-            the key 'sector' in `comp_data`. Default: False.
+            with a matching load, see above. Default: False.
         allowed_number_of_comp_per_bus : int
-            Only used if `connect_to_load_bus` is True. Specifies how many components
-            of the same type may at most be connected to a bus with a matching load.
-            Default: 2.
+            Only used if `connect_to_load_bus` is True. A bus with a matching load
+            only qualifies if no more than this number of components of the same
+            type are already connected to it, as in
+            :attr:`~.network.topology.Topology.connect_to_lv`. Default: 2.
 
         Returns
         -------
@@ -2414,7 +2418,20 @@ class Topology:
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, lv_buses
             )
-            if connect_to_load_bus:
+            # only components that are matched with loads, e.g. public charging
+            # points would otherwise be moved to house connections in grids where no
+            # bus is marked as inside a building
+            sector = comp_data.get("sector")
+            matched_with_loads = (
+                comp_type in ["generator", "storage_unit"]
+                or (comp_type == "charging_point" and sector in ["home", "work"])
+                or (
+                    comp_type == "heat_pump"
+                    and sector
+                    in ["individual_heating", "individual_heating_resistive_heater"]
+                )
+            )
+            if connect_to_load_bus and matched_with_loads:
                 # prefer the closest bus with a matching load, if it is close enough
                 # and has room for another component of the same type
                 suitable_buses = self._get_suitable_lv_buses(
@@ -2427,7 +2444,7 @@ class Topology:
                 )
                 candidates = lv_buses[
                     lv_buses.index.isin(suitable_buses)
-                    & (comps_per_bus < allowed_number_of_comp_per_bus).to_numpy()
+                    & (comps_per_bus <= allowed_number_of_comp_per_bus).to_numpy()
                 ]
                 if not candidates.empty:
                     load_bus, load_bus_distance = geo.find_nearest_bus(
@@ -2455,7 +2472,10 @@ class Topology:
     @staticmethod
     def _get_suitable_lv_buses(comp_type, comp_data, power, buses_df, loads_df):
         """
-        Returns the LV buses a new component may be connected to based on its loads.
+        Returns the LV buses a new component may be connected to.
+
+        The buses are chosen based on the loads connected to them or on whether they
+        lie inside a building.
 
         Generators and storage units up to 30 kW are matched with residential loads,
         larger ones with industrial, agricultural and CTS loads. Home charging points

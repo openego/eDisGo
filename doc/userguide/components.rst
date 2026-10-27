@@ -54,23 +54,29 @@ power. The voltage level it is connected to depends on its power (the thresholds
 are defined in :ref:`config_grid`); large components are connected directly to a
 station, smaller ones to the nearest suitable line or bus.
 
-In geo-referenced LV grids, components in the LV grid are connected to the closest LV
-bus, or via a new bus and line if the closest bus is farther away than
+If all LV buses have geolocations, components in the LV grid are connected to the
+closest LV bus, or via a new bus and line if the closest bus is farther away than
 ``max_distance_from_target_bus`` (default 20 m). With ``connect_to_load_bus=True``
 (off by default), a component in voltage level 7 is connected to the closest bus with
 a matching load instead, e.g. a home charging point to a bus with a residential load
 and a work charging point to a bus with a CTS, industrial or agricultural load. Small
-generators and storage units match residential loads, larger ones CTS, industrial or
-agricultural loads. A bus only qualifies if it lies within
-``max_distance_from_target_bus`` and fewer than ``allowed_number_of_comp_per_bus``
-(default 2) components of the same type are connected to it. Otherwise, the
-component is connected as without the option.
+generators and storage units up to 30 kW match residential loads, larger ones CTS,
+industrial or agricultural loads, and heat pumps for individual heating match any
+load. A bus only qualifies if it lies within ``max_distance_from_target_bus`` and no
+more than ``allowed_number_of_comp_per_bus`` (default 2) components of the same type
+are already connected to it. Otherwise, and for all other components, e.g. public
+charging points, the component is connected as without the option.
+
+In the following example with ding0 test grid 3, the charging point lies at a building
+with a CTS load. Without the option, it is connected to the bus of this building; with
+the option, it is connected to the bus of the neighbouring building with a residential
+load, 11 m away.
 
 .. code-block:: python
 
     edisgo.integrate_component_based_on_geolocation(
         comp_type="charging_point",
-        geolocation=(10.0272, 47.5512),
+        geolocation=(10.018961, 47.553177),
         sector="home",
         p_set=0.011,
         add_ts=False,

@@ -1709,7 +1709,9 @@ class EDisGo:
         connect_to_load_bus : bool
             See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
         allowed_number_of_comp_per_bus : int
-            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
+            for LV grids with geolocations and
+            :attr:`~.network.topology.Topology.connect_to_lv` for LV grids without.
         kwargs :
             Attributes of added component.
             See :attr:`~.network.topology.Topology.add_generator`,
@@ -2085,17 +2087,18 @@ class EDisGo:
                 grid friendly weight. Default: 0.5.
 
         integrate_charging_parks_kwds : dict
-            These may contain any further attributes you want to specify when
-            integrating the charging parks into the grid using
+            Options for the grid connection of the charging parks, passed on to
             :func:`~.io.electromobility_import.integrate_charging_parks`.
 
             connect_to_load_bus : bool
-                If True, charging parks in voltage level 7 in geo-referenced LV grids
-                are preferably connected to a bus with a matching load, e.g. home
-                charging points to a bus with a residential load. Default: False.
+                If True, home and work charging parks in voltage level 7 in LV grids
+                with geolocations are preferably connected to a bus with a matching
+                load, e.g. home charging parks to a bus with a residential load.
+                Default: False.
 
             See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
-            for these and further options.
+            for this and the further options `max_distance_from_target_bus` and
+            `allowed_number_of_comp_per_bus`.
 
         """
         if import_electromobility_data_kwds is None:

@@ -64,7 +64,8 @@ in the LV grid is connected to the closest LV bus. With
 ``integrate_charging_parks_kwds={"connect_to_load_bus": True}`` in
 :meth:`~edisgo.edisgo.EDisGo.import_electromobility`, home parks are connected to buses
 with residential loads and work parks to buses with CTS, industrial or agricultural
-loads, if such a bus is close by.
+loads, if such a bus lies within ``max_distance_from_target_bus`` (default 20 m).
+Public and hpc parks are not affected.
 
 .. _charging-strategies:
 
