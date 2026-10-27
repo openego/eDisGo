@@ -906,6 +906,9 @@ class TestTimeSeries:
         number_of_cols = len(df.index)
         assert p_ts.shape == (4, number_of_cols)
         assert q_ts.shape == (4, number_of_cols)
+        # object columns make the power flow fail
+        assert (p_ts.dtypes == float).all()
+        assert (q_ts.dtypes == float).all()
 
         # check values
         index = ["feed-in_case_mv", "feed-in_case_lv", "load_case_mv", "load_case_lv"]

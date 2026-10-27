@@ -427,3 +427,6 @@ Changes
   every stage only comprise its own measures, including new earthworks for lines
   extended again later, and are discounted to a base year. Optionally, the costs
   are compared with reinforcing the original grid directly for each stage
+* Fixed the worst-case time series of charging points, which had the dtype
+  ``object``. A power flow of a grid with charging points in a worst-case analysis
+  failed with ``scipy.sparse does not support dtype object``
