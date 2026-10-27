@@ -22,6 +22,7 @@ from edisgo.edisgo import import_edisgo_from_files
 from edisgo.flex_opt.reinforce_grid import enhanced_reinforce_grid
 from edisgo.io import electromobility_import, generators_import, timeseries_import
 from edisgo.network.results import Results
+from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
 
 
 @pytest.fixture
@@ -224,6 +225,59 @@ class TestEDisGo:
         assert_frame_equal(
             storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
         )
+
+    def test_set_time_series_manual_raises_on_missing_timesteps(self):
+        """
+        A DataFrame missing time steps of the time index raises a ValueError
+        instead of leaving NaN in the time series.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        # only 2 of the 3 required time steps
+        incomplete_ts = pd.DataFrame(
+            data={"GeneratorFluctuating_15": [2.0, 5.0]},
+            index=timeindex[:2],
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"'generators_p' time series miss 1 of 3 time steps of the time "
+            r"index \(first 2018-01-01 02:00:00, last 2018-01-01 02:00:00\)",
+        ):
+            self.edisgo.set_time_series_manual(generators_p=incomplete_ts)
+
+    def test_set_time_series_manual_exempts_zero_column_dataframe(self):
+        """
+        A DataFrame with no columns writes nothing, so it must be exempt
+        from the timeindex-coverage check even if its (empty) column
+        selection would otherwise be checked against a mismatched index.
+        eGo passes such a DataFrame as a placeholder.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        empty_cols_ts = pd.DataFrame(index=pd.date_range("1/1/1970", periods=1))
+
+        # must not raise
+        self.edisgo.set_time_series_manual(generators_q=empty_cols_ts)
+
+    def test_set_time_series_manual_allows_covering_superset(self):
+        """
+        A DataFrame covering the active timeindex (even as a superset with
+        extra time steps outside it) must still be accepted.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        wider_timeindex = pd.date_range("1/1/2018", periods=5, freq="H")
+        wider_ts = pd.DataFrame(
+            data={"GeneratorFluctuating_15": [2.0, 5.0, 6.0, 7.0, 8.0]},
+            index=wider_timeindex,
+        )
+
+        # must not raise
+        self.edisgo.set_time_series_manual(generators_p=wider_ts)
 
     def test_set_time_series_active_power_predefined_demandlib_auto_sets_timeindex(
         self,
@@ -2263,9 +2317,41 @@ class TestEDisGo:
             },
             index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
         )
+        # DSM data is resampled as well
+        self.edisgo.dsm.p_max = pd.DataFrame(
+            data={
+                "load_1": [5.0, 6.0],
+                "load_2": [7.0, 8.0],
+            },
+            index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+        )
         self.edisgo.resample_timeseries(freq="30min")
         assert len(self.edisgo.timeseries.loads_active_power) == 8
         assert len(self.edisgo.heat_pump.cop_df) == 4
+        assert len(self.edisgo.dsm.p_max) == 4
+
+    def test_reduce_timeseries_data_to_given_timeindex(self):
+        """
+        EDisGo.reduce_timeseries_data_to_given_timeindex gives the same result
+        as edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex, which
+        it calls.
+        """
+        self.setup_worst_case_time_series()
+        target_timeindex = self.edisgo.timeseries.timeindex[:2]
+
+        edisgo_via_method = deepcopy(self.edisgo)
+        edisgo_via_method.reduce_timeseries_data_to_given_timeindex(target_timeindex)
+
+        edisgo_via_function = deepcopy(self.edisgo)
+        reduce_timeseries_data_to_given_timeindex(edisgo_via_function, target_timeindex)
+
+        assert_frame_equal(
+            edisgo_via_method.timeseries.loads_active_power,
+            edisgo_via_function.timeseries.loads_active_power,
+        )
+        pd.testing.assert_index_equal(
+            edisgo_via_method.timeseries.timeindex, target_timeindex
+        )
 
 
 class TestEDisGoFunc:

@@ -489,6 +489,64 @@ class Electromobility:
                 start=start_date, periods=t_max + 1, freq=f"{stepsize}min"
             )
 
+        # Only build the bands from the charging processes that overlap the
+        # time index (the window from its first to its last time step). The
+        # SimBEV data can be for another year than the time index, so the time
+        # index is shifted to the SimBEV year to find the window, as
+        # `align_series_to_timeindex` shifts the bands back below. The bands
+        # start at the earlier of the window start and the first of these
+        # charging processes and reach one step past the later of the window
+        # end and the end of the last of these processes, because processes
+        # ending on the last step are dropped below. The bands are reduced to
+        # the time index at the end.
+        edisgo_timeindex = edisgo_obj.timeseries.timeindex
+        if len(edisgo_timeindex) > 0:
+            year_diff = flex_band_index[0].year - edisgo_timeindex[0].year
+            simbev_calendar_timeindex = edisgo_timeindex + pd.DateOffset(
+                years=year_diff
+            )
+            window_start_step = int(
+                (simbev_calendar_timeindex.min() - flex_band_index[0])
+                / pd.Timedelta(f"{stepsize}min")
+            )
+            window_end_step = int(
+                (simbev_calendar_timeindex.max() - flex_band_index[0])
+                / pd.Timedelta(f"{stepsize}min")
+            )
+
+            overlaps_window = (
+                self.charging_processes_df.park_end_timesteps >= window_start_step
+            ) & (self.charging_processes_df.park_start_timesteps <= window_end_step)
+            relevant_processes = self.charging_processes_df.loc[overlaps_window]
+
+            if relevant_processes.empty:
+                # no charging process overlaps the window, so the bands only
+                # cover the window
+                array_start_step = window_start_step
+                array_end_step = window_end_step
+            else:
+                array_start_step = min(
+                    window_start_step,
+                    int(relevant_processes.park_start_timesteps.min()),
+                )
+                array_end_step = (
+                    max(
+                        window_end_step,
+                        int(relevant_processes.park_end_timesteps.max()),
+                    )
+                    + 1
+                )
+
+            flex_band_index = pd.date_range(
+                start=flex_band_index[0]
+                + pd.Timedelta(f"{array_start_step * stepsize}min"),
+                periods=max(array_end_step - array_start_step + 1, 0),
+                freq=f"{stepsize}min",
+            )
+        else:
+            relevant_processes = self.charging_processes_df
+            array_start_step = 0
+
         # set up bands
         n_steps = len(flex_band_index)
         tmp_idx = range(n_steps)
@@ -502,14 +560,21 @@ class Electromobility:
         # map every charging process to the column (charging point) it belongs to;
         # processes of charging points outside `cps` map to -1 and are dropped
         park_to_cp = self.integrated_charging_parks_df["edisgo_id"]
-        proc = self.charging_processes_df
+        proc = relevant_processes
         col = cps.index.get_indexer(proc["charging_park_id"].map(park_to_cp))
-        end_all = proc["park_end_timesteps"].to_numpy()
+        # shift into the (possibly truncated) array's own step space - never
+        # clamped, since the array was sized to cover every retained event's
+        # true end above
+        start_all = proc["park_start_timesteps"].to_numpy() - array_start_step
+        end_all = proc["park_end_timesteps"].to_numpy() - array_start_step
         # the last time step can lead to problems --> skip those processes
         keep = (col >= 0) & (end_all != n_steps - 1)
 
         col = col[keep]
-        sub = proc.loc[keep]
+        sub = proc.loc[keep].assign(
+            park_start_timesteps=start_all[keep],
+            park_end_timesteps=end_all[keep],
+        )
         start = sub["park_start_timesteps"].to_numpy().astype(int)
         end = sub["park_end_timesteps"].to_numpy().astype(int)
         power = sub["nominal_charging_capacity_kW"].to_numpy(dtype=float)

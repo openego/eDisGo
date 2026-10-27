@@ -69,8 +69,10 @@ from edisgo.tools.spatial_complexity_reduction import (
     spatial_complexity_reduction,
 )
 from edisgo.tools.tools import (
+    check_timeindex_coverage,
     determine_grid_integration_voltage_level,
     get_path_length_to_station,
+    reduce_timeseries_data_to_given_timeindex,
 )
 
 if "READTHEDOCS" not in os.environ:
@@ -325,8 +327,9 @@ class EDisGo:
         You can set the time index upon initialisation of the EDisGo object by
         providing the input parameter 'timeindex' or using the function
         :attr:`~.edisgo.EDisGo.set_timeindex`.
-        Also make sure that the time steps for which time series are provided include
-        the set time index.
+        If a time index is set, the provided time series have to cover it. A
+        `ValueError` is raised if a DataFrame with columns is missing data for a time
+        step in :attr:`~.network.timeseries.TimeSeries.timeindex`.
 
         """
         # check if time index is already set, otherwise raise warning
@@ -337,6 +340,16 @@ class EDisGo:
                 "upon initialisation of the EDisGo object by providing the input "
                 "parameter 'timeindex' or using the function EDisGo.set_timeindex()."
             )
+        else:
+            for name, df in (
+                ("generators_p", generators_p),
+                ("loads_p", loads_p),
+                ("storage_units_p", storage_units_p),
+                ("generators_q", generators_q),
+                ("loads_q", loads_q),
+                ("storage_units_q", storage_units_q),
+            ):
+                check_timeindex_coverage(self.timeseries.timeindex, f"'{name}'", df)
         self.timeseries.set_active_power_manual(
             self,
             ts_generators=generators_p,
@@ -2206,6 +2219,9 @@ class EDisGo:
         match the SimBEV data frequency and after determining the charging demand time
         series resampled back to the original frequency.
 
+        The written charging point time series cover exactly
+        :attr:`~.network.timeseries.TimeSeries.timeindex`, also if it has gaps.
+
         """
         charging_strategy(
             self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs
@@ -2383,6 +2399,16 @@ class EDisGo:
             Defines for which heat pumps to apply operating strategy. If None, all heat
             pumps for which COP information in :attr:`~.edisgo.EDisGo.heat_pump` is
             given are used. Default: None.
+
+        Notes
+        -----
+        The written load time series are scoped to
+        :attr:`~.network.timeseries.TimeSeries.timeindex`, regardless of
+        whether :attr:`~.edisgo.EDisGo.heat_pump`'s COP/heat demand time
+        series currently span a wider or different range. Raises
+        ``KeyError`` if they are missing data for a time step in the active
+        timeindex - see :func:`~.flex_opt.heat_pump_operation.operating_strategy`
+        for details.
 
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
@@ -3794,8 +3820,8 @@ class EDisGo:
         """
         Resamples time series data in
         :class:`~.network.timeseries.TimeSeries`, :class:`~.network.heat.HeatPump`,
-        :class:`~.network.electromobility.Electromobility` and
-        :class:`~.network.overlying_grid.OverlyingGrid`.
+        :class:`~.network.electromobility.Electromobility`,
+        :class:`~.network.dsm.DSM` and :class:`~.network.overlying_grid.OverlyingGrid`.
 
         Both up- and down-sampling methods are possible.
 
@@ -3818,6 +3844,14 @@ class EDisGo:
         * :attr:`~.network.heat.HeatPump.cop_df`
 
         * :attr:`~.network.heat.HeatPump.heat_demand_df`
+
+        * :attr:`~.network.dsm.DSM.p_min`
+
+        * :attr:`~.network.dsm.DSM.p_max`
+
+        * :attr:`~.network.dsm.DSM.e_min`
+
+        * :attr:`~.network.dsm.DSM.e_max`
 
         * All data in :class:`~.network.overlying_grid.OverlyingGrid`
 
@@ -3851,7 +3885,71 @@ class EDisGo:
         self.timeseries.resample(method=method, freq=freq)
         self.electromobility.resample(freq=freq)
         self.heat_pump.resample_timeseries(method=method, freq=freq)
+        self.dsm.resample(method=method, freq=freq)
         self.overlying_grid.resample(method=method, freq=freq)
+
+    def reduce_timeseries_data_to_given_timeindex(
+        self,
+        timeindex,
+        freq="1H",
+        timeseries=True,
+        electromobility=True,
+        save_ev_soc_initial=True,
+        heat_pump=True,
+        dsm=True,
+        overlying_grid=True,
+    ):
+        """
+        Reduces timeseries data in this EDisGo object to given time index.
+
+        Calls :func:`edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex`.
+
+        Parameters
+        -----------
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+            Time index to set.
+        freq : str or :pandas:`pandas.Timedelta<Timedelta>`, optional
+            Frequency of time series data. This is only needed if it cannot be
+            inferred from the given `timeindex` and if electromobility data
+            and/or overlying grid data is reduced, as the initial SoC is
+            tried to be set using the time step before the first time step in
+            the given `timeindex`. Offset aliases can be found here:
+            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
+            Default: '1H'.
+        timeseries : bool
+            Indicates whether timeseries in
+            :class:`~.network.timeseries.TimeSeries` are reduced to given
+            time index. Default: True.
+        electromobility : bool
+            Indicates whether timeseries in
+            :class:`~.network.electromobility.Electromobility` are reduced to
+            given time index. Default: True.
+        save_ev_soc_initial : bool
+            Indicates whether to save initial EV SOC from timestep before
+            first timestep of given time index. Default: True.
+        heat_pump : bool
+            Indicates whether timeseries in :class:`~.network.heat.HeatPump`
+            are reduced to given time index. Default: True.
+        dsm : bool
+            Indicates whether timeseries in :class:`~.network.dsm.DSM` are
+            reduced to given time index. Default: True.
+        overlying_grid : bool
+            Indicates whether timeseries in
+            :class:`~.network.overlying_grid.OverlyingGrid` are reduced to
+            given time index. Default: True.
+
+        """
+        reduce_timeseries_data_to_given_timeindex(
+            self,
+            timeindex,
+            freq=freq,
+            timeseries=timeseries,
+            electromobility=electromobility,
+            save_ev_soc_initial=save_ev_soc_initial,
+            heat_pump=heat_pump,
+            dsm=dsm,
+            overlying_grid=overlying_grid,
+        )
 
 
 def import_edisgo_from_pickle(filename, path=""):
