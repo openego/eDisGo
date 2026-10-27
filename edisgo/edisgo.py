@@ -31,6 +31,7 @@ from edisgo.flex_opt.check_tech_constraints import lines_relative_load
 from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
+from edisgo.flex_opt.hosting_capacity import hosting_capacity
 from edisgo.flex_opt.reinforce_grid import (
     catch_convergence_reinforce_grid,
     reinforce_grid,
@@ -1506,6 +1507,56 @@ class EDisGo:
             self.results.measures = "grid_expansion"
 
         return edisgo_obj.results
+
+    def hosting_capacity(
+        self,
+        buses: str | list[str] | pd.Index,
+        component_type: str = "generator",
+        **kwargs,
+    ) -> pd.DataFrame:
+        """
+        Determines how much generation or load can be connected to the given buses.
+
+        For every bus, the largest additional active power is determined at which
+        no line or station is overloaded and all bus voltages stay within the
+        allowed voltage band, checked with a non-linear power flow of the whole
+        grid. Problems that already exist in the grid only count if the new
+        component makes them worse, so the grid should usually be reinforced first.
+        The buses are analysed independently of each other. The EDisGo object is
+        not changed.
+
+        See :func:`~.flex_opt.hosting_capacity.hosting_capacity` for more
+        information.
+
+        Parameters
+        ----------
+        buses : str or list(str) or :pandas:`pandas.Index<Index>`
+            Names of the buses to determine the hosting capacity for, as in index of
+            :attr:`~.network.topology.Topology.buses_df`.
+        component_type : str
+            Type of the new component. Possible options are 'generator' (hosting
+            capacity for feed-in) and 'conventional_load', 'charging_point' and
+            'heat_pump' (hosting capacity for load). Default: 'generator'.
+
+        Other Parameters
+        -----------------
+        kwargs : dict
+            Possible other parameters comprise all other parameters that can be set
+            in :func:`~.flex_opt.hosting_capacity.hosting_capacity`, e.g.
+            `timesteps`, `profile` or `p_max`.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Hosting capacity in MW per bus together with the constraint, component
+            and time step that limit it. See
+            :func:`~.flex_opt.hosting_capacity.hosting_capacity` for more
+            information.
+
+        """
+        return hosting_capacity(
+            self, buses=buses, component_type=component_type, **kwargs
+        )
 
     def add_component(
         self,

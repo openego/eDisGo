@@ -420,3 +420,11 @@ Changes
   ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
   the component and the new MV line were connected to the existing bus. This could
   happen after components were removed or aggregated (openego/eDisGo#413)
+* New :meth:`~.edisgo.EDisGo.hosting_capacity` determines how much generation or
+  load can be connected to given buses before a line or station is overloaded or a
+  voltage leaves the allowed band. The power of a test component at the bus is
+  increased until the first violation, checked with a non-linear power flow of the
+  whole grid and the same checks as :meth:`~.edisgo.EDisGo.reinforce`. Besides the
+  hosting capacity in MW, the result names the limiting constraint, component and
+  time step. Problems that already exist in the grid only count if the new
+  component makes them worse. The EDisGo object is not changed
