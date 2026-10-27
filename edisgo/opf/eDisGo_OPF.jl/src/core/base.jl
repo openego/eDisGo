@@ -70,9 +70,10 @@ If `:ne_branch` exists, then the following keys are also available with similar 
 
 
 The eDisGo components `:gen_nd`, `:gen_slack`, `:dsm`, `:electromobility`,
-`:heatpumps` and `:heat_storage` are filtered the same way: dropped when switched
-off (`gen_status` or `status`, a missing field counts as active) or when their bus
-is deactivated. A heat storage is also dropped with its heat pump.
+`:heatpumps`, `:heat_storage` and `:curtailment_14a` are filtered the same way:
+dropped when switched off (`gen_status` or `status`, a missing field counts as
+active) or when their bus is deactivated. A heat storage is also dropped with its
+heat pump. `:curtailment_14a` may be missing in the data and then counts as empty.
 
 Added keys for eDisGo OPF include:
 
@@ -84,6 +85,7 @@ Added keys for eDisGo OPF include:
 * `:bus_dsm` -- the mapping `Dict(i => [dsm["dsm_bus"] for (i,dsm) in ref[:dsm]])`.
 * `:bus_cps` -- the mapping `Dict(i => [cp["cp_bus"] for (i,cp) in ref[:electromobility]])`.
 * `:bus_hps` -- the mapping `Dict(i => [hp["hp_bus"] for (i,hp) in ref[:heatpumps]])`.
+* `:bus_curtailment_14a` -- the mapping `Dict(i => [c["load_bus"] for (i,c) in ref[:curtailment_14a]])`.
 
 """
 function ref_add_core!(ref::Dict{Symbol,Any})
@@ -117,6 +119,7 @@ function ref_add_core!(ref::Dict{Symbol,Any})
         # is dropped together with its heat pump
         hp_dropped = setdiff(hp_ids, keys(nw_ref[:heatpumps]))
         nw_ref[:heat_storage] = Dict(x for x in nw_ref[:heat_storage] if (get(x.second, "status", 1) != pm_component_status_inactive["storage"] && x.second["storage_bus"] in keys(nw_ref[:bus]) && !(x.first in hp_dropped)))
+        nw_ref[:curtailment_14a] = Dict(x for x in get(nw_ref, :curtailment_14a, Dict()) if (get(x.second, "status", 1) != pm_component_status_inactive["load"] && x.second["load_bus"] in keys(nw_ref[:bus])))
 
 
         ### setup arcs from edges ###
@@ -169,6 +172,12 @@ function ref_add_core!(ref::Dict{Symbol,Any})
             push!(bus_hps[hp["hp_bus"]], i)
         end
         nw_ref[:bus_hps] = bus_hps
+
+        bus_curtailment_14a = Dict((i, Int[]) for (i,bus) in nw_ref[:bus])
+        for (i,c) in nw_ref[:curtailment_14a]
+            push!(bus_curtailment_14a[c["load_bus"]], i)
+        end
+        nw_ref[:bus_curtailment_14a] = bus_curtailment_14a
 
         bus_gens_nd = Dict((i, Int[]) for (i,bus) in nw_ref[:bus])
         for (i,gen) in nw_ref[:gen_nd]

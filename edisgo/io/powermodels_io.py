@@ -109,6 +109,7 @@ def to_powermodels(
     flexible_loads=None,
     flexible_storage_units=None,
     opf_version=1,
+    curtailment_14a=False,
 ):
     """
     Convert eDisGo representation of the network topology and timeseries to
@@ -136,6 +137,11 @@ def to_powermodels(
         Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
         Default: 1.
+    curtailment_14a : bool or dict
+        §14a EnWG curtailment of heat pumps and charging points. Only possible with
+        `opf_version` 2 or 4. For more information see
+        :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+        Default: False.
 
     Returns
     -------
@@ -146,6 +152,11 @@ def to_powermodels(
         reduced by non-flexible components.
 
     """
+    if curtailment_14a and opf_version not in [2, 4]:
+        raise ValueError(
+            "§14a curtailment requires grid restrictions in the optimization, i.e. "
+            f"opf_version 2 or 4, but opf_version {opf_version} was given."
+        )
     if opf_version in [2, 3, 4]:
         opf_flex = ["curt"]
     else:
@@ -244,6 +255,9 @@ def to_powermodels(
         )
     else:
         logger.warning("No loads found in network.")
+    if curtailment_14a:
+        logger.info("Transforming §14a curtailment into PowerModels dictionary format.")
+        _build_curtailment_14a(edisgo_object, psa_net, pm, s_base, curtailment_14a)
     if (opf_version == 3) | (opf_version == 4):
         _check_overlying_grid_covers_timeindex(edisgo_object)
         # An entirely empty overlying grid is handled by the IndexError fallback
@@ -434,6 +448,17 @@ def from_powermodels(
                         data=results[names].values,
                     ),
                 )
+
+    # §14a curtailment reduces the load of the controlled heat pumps and charging
+    # points
+    if len(pm["nw"]["1"].get("curtailment_14a", {})) > 0:
+        ti = edisgo_object.timeseries.timeindex
+        df = _result_df(pm, "curtailment_14a", "p14a", timesteps, ti, s_base)
+        edisgo_object.timeseries._loads_active_power.loc[ti, df.columns] = (
+            edisgo_object.timeseries._loads_active_power.loc[ti, df.columns].values
+            - df.values
+        )
+        edisgo_object.opf_results.grid_slacks_t.curtailment_14a = df
 
     # calculate corresponding reactive power values
     edisgo_object.set_time_series_reactive_power_control()
@@ -636,6 +661,7 @@ def _init_pm():
         "heat_storage": dict(),
         "dsm": dict(),
         "HV_requirements": dict(),
+        "curtailment_14a": dict(),
         "baseMVA": 1,
         "source_version": 2,
         "shunt": dict(),
@@ -650,6 +676,7 @@ def _init_pm():
             "heatpumps": dict(),
             "dsm": dict(),
             "HV_requirements": dict(),
+            "curtailment_14a": dict(),
             "num_steps": int,
         },
     }
@@ -1099,6 +1126,91 @@ def _build_load(
                 "name": inflexible_storage_units[stor_i],
                 "index": stor_i + len(loads_df.index) + 1,
             }
+
+
+def _build_curtailment_14a(edisgo_obj, psa_net, pm, s_base, curtailment_14a):
+    """
+    Build §14a curtailment dictionary and its time series and add them to
+    PowerModels dictionary 'pm'.
+
+    By default, one entry is added per heat pump and charging point that is
+    connected to the low voltage grid, is inflexible (i.e. in ``pm["load"]``) and
+    whose nominal power exceeds its §14a minimum power. The minimum
+    power is 4.2 kW, for heat pumps above 11 kW 40 % of their nominal power
+    (BNetzA BK6-22-300). The upper bound `pmax` of the curtailment is the load minus
+    the minimum power in each time step.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary. Loads must already be added.
+    s_base : int
+        Base value of apparent power for per unit system.
+    curtailment_14a : bool or dict
+        See :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+
+    """
+    settings = curtailment_14a if isinstance(curtailment_14a, dict) else {}
+    max_hours_per_day = settings.get("max_hours_per_day")
+    if max_hours_per_day is None:
+        max_hours_per_day = 24
+    loads = {load["name"]: load for load in pm["load"].values()}
+    loads_df = edisgo_obj.topology.loads_df
+    components = settings.get("components")
+    if components is None:
+        v_nom = edisgo_obj.topology.buses_df.v_nom.loc[loads_df.bus].values
+        components = loads_df.index[
+            loads_df.type.isin(["heat_pump", "charging_point"])
+            & loads_df.index.isin(list(loads))
+            & (v_nom < 1)
+        ]
+    else:
+        invalid = [
+            comp
+            for comp in components
+            if comp not in loads
+            or loads_df.type.get(comp) not in ["heat_pump", "charging_point"]
+        ]
+        if invalid:
+            raise ValueError(
+                "§14a curtailment is only possible for inflexible heat pumps and "
+                f"charging points. The following components are not: {invalid}"
+            )
+    comp_df = loads_df.loc[components]
+    p_min = pd.Series(0.0042, index=comp_df.index)
+    big_hps = (comp_df.type == "heat_pump") & (comp_df.p_set > 0.011)
+    p_min[big_hps] = 0.4 * comp_df.p_set[big_hps]
+    eligible = comp_df.index[comp_df.p_set > p_min]
+    if len(eligible) < len(comp_df):
+        logger.info(
+            f"{len(comp_df) - len(eligible)} heat pumps and charging points are "
+            "excluded from §14a curtailment, as their nominal power does not exceed "
+            "their §14a minimum power."
+        )
+    pmax = (
+        (psa_net.loads_t.p_set[eligible] - p_min[eligible]).clip(lower=0) / s_base
+    ).round(20)
+    for comp_i, comp in enumerate(eligible):
+        load = loads[comp]
+        pm["curtailment_14a"][str(comp_i + 1)] = {
+            "pmax": pmax[comp].iloc[0],
+            "load_bus": load["load_bus"],
+            "pf": load["pf"],
+            "sign": load["sign"],
+            "max_hours_per_day": max_hours_per_day,
+            "name": comp,
+            "index": comp_i + 1,
+        }
+        pm["time_series"]["curtailment_14a"][str(comp_i + 1)] = {
+            "pmax": pmax[comp].values.tolist()
+        }
+    # calendar day of each time step for the daily time budget
+    pm["time_series"]["day_14a"] = pd.factorize(psa_net.snapshots.normalize())[
+        0
+    ].tolist()
 
 
 def _build_battery_storage(

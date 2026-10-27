@@ -189,6 +189,7 @@ def pm_optimize(
     method: str = "soc",
     warm_start: bool = False,
     silence_moi: bool = False,
+    curtailment_14a: bool | dict = False,
 ) -> None:
     """
     Run OPF for the edisgo object and write results back to it.
@@ -226,6 +227,7 @@ def pm_optimize(
         method=method,
         warm_start=warm_start,
         silence_moi=silence_moi,
+        curtailment_14a=curtailment_14a,
     )
 
     intervals = _contiguous_intervals(edisgo_obj.timeseries.timeindex)
@@ -373,6 +375,7 @@ def _pm_optimize_single(
     method: str = "soc",
     warm_start: bool = False,
     silence_moi: bool = False,
+    curtailment_14a: bool | dict = False,
 ) -> None:
     """
     Run a single-interval OPF for the edisgo object in a julia subprocess and
@@ -442,6 +445,27 @@ def _pm_optimize_single(
         hence there will be no logging coming from julia subprocess in python
         process.
         Default: False.
+    curtailment_14a : bool or dict
+        §14a EnWG curtailment of heat pumps and charging points: the grid operator
+        may reduce their load down to a minimum power of 4.2 kW, for heat pumps
+        above 11 kW down to 40 % of their nominal power. Covers all inflexible
+        heat pumps and charging points in the low voltage grid, i.e. those not
+        given in `flexible_hps` or `flexible_cps`. The curtailment is used before
+        load shedding, the controlled load time series are reduced accordingly and
+        the curtailment is saved in
+        :attr:`~.opf.results.opf_result_class.GridSlacks.curtailment_14a`.
+        Requires `opf_version` 2 or 4. If True, all eligible components are
+        curtailed without time budget. A dict may contain:
+
+        * "components" : list(str)
+            Names of the inflexible heat pumps and charging points to curtail,
+            also in the medium voltage grid. Default: all in the low voltage grid.
+        * "max_hours_per_day" : float
+            Maximum time per calendar day in hours during which a component may be
+            curtailed. Adds binary variables, so it requires method "soc" without
+            warm start. Default: None (no time budget).
+
+        Default: False.
     save_heat_storage : bool
         Indicates whether to save results of heat storage variables from the
         optimization to eDisGo object.
@@ -457,6 +481,15 @@ def _pm_optimize_single(
         Default: True.
 
     """
+    if (
+        isinstance(curtailment_14a, dict)
+        and curtailment_14a.get("max_hours_per_day") is not None
+        and (method == "nc" or warm_start)
+    ):
+        raise ValueError(
+            "A time budget for §14a curtailment adds binary variables, which "
+            "Ipopt cannot handle. Use method 'soc' without warm start."
+        )
     Topology.find_meshes(edisgo_obj)
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
@@ -467,6 +500,7 @@ def _pm_optimize_single(
         flexible_loads=flexible_loads,
         flexible_storage_units=flexible_storage_units,
         opf_version=opf_version,
+        curtailment_14a=curtailment_14a,
     )
 
     def _convert(o):

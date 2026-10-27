@@ -22,6 +22,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.44) für non-dispatchable Generators
                 eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.44)-(3.47)
                 eDisGo_OPF.variable_bus_voltage(pm, nw=n)  # Eq. (3.8)
+                eDisGo_OPF.variable_curtailment_14a(pm, nw=n)  # §14a EnWG
             end
             eDisGo_OPF.variable_slack_heat_pump_storage(pm, nw=n) # Eq. (3.44)-(3.47)
             eDisGo_OPF.variable_battery_storage(pm, nw=n)  # Eq. (3.11) und (3.12)
@@ -57,6 +58,11 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         for i in PowerModels.ids(pm, :heatpumps, nw=n)
             eDisGo_OPF.constraint_hp_operation(pm, i, n) # Eq. (3.19)
         end
+        if haskey(PowerModels.var(pm, n), :z14a)
+            for i in axes(PowerModels.var(pm, n, :z14a), 1)
+                eDisGo_OPF.constraint_curtailment_14a_active(pm, i, n)  # §14a EnWG
+            end
+        end
 
     end
 
@@ -89,6 +95,17 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             eDisGo_OPF.constraint_cp_state(pm, n_1, n_2, i, eta) # Eq. (3.26) (und (3.25) für letzten Zeitschritt)
         end
         n_1 = n_2
+    end
+
+    # §14a EnWG daily time budget, days as given by the time series `day_14a`
+    if haskey(PowerModels.var(pm, network_ids[1]), :z14a) && !isempty(PowerModels.var(pm, network_ids[1], :z14a))
+        days = Dict()
+        for n in network_ids
+            push!(get!(days, PowerModels.ref(pm, n, :day_14a), Int[]), n)
+        end
+        for nws in values(days), i in axes(PowerModels.var(pm, network_ids[1], :z14a), 1)
+            eDisGo_OPF.constraint_curtailment_14a_time_budget(pm, i, nws)
+        end
     end
 
     # OBJECTIVE FUNCTION

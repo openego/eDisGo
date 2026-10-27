@@ -697,3 +697,84 @@ end
             () -> eDisGo_OPF.constraint_HV_requirements(pm, 1, 1)) isa ArgumentError
     end
 end
+
+"""
+Model on `TestUtils.small_network` with a §14a curtailment with time budget at
+bus 3 (`num_steps` time steps, `pmax` per step), carrying only the §14a variables.
+"""
+function cst_14a_model(; num_steps::Int=2, pmax=fill(0.4, num_steps))
+    data = TestUtils.add_curtailment_14a!(TestUtils.small_network(num_steps=num_steps);
+                                          pmax=pmax, max_hours_per_day=2,
+                                          days=zeros(Int, num_steps))
+    build = pm -> for (n, _) in PowerModels.nws(pm)
+        eDisGo_OPF.variable_curtailment_14a(pm, nw=n)
+    end
+    return eDisGo_OPF.instantiate_model(TestUtils.multinetwork(data),
+                                        eDisGo_OPF.NCBFPowerModelEdisgo, build)
+end
+
+"Run `f()` and return the affine `≤` constraints it appended to `model`."
+function cst_new_le_constraints(f, model)
+    all_le() = JuMP.all_constraints(model, JuMP.AffExpr, MOI.LessThan{Float64})
+    before = length(all_le())
+    f()
+    return all_le()[(before + 1):end]
+end
+
+@testset "constraint_curtailment_14a_active" begin
+    pm = cst_14a_model(pmax=[0.4, 0.25])
+    for (n, pmax) in ((1, 0.4), (2, 0.25))
+        cons = cst_new_le_constraints(pm.model) do
+            eDisGo_OPF.constraint_curtailment_14a_active(pm, 1, n)
+        end
+        @test length(cons) == 1
+        # p14a <= pmax * z14a  ⇔  p14a - pmax * z14a <= 0, pmax of network n
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, n, :p14a, 1) => 1.0,
+                       PowerModels.var(pm, n, :z14a, 1) => -pmax),
+                  0.0)
+    end
+end
+
+@testset "constraint_curtailment_14a_time_budget" begin
+    @testset "constraint" begin
+        pm = cst_14a_model(num_steps=3)
+        cons = cst_new_le_constraints(pm.model) do
+            eDisGo_OPF.constraint_curtailment_14a_time_budget(pm, 1, [1, 2])
+        end
+        @test length(cons) == 1
+        # time_elapsed * (z14a[1] + z14a[2]) <= max_hours_per_day, only the given
+        # networks
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 1, :z14a, 1) => 1.0,
+                       PowerModels.var(pm, 2, :z14a, 1) => 1.0),
+                  2.0)
+    end
+
+    @testset "time_elapsed of the first network" begin
+        pm = cst_14a_model()
+        PowerModels.ref(pm, 1)[:time_elapsed] = 0.25
+        cons = cst_new_le_constraints(pm.model) do
+            eDisGo_OPF.constraint_curtailment_14a_time_budget(pm, 1, [1, 2])
+        end
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 1, :z14a, 1) => 0.25,
+                       PowerModels.var(pm, 2, :z14a, 1) => 0.25),
+                  2.0)
+    end
+
+    @testset "missing time_elapsed" begin
+        pm = cst_14a_model()
+        delete!(PowerModels.ref(pm, 1), :time_elapsed)
+        cons, warnings = TestUtils.capture_warnings() do
+            cst_new_le_constraints(pm.model) do
+                eDisGo_OPF.constraint_curtailment_14a_time_budget(pm, 1, [1, 2])
+            end
+        end
+        @test warnings == ["network data should specify time_elapsed, using 1.0 as a default"]
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, 1, :z14a, 1) => 1.0,
+                       PowerModels.var(pm, 2, :z14a, 1) => 1.0),
+                  2.0)
+    end
+end

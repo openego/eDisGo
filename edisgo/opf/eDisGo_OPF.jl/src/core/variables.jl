@@ -438,6 +438,48 @@ function variable_cp_energy(pm::AbstractPowerModel; nw::Int=nw_id_default, bound
     report && PowerModels.sol_component_value(pm, nw, :electromobility, :cpe, PowerModels.ids(pm, nw, :electromobility), cpe)
 end
 
+"variables for the §14a EnWG curtailment of heat pumps and charging points"
+function variable_curtailment_14a(pm::AbstractPowerModel; kwargs...)
+    eDisGo_OPF.variable_curtailment_14a_power(pm; kwargs...)
+    eDisGo_OPF.variable_curtailment_14a_active(pm; kwargs...)
+end
+
+"""
+Variable `p14a[i]` for `i` in `curtailment_14a`: the reduction of the grid draw of
+a heat pump or charging point under §14a EnWG, bounded by `[0, pmax]`. `pmax` is
+the load minus its §14a minimum power in the respective time step, so the net load
+never falls below the minimum.
+"""
+function variable_curtailment_14a_power(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    p14a = PowerModels.var(pm, nw)[:p14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :curtailment_14a)], base_name="$(nw)_p14a",
+        lower_bound = 0.0
+    )
+
+    if bounded
+        for (i, c) in PowerModels.ref(pm, nw, :curtailment_14a)
+            JuMP.set_upper_bound(p14a[i], c["pmax"])
+        end
+    end
+
+    report && PowerModels.sol_component_value(pm, nw, :curtailment_14a, :p14a, PowerModels.ids(pm, nw, :curtailment_14a), p14a)
+end
+
+"""
+Binary variable `z14a[i]`, 1 if the §14a curtailment of component `i` is active in
+time step `nw`. Only created for components with a daily time budget
+(`max_hours_per_day < 24`); without a budget the problem stays continuous.
+"""
+function variable_curtailment_14a_active(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true, kwargs...)
+    ids_budget = [i for (i, c) in PowerModels.ref(pm, nw, :curtailment_14a) if c["max_hours_per_day"] < 24]
+    z14a = PowerModels.var(pm, nw)[:z14a] = JuMP.@variable(pm.model,
+        [i in ids_budget], base_name="$(nw)_z14a",
+        binary = true
+    )
+
+    report && PowerModels.sol_component_value(pm, nw, :curtailment_14a, :z14a, ids_budget, z14a)
+end
+
 "slack variables for grid restrictions"
 function variable_slack_grid_restrictions(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_hp_slack(pm; kwargs...)

@@ -188,14 +188,16 @@ storage, DSM, heat pumps and charging points, plus the ohmic branch losses
 (`ccm·r` for active, `ccm·x` for reactive power). For `opf_version` 2 and 4 the
 balance additionally includes the load-shedding / curtailment slack variables
 (generation curtailment `pgc`, dispatchable-generation slack `pgens`, load slack
-`pds`, charging-point slack `pcps`, heat-pump slack `phps`). Reactive injections
+`pds`, charging-point slack `pcps`, heat-pump slack `phps`) and the §14a EnWG
+curtailment `p14a` of the heat pumps and charging points in `bus_c14a` (reactive
+power via the power factors in `bus_c14a_pf`). Reactive injections
 of the flexibilities are derived from their active power via the power factor
 (`tan(acos(pf))`).
 
 This low-level method receives the pre-collected per-bus component maps from
 `constraint_power_balance_bf`.
 """
-function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf)
+function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf; bus_c14a=Int[], bus_c14a_pf=Dict())
     pt   = get(PowerModels.var(pm, n),  :p, Dict()); PowerModels._check_var_keys(pt, bus_arcs_to, "active power", "branch")
     qt   = get(PowerModels.var(pm, n),  :q, Dict()); PowerModels._check_var_keys(qt, bus_arcs_to, "reactive power", "branch")
     pf   = get(PowerModels.var(pm, n),  :p, Dict()); PowerModels._check_var_keys(pf, bus_arcs_from, "active power", "branch")
@@ -214,6 +216,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
         pcps  = get(PowerModels.var(pm, n),  :pcps, Dict()); PowerModels._check_var_keys(pcps, bus_cps, "active power slack", "charging point")
         pgc  = get(PowerModels.var(pm, n),  :pgc, Dict()); PowerModels._check_var_keys(pgc, bus_gens_nd, "active power", "curtailment")
         phps  = get(PowerModels.var(pm, n),  :phps, Dict()); PowerModels._check_var_keys(phps, bus_hps, "active power slack", "heatpump")
+        p14a  = get(PowerModels.var(pm, n),  :p14a, Dict()); PowerModels._check_var_keys(p14a, bus_c14a, "active power", "curtailment_14a")
 
         cstr_p = JuMP.@constraint(pm.model,
             sum(pt[a] for a in bus_arcs_to)
@@ -231,6 +234,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pdsm[dsm] for dsm in bus_dsm)
             + sum(php[hp] - phps[hp] for hp in bus_hps)
             + sum(pcp[cp] - pcps[cp] for cp in bus_cps)
+            - sum(p14a[c] for c in bus_c14a)
         )
         cstr_q = JuMP.@constraint(pm.model,
             sum(qt[a] for a in bus_arcs_to)
@@ -248,6 +252,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pdsm[dsm] * bus_dsm_pf[dsm] for dsm in bus_dsm)
             + sum((php[hp] - phps[hp]) * bus_hps_pf[hp] for hp in bus_hps)
             + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for cp in bus_cps)
+            - sum(p14a[c] * bus_c14a_pf[c] for c in bus_c14a)
         )
     else  # Eq. (3.3ii), (3.4ii)
         cstr_p = JuMP.@constraint(pm.model,

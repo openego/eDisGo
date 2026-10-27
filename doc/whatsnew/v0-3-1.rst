@@ -420,3 +420,11 @@ Changes
   ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
   the component and the new MV line were connected to the existing bus. This could
   happen after components were removed or aggregated (openego/eDisGo#413)
+* New option ``curtailment_14a`` in :meth:`~.edisgo.EDisGo.pm_optimize` for
+  ``opf_version`` 2 and 4: the OPF may reduce the load of inflexible heat pumps and
+  charging points in the low voltage grid down to their §14a EnWG minimum power
+  (4.2 kW, for heat pumps above 11 kW 40 % of their nominal power) before it sheds
+  load. An optional daily time budget is set with ``max_hours_per_day``. The
+  curtailment is subtracted from the load time series and saved in
+  :attr:`~.opf.results.opf_result_class.GridSlacks.curtailment_14a`
+  (openego/eDisGo#830)

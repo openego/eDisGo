@@ -291,6 +291,18 @@ end
     # NOTE (production code): the `phss` term is summed over the heat storage
     # ids and `phps2` over the heat pump ids. Heat pump `i` and heat storage `i`
     # are paired by id without a check (#807); both fixtures use identical ids.
+
+    @testset "§14a curtailment" begin
+        # Weighted with half the slack weight: used before load shedding.
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network(opf_version=2))
+        pm14a = eDisGo_OPF.instantiate_model(TestUtils.multinetwork(data),
+                                             eDisGo_OPF.SOCBFPowerModelEdisgo,
+                                             eDisGo_OPF.build_mn_opf_bf_flex)
+        for n in 1:2
+            @test objective_coeff(pm14a.model, PowerModels.var(pm14a, n, :p14a, 1)) ≈
+                  0.5 * factor_slacks
+        end
+    end
 end
 
 @testset "objective_min_line_loading_max" begin
@@ -490,6 +502,18 @@ end
         for n in 1:2
             @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgs)[1]) == 0.0
             @test objective_coeff(pm.model, PowerModels.var(pm, n, :pdsm)[1]) == 0.0
+        end
+    end
+
+    @testset "§14a curtailment" begin
+        # Weighted with half the slack weight: used before load shedding.
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network(opf_version=4, overlying_grid=true))
+        pm14a = eDisGo_OPF.instantiate_model(TestUtils.multinetwork(data),
+                                             eDisGo_OPF.SOCBFPowerModelEdisgo,
+                                             eDisGo_OPF.build_mn_opf_bf_flex)
+        for n in 1:2
+            @test objective_coeff(pm14a.model, PowerModels.var(pm14a, n, :p14a, 1)) ≈
+                  0.5 * factor_slacks
         end
     end
 end

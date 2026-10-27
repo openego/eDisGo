@@ -866,3 +866,99 @@ end
         end
     end
 end
+
+# ---------------------------------------------------------------------------
+# §14a curtailment
+# ---------------------------------------------------------------------------
+
+@testset "variable_curtailment_14a" begin
+    @testset "creates the power and the binary variables" begin
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network();
+                                              max_hours_per_day=2)
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_curtailment_14a(pm, nw=1)
+        @test TestUtils.variable_keys(pm, 1) == [:p14a, :z14a]
+    end
+
+    @testset "forwards nw, bounded and report" begin
+        pm = vfx_bare_model(TestUtils.add_curtailment_14a!(TestUtils.small_network()))
+        eDisGo_OPF.variable_curtailment_14a(pm, nw=2, bounded=false, report=false)
+        @test isempty(PowerModels.var(pm, 1))
+        @test vfx_bounds(PowerModels.var(pm, 2, :p14a, 1)) == (0.0, nothing)
+        @test vfx_reported(pm, 2, :curtailment_14a) === nothing
+    end
+end
+
+@testset "variable_curtailment_14a_power" begin
+    @testset "key, index set and per-time-step bounds" begin
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network();
+                                              pmax=[0.1, 0.3])
+        TestUtils.add_curtailment_14a!(data; i=4, pmax=[0.2, 0.0])
+        pm = vfx_bare_model(data)
+        added = vfx_added_variables(pm) do
+            eDisGo_OPF.variable_curtailment_14a_power(pm, nw=1)
+            eDisGo_OPF.variable_curtailment_14a_power(pm, nw=2)
+        end
+        @test added == 4
+        @test vfx_indices(pm, 1, :p14a) == Set([1, 4])
+        @test JuMP.name(PowerModels.var(pm, 2, :p14a, 4)) == "2_p14a[4]"
+        @test vfx_bounds(PowerModels.var(pm, 1, :p14a, 1)) == (0.0, 0.1)
+        @test vfx_bounds(PowerModels.var(pm, 2, :p14a, 1)) == (0.0, 0.3)
+        @test vfx_bounds(PowerModels.var(pm, 2, :p14a, 4)) == (0.0, 0.0)
+    end
+
+    @testset "no §14a curtailment in the data" begin
+        pm = vfx_bare_model()
+        @test vfx_added_variables(
+            () -> eDisGo_OPF.variable_curtailment_14a_power(pm, nw=1), pm) == 0
+        @test isempty(PowerModels.var(pm, 1, :p14a))
+    end
+
+    @testset "unbounded keeps the lower bound" begin
+        pm = vfx_bare_model(TestUtils.add_curtailment_14a!(TestUtils.small_network()))
+        eDisGo_OPF.variable_curtailment_14a_power(pm, nw=1, bounded=false)
+        @test vfx_bounds(PowerModels.var(pm, 1, :p14a, 1)) == (0.0, nothing)
+    end
+
+    @testset "report" begin
+        pm = vfx_bare_model(TestUtils.add_curtailment_14a!(TestUtils.small_network()))
+        eDisGo_OPF.variable_curtailment_14a_power(pm, nw=1)
+        @test vfx_reported(pm, 1, :curtailment_14a)[1][:p14a] ==
+              PowerModels.var(pm, 1, :p14a, 1)
+        pm = vfx_bare_model(TestUtils.add_curtailment_14a!(TestUtils.small_network()))
+        eDisGo_OPF.variable_curtailment_14a_power(pm, nw=1, report=false)
+        @test vfx_reported(pm, 1, :curtailment_14a) === nothing
+    end
+end
+
+@testset "variable_curtailment_14a_active" begin
+    @testset "binary only for components with a time budget" begin
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network();
+                                              max_hours_per_day=2)
+        TestUtils.add_curtailment_14a!(data; i=2, max_hours_per_day=24)
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_curtailment_14a_active(pm, nw=1)
+        @test vfx_indices(pm, 1, :z14a) == Set([1])
+        @test JuMP.is_binary(PowerModels.var(pm, 1, :z14a, 1))
+        @test JuMP.name(PowerModels.var(pm, 1, :z14a, 1)) == "1_z14a[1]"
+    end
+
+    @testset "no time budget keeps the problem continuous" begin
+        pm = vfx_bare_model(TestUtils.add_curtailment_14a!(TestUtils.small_network()))
+        @test vfx_added_variables(
+            () -> eDisGo_OPF.variable_curtailment_14a_active(pm, nw=1), pm) == 0
+        @test isempty(PowerModels.var(pm, 1, :z14a))
+    end
+
+    @testset "report" begin
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network();
+                                              max_hours_per_day=2)
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_curtailment_14a_active(pm, nw=1)
+        @test vfx_reported(pm, 1, :curtailment_14a)[1][:z14a] ==
+              PowerModels.var(pm, 1, :z14a, 1)
+        pm = vfx_bare_model(data)
+        eDisGo_OPF.variable_curtailment_14a_active(pm, nw=1, report=false)
+        @test vfx_reported(pm, 1, :curtailment_14a) === nothing
+    end
+end

@@ -308,6 +308,68 @@ class TestPowermodelsIO:
             )
         )
 
+    def test_to_powermodels_curtailment_14a(self):
+        with pytest.raises(ValueError, match="opf_version 2 or 4"):
+            powermodels_io.to_powermodels(
+                self.edisgo, opf_version=1, curtailment_14a=True
+            )
+
+        # by default all inflexible heat pumps and charging points in the LV grid,
+        # without time budget
+        pm, _ = powermodels_io.to_powermodels(
+            self.edisgo, opf_version=2, curtailment_14a=True
+        )
+        c14a = {c["name"]: (i, c) for i, c in pm["curtailment_14a"].items()}
+        assert sorted(c14a) == [
+            "Charging_Point_LVGrid_6_1",
+            "Heat_Pump_LVGrid_3_individual_heating_1",
+            "Heat_Pump_LVGrid_5_individual_heating_1",
+        ]
+        cp_i, cp = c14a["Charging_Point_LVGrid_6_1"]
+        cp_load = next(
+            load
+            for load in pm["load"].values()
+            if load["name"] == "Charging_Point_LVGrid_6_1"
+        )
+        assert cp["load_bus"] == cp_load["load_bus"]
+        assert cp["max_hours_per_day"] == 24
+        # charging points can be curtailed down to 4.2 kW
+        assert np.allclose(
+            pm["time_series"]["curtailment_14a"][cp_i]["pmax"], [0.5 - 0.0042] * 4
+        )
+        # heat pumps above 11 kW only down to 40 % of their nominal power
+        hp = "Heat_Pump_LVGrid_5_individual_heating_1"
+        assert np.allclose(
+            pm["time_series"]["curtailment_14a"][c14a[hp][0]]["pmax"],
+            (
+                self.edisgo.timeseries.loads_active_power[hp]
+                - 0.4 * self.edisgo.topology.loads_df.at[hp, "p_set"]
+            ).clip(lower=0),
+        )
+        assert pm["time_series"]["day_14a"] == [0, 0, 0, 0]
+
+        # selected components with time budget, flexible ones are not allowed
+        pm, _ = powermodels_io.to_powermodels(
+            self.edisgo,
+            opf_version=2,
+            curtailment_14a={"components": [hp], "max_hours_per_day": 2},
+        )
+        assert [c["name"] for c in pm["curtailment_14a"].values()] == [hp]
+        assert pm["curtailment_14a"]["1"]["max_hours_per_day"] == 2
+        with pytest.raises(ValueError, match="only possible for inflexible"):
+            powermodels_io.to_powermodels(
+                self.edisgo,
+                opf_version=2,
+                flexible_cps=["Charging_Point_LVGrid_6_1"],
+                curtailment_14a={"components": ["Charging_Point_LVGrid_6_1"]},
+            )
+        with pytest.raises(ValueError, match="only possible for inflexible"):
+            powermodels_io.to_powermodels(
+                self.edisgo,
+                opf_version=2,
+                curtailment_14a={"components": ["Storage_1"]},
+            )
+
     def test_to_powermodels_flexible_hps_without_thermal_storage(self):
         # flexible heat pumps without thermal storage get a storage with zero
         # capacity, also if no thermal storage is defined at all

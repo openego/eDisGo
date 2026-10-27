@@ -340,6 +340,47 @@ class TestPowerModelsOPF:
             )
         )
 
+    @pytest.mark.runonlinux
+    def test_pm_optimize_curtailment_14a(self):
+        self.setup_class()
+        cp = "Charging_Point_LVGrid_6_1"
+        # overload the grid with the charging point so that it has to be curtailed
+        self.edisgo.timeseries._loads_active_power.loc[:, cp] = 3.0
+        loads_before = self.edisgo.timeseries.loads_active_power.copy()
+        pm_optimize(
+            self.edisgo,
+            opf_version=2,
+            silence_moi=True,
+            method="nc",
+            curtailment_14a=True,
+        )
+
+        curtailment = self.edisgo.opf_results.grid_slacks_t.curtailment_14a
+        assert cp in curtailment.columns
+        assert (curtailment[cp] > 1e-3).all()
+        # §14a is used before load shedding
+        assert np.allclose(
+            self.edisgo.opf_results.grid_slacks_t.load_shedding[cp], 0, atol=1e-4
+        )
+        # the controlled loads are reduced by the curtailment, but not below the
+        # §14a minimum power
+        assert np.allclose(
+            self.edisgo.timeseries.loads_active_power[curtailment.columns],
+            loads_before[curtailment.columns] - curtailment,
+            atol=1e-6,
+        )
+        assert (self.edisgo.timeseries.loads_active_power[cp] >= 0.0042 - 1e-6).all()
+
+    @pytest.mark.parametrize("kwargs", [{"method": "nc"}, {"warm_start": True}])
+    def test_pm_optimize_curtailment_14a_time_budget_needs_gurobi(self, kwargs):
+        with pytest.raises(ValueError, match="Ipopt cannot handle"):
+            pm_optimize(
+                self.edisgo,
+                opf_version=2,
+                curtailment_14a={"max_hours_per_day": 2},
+                **kwargs,
+            )
+
 
 class TestContiguousIntervals:
     def test_contiguous_index_is_one_interval(self):

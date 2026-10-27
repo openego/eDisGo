@@ -816,4 +816,23 @@ end
         @test all(b["f_bus"] in keys(r[:bus]) && b["t_bus"] in keys(r[:bus])
                   for b in values(r[:branch]))
     end
+
+    @testset "§14a curtailment" begin
+        # Missing in the data: empty, with an empty bus mapping.
+        nw_ref = base_nw_ref(TestUtils.small_network())
+        @test isempty(nw_ref[:curtailment_14a])
+        @test all(isempty, values(nw_ref[:bus_curtailment_14a]))
+
+        # Mapped to its bus; switched off or at an inactive bus it is dropped.
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network())
+        TestUtils.add_curtailment_14a!(data; i=2, bus=2)
+        TestUtils.add_curtailment_14a!(data; i=3)
+        data["curtailment_14a"]["3"]["status"] = false
+        nw_ref = base_nw_ref(data)
+        @test sort(collect(keys(nw_ref[:curtailment_14a]))) == [1, 2]
+        @test nw_ref[:bus_curtailment_14a][3] == [1]
+        @test nw_ref[:bus_curtailment_14a][2] == [2]
+        data["bus"]["2"]["bus_type"] = 4
+        @test sort(collect(keys(base_nw_ref(data)[:curtailment_14a]))) == [1]
+    end
 end

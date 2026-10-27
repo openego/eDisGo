@@ -254,6 +254,37 @@ on the previous step and the power chosen in between. With time-step length
   addressed flexibility must meet the active power requested by the higher voltage
   level, up to a penalised slack (:ref:`overlying-grid-flex`).
 
+§14a EnWG curtailment
+~~~~~~~~~~~~~~~~~~~~~
+
+Under §14a EnWG the grid operator may reduce the grid draw of heat pumps and charging
+points down to a minimum power of 4.2 kW; for heat pumps above 11 kW the minimum is
+40 % of their nominal power (BNetzA BK6-22-300). With ``curtailment_14a=True`` (versions
+2 and 4 only), :meth:`~edisgo.edisgo.EDisGo.pm_optimize` adds a curtailment variable
+:math:`p^\text{14a}_t` for every inflexible heat pump and charging point in the low
+voltage grid, i.e. every one not passed in ``flexible_hps`` or ``flexible_cps``. It
+reduces the load at the component's bus and is bounded by the load minus the minimum
+power, :math:`0 \le p^\text{14a}_t \le \max(0, p^\text{load}_t - p^\text{min})`, so
+the remaining load never falls below the minimum. It enters the objective with half
+the weight of the grid slacks, so the OPF curtails before it sheds load, but not just
+to reduce losses.
+
+A dict instead of ``True`` selects the components (``"components"``) and sets a time
+budget per calendar day (``"max_hours_per_day"``). The budget adds a binary variable
+per component and time step and therefore requires ``method="soc"`` (Gurobi) without
+warm start. If the time index is split into several intervals, each interval gets its
+own budget.
+
+The curtailment is subtracted from the load time series in ``edisgo.timeseries`` and
+saved in ``edisgo.opf_results.grid_slacks_t.curtailment_14a``.
+
+.. code-block:: python
+
+   edisgo.pm_optimize(
+       opf_version=2,
+       curtailment_14a={"max_hours_per_day": 2},
+   )
+
 Multi-period structure
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -288,7 +319,8 @@ status and solve time, the per-line branch-flow variables
 battery-storage trajectories
 (:class:`~edisgo.opf.results.opf_result_class.HeatStorage`,
 :class:`~edisgo.opf.results.opf_result_class.BatteryStorage`), the exchange with the
-overlying grid, and the grid slack variables — curtailment and load shedding —
+overlying grid, and the grid slack variables — curtailment, load shedding and §14a
+curtailment —
 (:class:`~edisgo.opf.results.opf_result_class.GridSlacks`). See its API reference for
 the full field list.
 
