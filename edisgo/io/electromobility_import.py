@@ -1266,7 +1266,7 @@ def determine_grid_connection_capacity(
         ) * (total_charging_point_capacity - lower_limit)
 
 
-def integrate_charging_parks(edisgo_obj):
+def integrate_charging_parks(edisgo_obj, **kwargs):
     """
     Integrates all designated charging parks into the grid.
 
@@ -1275,6 +1275,13 @@ def integrate_charging_parks(edisgo_obj):
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+
+    Other Parameters
+    ----------------
+    kwargs :
+        Options of the grid connection, e.g. `connect_to_load_bus`, that are passed
+        on to
+        :attr:`~.edisgo.EDisGo.integrate_component_based_on_geolocation`.
 
     """
     charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
@@ -1298,6 +1305,7 @@ def integrate_charging_parks(edisgo_obj):
             sector=cp.use_case,
             add_ts=False,
             p_set=cp.grid_connection_capacity,
+            **kwargs,
         )
         for cp in designated_charging_parks
     ]

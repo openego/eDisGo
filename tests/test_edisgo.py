@@ -1511,11 +1511,22 @@ class TestEDisGo:
             "potential_charging_parks_from_oedb",
             charging_parks_mock,
         )
+        integrate_charging_parks_spy = Mock(
+            wraps=edisgo_module.integrate_charging_parks
+        )
+        monkeypatch.setattr(
+            edisgo_module, "integrate_charging_parks", integrate_charging_parks_spy
+        )
 
         self.edisgo.import_electromobility(
             data_source="oedb",
             scenario="eGon2035",
             engine=None,
+            integrate_charging_parks_kwds={"connect_to_load_bus": True},
+        )
+
+        integrate_charging_parks_spy.assert_called_once_with(
+            self.edisgo, connect_to_load_bus=True
         )
 
         assert len(self.edisgo.electromobility.charging_processes_df) == 3

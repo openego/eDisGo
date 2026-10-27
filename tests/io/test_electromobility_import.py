@@ -279,6 +279,23 @@ class TestElectromobilityImport:
 
         assert edisgo_ids_cp == edisgo_ids_topology
 
+    def test_integrate_charging_parks_passes_on_options(self):
+        # options of the grid connection must reach the integration of each park
+        edisgo_obj = Mock()
+        charging_park = Mock(
+            id=0,
+            designated_charging_point_capacity=0.011,
+            within_grid=True,
+            use_case="home",
+            grid_connection_capacity=0.011,
+        )
+        edisgo_obj.electromobility.potential_charging_parks = [charging_park]
+        electromobility_import.integrate_charging_parks(
+            edisgo_obj, connect_to_load_bus=True
+        )
+        call_kwargs = edisgo_obj.integrate_component_based_on_geolocation.call_args
+        assert call_kwargs.kwargs["connect_to_load_bus"] is True
+
     def test_charging_point_allocation_independent_of_input_order(
         self, monkeypatch, tmp_path
     ):

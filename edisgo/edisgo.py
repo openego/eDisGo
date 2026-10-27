@@ -1704,6 +1704,14 @@ class EDisGo:
 
         Other Parameters
         ------------------
+        max_distance_from_target_bus : float
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+        connect_to_load_bus : bool
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+        allowed_number_of_comp_per_bus : int
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
+            for LV grids with geolocations and
+            :attr:`~.network.topology.Topology.connect_to_lv` for LV grids without.
         kwargs :
             Attributes of added component.
             See :attr:`~.network.topology.Topology.add_generator`,
@@ -1742,6 +1750,11 @@ class EDisGo:
         if type(geolocation) is not Point:
             geolocation = Point(geolocation)
 
+        # options of the LV connection functions must not end up in the component data
+        max_distance_from_target_bus = kwargs.pop("max_distance_from_target_bus", 0.02)
+        connect_to_load_bus = kwargs.pop("connect_to_load_bus", False)
+        allowed_number_of_comp_per_bus = kwargs.pop("allowed_number_of_comp_per_bus", 2)
+
         # write voltage level and geolocation to kwargs
         kwargs["geom"] = geolocation
         kwargs["voltage_level"] = voltage_level
@@ -1765,14 +1778,18 @@ class EDisGo:
                     ]
                     nearest_substation, _ = find_nearest_bus(geolocation, substations)
                     kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
-                comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
+                comp_name = self.topology.connect_to_lv(
+                    self, kwargs, comp_type, allowed_number_of_comp_per_bus
+                )
 
             else:
-                max_distance_from_target_bus = kwargs.pop(
-                    "max_distance_from_target_bus", 0.02
-                )
                 comp_name = self.topology.connect_to_lv_based_on_geolocation(
-                    self, kwargs, comp_type, max_distance_from_target_bus
+                    self,
+                    kwargs,
+                    comp_type,
+                    max_distance_from_target_bus,
+                    connect_to_load_bus,
+                    allowed_number_of_comp_per_bus,
                 )
 
         if add_ts:
@@ -1962,6 +1979,7 @@ class EDisGo:
         potential_charging_points_dir: PurePath | str = None,
         import_electromobility_data_kwds=None,
         allocate_charging_demand_kwds=None,
+        integrate_charging_parks_kwds=None,
     ):
         """
         Imports electromobility data and integrates charging points into grid.
@@ -2068,6 +2086,20 @@ class EDisGo:
                 Weighting factor of the user-friendly weight in comparison to the
                 grid friendly weight. Default: 0.5.
 
+        integrate_charging_parks_kwds : dict
+            Options for the grid connection of the charging parks, passed on to
+            :func:`~.io.electromobility_import.integrate_charging_parks`.
+
+            connect_to_load_bus : bool
+                If True, home and work charging parks in voltage level 7 in LV grids
+                with geolocations are preferably connected to a bus with a matching
+                load, e.g. home charging parks to a bus with a residential load.
+                Default: False.
+
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
+            for this and the further options `max_distance_from_target_bus` and
+            `allowed_number_of_comp_per_bus`.
+
         """
         if import_electromobility_data_kwds is None:
             import_electromobility_data_kwds = {}
@@ -2097,7 +2129,10 @@ class EDisGo:
 
         distribute_charging_demand(self, **allocate_charging_demand_kwds)
 
-        integrate_charging_parks(self)
+        if integrate_charging_parks_kwds is None:
+            integrate_charging_parks_kwds = {}
+
+        integrate_charging_parks(self, **integrate_charging_parks_kwds)
 
     def apply_charging_strategy(
         self,

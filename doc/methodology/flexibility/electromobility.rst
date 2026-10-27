@@ -58,6 +58,15 @@ plain sum of its charging-point ratings:
 Using the gross sum directly would systematically oversize the connections (and the
 reinforcement); the diversity factor keeps the integration realistic.
 
+Where in the grid a park is connected follows its geolocation (see
+:ref:`Integration based on geolocation <components-geolocation>`). By default, a park
+in the LV grid is connected to the closest LV bus. With
+``integrate_charging_parks_kwds={"connect_to_load_bus": True}`` in
+:meth:`~edisgo.edisgo.EDisGo.import_electromobility`, home parks are connected to buses
+with residential loads and work parks to buses with CTS, industrial or agricultural
+loads, if such a bus lies within ``max_distance_from_target_bus`` (default 20 m).
+Public and hpc parks are not affected.
+
 .. _charging-strategies:
 
 Charging strategies (heuristic)
