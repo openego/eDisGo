@@ -1460,7 +1460,9 @@ class TestTimeSeries:
             index=timeindex[:1],
         )
 
-        with pytest.raises(ValueError, match="ts_generators"):
+        with pytest.raises(
+            ValueError, match="fluctuating generators time series miss 1 of 2"
+        ):
             self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
                 self.edisgo, incomplete_ts
             )
@@ -1652,7 +1654,9 @@ class TestTimeSeries:
             index=timeindex[:1],
         )
 
-        with pytest.raises(ValueError, match="ts_generators"):
+        with pytest.raises(
+            ValueError, match="dispatchable generators time series miss 1 of 2"
+        ):
             self.edisgo.timeseries.predefined_dispatchable_generators_by_technology(
                 self.edisgo, incomplete_ts
             )
@@ -1936,7 +1940,9 @@ class TestTimeSeries:
             index=timeindex[:2],
         )
 
-        with pytest.raises(ValueError, match="ts_loads"):
+        with pytest.raises(
+            ValueError, match="conventional loads time series miss 1 of 3"
+        ):
             self.edisgo.timeseries.predefined_conventional_loads_by_sector(
                 self.edisgo, incomplete_ts
             )
@@ -2063,7 +2069,7 @@ class TestTimeSeries:
             index=timeindex[:2],
         )
 
-        with pytest.raises(ValueError, match="ts_loads"):
+        with pytest.raises(ValueError, match="charging points time series miss 1 of 3"):
             self.edisgo.timeseries.predefined_charging_points_by_use_case(
                 self.edisgo, incomplete_ts
             )

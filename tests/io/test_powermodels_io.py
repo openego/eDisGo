@@ -350,19 +350,21 @@ class TestPowermodelsIO:
             p_set=3,
         )
 
-        # flexibility_bands spans 8 steps, twice the active 4-step timeindex,
-        # with distinctive values so misalignment is obvious
-        wide_index = pd.date_range(timeindex[0], periods=8, freq=timeindex.freq)
+        # the flexibility bands start two time steps before the time index and
+        # end two after it, so reading them by position gives other values
+        wide_index = pd.date_range(
+            timeindex[0] - 2 * timeindex.freq, periods=8, freq=timeindex.freq
+        )
         edisgo.electromobility.flexibility_bands = {
             "lower_energy": pd.DataFrame(
                 {"Charging_Point_LVGrid_6_1": [0.0] * 8}, index=wide_index
             ),
             "upper_energy": pd.DataFrame(
-                {"Charging_Point_LVGrid_6_1": [9.0, 1, 2, 3, 4, 5, 6, 7]},
+                {"Charging_Point_LVGrid_6_1": [5.0, 6, 9, 1, 2, 3, 4, 7]},
                 index=wide_index,
             ),
             "upper_power": pd.DataFrame(
-                {"Charging_Point_LVGrid_6_1": [9.0, 1, 2, 3, 4, 5, 6, 7]},
+                {"Charging_Point_LVGrid_6_1": [5.0, 6, 9, 1, 2, 3, 4, 7]},
                 index=wide_index,
             ),
         }

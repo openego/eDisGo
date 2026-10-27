@@ -489,26 +489,16 @@ class Electromobility:
                 start=start_date, periods=t_max + 1, freq=f"{stepsize}min"
             )
 
-        # Only build the bands from the charging processes that overlap
-        # edisgo_obj.timeseries.timeindex. SimBEV's calendar (start_date) is typically a
-        # fixed reference year independent of the scenario year, so the
-        # active timeindex is inverse year-shifted onto that calendar to
-        # find which SimBEV steps are actually relevant - this mirrors the
-        # forward year-shift `align_series_to_timeindex` already applies to
-        # the built bands further down. Only events overlapping that window
-        # are kept (mirrors dumb/reduced/residual: zero overlap -> zero
-        # contribution, not a special case).
-        #
-        # The array itself is NOT truncated to the window's end, only
-        # (potentially) to the earliest relevant event's start: clamping a
-        # retained event's true end down to an artificial array boundary
-        # would push it onto the `end == n_steps - 1` edge case below (a
-        # pre-existing, unrelated exclusion for events ending exactly on the
-        # array's last row) for every boundary-straddling event, silently
-        # dropping their contribution entirely rather than only trimming it.
-        # The array is instead sized to comfortably cover every retained
-        # event's true end - the pre-existing final `.loc[edisgo_timeindex]`
-        # step below still discards whatever trailing rows aren't needed.
+        # Only build the bands from the charging processes that overlap the
+        # time index (the window from its first to its last time step). The
+        # SimBEV data can be for another year than the time index, so the time
+        # index is shifted to the SimBEV year to find the window, as
+        # `align_series_to_timeindex` shifts the bands back below. The bands
+        # start at the earlier of the window start and the first of these
+        # charging processes and reach one step past the later of the window
+        # end and the end of the last of these processes, because processes
+        # ending on the last step are dropped below. The bands are reduced to
+        # the time index at the end.
         edisgo_timeindex = edisgo_obj.timeseries.timeindex
         if len(edisgo_timeindex) > 0:
             year_diff = flex_band_index[0].year - edisgo_timeindex[0].year
@@ -530,14 +520,8 @@ class Electromobility:
             relevant_processes = self.charging_processes_df.loc[overlaps_window]
 
             if relevant_processes.empty:
-                # No event overlaps the active window at all (e.g. the
-                # window falls entirely outside SimBEV's simulated range) -
-                # size the array to the window itself so the final
-                # `.loc[edisgo_timeindex]` step still produces the expected
-                # shape (filled with NaN via `align_series_to_timeindex`,
-                # exactly as the pre-existing full-span build already would
-                # have for this case), without ever touching t_max, which
-                # only bounds where real event data can be, not the window.
+                # no charging process overlaps the window, so the bands only
+                # cover the window
                 array_start_step = window_start_step
                 array_end_step = window_end_step
             else:
@@ -545,15 +529,6 @@ class Electromobility:
                     window_start_step,
                     int(relevant_processes.park_start_timesteps.min()),
                 )
-                # Cover every retained event's true end (never clamped down
-                # below it) as well as the active window's own end. +1 extra
-                # step of padding mirrors the pre-existing `end_date + 1 day`
-                # padding on the full-span build (see above) - it exists so
-                # a retained event's true end never lands exactly on the
-                # array's last row, which would otherwise trip the
-                # pre-existing `end == n_steps - 1` exclusion below for
-                # every such event instead of just the rare full-span case
-                # it originally guarded against.
                 array_end_step = (
                     max(
                         window_end_step,

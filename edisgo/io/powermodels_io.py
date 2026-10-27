@@ -1273,11 +1273,8 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         Updated array containing all charging points that allow for flexible charging.
 
     """
-    # Align to the active timeindex explicitly rather than relying on
-    # flexibility_bands already being in the same order/length - correct
-    # regardless of what ran before this function (e.g. a second
-    # select_timesteps step, or direct EDisGo API use), not just when the
-    # standard run pipeline's task ordering happens to keep them aligned.
+    # Select the flexibility bands by time stamp, as they can cover more or
+    # other time steps than the time index.
     timeindex = edisgo_obj.timeseries.timeindex
     flex_bands_df = {
         key: df.loc[timeindex]
@@ -2019,11 +2016,8 @@ def _build_component_timeseries(
             }
     elif kind == "electromobility":
         if len(flexible_cps) > 0:
-            # Align to the active timeindex explicitly (see
-            # _build_electromobility for the same fix and its rationale) -
-            # also guards against a length mismatch with
-            # pm["time_series"]["num_steps"] (set from len(psa_net.snapshots)
-            # independently of flexibility_bands' own length).
+            # Select the flexibility bands by time stamp, so that their length
+            # matches pm["time_series"]["num_steps"].
             timeindex = edisgo_obj.timeseries.timeindex
             p_set = (
                 edisgo_obj.electromobility.flexibility_bands["upper_power"].loc[

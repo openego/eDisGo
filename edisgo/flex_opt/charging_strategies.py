@@ -183,8 +183,8 @@ def charging_strategy(
     # only write the part of an event's charging interval [start, start + stop)
     # that is in the time index, so an event's energy follows from the steps
     # written. If the time series were resampled to the frequency of the
-    # charging processes, the time index is in a different step space; then
-    # every step counts and the result is reduced to the time index at the end.
+    # charging processes, every step counts and the result is reduced to the
+    # time index at the end.
     if resample:
         step_in_window = np.ones(len_ts, dtype=bool)
     else:
@@ -317,7 +317,8 @@ def charging_strategy(
         # the time index. The residual load only exists for the time index, so
         # steps outside of it have no residual load to rank by. If the time
         # series were resampled to the frequency of the charging processes,
-        # every step counts (see the same case for `dumb` and `reduced` above).
+        # every step counts and the charging processes at the edges of the time
+        # index are not reduced.
         if resample:
             step_in_window = np.ones(len_residual_load + 1, dtype=bool)
         else:
@@ -332,13 +333,11 @@ def charging_strategy(
         in_window_steps_cumsum = np.concatenate(([0], np.cumsum(step_in_window)))
 
         if not resample:
-            # Events are reduced to the active timeindex before being
-            # scheduled: fully in-window events are untouched, fully
-            # out-of-window events are dropped, and boundary-straddling
-            # events have their charging demand prorated by how much of
-            # their parking time is actually observable. This mirrors
-            # `harmonize_charging_processes_df`'s own derivation of
-            # `minimum_charging_time` from demand and nominal power.
+            # Reduce the charging processes to the time index: processes
+            # inside it are kept as they are, processes outside of it are
+            # dropped, and the minimum charging time of processes only partly
+            # inside it is reduced by the share of their parking time inside
+            # it (rounded up).
             parking_time = (
                 charging_processes_df.park_end_timesteps
                 - charging_processes_df.park_start_timesteps
@@ -357,30 +356,17 @@ def charging_strategy(
             # residual_load data exists for them at all
             in_window = overlap_steps > 0
             charging_processes_df = charging_processes_df.loc[in_window]
-            in_window_fraction = (
-                (overlap_steps[in_window]) / (parking_time.to_numpy()[in_window])
+            # integer ceiling division, as rounding up a float can add a step
+            scaled_minimum_charging_time = -(
+                -charging_processes_df.minimum_charging_time.to_numpy(np.int64)
+                * overlap_steps[in_window]
+                // parking_time.to_numpy()[in_window]
             )
-
-            scaled_demand_kWh = (
-                charging_processes_df.harmonized_chargingdemand * in_window_fraction
-            )
-            scaled_minimum_charging_time = (
-                scaled_demand_kWh
-                / charging_processes_df.nominal_charging_capacity_kW
-                * 60
-                / edisgo_obj.electromobility.stepsize
-            )
-            scaled_minimum_charging_time = np.ceil(scaled_minimum_charging_time).astype(
-                np.uint16
-            )
-
-            # defensive clamp: proration preserves
-            # minimum_charging_time <= parking_time, so this should only ever
-            # bind on pre-existing anomalous input (an event whose full,
-            # unscaled demand already didn't fit its own parking time)
+            # the minimum charging time can only exceed the parking time inside
+            # the time index if it already exceeds the whole parking time
             scaled_minimum_charging_time = np.minimum(
                 scaled_minimum_charging_time, overlap_steps[in_window]
-            )
+            ).astype(np.uint16)
 
             charging_processes_df = charging_processes_df.assign(
                 minimum_charging_time=scaled_minimum_charging_time,
@@ -500,10 +486,11 @@ def charging_strategy(
     # charging processes. Reduce the written columns to the time index, as
     # anything reading the stored time series directly (e.g.
     # reduce_timeseries_data_to_given_timeindex) would otherwise see the
-    # other time steps as well.
+    # other time steps as well. Time steps after the end of the charging
+    # processes data are set to zero.
     trimmed_active_power = edisgo_obj.timeseries._loads_active_power.loc[
         :, edisgo_ids_to_update
-    ].reindex(timeindex_orig)
+    ].reindex(timeindex_orig, fill_value=0.0)
     edisgo_obj.timeseries.drop_component_time_series(
         "loads_active_power", edisgo_ids_to_update
     )

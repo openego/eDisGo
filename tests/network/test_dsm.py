@@ -107,6 +107,21 @@ class TestDSM:
         assert gap > pd.Timedelta("15min")
         assert len(dsm.p_max) == 192  # 2 runs * 24h * 4 (15min steps/h)
 
+    def test_resample_gap_after_single_time_step(self):
+        """
+        The frequency is the smallest step of the index, not its first step,
+        so a gap after a single time step is kept.
+        """
+        index = pd.DatetimeIndex(["2035-01-08 00:00"]).union(
+            pd.date_range("2035-01-08 05:00", periods=24, freq="h")
+        )
+        dsm = DSM()
+        dsm.p_max = pd.DataFrame({"load_1": [5.0] * 25}, index=index)
+
+        dsm.resample(freq="15min")
+        assert len(dsm.p_max) == 100  # 25 hours * 4 (15min steps/h)
+        assert dsm.p_max.index.to_series().diff().max() == pd.Timedelta("4h15min")
+
     def test_to_csv(self):
         # test with default values
         save_dir = os.path.join(os.getcwd(), "dsm_csv")

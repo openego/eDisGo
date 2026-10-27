@@ -14,7 +14,12 @@ Changes
     store their time series for the time index only. ``dumb`` and ``reduced`` place
     the charging demand on the time steps of the time index, and ``residual`` no
     longer repeats the residual load to cover charging events outside of it
-    (openego/eDisGo#724, openego/eDisGo#725).
+    (openego/eDisGo#724, openego/eDisGo#725). If the time index has the frequency of
+    the charging processes, ``residual`` reduces the charging demand of a charging
+    event that is only partly in the time index by the share of its parking time
+    in the time index. With another frequency, the charging events are not
+    reduced, so the charged energy at the edges of the time index depends on the
+    frequency.
   * :func:`~.io.powermodels_io.to_powermodels` reads the flexibility bands of the
     charging points for the time index instead of by position, and raises a
     ``KeyError`` if they do not cover it (openego/eDisGo#718).
@@ -27,8 +32,9 @@ Changes
   * New :meth:`~.edisgo.EDisGo.reduce_timeseries_data_to_given_timeindex`.
 
   The runner presets reduce all time series to the selected time steps after the
-  strategies ran, so their results are mostly unaffected; direct use of these
-  methods is.
+  strategies ran, so their results do not change. Results change if these methods
+  are called directly with a time index that is shorter than the input data or has
+  gaps.
 * :func:`~.tools.plots.plot_plotly` accepts a :pandas:`pandas.Series<Series>` or
   dict as ``line_color`` and ``node_color`` that gives the color of each line or bus
   by name. Lines and buses that are not given are grey (`#639

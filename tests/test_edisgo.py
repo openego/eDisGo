@@ -240,7 +240,11 @@ class TestEDisGo:
             index=timeindex[:2],
         )
 
-        with pytest.raises(ValueError, match="generators_p"):
+        with pytest.raises(
+            ValueError,
+            match=r"'generators_p' time series miss 1 of 3 time steps of the time "
+            r"index \(first 2018-01-01 02:00:00, last 2018-01-01 02:00:00\)",
+        ):
             self.edisgo.set_time_series_manual(generators_p=incomplete_ts)
 
     def test_set_time_series_manual_exempts_zero_column_dataframe(self):

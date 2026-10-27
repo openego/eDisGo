@@ -89,23 +89,18 @@ def check_timeindex_coverage(timeindex, name, df):
     Raises ``ValueError`` if `df` has columns but is missing data for a time
     step in `timeindex`.
 
-    Used by :attr:`~.edisgo.EDisGo.set_time_series_manual` and the
-    self-provided-DataFrame options of
-    :class:`~.network.timeseries.TimeSeries`'s ``predefined_*`` methods to
-    enforce that user-provided time series actually cover the active
-    timeindex, instead of silently writing a partially- or non-overlapping
-    series. A DataFrame with no columns is exempt - nothing is being
-    written, so there is nothing to validate coverage for.
+    Used to check that time series provided by the user cover the time index
+    before they are written. A DataFrame without columns is not checked, as
+    nothing is written.
 
     Parameters
     ----------
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-        Time index to check coverage against. Assumed non-empty by the
-        caller.
+        Time index the data has to cover.
     name : str
-        Parameter name to reference in the raised error message.
+        Name of the time series used in the error message.
     df : :pandas:`pandas.DataFrame<DataFrame>` or None
-        DataFrame to check. Skipped if ``None`` or has no columns.
+        DataFrame to check. Not checked if None or without columns.
 
     """
     if df is None or df.shape[1] == 0:
@@ -113,8 +108,10 @@ def check_timeindex_coverage(timeindex, name, df):
     missing = timeindex.difference(df.index)
     if len(missing) > 0:
         raise ValueError(
-            f"'{name}' does not cover the current timeindex - missing time "
-            f"steps: {list(missing)}."
+            f"The {name} time series miss {len(missing)} of {len(timeindex)} time "
+            f"steps of the time index (first {missing[0]}, last {missing[-1]}). "
+            f"Provide data for these time steps or adapt the time index with "
+            f"EDisGo.set_timeindex."
         )
 
 
@@ -1410,14 +1407,10 @@ def split_into_contiguous_runs(df, freq_orig):
     Splits a DataFrame with a (possibly gapped) `DatetimeIndex` into its
     maximal contiguous runs.
 
-    A run boundary is any gap between consecutive index entries strictly
-    larger than `freq_orig`. Used by :func:`resample` so that resampling a
-    gapped timeindex (e.g. as produced by ``select_timesteps`` in auto mode,
-    which deliberately keeps two disjoint intervals separate) resamples each
-    contiguous block independently, rather than silently bridging the gap
-    with resample artifacts (pandas' own `.resample()` always buckets
-    contiguously across whatever span the data's index covers, filling any
-    gap with forward-filled/averaged data rather than leaving it empty).
+    A run boundary is any gap between consecutive index entries larger than
+    `freq_orig`. :func:`resample` resamples each run on its own, as pandas'
+    `.resample()` would fill a gap in the time index (e.g. two separate weeks)
+    with resampled data.
 
     Parameters
     ----------
@@ -1481,9 +1474,9 @@ def resample(
 
     Notes
     -----
-    A gapped index (e.g. as produced by ``select_timesteps`` in auto mode) is
-    resampled per contiguous run (see :func:`split_into_contiguous_runs`), so
-    a gap is preserved rather than silently bridged with resample artifacts.
+    A time index with gaps (e.g. two separate weeks) is resampled per
+    contiguous run (see :func:`split_into_contiguous_runs`), so the gaps are
+    kept.
 
     """
     if attr_to_resample is None:
@@ -1492,7 +1485,7 @@ def resample(
     freq = pd.Timedelta(freq) if not isinstance(freq, pd.Timedelta) else freq
     up_sampling = freq < freq_orig
 
-    if method not in ("interpolate", "ffill", "bfill"):
+    if up_sampling and method not in ("interpolate", "ffill", "bfill"):
         raise NotImplementedError(f"Resampling method {method} is not implemented.")
 
     for attr in attr_to_resample:

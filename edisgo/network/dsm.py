@@ -182,7 +182,7 @@ class DSM:
                     f"time steps."
                 )
             else:
-                freq_orig = attr_index[1] - attr_index[0]
+                freq_orig = (attr_index[1:] - attr_index[:-1]).min()
                 tools.resample(self, freq_orig, method, freq, attr_to_resample=[attr])
 
     def reduce_memory(

@@ -327,12 +327,9 @@ class EDisGo:
         You can set the time index upon initialisation of the EDisGo object by
         providing the input parameter 'timeindex' or using the function
         :attr:`~.edisgo.EDisGo.set_timeindex`.
-        Also make sure that the time steps for which time series are provided include
-        the set time index - this is now enforced: a `ValueError` is raised if a
-        non-empty DataFrame is missing data for a time step in
-        :attr:`~.network.timeseries.TimeSeries.timeindex` when a time index is
-        already set. A DataFrame with no columns is exempt from this check (nothing
-        is being written, so there is nothing to validate coverage for).
+        If a time index is set, the provided time series have to cover it. A
+        `ValueError` is raised if a DataFrame with columns is missing data for a time
+        step in :attr:`~.network.timeseries.TimeSeries.timeindex`.
 
         """
         # check if time index is already set, otherwise raise warning
@@ -352,7 +349,7 @@ class EDisGo:
                 ("loads_q", loads_q),
                 ("storage_units_q", storage_units_q),
             ):
-                check_timeindex_coverage(self.timeseries.timeindex, name, df)
+                check_timeindex_coverage(self.timeseries.timeindex, f"'{name}'", df)
         self.timeseries.set_active_power_manual(
             self,
             ts_generators=generators_p,

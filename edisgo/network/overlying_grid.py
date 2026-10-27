@@ -292,7 +292,7 @@ class OverlyingGrid:
             )
             return
 
-        freq_orig = timeindex[1] - timeindex[0]
+        freq_orig = (timeindex[1:] - timeindex[:-1]).min()
         resample(self, freq_orig, method, freq)
 
 

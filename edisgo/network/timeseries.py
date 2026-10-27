@@ -1298,7 +1298,9 @@ class TimeSeries:
             # to edisgo_object's timeindex by feedin_oedb/feedin_oedb_legacy
             if not edisgo_object.timeseries.timeindex.empty:
                 check_timeindex_coverage(
-                    edisgo_object.timeseries.timeindex, "ts_generators", ts_generators
+                    edisgo_object.timeseries.timeindex,
+                    "fluctuating generators",
+                    ts_generators,
                 )
 
         # set generator_names if None
@@ -1394,7 +1396,9 @@ class TimeSeries:
             raise ValueError("'ts_generators' must be a pandas DataFrame.")
         if not edisgo_object.timeseries.timeindex.empty:
             check_timeindex_coverage(
-                edisgo_object.timeseries.timeindex, "ts_generators", ts_generators
+                edisgo_object.timeseries.timeindex,
+                "dispatchable generators",
+                ts_generators,
             )
 
         # write to TimeSeriesRaw
@@ -1501,7 +1505,7 @@ class TimeSeries:
             # self-provided DataFrame - the demandlib path above is already
             # scoped to edisgo_object's timeindex by load_time_series_demandlib
             check_timeindex_coverage(
-                edisgo_object.timeseries.timeindex, "ts_loads", ts_loads
+                edisgo_object.timeseries.timeindex, "conventional loads", ts_loads
             )
 
         # write to TimeSeriesRaw
@@ -1581,7 +1585,7 @@ class TimeSeries:
             return
         elif not edisgo_object.timeseries.timeindex.empty:
             check_timeindex_coverage(
-                edisgo_object.timeseries.timeindex, "ts_loads", ts_loads
+                edisgo_object.timeseries.timeindex, "charging points", ts_loads
             )
 
         # write to TimeSeriesRaw
@@ -2323,16 +2327,13 @@ class TimeSeries:
             )
             return
 
-        freq_orig = self.timeindex[1] - self.timeindex[0]
+        freq_orig = (self.timeindex[1:] - self.timeindex[:-1]).min()
 
         resample(self, freq_orig, method, freq)
 
-        # Rebuild the new index per contiguous run of the original timeindex
-        # (mirroring how `resample()` above already resamples the data
-        # per-run) and union them back together, so a gap in the original
-        # timeindex (e.g. from `select_timesteps` in auto mode) is preserved
-        # here too, rather than bridged by one date_range(first, last, freq)
-        # span.
+        # Build the new index per contiguous run of the time index, like the
+        # data above, so gaps in the time index (e.g. two separate weeks) are
+        # kept.
         freq_td = pd.Timedelta(freq)
         new_indices = []
         for run in split_into_contiguous_runs(
