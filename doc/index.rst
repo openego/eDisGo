@@ -122,6 +122,7 @@ The synthetic distribution grids analysed in these studies are generated with
    tutorials/simple_example
    tutorials/electromobility_example
    tutorials/plot_example
+   tutorials/expansion_path_example
 
 .. _reference:
 

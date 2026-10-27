@@ -18,6 +18,7 @@ import os
 import pickle
 import shutil
 
+from collections.abc import Callable
 from numbers import Number
 from pathlib import PurePath
 
@@ -28,6 +29,10 @@ from sqlalchemy.engine.base import Engine
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
+from edisgo.flex_opt.expansion_path import (
+    ExpansionPathResults,
+    reinforce_expansion_path,
+)
 from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
@@ -1506,6 +1511,74 @@ class EDisGo:
             self.results.measures = "grid_expansion"
 
         return edisgo_obj.results
+
+    def reinforce_expansion_path(
+        self,
+        stages: dict[int, Callable[[EDisGo], None]],
+        base_year: int | None = None,
+        discount_rate: float = 0.05,
+        compare_direct_reinforce: bool = False,
+        **kwargs,
+    ) -> ExpansionPathResults:
+        """
+        Reinforces the grid stage by stage for several target years.
+
+        Every stage starts from the grid reinforced in the previous stage, so the
+        result shows when which measure is needed. For each year in `stages`, the
+        given function applies the changes up to this year to the grid, e.g. adds
+        heat pumps and charging points, and the grid is reinforced with
+        :meth:`~.edisgo.EDisGo.reinforce`. The costs of each stage only comprise the
+        measures taken in this stage and are discounted to `base_year`.
+
+        Applying the functions of all stages up to a year one after another to the
+        original grid must give the grid of this year. The functions must be
+        deterministic, as `compare_direct_reinforce` calls them again.
+
+        The EDisGo object is changed in place and contains the grid reinforced for
+        the last stage afterwards. Its
+        :attr:`~.network.results.Results.grid_expansion_costs` are the costs of all
+        stages calculated at once, with the earthworks of every line counted once.
+
+        See :func:`~.flex_opt.expansion_path.reinforce_expansion_path` for more
+        information.
+
+        Parameters
+        ----------
+        stages : dict(int, callable)
+            Years of the stages and, for each year, a function that takes the
+            EDisGo object and applies the changes up to this year to it, see
+            above. The function has to leave the object with time series for all
+            components.
+        base_year : int or None
+            Year the costs are discounted to. Per default, the year of the first
+            stage. Default: None.
+        discount_rate : float
+            Discount rate per year, e.g. 0.05 for 5 %. Default: 0.05.
+        compare_direct_reinforce : bool
+            If True, the original grid is additionally reinforced directly for the
+            scenario of every stage, to compare the costs of the expansion path with
+            building for the target year at once. Default: False.
+
+        Other Parameters
+        -----------------
+        kwargs : dict
+            Parameters passed to :meth:`~.edisgo.EDisGo.reinforce` in every stage.
+
+        Returns
+        -------
+        :class:`~.flex_opt.expansion_path.ExpansionPathResults`
+            Costs per stage (attribute `summary`) and the costs and equipment changes
+            of every stage.
+
+        """
+        return reinforce_expansion_path(
+            self,
+            stages,
+            base_year=base_year,
+            discount_rate=discount_rate,
+            compare_direct_reinforce=compare_direct_reinforce,
+            reinforce_kwargs=kwargs,
+        )
 
     def add_component(
         self,

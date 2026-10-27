@@ -34,6 +34,18 @@ class TestExamples:
         nb = nbformat.read(path, as_version=4)
         NotebookClient(nb, timeout=600, kernel_name="python3").execute()
 
+    @pytest.mark.slow
+    def test_expansion_path_example_ipynb(self):
+        path = os.path.join(self.examples_dir_path, "expansion_path_example.ipynb")
+        nb = nbformat.read(path, as_version=4)
+        # the example loads the test grid relative to the examples directory
+        NotebookClient(
+            nb,
+            timeout=600,
+            kernel_name="python3",
+            resources={"metadata": {"path": self.examples_dir_path}},
+        ).execute()
+
     @classmethod
     def teardown_class(cls):
         logger = logging.getLogger("edisgo")

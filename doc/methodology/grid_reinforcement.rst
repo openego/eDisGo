@@ -714,6 +714,11 @@ with the line length :math:`l` and the number :math:`q` of added cables. Transfo
 cost a fixed amount each (``costs_transformers``: 10 kEUR for MV/LV, 1000 kEUR for
 HV/MV), independent of their size.
 
+Along an expansion path (:py:meth:`~edisgo.EDisGo.reinforce_expansion_path`), the
+costs of every stage are calculated on their own. A line that gets another cable in
+a later stage pays the earthwork again, as the new cable needs its own trench, and
+the reinforcement of that stage plans with this earthwork as well.
+
 .. only:: html
 
    Choose the voltage level and the area type and move the sliders to see how the
