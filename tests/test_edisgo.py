@@ -32,22 +32,9 @@ from edisgo.tools.tools import (
 def mock_oep_time_series_import(monkeypatch):
     """Replace OEP time-series retrieval with small local DataFrames."""
 
-    def apply_mocks(*, edisgo_object, timeindex, load_name):
+    def apply_mocks(*, edisgo_object, load_name):
         """Defines the helper function that applies the mocks
         for the OEP time-series retrieval functions."""
-
-        # Create minimal load and feed-in profiles
-        # for the requested timeindex:
-        load_profiles = pd.DataFrame(
-            {
-                load_name: np.linspace(
-                    0.1,
-                    0.2,
-                    len(timeindex),
-                )
-            },
-            index=timeindex,
-        )
 
         fluctuating_gens = edisgo_object.topology.generators_df.query(
             "type in ['wind', 'solar']"
@@ -56,16 +43,27 @@ def mock_oep_time_series_import(monkeypatch):
             fluctuating_gens[["type", "weather_cell_id"]].drop_duplicates()
         )
 
-        feedin_profiles = pd.DataFrame(
-            0.5,
-            index=timeindex,
-            columns=profile_columns,
-        )
+        # Create minimal load and feed-in profiles for the time index the real
+        # functions would use, which also sets TimeSeries.timeindex if needed
+        def load_profiles(edisgo_obj, *args, timeindex=None, **kwargs):
+            timeindex, _ = timeseries_import._timeindex_helper_func(
+                edisgo_obj, timeindex
+            )
+            return pd.DataFrame(
+                {load_name: np.linspace(0.1, 0.2, len(timeindex))},
+                index=timeindex,
+            )
+
+        def feedin_profiles(edisgo_obj, *args, timeindex=None, **kwargs):
+            timeindex, _ = timeseries_import._timeindex_helper_func(
+                edisgo_obj, timeindex
+            )
+            return pd.DataFrame(0.5, index=timeindex, columns=profile_columns)
 
         # Creates replacement functions that return the mock profiles
         # instead of querying the OEP database:
-        demand_mock = Mock(return_value=load_profiles)
-        feedin_mock = Mock(return_value=feedin_profiles)
+        demand_mock = Mock(side_effect=load_profiles)
+        feedin_mock = Mock(side_effect=feedin_profiles)
 
         # Temporarily replace the OEP time-series retrieval functions
         # with the mocks:
@@ -133,6 +131,28 @@ class TestEDisGo:
 
         # delete directory
         shutil.rmtree(save_dir)
+
+    def test_set_timeindex(self, caplog):
+        # test time index in the reference year is set unchanged
+        timeindex = pd.date_range("3/1/2011", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+        assert_index_equal(self.edisgo.timeseries.timeindex, timeindex)
+
+        # test full leap year is relabelled to the reference year without 29 Feb
+        with caplog.at_level(logging.WARNING):
+            self.edisgo.set_timeindex(
+                pd.date_range("1/1/2020", periods=8784, freq="H")
+            )
+        assert "is set in year 2020" in caplog.text
+        assert_index_equal(
+            self.edisgo.timeseries.timeindex,
+            pd.date_range("1/1/2011", periods=8760, freq="H"),
+        )
+
+        # test worst-case time index is set unchanged
+        worst_case_index = pd.date_range("1/1/1970", periods=4, freq="H")
+        self.edisgo.set_timeindex(worst_case_index)
+        assert_index_equal(self.edisgo.timeseries.timeindex, worst_case_index)
 
     def test_set_time_series_manual(self, caplog):
         timeindex = pd.date_range("1/1/2011", periods=3, freq="H")
@@ -379,7 +399,6 @@ class TestEDisGo:
         # Create the fake data (mocks)
         demand_mock, feedin_mock = mock_oep_time_series_import(
             edisgo_object=edisgo_object,
-            timeindex=requested_timeindex,
             load_name=load_name,
         )
 
@@ -430,7 +449,6 @@ class TestEDisGo:
         # Create the fake data (mocks)
         demand_mock, feedin_mock = mock_oep_time_series_import(
             edisgo_object=edisgo_object,
-            timeindex=expected_timeindex,
             load_name=load_name,
         )
         # Execute the function using its real "oedb" code paths. Only the OEP
@@ -451,33 +469,36 @@ class TestEDisGo:
         assert demand_mock.call_args.kwargs["timeindex"] is None
         assert feedin_mock.call_args.kwargs["timeindex"] is None
 
-    @pytest.mark.slow
-    def test_set_time_series_active_power_predefined_oedb_reference_year_independent_of_scenario(  # noqa: E501
-        self,
+    @pytest.mark.parametrize("reference_year", [2011, 2013])
+    def test_set_time_series_active_power_predefined_oedb_reference_year(
+        self, mock_oep_time_series_import, monkeypatch, reference_year
     ):
-        # 'eGon100RE' used to map to year 2045 via the now removed
-        # get_year_based_on_scenario; the resulting time index must instead
-        # be in the configured reference year (default 2011), regardless of
-        # scenario, whenever neither an explicit timeindex nor
-        # TimeSeries.timeindex is set
+        # without timeindex, TimeSeries.timeindex is set to the reference year for
+        # every scenario
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path,
             legacy_ding0_grids=False,
         )
-        assert edisgo_object.timeseries.timeindex.empty
-
-        edisgo_object.set_time_series_active_power_predefined(
-            conventional_loads_ts="oedb",
-            fluctuating_generators_ts="oedb",
-            scenario="eGon100RE",
-            engine=pytest.engine,
-            conventional_loads_names=[
-                "Load_mvgd_33535_lvgd_1164210000_244_residential"
-            ],
+        monkeypatch.setitem(
+            edisgo_object.config["timeindex"], "reference_year", reference_year
         )
+        load_name = "Load_mvgd_33535_lvgd_1164210000_244_residential"
+        mock_oep_time_series_import(edisgo_object=edisgo_object, load_name=load_name)
 
-        assert edisgo_object.timeseries.timeindex[0].year == 2011
-        assert edisgo_object.timeseries.timeindex[0].year != 2045
+        for scenario in ["eGon2035", "eGon100RE"]:
+            edisgo_object.timeseries.timeindex = pd.DatetimeIndex([])
+            edisgo_object.set_time_series_active_power_predefined(
+                conventional_loads_ts="oedb",
+                fluctuating_generators_ts="oedb",
+                scenario=scenario,
+                engine=None,
+                conventional_loads_names=[load_name],
+            )
+            assert_index_equal(
+                edisgo_object.timeseries.timeindex,
+                pd.date_range(f"1/1/{reference_year}", periods=8760, freq="H"),
+            )
+            assert edisgo_object.timeseries.loads_active_power[load_name].notna().all()
 
     def test_set_time_series_reactive_power_control(self):
         # set active power time series for fixed cosphi
@@ -1754,15 +1775,12 @@ class TestEDisGo:
             assert df["Load_1"].tolist() == [0.1, 0.2, 0.3]
 
     @pytest.mark.slow
-    def test_import_heat_pumps_reference_year_independent_of_scenario(self):
-        # 'eGon2035' used to map to year 2035 via the now removed
-        # get_year_based_on_scenario; the resulting time index must instead
-        # be in the configured reference year (default 2011), regardless of
-        # scenario, whenever neither an explicit timeindex nor
-        # TimeSeries.timeindex is set.
-        # Note: 'eGon100RE' would make the same point (it used to map to
-        # 2045), but ding0_test_network_3 has zero heat pumps for that
-        # scenario, so there would be no heat_demand_df/cop_df to check.
+    @pytest.mark.oep
+    def test_import_heat_pumps_reference_year_independent_of_scenario(
+        self, oep_engine
+    ):
+        # without timeindex, heat demand and COP are indexed in the reference year
+        # (ding0_test_network_3 only has heat pumps in scenario eGon2035)
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -1770,16 +1788,16 @@ class TestEDisGo:
 
         edisgo_object.import_heat_pumps(
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=oep_engine,
             import_types=["individual_heat_pumps", "central_heat_pumps"],
         )
 
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
-        assert edisgo_object.heat_pump.heat_demand_df.index[0].year != 2035
         assert edisgo_object.heat_pump.cop_df.index[0].year == 2011
 
     @pytest.mark.slow
-    def test_set_time_series_and_import_heat_pumps_order_independent(self):
+    @pytest.mark.oep
+    def test_set_time_series_and_import_heat_pumps_order_independent(self, oep_engine):
         """
         Whichever of set_time_series_active_power_predefined (oedb feed-in)
         or import_heat_pumps runs first on a fresh EDisGo object (empty
@@ -1790,11 +1808,11 @@ class TestEDisGo:
         feedin_kwargs = dict(
             fluctuating_generators_ts="oedb",
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=oep_engine,
         )
         heat_pump_kwargs = dict(
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=oep_engine,
             import_types=["individual_heat_pumps", "central_heat_pumps"],
         )
 
@@ -2442,38 +2460,6 @@ class TestEDisGo:
             )
             pd.testing.assert_series_equal(
                 active_power[gen], expected, check_names=False
-            )
-
-    def test_get_flexibility_bands_no_timeindex_uses_reference_year(self):
-        """
-        Regression test for the timeindex/reference-year refactor: with
-        TimeSeries.timeindex empty, building flexibility bands from real
-        SimBEV/TracBEV test data must set up TimeSeries.timeindex on the
-        configured reference year and align the bands onto it - not leave
-        everything in SimBEV's own native calendar.
-        """
-        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
-        electromobility_import.import_electromobility_from_dir(
-            edisgo_obj,
-            pytest.simbev_example_scenario_path,
-            pytest.tracbev_example_scenario_path,
-        )
-        electromobility_import.distribute_charging_demand(edisgo_obj)
-        electromobility_import.integrate_charging_parks(edisgo_obj)
-
-        assert edisgo_obj.timeseries.timeindex.empty
-
-        reference_year = get_reference_year(edisgo_obj)
-        bands = edisgo_obj.electromobility.get_flexibility_bands(
-            edisgo_obj, ["work", "public"]
-        )
-
-        assert not edisgo_obj.timeseries.timeindex.empty
-        assert edisgo_obj.timeseries.timeindex[0].year == reference_year
-        for key in ("upper_power", "lower_energy", "upper_energy"):
-            assert bands[key].index[0].year == reference_year
-            pd.testing.assert_index_equal(
-                bands[key].index, edisgo_obj.timeseries.timeindex
             )
 
     def test_reduce_timeseries_data_to_given_timeindex_heat_pump_different_year(

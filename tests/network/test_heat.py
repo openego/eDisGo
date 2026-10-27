@@ -291,24 +291,20 @@ class TestHeatPump:
             [edisgo_object.topology.loads_df, hp_data_egon]
         )
 
-        annual_timeindex = pd.date_range("1/1/2035", periods=8760, freq="H")
-        annual_heat_demand = pd.DataFrame(
-            1.0,
-            index=annual_timeindex,
-            columns=hp_data_egon.index,
-        )
-        heat_demand_mock = mock_oep_heat_import(
-            timeseries_import,
-            "heat_demand_oedb",
-            annual_heat_demand,
-        )
+        # the mock returns data for the time index the real function would use,
+        # which also sets TimeSeries.timeindex if needed
+        def heat_demand(edisgo_obj, timeindex=None, **kwargs):
+            timeindex, _ = timeseries_import._timeindex_helper_func(
+                edisgo_obj, timeindex
+            )
+            return pd.DataFrame(1.0, index=timeindex, columns=hp_data_egon.index)
 
-        # ################# test with no timeindex to get year from #############
-        # With neither an explicit timeindex nor TimeSeries.timeindex set,
-        # _timeindex_helper_func (Fall c) now indexes by the configured
-        # reference year (default 2011) rather than the scenario year - the
-        # scenario is currently not used to determine the default year for
-        # the oedb import functions (that rework is a later step).
+        heat_demand_mock = mock_oep_heat_import(
+            timeseries_import, "heat_demand_oedb", None
+        )
+        heat_demand_mock.side_effect = heat_demand
+
+        # ################# test without timeindex #############
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,
             "oedb",
@@ -317,17 +313,16 @@ class TestHeatPump:
         )
         assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 5)
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
+        pd.testing.assert_index_equal(
+            edisgo_object.timeseries.timeindex,
+            edisgo_object.heat_pump.heat_demand_df.index,
+        )
 
-        # ###### test with timeindex to get year from and invalid heat pump name #####
+        # ###### test with timeindex and invalid heat pump name #####
         # reset heat_demand_df
         edisgo_object.heat_pump.heat_demand_df = pd.DataFrame()
         edisgo_object.set_timeindex(
             pd.date_range("1/1/2011 12:00", periods=2, freq="H")
-        )
-        heat_demand_mock.return_value = pd.DataFrame(
-            2.0,
-            index=edisgo_object.timeseries.timeindex,
-            columns=hp_data_egon.index,
         )
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,

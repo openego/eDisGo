@@ -491,26 +491,29 @@ class TestTimeseriesImport:
         assert mocks["district_heating"].call_count == 2
         assert mocks["cts"].call_count == 2
 
-    def test_heat_demand_oedb_reference_year_independent_of_scenario(self):
-        # 'eGon100RE' used to map to year 2045 via the now removed
-        # get_year_based_on_scenario; the resulting time index must instead
-        # be in the configured reference year (default 2011), regardless of
-        # scenario, whenever neither an explicit timeindex nor
-        # TimeSeries.timeindex is set
+    @pytest.mark.parametrize("reference_year", [2011, 2013])
+    def test_heat_demand_oedb_reference_year_independent_of_scenario(
+        self, mock_oep_demand_retrieval, monkeypatch, reference_year
+    ):
+        # without timeindex, the data is indexed in the reference year for every
+        # scenario
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        monkeypatch.setitem(
+            edisgo_object.config["timeindex"], "reference_year", reference_year
         )
         hp_data_egon = self.setup_egon_heat_pump_data()
         edisgo_object.topology.loads_df = pd.concat(
             [edisgo_object.topology.loads_df, hp_data_egon]
         )
-        assert edisgo_object.timeseries.timeindex.empty
-
-        df = timeseries_import.heat_demand_oedb(
-            edisgo_object, "eGon100RE", pytest.engine
-        )
-        assert df.index[0].year == 2011
-        assert df.index[0].year != 2045
+        for scenario in ["eGon2035", "eGon100RE"]:
+            edisgo_object.timeseries.timeindex = pd.DatetimeIndex([])
+            df = timeseries_import.heat_demand_oedb(
+                edisgo_object, scenario, engine=None
+            )
+            assert df.index[0] == pd.Timestamp(f"1/1/{reference_year}")
+            assert len(df) == 8760
 
     def test_heat_demand_oedb_without_residential_heat_demand(
         self, mock_oep_demand_retrieval
@@ -620,25 +623,28 @@ class TestTimeseriesImport:
         assert mocks["industrial_electricity"].call_count == 3
         assert mocks["cts"].call_count == 2
 
-    def test_electricity_demand_oedb_reference_year_independent_of_scenario(self):
-        # 'eGon100RE' used to map to year 2045 via the now removed
-        # get_year_based_on_scenario; the resulting time index must instead
-        # be in the configured reference year (default 2011), regardless of
-        # scenario, whenever neither an explicit timeindex nor
-        # TimeSeries.timeindex is set
+    @pytest.mark.parametrize("reference_year", [2011, 2013])
+    def test_electricity_demand_oedb_reference_year_independent_of_scenario(
+        self, mock_oep_demand_retrieval, monkeypatch, reference_year
+    ):
+        # without timeindex, the data is indexed in the reference year for every
+        # scenario
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        assert edisgo_object.timeseries.timeindex.empty
-
-        df = timeseries_import.electricity_demand_oedb(
-            edisgo_object,
-            "eGon100RE",
-            pytest.engine,
-            load_names=["Load_mvgd_33535_1_industrial"],
+        monkeypatch.setitem(
+            edisgo_object.config["timeindex"], "reference_year", reference_year
         )
-        assert df.index[0].year == 2011
-        assert df.index[0].year != 2045
+        for scenario in ["eGon2035", "eGon100RE"]:
+            edisgo_object.timeseries.timeindex = pd.DatetimeIndex([])
+            df = timeseries_import.electricity_demand_oedb(
+                edisgo_object,
+                scenario,
+                engine=None,
+                load_names=["Load_mvgd_33535_1_industrial"],
+            )
+            assert df.index[0] == pd.Timestamp(f"1/1/{reference_year}")
+            assert len(df) == 8760
 
     @pytest.mark.oep
     def test_query_residential_heat_profile_data_live(self, oep_engine):

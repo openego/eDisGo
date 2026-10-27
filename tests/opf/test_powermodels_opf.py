@@ -412,13 +412,13 @@ class TestPmOptimizeIntervalSplit:
     @pytest.fixture
     def edisgo_obj(self):
         e = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        e.set_timeindex(pd.date_range("2035-01-01", periods=24, freq="h"))
+        e.set_timeindex(pd.date_range("2011-01-01", periods=24, freq="h"))
         return e
 
     def test_single_interval_calls_once_with_freq(self, edisgo_obj, monkeypatch):
         import edisgo.opf.powermodels_opf as pmo
 
-        ti = pd.DatetimeIndex(pd.date_range("2035-01-01", periods=24, freq="h").values)
+        ti = pd.DatetimeIndex(pd.date_range("2011-01-01", periods=24, freq="h").values)
         assert ti.freq is None
         edisgo_obj.set_timeindex(ti)
         seen = []
@@ -433,8 +433,8 @@ class TestPmOptimizeIntervalSplit:
     def test_two_intervals_run_separately_and_restore(self, edisgo_obj, monkeypatch):
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         seen = []
@@ -456,8 +456,8 @@ class TestPmOptimizeIntervalSplit:
     def test_overlying_grid_state_restored(self, edisgo_obj, monkeypatch):
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         edisgo_obj.overlying_grid.storage_units_soc = pd.Series(1.0, index=full)
@@ -479,8 +479,8 @@ class TestPmOptimizeIntervalSplit:
     def test_reactive_power_restored(self, edisgo_obj, monkeypatch):
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         gen = edisgo_obj.topology.generators_df.index[0]
@@ -510,8 +510,8 @@ class TestPmOptimizeIntervalSplit:
 
         from edisgo.flex_opt.exceptions import InfeasibleModelError
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
 
@@ -540,8 +540,8 @@ class TestPmOptimizeIntervalSplit:
         """
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         # distinguishable values per interval: 1.0 in week 1, 9.0 in week 2
@@ -582,8 +582,8 @@ class TestPmOptimizeIntervalSplit:
         """DSM and heat-pump inputs are narrowed per interval and restored."""
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         values = [1.0] * len(a) + [9.0] * len(b)
