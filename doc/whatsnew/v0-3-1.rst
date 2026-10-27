@@ -408,3 +408,15 @@ Changes
   of ``src/`` drops below 100 %. Known defects of the package that are not fixed
   yet are marked with ``@test_broken`` and tracked in openego/eDisGo#810
   (openego/eDisGo#522)
+* New option ``connect_to_load_bus`` (off by default) in
+  :attr:`~.edisgo.EDisGo.integrate_component_based_on_geolocation` connects
+  components in voltage level 7 to a close bus with a matching load, e.g. home
+  charging points to a bus with a residential load, see
+  :ref:`components-geolocation`. For charging parks, it is set via the new parameter
+  ``integrate_charging_parks_kwds`` of :attr:`~.edisgo.EDisGo.import_electromobility`
+  (openego/eDisGo#413)
+* Fixed :attr:`~.network.topology.Topology.connect_to_mv`, which connected a new
+  component to an existing bus if the name of the new MV bus, e.g.
+  ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
+  the component and the new MV line were connected to the existing bus. This could
+  happen after components were removed or aggregated (openego/eDisGo#413)
