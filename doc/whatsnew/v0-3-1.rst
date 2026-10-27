@@ -6,6 +6,21 @@ Release date: not yet released
 Changes
 -------
 
+* :func:`~.tools.plots.plot_plotly` accepts a :pandas:`pandas.Series<Series>` or
+  dict as ``line_color`` and ``node_color`` that gives the color of each line or bus
+  by name. Lines and buses that are not given are grey (`#639
+  <https://github.com/openego/eDisGo/pull/639>`_)
+* Made :func:`~.io.electromobility_import.determine_grid_connection_capacity`
+  monotonically non-decreasing. Between ``lower_limit`` and ``upper_limit`` it
+  interpolated the simultaneity factor linearly and multiplied it with the gross
+  capacity, so the returned capacity was quadratic and, with the default parameters,
+  peaked at about 0.486 MW for a 0.79 MW park before dropping to 0.45 MW at 1 MW. A
+  larger charging park could thus get a smaller grid connection capacity. The
+  capacity itself is now interpolated linearly between ``lower_limit`` and
+  ``minimum_factor * upper_limit``; values outside that range are unchanged, values
+  inside it are lower than before. Parameters with
+  ``minimum_factor * upper_limit < lower_limit`` now raise a ``ValueError``
+  (`#650 <https://github.com/openego/eDisGo/issues/650>`_)
 * Corrected the Julia version documented in ``config_opf_julia.cfg``, which still
   pointed at ``julia-1.1.0/bin`` while the bundled ``eDisGo_OPF.jl`` package targets
   Julia 1.12. The file is included verbatim in the configuration reference, so the
@@ -13,6 +28,11 @@ Changes
   read since :meth:`~.edisgo.EDisGo.pm_optimize` started resolving ``julia`` from the
   system ``PATH``; the reference now says so instead of claiming the file points to the
   binary in use
+* Added :attr:`~.network.results.Results.reinforce_log`, a long-format dataframe
+  that records, for every reinforcement measure taken in
+  :func:`~.flex_opt.reinforce_grid.reinforce_grid`, which component violated which
+  limit, at what time step, and what change and cost that caused `#741
+  <https://github.com/openego/eDisGo/issues/741>`_
 * Wired district-heating handling into the runner pipeline. The overlying grid's
   ``feedin_district_heating`` — thermal feed-in from other heat sources such as solar
   or geothermal — had no consumer at all: its only consumer,
@@ -169,6 +189,12 @@ Changes
   this changes allocation results once compared to earlier versions, and that
   :attr:`~.network.electromobility.Electromobility.charging_processes_df` is now
   indexed from zero in that sorted order (openego/eDisGo#742)
+* Fixed :func:`~.io.electromobility_import.distribute_private_charging_demand`
+  booking the capacity of each home charging point to the charging park drawn for
+  the last work car instead of the home park drawn for it. The capacity weights of
+  the following draws therefore never saw the home capacity already assigned, and
+  one work park collected it all. This changes which home charging park a car is
+  assigned to (openego/eDisGo#679)
 * Fixed :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction`
   giving a line that stands for several parallel systems ``num_parallel`` times its
   impedance. The per-km values the aggregation rebuilds ``r`` and ``x`` from describe

@@ -46,12 +46,11 @@ plain sum of its charging-point ratings:
 #. A size-dependent **simultaneity (diversity) factor** is applied
    (:func:`~edisgo.io.electromobility_import.determine_grid_connection_capacity`):
    parks below 0.3 MW gross are connected in full (factor ``1.0``), parks of 1 MW gross
-   and above are reduced to 45 % (factor ``0.45``), and in between the factor is
-   interpolated linearly. The rationale: the more charging points a site has, the less
-   likely they all draw peak power at the same instant. High-power-charging (``hpc``)
-   sites are the exception and are connected at full capacity. (Because the linear
-   factor is applied multiplicatively, the resulting *capacity* is not monotonic in the
-   0.3–1.0 MW range — see the function's notes.)
+   and above are reduced to 45 % (factor ``0.45``), and in between the connection
+   capacity is interpolated linearly from 0.3 MW to 0.45 MW, so a larger park never
+   gets a smaller connection. The rationale: the more charging points a site has, the
+   less likely they all draw peak power at the same instant. High-power-charging
+   (``hpc``) sites are the exception and are connected at full capacity.
 #. The result becomes the charging point's ``p_set``, which determines the **voltage
    level** it is connected to and how the connection is sized — and hence how much grid
    reinforcement the charging demand ultimately triggers.
