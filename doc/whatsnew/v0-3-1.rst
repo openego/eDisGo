@@ -420,3 +420,10 @@ Changes
   ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
   the component and the new MV line were connected to the existing bus. This could
   happen after components were removed or aggregated (openego/eDisGo#413)
+* New :meth:`~.edisgo.EDisGo.reinforce_expansion_path` reinforces the grid stage by
+  stage for several target years. For every year, a given function applies the
+  changes up to this year, e.g. new heat pumps and charging points, to the grid as
+  reinforced in the previous stage, and the grid is reinforced again. The costs of
+  every stage only comprise its own measures, including new earthworks for lines
+  extended again later, and are discounted to a base year. Optionally, the costs
+  are compared with reinforcing the original grid directly for each stage
