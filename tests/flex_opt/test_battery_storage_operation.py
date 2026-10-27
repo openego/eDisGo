@@ -9,7 +9,7 @@ from edisgo.flex_opt.battery_storage_operation import apply_reference_operation
 class TestStorageOperation:
     @classmethod
     def setup_class(self):
-        self.timeindex = pd.date_range("1/1/2011 12:00", periods=5, freq="H")
+        self.timeindex = pd.date_range("1/1/2011 12:00", periods=5, freq="h")
         self.edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_path, timeindex=self.timeindex
         )

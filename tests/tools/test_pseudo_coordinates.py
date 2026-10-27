@@ -21,8 +21,8 @@ class TestPseudoCoordinates:
         coordinates = self.edisgo_root.topology.buses_df.loc[
             "Bus_BranchTee_LVGrid_1_9", ["x", "y"]
         ]
-        assert round(coordinates[0], 5) != round(7.943307, 5)
-        assert round(coordinates[1], 5) != round(48.080396, 5)
+        assert round(coordinates["x"], 5) != round(7.943307, 5)
+        assert round(coordinates["y"], 5) != round(48.080396, 5)
 
         # make pseudo coordinates
         make_pseudo_coordinates(self.edisgo_root, mv_coordinates=True)
@@ -31,10 +31,10 @@ class TestPseudoCoordinates:
         coordinates = self.edisgo_root.topology.buses_df.loc[
             "Bus_BranchTee_LVGrid_1_9", ["x", "y"]
         ]
-        assert round(coordinates[0], 5) == round(7.943307, 5)
-        assert round(coordinates[1], 5) == round(48.080396, 5)
+        assert round(coordinates["x"], 5) == round(7.943307, 5)
+        assert round(coordinates["y"], 5) == round(48.080396, 5)
 
-        assert not self.edisgo_root.topology.buses_df.x.isin([np.NaN]).any()
+        assert not self.edisgo_root.topology.buses_df.x.isin([np.nan]).any()
 
     def test__make_coordinates_meshed_graph(self):
         """

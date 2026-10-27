@@ -15,7 +15,7 @@ class TestQControl:
         assert q_control.get_q_sign_load("Capacitive") == -1
 
     def test_fixed_cosphi(self):
-        timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/1970", periods=2, freq="h")
         active_power_ts = pd.DataFrame(
             data={
                 "comp_mv_1": [0.5, 1.5],

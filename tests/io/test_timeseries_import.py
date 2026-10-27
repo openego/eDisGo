@@ -118,24 +118,24 @@ class TestTimeseriesImport:
         # test with timeindex=None and TimeSeries.timeindex not set
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         ind, ind_full = timeseries_import._timeindex_helper_func(edisgo, timeindex=None)
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="h")
         assert_index_equal(ind, timeindex)
         assert_index_equal(ind_full, timeindex)
 
         # test with timeindex=None and TimeSeries.timeindex set
-        edisgo_index = pd.date_range("1/1/2010", periods=5, freq="H")
+        edisgo_index = pd.date_range("1/1/2010", periods=5, freq="h")
         edisgo.set_timeindex(edisgo_index)
         ind, ind_full = timeseries_import._timeindex_helper_func(edisgo, timeindex=None)
-        timeindex = pd.date_range("1/1/2010", periods=8760, freq="H")
+        timeindex = pd.date_range("1/1/2010", periods=8760, freq="h")
         assert_index_equal(ind, edisgo_index)
         assert_index_equal(ind_full, timeindex)
 
         # test with given timeindex and leap year
-        given_index = pd.date_range("1/1/2012", periods=5, freq="H")
+        given_index = pd.date_range("1/1/2012", periods=5, freq="h")
         ind, ind_full = timeseries_import._timeindex_helper_func(
             edisgo, timeindex=given_index
         )
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="h")
         assert_index_equal(ind, timeindex)
         assert_index_equal(ind_full, timeindex)
 
@@ -143,17 +143,17 @@ class TestTimeseriesImport:
         ind, ind_full = timeseries_import._timeindex_helper_func(
             edisgo, timeindex=given_index, allow_leap_year=True
         )
-        timeindex = pd.date_range("1/1/2012", periods=8760, freq="H")
+        timeindex = pd.date_range("1/1/2012", periods=8760, freq="h")
         assert_index_equal(ind, given_index)
         assert_index_equal(ind_full, timeindex)
 
         # test with given timeindex and no leap year
-        given_index = pd.date_range("1/1/2013", periods=5, freq="H")
+        given_index = pd.date_range("1/1/2013", periods=5, freq="h")
         ind, ind_full = timeseries_import._timeindex_helper_func(
             edisgo,
             timeindex=given_index,
         )
-        timeindex = pd.date_range("1/1/2013", periods=8760, freq="H")
+        timeindex = pd.date_range("1/1/2013", periods=8760, freq="h")
         assert_index_equal(ind, given_index)
         assert_index_equal(ind_full, timeindex)
 
@@ -185,7 +185,7 @@ class TestTimeseriesImport:
         requested_timeindex = pd.date_range(
             "1/1/2011 01:00",
             periods=2,
-            freq="H",
+            freq="h",
         )
         database_data = pd.DataFrame(
             {
@@ -232,7 +232,7 @@ class TestTimeseriesImport:
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        timeindex = pd.date_range("1/2/2018", periods=6, freq="H")
+        timeindex = pd.date_range("1/2/2018", periods=6, freq="h")
         edisgo_object.set_timeindex(timeindex)
         feedin_df = timeseries_import.feedin_oedb(
             edisgo_object,
@@ -251,7 +251,7 @@ class TestTimeseriesImport:
         requested_timeindex = pd.date_range(
             "1/1/2011 01:00",
             periods=2,
-            freq="H",
+            freq="h",
         )
         database_data = pd.DataFrame(
             {
@@ -295,7 +295,7 @@ class TestTimeseriesImport:
 
     def test_load_time_series_demandlib(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        timeindex = pd.date_range("1/1/2018", periods=8760, freq="H")
+        timeindex = pd.date_range("1/1/2018", periods=8760, freq="h")
         load = timeseries_import.load_time_series_demandlib(edisgo, timeindex)
         assert (
             load.columns == ["cts", "residential", "agricultural", "industrial"]
@@ -313,7 +313,7 @@ class TestTimeseriesImport:
     @pytest.mark.oep
     def test_cop_oedb_live(self, oep_engine):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        timeindex = pd.date_range("1/1/2011", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=2, freq="h")
         cop_df = timeseries_import.cop_oedb(
             edisgo_object=edisgo,
             engine=oep_engine,
@@ -332,7 +332,7 @@ class TestTimeseriesImport:
         requested_timeindex = pd.date_range(
             "1/1/2011 02:00",
             periods=2,
-            freq="H",
+            freq="h",
         )
         cop_values = np.arange(8760, dtype=float) / 10 + 2
         database_data = pd.DataFrame(
@@ -434,7 +434,7 @@ class TestTimeseriesImport:
                 timeindex=pd.date_range(
                     "1/1/2020",
                     periods=8760,
-                    freq="H",
+                    freq="h",
                 ),
             )
 
@@ -514,7 +514,7 @@ class TestTimeseriesImport:
         requested_timeindex = pd.date_range(
             "1/1/2011",
             periods=4,
-            freq="H",
+            freq="h",
         )
         df = timeseries_import.electricity_demand_oedb(
             edisgo_object,
@@ -541,7 +541,7 @@ class TestTimeseriesImport:
                 timeindex=pd.date_range(
                     "1/1/2020",
                     periods=4,
-                    freq="H",
+                    freq="h",
                 ),
             )
 

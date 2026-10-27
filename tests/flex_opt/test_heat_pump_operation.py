@@ -8,7 +8,7 @@ from edisgo.flex_opt.heat_pump_operation import operating_strategy
 class TestHeatPumpOperation:
     @classmethod
     def setup_class(self):
-        self.timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="h")
         self.cop = pd.DataFrame(
             data={
                 "hp1": [5.0, 6.0],

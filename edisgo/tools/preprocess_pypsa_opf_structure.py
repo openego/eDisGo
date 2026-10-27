@@ -12,8 +12,6 @@
 import numpy as np
 import pandas as pd
 
-from pypsa.descriptors import Dict
-
 from edisgo.flex_opt.costs import line_expansion_costs
 
 
@@ -54,7 +52,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
     psa_network.buses.control.loc[psa_network.generators.bus.loc[gen_slack_loc]] = (
         "Slack"
     )
-    is_fluct = psa_network.generators.fluctuating.loc[gen_slack_loc][0]
+    is_fluct = psa_network.generators.fluctuating.loc[gen_slack_loc].iloc[0]
     # check for nan value
     if is_fluct != is_fluct:
         print(
@@ -224,6 +222,7 @@ def aggregate_fluct_generators(psa_network):
 
     # write aggregated generator dataframe on pypsa network
     psa_network.generators = gen_df
-    # write aggregated timeseries into psa_network.generators_t as
-    # pypsa.descriptors.Dict()
-    psa_network.generators_t = Dict(gen_t_dict)
+    # write the aggregated time series back into psa_network.generators_t. The
+    # container is updated in place - gen_t_dict is a copy of it and holds the same
+    # keys - so that PyPSA keeps its own container type.
+    psa_network.generators_t.update(gen_t_dict)

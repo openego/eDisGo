@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -61,10 +62,10 @@ def _timeindex_helper_func(
         year = tools.get_year_based_on_timeindex(edisgo_object)
         if year is None:
             year = default_year
-            timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+            timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="h")
         else:
             timeindex = edisgo_object.timeseries.timeindex
-        timeindex_full = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+        timeindex_full = pd.date_range(f"1/1/{year}", periods=8760, freq="h")
     else:
         year = timeindex.year[0]
         if allow_leap_year is False and pd.Timestamp(year, 1, 1).is_leap_year:
@@ -74,8 +75,8 @@ def _timeindex_helper_func(
                 f"data is indexed by is therefore set to the default value of "
                 f"{default_year}."
             )
-            timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
-        timeindex_full = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+            timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="h")
+        timeindex_full = pd.date_range(f"1/1/{year}", periods=8760, freq="h")
     return timeindex, timeindex_full
 
 
@@ -293,46 +294,51 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
     cal = Germany()
     holidays = dict(cal.holidays(year))
 
-    e_slp = bdew.ElecSlp(year, holidays=holidays)
+    # demandlib 0.2.2 leaves a global warnings.simplefilter("error") behind when
+    # building the load profiles (elec_slp.py), which would turn every later
+    # warning of the process into an exception. catch_warnings() restores the
+    # filters on exit.
+    with warnings.catch_warnings():
+        e_slp = bdew.ElecSlp(year, holidays=holidays)
 
-    # multiply given annual demand with timeseries
-    elec_demand = e_slp.get_profile(sectoral_consumption)
+        # multiply given annual demand with timeseries
+        elec_demand = e_slp.get_scaled_power_profiles(sectoral_consumption)
 
-    # Add the slp for the industrial group
-    ilp = profiles.IndustrialLoadProfile(e_slp.date_time_index, holidays=holidays)
+        # Add the slp for the industrial group
+        ilp = profiles.IndustrialLoadProfile(e_slp.date_time_index, holidays=holidays)
 
-    # Beginning and end of workday, weekdays and weekend days, and scaling
-    # factors by default
-    elec_demand["i0"] = ilp.simple_profile(
-        sectoral_consumption["i0"],
-        am=datetime.time(
-            edisgo_obj.config["demandlib"]["day_start"].hour,
-            edisgo_obj.config["demandlib"]["day_start"].minute,
-            0,
-        ),
-        pm=datetime.time(
-            edisgo_obj.config["demandlib"]["day_end"].hour,
-            edisgo_obj.config["demandlib"]["day_end"].minute,
-            0,
-        ),
-        profile_factors={
-            "week": {
-                "day": edisgo_obj.config["demandlib"]["week_day"],
-                "night": edisgo_obj.config["demandlib"]["week_night"],
+        # Beginning and end of workday, weekdays and weekend days, and scaling
+        # factors by default
+        elec_demand["i0"] = ilp.simple_profile(
+            sectoral_consumption["i0"],
+            am=datetime.time(
+                edisgo_obj.config["demandlib"]["day_start"].hour,
+                edisgo_obj.config["demandlib"]["day_start"].minute,
+                0,
+            ),
+            pm=datetime.time(
+                edisgo_obj.config["demandlib"]["day_end"].hour,
+                edisgo_obj.config["demandlib"]["day_end"].minute,
+                0,
+            ),
+            profile_factors={
+                "week": {
+                    "day": edisgo_obj.config["demandlib"]["week_day"],
+                    "night": edisgo_obj.config["demandlib"]["week_night"],
+                },
+                "weekend": {
+                    "day": edisgo_obj.config["demandlib"]["weekend_day"],
+                    "night": edisgo_obj.config["demandlib"]["weekend_night"],
+                },
+                "holiday": {
+                    "day": edisgo_obj.config["demandlib"]["holiday_day"],
+                    "night": edisgo_obj.config["demandlib"]["holiday_night"],
+                },
             },
-            "weekend": {
-                "day": edisgo_obj.config["demandlib"]["weekend_day"],
-                "night": edisgo_obj.config["demandlib"]["weekend_night"],
-            },
-            "holiday": {
-                "day": edisgo_obj.config["demandlib"]["holiday_day"],
-                "night": edisgo_obj.config["demandlib"]["holiday_night"],
-            },
-        },
-    )
+        )
 
     # Resample 15-minute values to hourly values and sum across sectors
-    elec_demand = elec_demand.resample("H").mean()
+    elec_demand = elec_demand.resample("h").mean()
 
     elec_demand.rename(
         columns={
@@ -488,9 +494,11 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         cts_profiles_df = cts_profiles_df.drop(columns=buildings_no_hp)
         # add residential and CTS profiles per building; a missing profile counts
         # as zero, e.g. if there is no residential heat demand at all
-        individual_heating_df = residential_profiles_df.add(
-            cts_profiles_df, fill_value=0
-        ).fillna(0.0)
+        individual_heating_df = (
+            residential_profiles_df.add(cts_profiles_df, fill_value=0)
+            .fillna(0.0)
+            .astype(float)
+        )
         # set column names to be heat pump names instead of building IDs
         individual_heating_df = pd.DataFrame(
             {
@@ -1384,8 +1392,9 @@ def _query_residential_electricity_profile_data(
             ).filter(iee_household_load_profiles.type.in_(profile_ids))
         df = pd.read_sql(query.statement, engine, index_col="type")
 
-        # convert array to dataframe
-        df_converted = pd.DataFrame.from_records(df["load_in_wh"], index=df.index).T
+        # convert array to dataframe. The values are lists, one per profile;
+        # DataFrame.from_records no longer accepts a Series of those in pandas 3.
+        df_converted = pd.DataFrame(df["load_in_wh"].tolist(), index=df.index).T
 
         return df_converted
 

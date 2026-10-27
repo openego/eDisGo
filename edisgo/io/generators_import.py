@@ -332,7 +332,9 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
 
     # Normalize renewable raw data; conventional capacities are already in MW.
     for data in (generators_res_mv, generators_res_lv):
-        data.loc[data["subtype"].isnull(), "subtype"] = "unknown"
+        # a column of missing subtypes only can come as float, which pandas 3 does
+        # not cast to hold the string
+        data["subtype"] = data["subtype"].astype(object).fillna("unknown")
         data["p_nom"] = pd.to_numeric(data["p_nom"]) / 1e3
 
     # Filter out empty DataFrames before concatenation to avoid FutureWarning
@@ -703,7 +705,12 @@ def _update_grids(
         edisgo_object.topology.transformers_df.bus1.unique()
     ]
 
-    new_gens_lv.geom = new_gens_lv.geom.apply(wkt_loads)
+    # A generator without georeference is placed by its LV grid, so a missing
+    # geometry is passed on as None. pandas represents it as NaN in a string
+    # column since version 3, which shapely rejects.
+    new_gens_lv.geom = new_gens_lv.geom.apply(
+        lambda geom: wkt_loads(geom) if isinstance(geom, str) else None
+    )
 
     new_gens_lv = gpd.GeoDataFrame(
         new_gens_lv,

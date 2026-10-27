@@ -15,9 +15,8 @@ OEP_URLS = [
     [
         lambda engine: engine.connect(),
         lambda engine: engine.raw_connection(),
-        # table reflection connects without Engine.connect in SQLAlchemy 1.3
         lambda engine: sa.Table(
-            "cosmoclmgrid", sa.MetaData(bind=engine), schema="climate", autoload=True
+            "cosmoclmgrid", sa.MetaData(), schema="climate", autoload_with=engine
         ),
     ],
     ids=["connect", "raw-connection", "reflection"],

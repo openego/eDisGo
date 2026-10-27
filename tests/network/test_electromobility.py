@@ -183,7 +183,7 @@ class TestElectromobility:
         flex_bands_index = self.edisgo_obj.electromobility.flexibility_bands[
             "upper_energy"
         ].index
-        assert (flex_bands_index[1] - flex_bands_index[0]) == pd.Timedelta("1H")
+        assert (flex_bands_index[1] - flex_bands_index[0]) == pd.Timedelta("1h")
 
     def test_get_flexibility_bands_scopes_to_mismatched_timeindex(self):
         """
@@ -512,7 +512,7 @@ class TestElectromobility:
             assert_frame_equal(flex_bands_checking[band], flex_bands_new[band])
 
         # check resampling to 2 hours
-        self.edisgo_obj.electromobility.resample(freq="2H")
+        self.edisgo_obj.electromobility.resample(freq="2h")
         # check that integrity check does not fail
         self.edisgo_obj.electromobility.check_integrity()
         # check shape and no NaN values
@@ -595,7 +595,7 @@ class TestElectromobility:
     def test_to_csv(self):
         """Test for method to_csv."""
         dir = os.path.join(os.getcwd(), "electromobility")
-        timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/1970", periods=2, freq="h")
         flex_bands = {
             "upper_energy": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
             "upper_power": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
@@ -630,7 +630,7 @@ class TestElectromobility:
 
         """
         dir = os.path.join(os.getcwd(), "electromobility")
-        timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
+        timeindex = pd.date_range("1/1/1970", periods=2, freq="h")
         flex_bands = {
             "upper_energy": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
             "upper_power": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),

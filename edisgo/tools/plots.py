@@ -719,7 +719,7 @@ def mv_grid_topology(
         line_width = 2
     cmap = matplotlib.pyplot.colormaps.get_cmap(lines_cmap)
 
-    ll = pypsa_plot.plot(
+    collections = pypsa_plot.plot(
         line_colors=line_colors,
         line_cmap=cmap,
         ax=ax,
@@ -731,13 +731,18 @@ def mv_grid_topology(
         bus_colors=bus_colors,
         bus_cmap=bus_cmap,
     )
+    # PyPSA returns the artists it drew as {"nodes": {...}, "branches": {...},
+    # "flows": {...}} since version 1.0, where it used to return a tuple of
+    # (buses, branches, flows).
+    bus_collection = collections["nodes"]["Bus"]
+    line_collection = collections["branches"]["Line"]
 
     # color bar line loading
     if line_color == "loading":
         if limits_cb_lines is None:
             limits_cb_lines = (min(line_colors), max(line_colors))
         v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
-        cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
+        cb = plt.colorbar(line_collection, boundaries=v, ticks=v[0:101:10])
         cb.norm.vmin = limits_cb_lines[0]
         cb.norm.vmax = limits_cb_lines[1]
         cb.set_label("Line loading in p.u.")
@@ -749,7 +754,7 @@ def mv_grid_topology(
                 max(max(line_colors), max(bus_colors.values())),
             )
         v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
-        cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
+        cb = plt.colorbar(line_collection, boundaries=v, ticks=v[0:101:10])
         cb.norm.vmin = limits_cb_lines[0]
         cb.norm.vmax = limits_cb_lines[1]
         cb.set_label("Grid expansion costs in kEUR")
@@ -764,9 +769,9 @@ def mv_grid_topology(
         v_voltage = np.linspace(limits_cb_nodes[0], limits_cb_nodes[1], 101)
         # for some reason, the cmap given to pypsa plot is overwritten and
         # needs to be set again
-        ll[0].set(cmap="Blues")
+        bus_collection.set(cmap="Blues")
         cb_voltage = plt.colorbar(
-            ll[0], boundaries=v_voltage, ticks=v_voltage[0:101:10]
+            bus_collection, boundaries=v_voltage, ticks=v_voltage[0:101:10]
         )
         cb_voltage.norm.vmin = limits_cb_nodes[0]
         cb_voltage.norm.vmax = limits_cb_nodes[1]
@@ -865,8 +870,8 @@ def mv_grid_topology(
 
     # draw arrows on lines
     if arrows and timestep and line_color == "loading":
-        path = ll[1].get_segments()
-        # colors = cmap(ll[1].get_array() / 100)
+        path = line_collection.get_segments()
+        # colors = cmap(line_collection.get_array() / 100)
         for i in range(len(path)):
             if edisgo_obj.lines_t.p0.loc[timestep, line_colors.index[i]] > 0:
                 arrowprops = dict(arrowstyle="->", color="b")  # colors[i])
@@ -1182,7 +1187,7 @@ def plot_plotly(
             middle_node_text.append(text)
 
         if plot_map:
-            middle_node_scatter = go.Scattermapbox(
+            middle_node_scatter = go.Scattermap(
                 lon=middle_node_x,
                 lat=middle_node_y,
                 text=middle_node_text,
@@ -1303,7 +1308,7 @@ def plot_plotly(
             else:
                 color = "grey"
             if plot_map:
-                edge_scatter = go.Scattermapbox(
+                edge_scatter = go.Scattermap(
                     mode="lines",
                     lon=edge_x,
                     lat=edge_y,
@@ -1341,15 +1346,14 @@ def plot_plotly(
 
             # Create invisible scatter plot for colorbar
             if plot_map:
-                colorbar_edge_scatter = go.Scattermapbox(
+                colorbar_edge_scatter = go.Scattermap(
                     mode="markers",
                     lon=[None],
                     lat=[None],
                     marker=dict(
                         colorbar=dict(
-                            title=line_color_title[line_color],
+                            title=dict(text=line_color_title[line_color], side="right"),
                             xanchor="left",
-                            titleside="right",
                             x=1.02,
                             thickness=15,
                         ),
@@ -1368,9 +1372,8 @@ def plot_plotly(
                     y=[None],
                     marker=dict(
                         colorbar=dict(
-                            title=line_color_title[line_color],
+                            title=dict(text=line_color_title[line_color], side="right"),
                             xanchor="left",
-                            titleside="right",
                             x=1.19,
                             thickness=15,
                         ),
@@ -1438,9 +1441,8 @@ def plot_plotly(
 
             colorbar = dict(
                 thickness=15,
-                title="Node voltage deviation in p.u.",
+                title=dict(text="Node voltage deviation in p.u.", side="right"),
                 xanchor="left",
-                titleside="right",
             )
             colorscale = "RdBu"
             cmid = 0
@@ -1453,9 +1455,8 @@ def plot_plotly(
 
             colorbar = dict(
                 thickness=15,
-                title="Node connections",
+                title=dict(text="Node connections", side="right"),
                 xanchor="left",
-                titleside="right",
             )
             showscale = True
 
@@ -1494,14 +1495,15 @@ def plot_plotly(
         node_scatter_plots = []
 
         if plot_map:
-            node_scatter = go.Scattermapbox(
+            node_scatter = go.Scattermap(
                 lon=node_x,
                 lat=node_y,
                 mode="markers",
                 hoverinfo="text",
                 text=node_text,
                 marker=dict(
-                    showscale=False,  # Disable colorbar for mapbox, added it separately
+                    # the colorbar of the map is added separately
+                    showscale=False,
                     colorscale=colorscale,
                     color=node_colors,
                     size=8,
@@ -1528,18 +1530,24 @@ def plot_plotly(
 
         node_scatter_plots.append(node_scatter)
 
-        # Add separate colorbar for nodes in mapbox plots
+        # Add separate colorbar for nodes in map plots
         if plot_map and node_color and showscale:
             if plot_map:
-                node_colorbar_scatter = go.Scattermapbox(
+                node_colorbar_scatter = go.Scattermap(
                     mode="markers",
                     lon=[None],
                     lat=[None],
                     marker=dict(
                         colorbar=dict(
-                            title=colorbar["title"] if colorbar else "Node values",
+                            title=dict(
+                                text=(
+                                    colorbar["title"]["text"]
+                                    if colorbar
+                                    else "Node values"
+                                ),
+                                side="right",
+                            ),
                             xanchor="left",
-                            titleside="right",
                             x=1.12,  # Position it next to line colorbar
                             thickness=15,
                         ),
@@ -1612,7 +1620,7 @@ def plot_plotly(
             showlegend=False,
             hovermode="closest",
             margin=dict(b=20, l=5, r=5, t=40),
-            mapbox=dict(
+            map=dict(
                 center=dict(
                     lat=y_center,
                     lon=x_center,

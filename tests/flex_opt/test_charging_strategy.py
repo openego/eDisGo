@@ -20,7 +20,7 @@ class TestChargingStrategy:
         cls.charging_strategies = ["dumb", "reduced", "residual"]
 
         cls.edisgo_obj = EDisGo(ding0_grid=cls.ding0_path)
-        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="h")
         cls.edisgo_obj.set_timeindex(timeindex)
 
         cls.edisgo_obj.import_electromobility(
@@ -90,20 +90,20 @@ class TestChargingStrategy:
         )
 
         # ##################### check time index #####################
-        assert ts._loads_active_power.index.freqstr == "H"
+        assert ts._loads_active_power.index.freqstr == "h"
         # change time index to quarter-hourly
-        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="0.25H")
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="15min")
         self.edisgo_obj.set_timeindex(timeindex)
         charging_strategy(self.edisgo_obj, strategy="dumb")
-        assert ts._loads_active_power.index.freqstr == "15T"
+        assert ts._loads_active_power.index.freqstr == "15min"
 
     def test_charging_strategy_keeps_non_contiguous_time_index(self):
         """
         Resampling to the charging processes' frequency and back must not fill
         the gap of a non-contiguous time index.
         """
-        timeindex = pd.date_range("1/1/2011", periods=24, freq="H").append(
-            pd.date_range("1/5/2011", periods=24, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=24, freq="h").append(
+            pd.date_range("1/5/2011", periods=24, freq="h")
         )
         self.edisgo_obj.set_timeindex(timeindex)
         charging_strategy(self.edisgo_obj, strategy="dumb")
@@ -118,7 +118,7 @@ class TestChargingStrategy:
         without overwriting each other's results.
         """
         # edisgo = self.edisgo_obj
-        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="h")
         edisgo = self.edisgo_obj
         edisgo.set_timeindex(timeindex)
 

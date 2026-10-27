@@ -36,36 +36,41 @@ def read(fname):
 requirements = [
     "contextily >= 1.7.1, < 1.8.0",
     "dash < 4.5.0",
-    "demandlib < 0.3.0",
+    # eDisGo builds the standard load profiles with get_scaled_power_profiles(),
+    # which demandlib added in 0.2.2
+    "demandlib >= 0.2.2, < 0.3.0",
     "descartes < 1.2.0",
-    # pinned: oedialect 0.1.1 requires geoalchemy2<0.7.0, and newer geoalchemy2
-    # releases need SQLAlchemy>=1.4, which conflicts with sqlalchemy<1.4.0 below
-    "geoalchemy2 == 0.6.3",
+    "geoalchemy2 >= 0.17.0, < 0.21.0",
     "geopandas >= 0.12.0, < 1.2.0",
     "geopy >= 2.0.0, < 2.6.0",
     "jupyterlab < 4.7.0",
     "jupyter_dash < 0.5.0",
-    "matplotlib >= 3.3.0, < 3.11.0",
+    "matplotlib >= 3.3.0, < 3.12.0",
     "multiprocess < 0.71.0",
     "networkx >= 2.5.0, < 3.7.0",
-    # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
-    # sqlalchemy leads to new errors.. should be fixed at some point
-    "numpy ==1.26.4",
-    "oedialect < 0.2.0",
-    "pandas >= 1.4.0, < 2.2.0",
+    "numpy >= 2.0.0, < 2.5.0",
+    # The SQLAlchemy 2.0 support of oedialect and saio is not released yet
+    # (OpenEnergyPlatform/oedialect#56, OpenEnergyPlatform/saio#10). Until it is,
+    # both are installed from the forks the pull requests come from.
+    "oedialect @ git+https://github.com/joda9/oedialect.git@937e0cf9289000d3adae08351ce15a003d5588f8",  # noqa: E501
+    "pandas >= 3.0.0, < 3.1.0",
+    # sshtunnel 0.4.0 - the latest release - reads paramiko.DSSKey, which
+    # paramiko removed in version 4
     "paramiko < 4.0",
-    "plotly < 6.0",
+    "plotly >= 6.0, < 8.0",
     "psycopg2-binary < 2.10.0",
     "pydot < 4.1.0",
     "pypower < 5.2.0",
     "pyproj >= 3.0.0, < 3.8.0",
-    "pypsa == 0.26.2",
+    # eDisGo uses PyPSA internals (Network.static/dynamic and the component
+    # defaults) to export its grids, so the range is kept narrow
+    "pypsa >= 1.3.0, < 1.4.0",
     "pyyaml < 6.1.0",
-    "saio < 0.3.0",
-    "scikit-learn < 1.3.0",
+    "saio @ git+https://github.com/joda9/saio.git@3f5fe13a84841c594976fa1721c5b4088b2736ce",  # noqa: E501
+    "scikit-learn < 1.10.0",
     "scipy < 1.18.0",
     "shapely >= 1.7.0, < 2.2.0",
-    "sqlalchemy < 1.4.0",
+    "sqlalchemy >= 2.0.0, < 2.1.0",
     "sshtunnel < 0.6.0",
     "urllib3 < 2.9.0",
     "workalendar < 17.1.0",
@@ -119,9 +124,8 @@ setup(
     description="A python package for distribution network analysis and optimization",
     long_description=read("README.md"),
     long_description_content_type="text/markdown",
-    # numpy is pinned to 1.26.4, which has no wheels for 3.13; the test matrix covers
-    # 3.10 to 3.12.
-    python_requires=">=3.10,<3.13",
+    # PyPSA 1.3 requires Python 3.11; the test matrix covers 3.11 to 3.13.
+    python_requires=">=3.11,<3.14",
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
@@ -129,9 +133,9 @@ setup(
         "(AGPLv3+)",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Topic :: Scientific/Engineering",
     ],
     install_requires=requirements,

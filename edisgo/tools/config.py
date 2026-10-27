@@ -32,7 +32,7 @@ import sqlalchemy as sa
 
 from saio import register_schema
 from sqlalchemy import MetaData, Table
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 import edisgo
 

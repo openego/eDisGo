@@ -208,7 +208,9 @@ class TestImportOverlyingGridData:
         pd.testing.assert_index_equal(ts.index, timeindex)
         assert not ts.isna().any().any()
         expected = 0.5 * gens.loc[gas_gens, "p_nom"]
-        pd.testing.assert_series_equal(ts.iloc[0], expected, check_names=False)
+        pd.testing.assert_series_equal(
+            ts.iloc[0], expected, check_names=False, check_index_type=False
+        )
 
     def test_csv_without_path_warns(self, edisgo_obj, caplog):
         ctx = self._ctx({"enabled": True, "source": "csv"})

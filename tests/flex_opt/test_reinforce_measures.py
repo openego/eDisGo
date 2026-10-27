@@ -16,7 +16,7 @@ class TestReinforceMeasures:
         cls.edisgo.set_time_series_worst_case_analysis()
         cls.edisgo.analyze()
         cls.edisgo_root = copy.deepcopy(cls.edisgo)
-        cls.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
+        cls.timesteps = pd.date_range("1/1/1970", periods=2, freq="h")
 
     def test_reinforce_mv_lv_station_overloading(self):
         # implicitly checks function _station_overloading

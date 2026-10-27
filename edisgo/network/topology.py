@@ -47,6 +47,32 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+def _to_numeric_if_possible(series):
+    """
+    Cast a series to a numeric data type, or return it unchanged.
+
+    Replaces ``pd.to_numeric(series, errors="ignore")``, which pandas removed in
+    version 3.0.
+
+    Parameters
+    ----------
+    series : :pandas:`pandas.Series<Series>`
+        Series to cast.
+
+    Returns
+    -------
+    :pandas:`pandas.Series<Series>`
+        Series with a numeric data type, or the unchanged series if it holds
+        values that cannot be cast.
+
+    """
+    try:
+        return pd.to_numeric(series)
+    except (TypeError, ValueError):
+        return series
+
+
 COLUMNS = {
     "loads_df": [
         "bus",
@@ -1166,7 +1192,7 @@ class Topology:
         # FIXME: casting non-numeric values with numeric values into one series changes
         #  the data type to 'Object'. Change the data type to numeric if possible
         for col in new_df.columns:
-            new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
+            new_df[col] = _to_numeric_if_possible(new_df[col])
 
         self.loads_df = pd.concat(
             [
@@ -1262,7 +1288,7 @@ class Topology:
         # FIXME: casting non-numeric values with numeric values into one series changes
         #  the data type to 'Object'. Change the data type to numeric if possible
         for col in new_df.columns:
-            new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
+            new_df[col] = _to_numeric_if_possible(new_df[col])
 
         self.generators_df = pd.concat(
             [
@@ -1331,7 +1357,7 @@ class Topology:
         # FIXME: casting non-numeric values with numeric values into one series changes
         #  the data type to 'Object'. Change the data type to numeric if possible
         for col in new_df.columns:
-            new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
+            new_df[col] = _to_numeric_if_possible(new_df[col])
 
         self.storage_units_df = pd.concat(
             [
@@ -1884,10 +1910,13 @@ class Topology:
         power = comp_data.pop("p")
 
         # create new bus for new component
-        if not isinstance(comp_data["geom"], Point):
-            geom = wkt_loads(comp_data["geom"])
-        else:
-            geom = comp_data["geom"]
+        geom = comp_data["geom"]
+        if isinstance(geom, str):
+            geom = wkt_loads(geom)
+        elif not isinstance(geom, Point):
+            # a missing geometry reaches this as None or, from a pandas string
+            # column, as NaN
+            geom = None
 
         if comp_type == "generator":
             if comp_data["generator_id"] is not None:
@@ -2840,10 +2869,13 @@ class Topology:
         else:
             b = f"Bus_Storage_{len(self.storage_units_df)}"
 
-        if not isinstance(comp_data["geom"], Point):
-            geom = wkt_loads(comp_data["geom"])
-        else:
-            geom = comp_data["geom"]
+        geom = comp_data["geom"]
+        if isinstance(geom, str):
+            geom = wkt_loads(geom)
+        elif not isinstance(geom, Point):
+            # a missing geometry reaches this as None or, from a pandas string
+            # column, as NaN
+            geom = None
 
         b = self.add_bus(
             bus_name=b,
