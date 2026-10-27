@@ -142,6 +142,65 @@ function constraint_hp_operation(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_i
 end
 
 """
+Couples the §14a curtailment `p14a` of component `i` in network `nw` to its binary
+`z14a`: `p14a ≤ pmax · z14a`, so curtailment is only possible in time steps counted
+against the daily time budget.
+"""
+function constraint_curtailment_14a_active(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
+    c = PowerModels.ref(pm, nw, :curtailment_14a, i)
+    p14a = PowerModels.var(pm, nw, :p14a, i)
+    z14a = PowerModels.var(pm, nw, :z14a, i)
+
+    JuMP.@constraint(pm.model, p14a <= c["pmax"] * z14a)
+end
+
+"""
+Non-discriminatory §14a curtailment of component `i` in network `nw`: it is
+curtailed by the share `s14a` of its grid area, `p14a = pmax · s14a`, like every
+other component of the area.
+"""
+function constraint_curtailment_14a_share(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
+    c = PowerModels.ref(pm, nw, :curtailment_14a, i)
+    p14a = PowerModels.var(pm, nw, :p14a, i)
+    s14a = PowerModels.var(pm, nw, :s14a, c["area"])
+
+    JuMP.@constraint(pm.model, p14a == c["pmax"] * s14a)
+end
+
+"""
+Limits the §14a curtailment `p14a` of component `i` in network `nw` together with
+the load shedding `pds` of its loads `c["loads"]` to their load:
+`Σ pds + p14a ≤ Σ pd`. Each is bounded by the load on its own, so without this
+constraint a device whose load is shed could feed in.
+"""
+function constraint_curtailment_14a_load(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
+    c = PowerModels.ref(pm, nw, :curtailment_14a, i)
+    p14a = PowerModels.var(pm, nw, :p14a, i)
+    pds = PowerModels.var(pm, nw, :pds)
+    pd = sum(PowerModels.ref(pm, nw, :load, l, "pd") for l in c["loads"]; init=0.0)
+
+    JuMP.@constraint(pm.model, sum(pds[l] for l in c["loads"]; init=0.0) + p14a <= pd)
+end
+
+"""
+Daily time budget of the §14a curtailment of component `i`: summed over the
+networks `nws` of one day, the time with active curtailment must not exceed
+`max_hours_per_day`.
+"""
+function constraint_curtailment_14a_time_budget(pm::AbstractBFModelEdisgo, i::Int, nws)
+    n_1 = first(nws)
+    if haskey(PowerModels.ref(pm, n_1), :time_elapsed)
+        time_elapsed = PowerModels.ref(pm, n_1, :time_elapsed)
+    else
+        Memento.warn(_LOGGER, "network data should specify time_elapsed, using 1.0 as a default")
+        time_elapsed = 1.0
+    end
+    max_hours = PowerModels.ref(pm, n_1, :curtailment_14a, i, "max_hours_per_day")
+
+    JuMP.@constraint(pm.model, time_elapsed * sum(PowerModels.var(pm, n, :z14a, i) for n in nws) <= max_hours)
+end
+
+"""
 Overlying-grid requirement constraint `i` in network `nw` (`opf_version` 3 and 4):
 forces the total dispatch of the addressed flexibility (DSM, curtailment, storage,
 heat pumps or charging points) to meet the active power `P` requested by the higher

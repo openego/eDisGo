@@ -254,6 +254,58 @@ on the previous step and the power chosen in between. With time-step length
   addressed flexibility must meet the active power requested by the higher voltage
   level, up to a penalised slack (:ref:`overlying-grid-flex`).
 
+§14a EnWG curtailment
+~~~~~~~~~~~~~~~~~~~~~
+
+Under §14a EnWG the grid operator may reduce the grid draw of controllable devices —
+heat pumps, non-public charging points and storage units when charging, each above
+4.2 kW and connected to the low voltage grid — down to a minimum power. The rules are
+set by the Bundesnetzagentur in BK6-22-300 (Anlage 1). With ``curtailment_14a`` (versions
+2 and 4 only), :meth:`~edisgo.edisgo.EDisGo.pm_optimize` adds a curtailment variable
+:math:`p^\text{14a}_t` for every such device that is not optimised as a flexibility. It
+reduces the load at the device's bus and is bounded by the load minus the minimum power,
+:math:`0 \le p^\text{14a}_t \le \max(0, p^\text{load}_t - p^\text{min})`, so the
+remaining load never falls below the minimum. Together with the load shedding of the
+device it may not exceed its load, :math:`p^\text{14a}_t + p^\text{shed}_t \le
+p^\text{load}_t`, so that a curtailed device never feeds in. It enters the objective
+with half the weight of the grid slacks, so the OPF curtails before it sheds load, but
+not just to reduce losses.
+
+* **Devices** (Ziffer 2.4): by default all heat pumps, charging points with a
+  sector other than ``public`` or ``hpc`` and storage units in the LV grid with a
+  nominal power above 4.2 kW. ``"components"`` selects the devices explicitly
+  instead; they are not filtered by voltage level, nominal power or sector, so that
+  e.g. devices in the MV grid or only those commissioned after 2023 can be chosen.
+* **Minimum power** (Ziffer 4.5): 4.2 kW, for heat pumps above 11 kW 40 % of their
+  nominal power. With ``"control": "ems"``, all devices at one bus are controlled
+  together via an energy management system, the heat pumps among them counting as
+  one device for the 11 kW threshold (Ziffer 2.4.2), with the minimum power
+  :math:`\max(4.2\,\text{kW}, 0.4 \cdot P_\text{heat pumps}) + (n - 1) \cdot
+  \text{GZF} \cdot 4.2\,\text{kW}` and the simultaneity factor GZF of the
+  :math:`n` devices (0.8 for two down to 0.45 for nine and more).
+* **Time budget** (Ziffer 10.5): until the end of 2028, grid operators without a
+  measurement-based grid state estimation may curtail preventively, for at most two
+  hours per day. This is the default (``"max_hours_per_day": 2``), counted per calendar
+  day and device. Grid-oriented control based on the measured grid state (Ziffer 4)
+  has no time limit (``"max_hours_per_day": None``). The budget adds a binary variable
+  per device and time step and therefore requires ``method="soc"`` (Gurobi) without
+  warm start. If the time index is split into several intervals, each interval gets
+  its own budget.
+* **Non-discriminatory control** (Ziffer 4.3): the grid operator has to treat all
+  devices in a grid area alike. By default, all devices in one LV grid are therefore
+  curtailed by the same share of their curtailable power
+  (``"non_discriminatory": False`` lets the OPF choose each device individually).
+
+The curtailment is subtracted from the load time series in ``edisgo.timeseries`` (for
+storage units, from their charging) and saved per device in
+``edisgo.opf_results.grid_slacks_t.curtailment_14a``. Its energy is lost, not shifted:
+the curtailed devices keep their remaining time series. For storage units with a fixed
+schedule, the state of charge is not adjusted to the curtailed charging.
+
+.. code-block:: python
+
+   edisgo.pm_optimize(opf_version=2, curtailment_14a=True)
+
 Multi-period structure
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -288,7 +340,8 @@ status and solve time, the per-line branch-flow variables
 battery-storage trajectories
 (:class:`~edisgo.opf.results.opf_result_class.HeatStorage`,
 :class:`~edisgo.opf.results.opf_result_class.BatteryStorage`), the exchange with the
-overlying grid, and the grid slack variables — curtailment and load shedding —
+overlying grid, and the grid slack variables — curtailment, load shedding and §14a
+curtailment —
 (:class:`~edisgo.opf.results.opf_result_class.GridSlacks`). See its API reference for
 the full field list.
 

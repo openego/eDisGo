@@ -121,6 +121,9 @@ class GridSlacks:
         Shed heat-pump demand in MW.
     hp_operation_slack : :pandas:`pandas.DataFrame<DataFrame>`
         Slack on the heat-pump operation constraints in MW.
+    curtailment_14a : :pandas:`pandas.DataFrame<DataFrame>`
+        Curtailment of heat pumps, charging points and storage units under §14a
+        EnWG in MW, per device.
 
     """
 
@@ -131,6 +134,7 @@ class GridSlacks:
         self.cp_load_shedding = pd.DataFrame()
         self.hp_load_shedding = pd.DataFrame()
         self.hp_operation_slack = pd.DataFrame()
+        self.curtailment_14a = pd.DataFrame()
 
     def _attributes(self):
         return [
@@ -140,6 +144,7 @@ class GridSlacks:
             "cp_load_shedding",
             "hp_load_shedding",
             "hp_operation_slack",
+            "curtailment_14a",
         ]
 
 
@@ -381,6 +386,7 @@ def _get_matching_dict_of_attributes_and_file_names():
             "cp_load_shedding": "cp_load_shedding.csv",
             "hp_load_shedding": "hp_load_shedding.csv",
             "hp_operation_slack": "hp_operation_slack.csv",
+            "curtailment_14a": "curtailment_14a.csv",
         },
     }
 

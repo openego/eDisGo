@@ -35,6 +35,7 @@ function ct_variables_only!(pm)
             eDisGo_OPF.variable_gen_power_curt(pm, nw=n)
             eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n)
             eDisGo_OPF.variable_bus_voltage(pm, nw=n)
+            eDisGo_OPF.variable_curtailment_14a(pm, nw=n)
         end
         eDisGo_OPF.variable_slack_heat_pump_storage(pm, nw=n)
         eDisGo_OPF.variable_battery_storage(pm, nw=n)
@@ -355,6 +356,28 @@ end
         @test ct_coef(cstr_p, PowerModels.var(pm, 2, :pdsm, 1)) == -1.0
         @test ct_coef(cstr_p, PowerModels.var(pm, 1, :pdsm, 1)) == 0.0
         @test all(startswith(name, "2_") for name in ct_varnames(cstr_p))
+    end
+
+    @testset "§14a curtailment" begin
+        # The curtailment at bus 3 lowers the load in the P balance and, with the
+        # power factor of the curtailed component, in the Q balance; bus 2 is not
+        # affected.
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network(opf_version=2))
+        pm = ct_model(data)
+        p14a = PowerModels.var(pm, 1, :p14a, 1)
+        eDisGo_OPF.constraint_power_balance_bf(pm, 3, nw=1)
+        cstr_p, cstr_q = ct_eq_constraints(pm.model)
+        @test ct_coef(cstr_p, p14a) == 1.0
+        @test ct_coef(cstr_q, p14a) ≈ tan(acos(0.95))
+        eDisGo_OPF.constraint_power_balance_bf(pm, 2, nw=1)
+        @test all(ct_coef(c, p14a) == 0.0 for c in ct_eq_constraints(pm.model)[3:4])
+
+        # Without grid restrictions (versions 1 and 3) there is no curtailment.
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network(opf_version=1))
+        pm = ct_model(data)
+        @test ct_added(() -> eDisGo_OPF.constraint_power_balance_bf(pm, 3, nw=1),
+                       pm.model) == 2
+        @test !haskey(PowerModels.var(pm, 1), :p14a)
     end
 end
 

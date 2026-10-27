@@ -11,7 +11,7 @@ function constraint_power_balance_bf(pm::AbstractBFModelEdisgo, i::Int; nw::Int=
     bus_dsm = PowerModels.ref(pm, nw, :bus_dsm, i)
     bus_hps = PowerModels.ref(pm, nw, :bus_hps, i)
     bus_cps = PowerModels.ref(pm, nw, :bus_cps, i)
-
+    bus_c14a = PowerModels.ref(pm, nw, :bus_curtailment_14a, i)
 
     branch_r = Dict(k => PowerModels.ref(pm, nw, :branch, k, "br_r") for k in bus_lines_to)
     branch_x = Dict(k => PowerModels.ref(pm, nw, :branch, k, "br_x") for k in bus_lines_to)
@@ -33,8 +33,9 @@ function constraint_power_balance_bf(pm::AbstractBFModelEdisgo, i::Int; nw::Int=
     bus_gen_nd_pf = Dict(k => tan(acos(PowerModels.ref(pm, nw, :gen_nd, k, "pf")))*PowerModels.ref(pm, nw, :gen_nd, k, "sign") for k in bus_gens_nd)
     bus_gen_d_pf = Dict(k => tan(acos(PowerModels.ref(pm, nw, :gen, k, "pf")))*PowerModels.ref(pm, nw, :gen, k, "sign") for k in bus_gens)
     bus_loads_pf = Dict(k => tan(acos(PowerModels.ref(pm, nw, :load, k, "pf")))*PowerModels.ref(pm, nw, :load, k, "sign") for k in bus_loads)
+    bus_c14a_pf = Dict(k => tan(acos(PowerModels.ref(pm, nw, :curtailment_14a, k, "pf")))*PowerModels.ref(pm, nw, :curtailment_14a, k, "sign") for k in bus_c14a)
 
-    constraint_power_balance(pm, nw, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf)
+    constraint_power_balance(pm, nw, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf; bus_c14a=bus_c14a, bus_c14a_pf=bus_c14a_pf)
 end
 
 """

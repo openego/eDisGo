@@ -308,6 +308,284 @@ class TestPowermodelsIO:
             )
         )
 
+    def test_to_powermodels_curtailment_14a(self):
+        with pytest.raises(ValueError, match="opf_version 2 or 4"):
+            powermodels_io.to_powermodels(
+                self.edisgo, opf_version=1, curtailment_14a=True
+            )
+
+        edisgo = copy.deepcopy(self.edisgo)
+        hp = "Heat_Pump_LVGrid_5_individual_heating_1"
+        hp_bus = edisgo.topology.loads_df.at[hp, "bus"]
+        ti = edisgo.timeseries.timeindex
+        # a home charging point at the bus of the heat pump, a public one and a
+        # storage unit in the LV grid
+        home_cp = edisgo.add_component(
+            comp_type="load",
+            type="charging_point",
+            sector="home",
+            ts_active_power=pd.Series(0.011, index=ti),
+            ts_reactive_power="default",
+            bus=hp_bus,
+            p_set=0.011,
+        )
+        edisgo.add_component(
+            comp_type="load",
+            type="charging_point",
+            sector="public",
+            ts_active_power=pd.Series(0.022, index=ti),
+            ts_reactive_power="default",
+            bus=hp_bus,
+            p_set=0.022,
+        )
+        storage = edisgo.add_component(
+            comp_type="storage_unit",
+            ts_active_power=pd.Series([-0.01, 0.01, -0.002, 0.0], index=ti),
+            ts_reactive_power="default",
+            bus=hp_bus,
+            p_nom=0.01,
+        )
+
+        # by default heat pumps, non-public charging points and storage units in
+        # the LV grid, controlled directly, with a time budget of two hours
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo, opf_version=2, curtailment_14a=True
+        )
+        c14a = {c["name"]: (i, c) for i, c in pm["curtailment_14a"].items()}
+        assert sorted(c14a) == sorted(
+            [
+                "Charging_Point_LVGrid_6_1",
+                "Heat_Pump_LVGrid_3_individual_heating_1",
+                hp,
+                home_cp,
+                storage,
+            ]
+        )
+        cp_i, cp = c14a["Charging_Point_LVGrid_6_1"]
+        cp_load = next(
+            load
+            for load in pm["load"].values()
+            if load["name"] == "Charging_Point_LVGrid_6_1"
+        )
+        assert cp["load_bus"] == cp_load["load_bus"]
+        assert cp["components"] == ["Charging_Point_LVGrid_6_1"]
+        assert cp["max_hours_per_day"] == 2
+        assert pm["time_series"]["day_14a"] == [0, 0, 0, 0]
+        # charging points and storage units can be curtailed down to 4.2 kW, the
+        # storage units only when charging
+        assert np.allclose(
+            pm["time_series"]["curtailment_14a"][cp_i]["pmax"], [0.5 - 0.0042] * 4
+        )
+        assert np.allclose(
+            pm["time_series"]["curtailment_14a"][c14a[storage][0]]["pmax"],
+            [0.01 - 0.0042, 0, 0, 0],
+        )
+        # heat pumps above 11 kW only down to 40 % of their nominal power
+        assert np.allclose(
+            pm["time_series"]["curtailment_14a"][c14a[hp][0]]["pmax"],
+            (
+                edisgo.timeseries.loads_active_power[hp]
+                - 0.4 * edisgo.topology.loads_df.at[hp, "p_set"]
+            ).clip(lower=0),
+        )
+        # non-discriminatory: one grid area per LV grid
+        assert c14a[hp][1]["area"] == c14a[storage][1]["area"]
+        assert c14a[hp][1]["area"] != cp["area"]
+
+        # control via EMS: one entry per bus with a minimum power that accounts for
+        # the simultaneity of the devices
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo,
+            opf_version=2,
+            curtailment_14a={
+                "control": "ems",
+                "non_discriminatory": False,
+                "max_hours_per_day": None,
+            },
+        )
+        ems_i, ems = next(
+            (i, c) for i, c in pm["curtailment_14a"].items() if hp in c["components"]
+        )
+        assert sorted(ems["components"]) == sorted([hp, home_cp, storage])
+        assert ems["name"] == f"EMS_{hp_bus}"
+        assert ems["area"] == 0
+        assert ems["max_hours_per_day"] == 24
+        p_min = 0.4 * 3 + 2 * 0.75 * 0.0042
+        demand = edisgo.timeseries.loads_active_power[[hp, home_cp]].sum(
+            axis=1
+        ) - edisgo.timeseries.storage_units_active_power[storage].clip(upper=0)
+        assert np.allclose(
+            pm["time_series"]["curtailment_14a"][ems_i]["pmax"],
+            (demand - p_min).clip(lower=0),
+        )
+
+        # selected components, flexible ones are not allowed
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo, opf_version=2, curtailment_14a={"components": [hp]}
+        )
+        assert [c["name"] for c in pm["curtailment_14a"].values()] == [hp]
+        for components, kwargs in [
+            (
+                ["Charging_Point_LVGrid_6_1"],
+                {"flexible_cps": ["Charging_Point_LVGrid_6_1"]},
+            ),
+            (["Load_industrial_LVGrid_5_1"], {}),
+        ]:
+            with pytest.raises(ValueError, match="only possible for inflexible"):
+                powermodels_io.to_powermodels(
+                    self.edisgo,
+                    opf_version=2,
+                    curtailment_14a={"components": components},
+                    **kwargs,
+                )
+        with pytest.raises(ValueError, match="Must be 'direct' or 'ems'"):
+            powermodels_io.to_powermodels(
+                self.edisgo, opf_version=2, curtailment_14a={"control": "smart"}
+            )
+
+    def test_to_powermodels_curtailment_14a_minimum_power(self):
+        edisgo = copy.deepcopy(self.edisgo)
+        # time index across midnight: the time budget is counted per calendar day,
+        # not per 24 hours from the first time step
+        ti = edisgo.timeseries.timeindex + pd.Timedelta(hours=22)
+        for attr in edisgo.timeseries._attributes:
+            getattr(edisgo.timeseries, f"_{attr}").index = ti
+        edisgo.timeseries._timeindex = ti
+        # devices whose load exceeds their §14a minimum power at three LV buses
+        # without other §14a devices
+        buses = (
+            edisgo.topology.loads_df[
+                edisgo.topology.loads_df.type == "conventional_load"
+            ]
+            .bus.loc[lambda b: edisgo.topology.buses_df.v_nom.loc[b].values < 1]
+            .unique()[:3]
+        )
+        devices = {}
+        for name, comp_type, sector, bus, p_set, load in [
+            ("hp_15kw", "heat_pump", "individual_heating", buses[0], 0.015, 0.014),
+            ("hp_11kw", "heat_pump", "individual_heating", buses[1], 0.011, 0.010),
+            ("hp_8kw", "heat_pump", "individual_heating", buses[2], 0.008, 0.007),
+            ("hp_6kw", "heat_pump", "individual_heating", buses[2], 0.006, 0.005),
+            ("cp_home", "charging_point", "home", buses[2], 0.011, 0.011),
+        ]:
+            devices[name] = edisgo.add_component(
+                comp_type="load",
+                type=comp_type,
+                sector=sector,
+                ts_active_power=pd.Series(load, index=ti),
+                ts_reactive_power="default",
+                bus=bus,
+                p_set=p_set,
+            )
+
+        def pmax(pm):
+            return {
+                c["name"]: pm["time_series"]["curtailment_14a"][i]["pmax"]
+                for i, c in pm["curtailment_14a"].items()
+            }
+
+        # direct control: 40 % of the nominal power only for heat pumps above 11 kW
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo, opf_version=2, curtailment_14a=True
+        )
+        assert pm["time_series"]["day_14a"] == [0, 0, 1, 1]
+        expected = {
+            "hp_15kw": 0.014 - 0.4 * 0.015,
+            "hp_11kw": 0.010 - 0.0042,
+            "hp_8kw": 0.007 - 0.0042,
+            "hp_6kw": 0.005 - 0.0042,
+            "cp_home": 0.011 - 0.0042,
+        }
+        for name, value in expected.items():
+            assert np.allclose(pmax(pm)[devices[name]], [value] * 4)
+        entry = next(
+            c for c in pm["curtailment_14a"].values() if c["name"] == devices["hp_15kw"]
+        )
+        assert [pm["load"][str(i)]["name"] for i in entry["loads"]] == [
+            devices["hp_15kw"]
+        ]
+
+        # EMS: the heat pumps at one bus count as one device of 14 kW for the 40 %
+        # rule, plus two devices with the simultaneity factor 0.75
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo, opf_version=2, curtailment_14a={"control": "ems"}
+        )
+        ems = f"EMS_{buses[2]}"
+        p_min = 0.4 * 0.014 + 2 * 0.75 * 0.0042
+        assert np.allclose(pmax(pm)[ems], [0.023 - p_min] * 4)
+        entry = next(c for c in pm["curtailment_14a"].values() if c["name"] == ems)
+        assert sorted(pm["load"][str(i)]["name"] for i in entry["loads"]) == sorted(
+            [devices["hp_8kw"], devices["hp_6kw"], devices["cp_home"]]
+        )
+        assert np.allclose(pmax(pm)[f"EMS_{buses[0]}"], [0.014 - 0.4 * 0.015] * 4)
+
+    def test_settings_curtailment_14a(self):
+        defaults = {
+            "components": None,
+            "max_hours_per_day": 2,
+            "control": "direct",
+            "non_discriminatory": True,
+        }
+        assert powermodels_io._settings_curtailment_14a(False) is None
+        assert powermodels_io._settings_curtailment_14a(None) is None
+        assert powermodels_io._settings_curtailment_14a(True) == defaults
+        # an empty dict switches §14a curtailment on with the defaults
+        assert powermodels_io._settings_curtailment_14a({}) == defaults
+        settings = powermodels_io._settings_curtailment_14a(
+            {"components": ["a", "b", "a"], "max_hours_per_day": None}
+        )
+        assert settings["components"] == ["a", "b"]
+        assert settings["max_hours_per_day"] == 24
+        assert (
+            powermodels_io._settings_curtailment_14a({"max_hours_per_day": 0})[
+                "max_hours_per_day"
+            ]
+            == 0
+        )
+
+        for curtailment_14a, error, match in [
+            ({"max_hours": 3}, ValueError, "Unknown settings"),
+            ({"max_hours_per_day": -1}, ValueError, "None or a number"),
+            ({"max_hours_per_day": "2"}, ValueError, "None or a number"),
+            ({"max_hours_per_day": True}, ValueError, "None or a number"),
+            ({"control": "smart"}, ValueError, "Must be 'direct' or 'ems'"),
+            ({"non_discriminatory": "yes"}, ValueError, "True or False"),
+            ("ems", TypeError, "bool or dict"),
+        ]:
+            with pytest.raises(error, match=match):
+                powermodels_io._settings_curtailment_14a(curtailment_14a)
+
+    def test_from_powermodels_curtailment_14a(self):
+        # the curtailment of an EMS is split between its devices in proportion to
+        # their load, for storage units it reduces their charging
+        edisgo = copy.deepcopy(self.edisgo)
+        ti = edisgo.timeseries.timeindex
+        hp = "Heat_Pump_LVGrid_5_individual_heating_1"
+        edisgo.timeseries._loads_active_power.loc[:, hp] = 0.03
+        storage = edisgo.add_component(
+            comp_type="storage_unit",
+            ts_active_power=pd.Series(-0.01, index=ti),
+            ts_reactive_power="default",
+            bus=edisgo.topology.loads_df.at[hp, "bus"],
+            p_nom=0.01,
+        )
+        entry = {"name": "EMS_1", "components": [hp, storage]}
+        pm = {
+            "nw": {
+                str(t + 1): {"curtailment_14a": {"1": {**entry, "p14a": 0.02}}}
+                for t in range(len(ti))
+            }
+        }
+        powermodels_io._write_curtailment_14a(edisgo, pm, np.arange(1, 5), 1)
+
+        curtailment = edisgo.opf_results.grid_slacks_t.curtailment_14a
+        assert np.allclose(curtailment[hp], 0.015)
+        assert np.allclose(curtailment[storage], 0.005)
+        assert np.allclose(edisgo.timeseries.loads_active_power[hp], 0.015)
+        assert np.allclose(
+            edisgo.timeseries.storage_units_active_power[storage], -0.005
+        )
+
     def test_to_powermodels_flexible_hps_without_thermal_storage(self):
         # flexible heat pumps without thermal storage get a storage with zero
         # capacity, also if no thermal storage is defined at all
