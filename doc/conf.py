@@ -88,11 +88,6 @@ autoapi_own_page_level = "class"
 autoapi_ignore = [
     "*/opf/timeseries_reduction.py",
     "*/opf/opf_solutions/*",
-    # The vendored OEP dialect implements SQLAlchemy interfaces and inherits
-    # their docstrings, which use roles only SQLAlchemy's own documentation
-    # defines. It is internal plumbing - the package docstring in the API
-    # reference of edisgo.io is what users need.
-    "*/io/oedialect/*",
 ]
 # Don't add autoapi to toctree if no modules were successfully parsed
 autoapi_add_toctree_entry = False
@@ -154,6 +149,8 @@ autodoc_mock_imports = [
     "sqlalchemy.orm",
     "geoalchemy2",
     "geoalchemy2.types",
+    "oedialect",
+    "saio",
     # Machine learning
     "sklearn",
     "sklearn.cluster",

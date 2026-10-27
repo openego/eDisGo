@@ -99,25 +99,12 @@ Changes
   upgrades hang together: NumPy 2 needs pandas 2.2 or newer, which only talks to
   SQLAlchemy 2.0, and PyPSA 1.3 requires pandas 3. What that needed in eDisGo is
   described in the entries below
-* Replaced the ``oedialect`` package by a reduced fork of it in
-  :mod:`edisgo.io.oedialect`, which reads from the Open Energy Platform (OEP) with
-  SQLAlchemy 2.0. The released oedialect 0.1.1 only works with SQLAlchemy 1.3 — with
-  2.0 it cannot even be imported — and its SQLAlchemy 2.0 branch is unfinished, so
-  it blocked the whole upgrade chain down to NumPy. The fork compiles SELECT
-  statements into the same API documents as its origin (``tests/io/test_oedialect.py``
-  compares them), reflects the schema through the API's ``advanced/get_*``
-  endpoints, and is read-only: eDisGo never writes to the OEP, so compiling an
-  INSERT, UPDATE, DELETE or DDL statement raises instead. It can be dropped again
-  once oedialect releases a SQLAlchemy 2.0 compatible version
-* Replaced the ``saio`` package, unmaintained since 2020 and likewise incompatible
-  with SQLAlchemy 2.0, by ``_ReflectedSchema`` in :mod:`edisgo.tools.config`, which
-  reflects the ORM classes eDisGo reads and caches them per engine and schema. The
-  OEP and egon-data paths of ``import_tables_from_oep`` and the legacy open_eGo
-  tables read through :func:`~.tools.legacy_oep_table` now share that reflection
-  instead of having one implementation each. Tables without a primary key (views)
-  are mapped by their columns as before, but columns of a type whose values are
-  unhashable — arrays and JSON — are left out of the assumed key, as the ORM would
-  raise a ``TypeError`` on them
+* Read from the Open Energy Platform (OEP) with SQLAlchemy 2.0 through forks of
+  ``oedialect`` and ``saio``, installed from GitHub until the SQLAlchemy 2.0 support
+  they contain is released. The released oedialect 0.1.1 only works with
+  SQLAlchemy 1.3 — with 2.0 it cannot even be imported — and saio calls
+  ``declarative_base(bind=...)``, which SQLAlchemy 2.0 removed, so both blocked the
+  whole upgrade chain down to NumPy
 * Followed the PyPSA 1.0 API in :mod:`edisgo.io.pypsa_io`:
   ``import_components_from_dataframe()`` and ``import_series_from_dataframe()`` were
   removed there, and are replaced by functions of the same name in that module,

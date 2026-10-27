@@ -4,10 +4,9 @@ import os
 import matplotlib
 import pytest
 
+from oedialect.dialect import OEDialect
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
-
-from edisgo.io.oedialect.dialect import OEDialect
 
 matplotlib.use("Agg")
 

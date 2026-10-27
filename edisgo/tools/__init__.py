@@ -9,9 +9,12 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import importlib
+
 from contextlib import contextmanager
 from functools import cache
 
+from saio import register_schema
 from sqlalchemy.orm import Session
 
 
@@ -22,14 +25,11 @@ def _oep_engine():
 
     Uses the OEP token (see :func:`edisgo.io.db.engine`), so the connection does
     not count against the limit of open connections that all anonymous OEP
-    clients share. The engine is created on the first query, so that importing
-    eDisGo does not open a connection.
+    clients share.
 
     """
     from edisgo.io.db import engine
 
-    # ssh=False pins the source to the OEP: the legacy tables do not exist in
-    # an egon-data database, which engine() would otherwise auto-detect.
     return engine(ssh=False)
 
 
@@ -50,8 +50,8 @@ def legacy_oep_table(schema, table):
     """
     ORM class of a table of the legacy open_eGo data model on the OEP.
 
-    The table definition is reflected from the OEP with the engine of
-    :func:`session_scope` and cached, see :class:`~.tools.config._ReflectedSchema`.
+    The table definition is reflected from the OEP with saio, using the engine
+    of :func:`session_scope`.
 
     Parameters
     ----------
@@ -61,6 +61,7 @@ def legacy_oep_table(schema, table):
         Name of the table, e.g. 'ego_dp_res_powerplant'.
 
     """
-    from edisgo.tools.config import _ReflectedSchema
-
-    return _ReflectedSchema.get(_oep_engine(), schema).orm_class(table)
+    # register the schema on every call: other imports register the same
+    # schema name with a different engine, e.g. the local egon-data database
+    register_schema(schema, _oep_engine())
+    return getattr(importlib.import_module(f"saio.{schema}"), table)

@@ -1,9 +1,10 @@
+import importlib
+
 from sqlalchemy import create_engine, text
 
 import edisgo.io.db
 
 from edisgo import tools
-from edisgo.tools.config import _ReflectedSchema
 
 
 def test_session_scope_uses_oep_engine(monkeypatch):
@@ -31,8 +32,8 @@ def test_session_scope_uses_oep_engine(monkeypatch):
 
 
 def test_legacy_oep_table_reflects_table_from_oep_engine(monkeypatch):
-    # the legacy tables are reflected from the engine of session_scope, so no
-    # ORM definitions of their own are needed
+    # the legacy tables are reflected with saio from the engine of
+    # session_scope, so no ORM definitions (formerly egoio) are needed
     oep_engine = create_engine("sqlite://")
     with oep_engine.begin() as connection:
         connection.execute(
@@ -43,7 +44,6 @@ def test_legacy_oep_table_reflects_table_from_oep_engine(monkeypatch):
         )
 
     monkeypatch.setattr(edisgo.io.db, "engine", lambda **kwargs: oep_engine)
-    monkeypatch.setattr(_ReflectedSchema, "_cache", {})
     tools._oep_engine.cache_clear()
     try:
         table = tools.legacy_oep_table("main", "ego_renewable_feedin")
@@ -52,4 +52,4 @@ def test_legacy_oep_table_reflects_table_from_oep_engine(monkeypatch):
 
     assert table.__table__.schema == "main"
     assert set(table.__table__.columns.keys()) == {"w_id", "source"}
-    assert _ReflectedSchema.get(oep_engine, "main").engine is oep_engine
+    assert importlib.import_module("saio.main").engine is oep_engine

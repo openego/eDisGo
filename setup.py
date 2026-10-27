@@ -49,6 +49,10 @@ requirements = [
     "multiprocess < 0.71.0",
     "networkx >= 2.5.0, < 3.7.0",
     "numpy >= 2.0.0, < 2.5.0",
+    # The SQLAlchemy 2.0 support of oedialect and saio is not released yet
+    # (OpenEnergyPlatform/oedialect#56, OpenEnergyPlatform/saio#10). Until it is,
+    # both are installed from the forks the pull requests come from.
+    "oedialect @ git+https://github.com/joda9/oedialect.git@937e0cf9289000d3adae08351ce15a003d5588f8",  # noqa: E501
     "pandas >= 3.0.0, < 3.1.0",
     # sshtunnel 0.4.0 - the latest release - reads paramiko.DSSKey, which
     # paramiko removed in version 4
@@ -62,6 +66,7 @@ requirements = [
     # defaults) to export its grids, so the range is kept narrow
     "pypsa >= 1.3.0, < 1.4.0",
     "pyyaml < 6.1.0",
+    "saio @ git+https://github.com/joda9/saio.git@3f5fe13a84841c594976fa1721c5b4088b2736ce",  # noqa: E501
     "scikit-learn < 1.10.0",
     "scipy < 1.18.0",
     "shapely >= 1.7.0, < 2.2.0",
@@ -136,7 +141,6 @@ setup(
     install_requires=requirements,
     extras_require=extras,
     package_data={
-        "edisgo.io.oedialect": ["LICENSE"],
         "edisgo": [
             os.path.join("config", "*.cfg"),
             os.path.join("equipment", "*.csv"),
