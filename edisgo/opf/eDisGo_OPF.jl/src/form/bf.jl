@@ -189,7 +189,8 @@ storage, DSM, heat pumps and charging points, plus the ohmic branch losses
 balance additionally includes the load-shedding / curtailment slack variables
 (generation curtailment `pgc`, dispatchable-generation slack `pgens`, load slack
 `pds`, charging-point slack `pcps`, heat-pump slack `phps`) and the §14a EnWG
-curtailment `p14a` of the heat pumps and charging points in `bus_c14a` (reactive
+curtailment `p14a` of the heat pumps, charging points and storage units in
+`bus_c14a` (reactive
 power via the power factors in `bus_c14a_pf`). Reactive injections
 of the flexibilities are derived from their active power via the power factor
 (`tan(acos(pf))`).

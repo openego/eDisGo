@@ -58,11 +58,11 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         for i in PowerModels.ids(pm, :heatpumps, nw=n)
             eDisGo_OPF.constraint_hp_operation(pm, i, n) # Eq. (3.19)
         end
-        if haskey(PowerModels.var(pm, n), :z14a)
-            for i in axes(PowerModels.var(pm, n, :z14a), 1)
-                eDisGo_OPF.constraint_curtailment_14a_active(pm, i, n)  # §14a EnWG
-            end
+        if PowerModels.ref(pm, 1, :opf_version) in(2, 4)  # §14a EnWG
+            z14a = PowerModels.var(pm, n, :z14a)
             for (i, c) in PowerModels.ref(pm, n, :curtailment_14a)
+                eDisGo_OPF.constraint_curtailment_14a_load(pm, i, n)
+                i in axes(z14a, 1) && eDisGo_OPF.constraint_curtailment_14a_active(pm, i, n)
                 get(c, "area", 0) > 0 && eDisGo_OPF.constraint_curtailment_14a_share(pm, i, n)
             end
         end

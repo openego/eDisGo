@@ -12,6 +12,7 @@
 import json
 import logging
 import math
+import numbers
 
 from copy import deepcopy
 
@@ -152,7 +153,8 @@ def to_powermodels(
         reduced by non-flexible components.
 
     """
-    if curtailment_14a and opf_version not in [2, 4]:
+    settings_14a = _settings_curtailment_14a(curtailment_14a)
+    if settings_14a is not None and opf_version not in [2, 4]:
         raise ValueError(
             "§14a curtailment requires grid restrictions in the optimization, i.e. "
             f"opf_version 2 or 4, but opf_version {opf_version} was given."
@@ -255,9 +257,9 @@ def to_powermodels(
         )
     else:
         logger.warning("No loads found in network.")
-    if curtailment_14a:
+    if settings_14a is not None:
         logger.info("Transforming §14a curtailment into PowerModels dictionary format.")
-        _build_curtailment_14a(edisgo_object, psa_net, pm, s_base, curtailment_14a)
+        _build_curtailment_14a(edisgo_object, psa_net, pm, s_base, settings_14a)
     if (opf_version == 3) | (opf_version == 4):
         _check_overlying_grid_covers_timeindex(edisgo_object)
         # An entirely empty overlying grid is handled by the IndexError fallback
@@ -642,24 +644,26 @@ def _write_curtailment_14a(edisgo_object, pm, timesteps, s_base):
     ti = edisgo_object.timeseries.timeindex
     ts = edisgo_object.timeseries
     curtailment = _result_df(pm, "curtailment_14a", "p14a", timesteps, ti, s_base)
-    per_device = []
-    for entry in pm["nw"]["1"]["curtailment_14a"].values():
-        demand = pd.concat(
-            {
-                comp: (
-                    ts.loads_active_power.loc[ti, comp]
-                    if comp in ts.loads_active_power.columns
-                    else -ts.storage_units_active_power.loc[ti, comp].clip(upper=0)
-                )
-                for comp in entry["components"]
-            },
-            axis=1,
-        )
-        share = demand.div(demand.sum(axis=1), axis=0).fillna(0.0)
-        per_device.append(share.mul(curtailment[entry["name"]].values, axis=0))
-    per_device = pd.concat(per_device, axis=1)
-    loads = per_device.columns.intersection(ts.loads_active_power.columns)
-    storage_units = per_device.columns.difference(loads)
+    # entry of each device
+    entry = pd.Series(
+        {
+            comp: c["name"]
+            for c in pm["nw"]["1"]["curtailment_14a"].values()
+            for comp in c["components"]
+        }
+    )
+    loads = entry.index.intersection(ts.loads_active_power.columns, sort=False)
+    storage_units = entry.index.difference(loads, sort=False)
+    demand = pd.concat(
+        [
+            ts.loads_active_power.loc[ti, loads],
+            -ts.storage_units_active_power.loc[ti, storage_units].clip(upper=0),
+        ],
+        axis=1,
+    )[entry.index]
+    demand_entry = demand.T.groupby(entry).sum().T[entry.values]
+    share = (demand / demand_entry.values).fillna(0.0)
+    per_device = share * curtailment[entry.values].values
     ts._loads_active_power.loc[ti, loads] = (
         ts._loads_active_power.loc[ti, loads].values - per_device[loads].values
     )
@@ -1169,8 +1173,78 @@ def _build_load(
 # Ziffer 4.5.2), 0.45 for nine and more
 _SIMULTANEITY_FACTORS_14A = {2: 0.8, 3: 0.75, 4: 0.7, 5: 0.65, 6: 0.6, 7: 0.55, 8: 0.5}
 
+# settings of the §14a curtailment and their defaults, see
+# :func:`edisgo.opf.powermodels_opf.pm_optimize`
+_DEFAULT_SETTINGS_14A = {
+    "components": None,
+    "max_hours_per_day": 2,
+    "control": "direct",
+    "non_discriminatory": True,
+}
 
-def _build_curtailment_14a(edisgo_obj, psa_net, pm, s_base, curtailment_14a):
+
+def _settings_curtailment_14a(curtailment_14a):
+    """
+    Validate the settings of the §14a curtailment and complete them with the
+    defaults.
+
+    Parameters
+    ----------
+    curtailment_14a : bool or dict or None
+        See :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+
+    Returns
+    -------
+    dict or None
+        None if §14a curtailment is switched off (False or None), otherwise all
+        settings. True and an empty dict give the defaults. No time budget (None) is
+        given as 24 hours per day, and duplicate `components` are removed.
+
+    """
+    if curtailment_14a is None or curtailment_14a is False:
+        return None
+    if curtailment_14a is True:
+        curtailment_14a = {}
+    if not isinstance(curtailment_14a, dict):
+        raise TypeError(
+            "§14a curtailment must be given as bool or dict, but "
+            f"{type(curtailment_14a).__name__} was given."
+        )
+    unknown = [key for key in curtailment_14a if key not in _DEFAULT_SETTINGS_14A]
+    if unknown:
+        raise ValueError(
+            f"Unknown settings of §14a curtailment: {unknown}. Valid settings are "
+            f"{list(_DEFAULT_SETTINGS_14A)}."
+        )
+    settings = {**_DEFAULT_SETTINGS_14A, **curtailment_14a}
+    max_hours_per_day = settings["max_hours_per_day"]
+    if max_hours_per_day is None:
+        settings["max_hours_per_day"] = 24
+    elif (
+        isinstance(max_hours_per_day, bool)
+        or not isinstance(max_hours_per_day, numbers.Real)
+        or not max_hours_per_day >= 0
+    ):
+        raise ValueError(
+            "'max_hours_per_day' of §14a curtailment must be None or a number of at "
+            f"least 0, but {max_hours_per_day!r} was given."
+        )
+    if settings["control"] not in ["direct", "ems"]:
+        raise ValueError(
+            f"Control '{settings['control']}' of §14a curtailment is not valid. Must "
+            "be 'direct' or 'ems'."
+        )
+    if not isinstance(settings["non_discriminatory"], bool):
+        raise ValueError(
+            "'non_discriminatory' of §14a curtailment must be True or False, but "
+            f"{settings['non_discriminatory']!r} was given."
+        )
+    if settings["components"] is not None:
+        settings["components"] = list(dict.fromkeys(settings["components"]))
+    return settings
+
+
+def _build_curtailment_14a(edisgo_obj, psa_net, pm, s_base, settings):
     """
     Build §14a curtailment dictionary and its time series and add them to
     PowerModels dictionary 'pm'.
@@ -1185,11 +1259,14 @@ def _build_curtailment_14a(edisgo_obj, psa_net, pm, s_base, curtailment_14a):
 
         max(4.2 kW, 0.4 * sum of heat pumps) + (n - 1) * simultaneity factor * 4.2 kW,
 
-    the 40 % rule only applying if a heat pump has more than 11 kW, and n being the
-    number of devices (one with direct control). The upper bound `pmax` of the
-    curtailment is the load of the entry minus its minimum power in each time step.
-    With non-discriminatory control, all entries in one LV grid are curtailed by the
-    same share of their `pmax` (``area``).
+    the 40 % rule only applying if the heat pumps of the entry together have more
+    than 11 kW, as several heat pumps behind one connection count as one device
+    (Ziffer 2.4.2), and n being the number of devices (one with direct control). The
+    upper bound `pmax` of the curtailment is the load of the entry minus its minimum
+    power in each time step. With non-discriminatory control, all entries in one LV
+    grid are curtailed by the same share of their `pmax` (``area``). ``loads`` are
+    the indices of the devices in ``pm["load"]``, so that the OPF can limit their
+    curtailment and load shedding together to their load.
 
     Parameters
     ----------
@@ -1200,20 +1277,11 @@ def _build_curtailment_14a(edisgo_obj, psa_net, pm, s_base, curtailment_14a):
         (PowerModels) dictionary. Loads must already be added.
     s_base : int
         Base value of apparent power for per unit system.
-    curtailment_14a : bool or dict
-        See :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+    settings : dict
+        Settings of the §14a curtailment as returned by
+        :func:`_settings_curtailment_14a`.
 
     """
-    settings = curtailment_14a if isinstance(curtailment_14a, dict) else {}
-    max_hours_per_day = settings.get("max_hours_per_day", 2)
-    if max_hours_per_day is None:
-        max_hours_per_day = 24
-    control = settings.get("control", "direct")
-    if control not in ["direct", "ems"]:
-        raise ValueError(
-            f"Control '{control}' of §14a curtailment is not valid. Must be 'direct' "
-            "or 'ems'."
-        )
     loads = {load["name"]: load for load in pm["load"].values()}
     topology = edisgo_obj.topology
 
@@ -1227,7 +1295,7 @@ def _build_curtailment_14a(edisgo_obj, psa_net, pm, s_base, curtailment_14a):
             topology.storage_units_df[["p_nom", "bus"]].assign(type="storage_unit"),
         ]
     )
-    components = settings.get("components")
+    components = settings["components"]
     if components is None:
         devices = devices[
             devices.index.isin(list(loads))
@@ -1258,52 +1326,57 @@ def _build_curtailment_14a(edisgo_obj, psa_net, pm, s_base, curtailment_14a):
         ],
         axis=1,
     )
-    groups = (
-        devices.groupby("bus").groups
-        if control == "ems"
-        else {comp: [comp] for comp in devices.index}
+    # entry of each device: with EMS one per bus, otherwise one per device
+    entry = (
+        "EMS_" + devices.bus
+        if settings["control"] == "ems"
+        else pd.Series(devices.index, index=devices.index)
     )
-    if settings.get("non_discriminatory", True):
+    if settings["non_discriminatory"]:
         lv_grids = topology.buses_df.lv_grid_id.loc[devices.bus]
-        areas = dict(
-            zip(devices.index, pd.factorize(lv_grids, use_na_sentinel=False)[0] + 1)
+        areas = pd.Series(
+            pd.factorize(lv_grids, use_na_sentinel=False)[0] + 1, index=devices.index
         )
     else:
-        areas = dict.fromkeys(devices.index, 0)
+        areas = pd.Series(0, index=devices.index)
 
-    comp_i = 0
-    for name, members in groups.items():
-        members = list(members)
-        hps = devices.loc[members].query("type == 'heat_pump'").p_nom
-        p_min = max(0.4 * hps.sum(), 0.0042) if (hps > 0.011).any() else 0.0042
-        if len(members) > 1:
-            p_min += (
-                (len(members) - 1)
-                * _SIMULTANEITY_FACTORS_14A.get(len(members), 0.45)
-                * 0.0042
-            )
-        if devices.loc[members].p_nom.sum() <= p_min:
-            continue
-        pmax = ((load_ts[members].sum(axis=1) - p_min).clip(lower=0) / s_base).round(20)
-        load = loads[members[0]]
-        comp_i += 1
+    grouped = devices.assign(
+        p_hp=devices.p_nom.where(devices.type == "heat_pump", 0.0)
+    ).groupby(entry, sort=False)
+    p_hp = grouped.p_hp.sum()
+    n_devices = grouped.size()
+    # the heat pumps of an entry count as one device for the 11 kW (Ziffer 2.4.2)
+    p_min = (0.4 * p_hp).clip(lower=0.0042).where(p_hp > 0.011, 0.0042)
+    simultaneity = n_devices.map(_SIMULTANEITY_FACTORS_14A).fillna(0.45)
+    p_min += (n_devices - 1) * simultaneity * 0.0042
+    curtailable = grouped.p_nom.sum() > p_min
+    p_min = p_min[curtailable]
+    pmax = (
+        (load_ts.T.groupby(entry).sum().T[p_min.index] - p_min).clip(lower=0) / s_base
+    ).round(20)
+    members = grouped.groups
+
+    for comp_i, (name, pmax_ts) in enumerate(pmax.items(), start=1):
+        comps = list(members[name])
+        load = loads[comps[0]]
         pm["curtailment_14a"][str(comp_i)] = {
-            "pmax": pmax.iloc[0],
+            "pmax": pmax_ts.iloc[0],
             "load_bus": load["load_bus"],
             "pf": load["pf"],
             "sign": load["sign"],
-            "max_hours_per_day": max_hours_per_day,
-            "area": int(areas[members[0]]),
-            "components": members,
-            "name": name if control == "direct" else f"EMS_{name}",
+            "max_hours_per_day": settings["max_hours_per_day"],
+            "area": int(areas[comps[0]]),
+            "loads": [loads[comp]["index"] for comp in comps],
+            "components": comps,
+            "name": name,
             "index": comp_i,
         }
         pm["time_series"]["curtailment_14a"][str(comp_i)] = {
-            "pmax": pmax.values.tolist()
+            "pmax": pmax_ts.values.tolist()
         }
-    if comp_i < len(groups):
+    if not curtailable.all():
         logger.info(
-            f"{len(groups) - comp_i} §14a devices are excluded from §14a curtailment, "
+            f"{(~curtailable).sum()} §14a devices are excluded from §14a curtailment, "
             "as their nominal power does not exceed their §14a minimum power."
         )
     # calendar day of each time step for the daily time budget

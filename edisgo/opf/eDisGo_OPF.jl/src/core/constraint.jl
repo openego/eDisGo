@@ -168,6 +168,21 @@ function constraint_curtailment_14a_share(pm::AbstractBFModelEdisgo, i::Int, nw:
 end
 
 """
+Limits the §14a curtailment `p14a` of component `i` in network `nw` together with
+the load shedding `pds` of its loads `c["loads"]` to their load:
+`Σ pds + p14a ≤ Σ pd`. Each is bounded by the load on its own, so without this
+constraint a device whose load is shed could feed in.
+"""
+function constraint_curtailment_14a_load(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
+    c = PowerModels.ref(pm, nw, :curtailment_14a, i)
+    p14a = PowerModels.var(pm, nw, :p14a, i)
+    pds = PowerModels.var(pm, nw, :pds)
+    pd = sum(PowerModels.ref(pm, nw, :load, l, "pd") for l in c["loads"]; init=0.0)
+
+    JuMP.@constraint(pm.model, sum(pds[l] for l in c["loads"]; init=0.0) + p14a <= pd)
+end
+
+"""
 Daily time budget of the §14a curtailment of component `i`: summed over the
 networks `nws` of one day, the time with active curtailment must not exceed
 `max_hours_per_day`.

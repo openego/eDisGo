@@ -443,6 +443,118 @@ class TestPowermodelsIO:
                 self.edisgo, opf_version=2, curtailment_14a={"control": "smart"}
             )
 
+    def test_to_powermodels_curtailment_14a_minimum_power(self):
+        edisgo = copy.deepcopy(self.edisgo)
+        # time index across midnight: the time budget is counted per calendar day,
+        # not per 24 hours from the first time step
+        ti = edisgo.timeseries.timeindex + pd.Timedelta(hours=22)
+        for attr in edisgo.timeseries._attributes:
+            getattr(edisgo.timeseries, f"_{attr}").index = ti
+        edisgo.timeseries._timeindex = ti
+        # devices whose load exceeds their §14a minimum power at three LV buses
+        # without other §14a devices
+        buses = (
+            edisgo.topology.loads_df[
+                edisgo.topology.loads_df.type == "conventional_load"
+            ]
+            .bus.loc[lambda b: edisgo.topology.buses_df.v_nom.loc[b].values < 1]
+            .unique()[:3]
+        )
+        devices = {}
+        for name, comp_type, sector, bus, p_set, load in [
+            ("hp_15kw", "heat_pump", "individual_heating", buses[0], 0.015, 0.014),
+            ("hp_11kw", "heat_pump", "individual_heating", buses[1], 0.011, 0.010),
+            ("hp_8kw", "heat_pump", "individual_heating", buses[2], 0.008, 0.007),
+            ("hp_6kw", "heat_pump", "individual_heating", buses[2], 0.006, 0.005),
+            ("cp_home", "charging_point", "home", buses[2], 0.011, 0.011),
+        ]:
+            devices[name] = edisgo.add_component(
+                comp_type="load",
+                type=comp_type,
+                sector=sector,
+                ts_active_power=pd.Series(load, index=ti),
+                ts_reactive_power="default",
+                bus=bus,
+                p_set=p_set,
+            )
+
+        def pmax(pm):
+            return {
+                c["name"]: pm["time_series"]["curtailment_14a"][i]["pmax"]
+                for i, c in pm["curtailment_14a"].items()
+            }
+
+        # direct control: 40 % of the nominal power only for heat pumps above 11 kW
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo, opf_version=2, curtailment_14a=True
+        )
+        assert pm["time_series"]["day_14a"] == [0, 0, 1, 1]
+        expected = {
+            "hp_15kw": 0.014 - 0.4 * 0.015,
+            "hp_11kw": 0.010 - 0.0042,
+            "hp_8kw": 0.007 - 0.0042,
+            "hp_6kw": 0.005 - 0.0042,
+            "cp_home": 0.011 - 0.0042,
+        }
+        for name, value in expected.items():
+            assert np.allclose(pmax(pm)[devices[name]], [value] * 4)
+        entry = next(
+            c for c in pm["curtailment_14a"].values() if c["name"] == devices["hp_15kw"]
+        )
+        assert [pm["load"][str(i)]["name"] for i in entry["loads"]] == [
+            devices["hp_15kw"]
+        ]
+
+        # EMS: the heat pumps at one bus count as one device of 14 kW for the 40 %
+        # rule, plus two devices with the simultaneity factor 0.75
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo, opf_version=2, curtailment_14a={"control": "ems"}
+        )
+        ems = f"EMS_{buses[2]}"
+        p_min = 0.4 * 0.014 + 2 * 0.75 * 0.0042
+        assert np.allclose(pmax(pm)[ems], [0.023 - p_min] * 4)
+        entry = next(c for c in pm["curtailment_14a"].values() if c["name"] == ems)
+        assert sorted(pm["load"][str(i)]["name"] for i in entry["loads"]) == sorted(
+            [devices["hp_8kw"], devices["hp_6kw"], devices["cp_home"]]
+        )
+        assert np.allclose(pmax(pm)[f"EMS_{buses[0]}"], [0.014 - 0.4 * 0.015] * 4)
+
+    def test_settings_curtailment_14a(self):
+        defaults = {
+            "components": None,
+            "max_hours_per_day": 2,
+            "control": "direct",
+            "non_discriminatory": True,
+        }
+        assert powermodels_io._settings_curtailment_14a(False) is None
+        assert powermodels_io._settings_curtailment_14a(None) is None
+        assert powermodels_io._settings_curtailment_14a(True) == defaults
+        # an empty dict switches §14a curtailment on with the defaults
+        assert powermodels_io._settings_curtailment_14a({}) == defaults
+        settings = powermodels_io._settings_curtailment_14a(
+            {"components": ["a", "b", "a"], "max_hours_per_day": None}
+        )
+        assert settings["components"] == ["a", "b"]
+        assert settings["max_hours_per_day"] == 24
+        assert (
+            powermodels_io._settings_curtailment_14a({"max_hours_per_day": 0})[
+                "max_hours_per_day"
+            ]
+            == 0
+        )
+
+        for curtailment_14a, error, match in [
+            ({"max_hours": 3}, ValueError, "Unknown settings"),
+            ({"max_hours_per_day": -1}, ValueError, "None or a number"),
+            ({"max_hours_per_day": "2"}, ValueError, "None or a number"),
+            ({"max_hours_per_day": True}, ValueError, "None or a number"),
+            ({"control": "smart"}, ValueError, "Must be 'direct' or 'ems'"),
+            ({"non_discriminatory": "yes"}, ValueError, "True or False"),
+            ("ems", TypeError, "bool or dict"),
+        ]:
+            with pytest.raises(error, match=match):
+                powermodels_io._settings_curtailment_14a(curtailment_14a)
+
     def test_from_powermodels_curtailment_14a(self):
         # the curtailment of an EMS is split between its devices in proportion to
         # their load, for storage units it reduces their charging

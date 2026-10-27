@@ -438,7 +438,7 @@ function variable_cp_energy(pm::AbstractPowerModel; nw::Int=nw_id_default, bound
     report && PowerModels.sol_component_value(pm, nw, :electromobility, :cpe, PowerModels.ids(pm, nw, :electromobility), cpe)
 end
 
-"variables for the §14a EnWG curtailment of heat pumps and charging points"
+"variables for the §14a EnWG curtailment of heat pumps, charging points and storage units"
 function variable_curtailment_14a(pm::AbstractPowerModel; kwargs...)
     eDisGo_OPF.variable_curtailment_14a_power(pm; kwargs...)
     eDisGo_OPF.variable_curtailment_14a_active(pm; kwargs...)
@@ -447,9 +447,9 @@ end
 
 """
 Variable `p14a[i]` for `i` in `curtailment_14a`: the reduction of the grid draw of
-a heat pump or charging point under §14a EnWG, bounded by `[0, pmax]`. `pmax` is
-the load minus its §14a minimum power in the respective time step, so the net load
-never falls below the minimum.
+a heat pump, charging point or charging storage unit under §14a EnWG, bounded by
+`[0, pmax]`. `pmax` is the load minus its §14a minimum power in the respective time
+step, so the net load never falls below the minimum.
 """
 function variable_curtailment_14a_power(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     p14a = PowerModels.var(pm, nw)[:p14a] = JuMP.@variable(pm.model,

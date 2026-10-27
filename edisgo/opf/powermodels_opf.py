@@ -20,7 +20,10 @@ import numpy as np
 import pandas as pd
 
 from edisgo.flex_opt import exceptions
-from edisgo.io.powermodels_io import from_powermodels
+from edisgo.io.powermodels_io import (
+    _settings_curtailment_14a,
+    from_powermodels,
+)
 from edisgo.network.topology import Topology
 from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
 
@@ -214,8 +217,57 @@ def pm_optimize(
     later interval sees intact input. The same snapshot covers the overlying-grid,
     DSM, heat-pump and electromobility time series, which
     :func:`_narrow_flex_inputs` narrows to the interval before each solve — see
-    there for why ``set_timeindex`` alone is not enough. Parameters are as for
-    :func:`_pm_optimize_single`.
+    there for why ``set_timeindex`` alone is not enough.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    curtailment_14a : bool or dict
+        §14a EnWG curtailment (BNetzA BK6-22-300): the grid operator may reduce the
+        load of heat pumps, non-public charging points and the charging of storage
+        units above 4.2 kW in the low voltage grid down to a minimum power of
+        4.2 kW, for heat pumps above 11 kW down to 40 % of their nominal power
+        (with control via EMS, the heat pumps at one bus together). Covers all such
+        devices that are not optimized as flexibilities, i.e. not given in
+        `flexible_hps`, `flexible_cps` or `flexible_storage_units`. The curtailment
+        is used before load shedding, the load time series of the devices are
+        reduced accordingly and the curtailment is saved in
+        :attr:`~.opf.results.opf_result_class.GridSlacks.curtailment_14a`. The
+        state of charge of curtailed storage units is not adjusted. Requires
+        `opf_version` 2 or 4. If True or an empty dict, the default settings below
+        are used. A dict may contain:
+
+        * "components" : list(str)
+            Names of the devices to curtail instead of the default selection. They
+            must be inflexible heat pumps, charging points or storage units, but
+            are not filtered by voltage level, nominal power or sector, so that
+            e.g. devices in the medium voltage grid can be included. Duplicates
+            are ignored.
+            Default: all in the low voltage grid, see above.
+        * "max_hours_per_day" : float or None
+            Maximum time per calendar day in hours during which a device may be
+            curtailed, at least 0. The default of 2 hours applies to the
+            preventive control that grid operators may use until 2028 (Anlage 1,
+            Ziffer 10.5). None (or 24 and more) means no time budget, as in
+            grid-oriented control based on the measured grid state (Ziffer 4). The
+            time budget adds binary variables and therefore requires method "soc"
+            without warm start.
+            Default: 2.
+        * "control" : str
+            "direct" (each device gets its own minimum power) or "ems" (all
+            devices at one bus are controlled together via an energy management
+            system, with a minimum power that accounts for their simultaneity,
+            Ziffer 4.5.2). Default: "direct".
+        * "non_discriminatory" : bool
+            If True, all devices in one LV grid are curtailed by the same share
+            of their curtailable power, as the grid operator may not pick
+            devices by their location within a grid area (Ziffer 4.3).
+            Default: True.
+
+        Other keys raise a ValueError.
+        Default: False.
+
+    All other parameters are as for :func:`_pm_optimize_single`.
     """
     opf_kwargs = dict(
         s_base=s_base,
@@ -446,40 +498,8 @@ def _pm_optimize_single(
         process.
         Default: False.
     curtailment_14a : bool or dict
-        §14a EnWG curtailment (BNetzA BK6-22-300): the grid operator may reduce the
-        load of heat pumps, non-public charging points and the charging of storage
-        units above 4.2 kW in the low voltage grid down to a minimum power of
-        4.2 kW, for heat pumps above 11 kW down to 40 % of their nominal power.
-        Covers all such devices that are not optimized as flexibilities, i.e. not
-        given in `flexible_hps`, `flexible_cps` or `flexible_storage_units`. The
-        curtailment is used before load shedding, the load time series of the
-        devices are reduced accordingly and the curtailment is saved in
-        :attr:`~.opf.results.opf_result_class.GridSlacks.curtailment_14a`.
-        Requires `opf_version` 2 or 4. If True, the default settings below are
-        used. A dict may contain:
-
-        * "components" : list(str)
-            Names of the devices to curtail, also in the medium voltage grid.
-            Default: all in the low voltage grid, see above.
-        * "max_hours_per_day" : float or None
-            Maximum time per calendar day in hours during which a device may be
-            curtailed. The default of 2 hours applies to the preventive control
-            that grid operators may use until 2028 (Anlage 1, Ziffer 10.5). None
-            means no time budget, as in grid-oriented control based on the
-            measured grid state (Ziffer 4). The time budget adds binary variables
-            and therefore requires method "soc" without warm start.
-            Default: 2.
-        * "control" : str
-            "direct" (each device gets its own minimum power) or "ems" (all
-            devices at one bus are controlled together via an energy management
-            system, with a minimum power that accounts for their simultaneity,
-            Ziffer 4.5.2). Default: "direct".
-        * "non_discriminatory" : bool
-            If True, all devices in one LV grid are curtailed by the same share
-            of their curtailable power, as the grid operator may not pick
-            devices by their location within a grid area (Ziffer 4.3).
-            Default: True.
-
+        §14a EnWG curtailment of heat pumps, charging points and storage units.
+        See :func:`pm_optimize`.
         Default: False.
     save_heat_storage : bool
         Indicates whether to save results of heat storage variables from the
@@ -496,10 +516,10 @@ def _pm_optimize_single(
         Default: True.
 
     """
-    settings_14a = curtailment_14a if isinstance(curtailment_14a, dict) else {}
+    settings_14a = _settings_curtailment_14a(curtailment_14a)
     if (
-        curtailment_14a
-        and settings_14a.get("max_hours_per_day", 2) is not None
+        settings_14a is not None
+        and settings_14a["max_hours_per_day"] < 24
         and (method == "nc" or warm_start)
     ):
         raise ValueError(

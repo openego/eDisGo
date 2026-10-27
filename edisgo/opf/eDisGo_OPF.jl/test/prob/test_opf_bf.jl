@@ -315,6 +315,22 @@ end
         @test all(p14a(result, n) > 1.0 for n in ("1", "2"))
         @test all(isapprox(pds(result, n), 0; atol=1e-5) for n in ("1", "2"))
 
+        # Shedding a second load at the same bus is as expensive as letting the
+        # curtailed device feed in, so without the limit on curtailment plus load
+        # shedding of the device it ends up feeding in.
+        data = TestUtils.small_network(opf_version=2)
+        data["time_series"]["load"]["1"]["pd"] = fill(1.0, 2)
+        data["load"]["2"] = merge(data["load"]["1"], Dict("index" => 2, "name" => "Load_2"))
+        data["time_series"]["load"]["2"] = Dict{String,Any}("pd" => fill(6.0, 2),
+                                                           "qd" => fill(0.0, 2))
+        result, _ = eDisGo_OPF.solve_mn_opf_bf_flex(
+            TestUtils.multinetwork(TestUtils.add_curtailment_14a!(data; pmax=fill(0.8, 2))),
+            eDisGo_OPF.NCBFPowerModelEdisgo, OPF_IPOPT)
+        @test result["termination_status"] == MOI.LOCALLY_SOLVED
+        @test all(p14a(result, n) > 0.5 for n in ("1", "2"))
+        @test all(result["solution"]["nw"][n]["load"]["2"]["pds"] > 0.5 for n in ("1", "2"))
+        @test all(p14a(result, n) + pds(result, n) <= 1.0 + 1e-6 for n in ("1", "2"))
+
         # A time budget of one hour per day makes it a MIP, which needs Gurobi:
         # one time step is curtailed, in the other one load is shed.
         if TestUtils.gurobi_available()
@@ -445,12 +461,16 @@ end
                 pmax=fill(0.1, 4), days=zeros(Int, 4), kwargs...)),
             eDisGo_OPF.NCBFPowerModelEdisgo, eDisGo_OPF.build_mn_opf_bf_flex)
 
-        # Without time budget: continuous, part of the P and Q balance of bus 3 and
-        # of the objective with half the slack weight.
+        # Without time budget: continuous, part of the P and Q balance of bus 3, of
+        # the limit together with the load shedding and of the objective with half
+        # the slack weight.
         for v in (2, 4)
             pm = c14a_model(v)
             for n in 1:4
-                @test opf_count_with(pm, n, "p14a", "1") == 2
+                @test opf_count_with(pm, n, "p14a", "1") == 3
+                @test count(s -> occursin(opf_var_regex(n, "p14a", "1"), s) &&
+                                 occursin(opf_var_regex(n, "pds", "1"), s),
+                            opf_constraint_strings(pm)) == 3   # P and Q balance, limit
                 @test isempty(PowerModels.var(pm, n, :z14a))
             end
             obj = JuMP.objective_function(pm.model)
@@ -478,7 +498,8 @@ end
                        occursin(opf_var_regex(4, "z14a"), s), budgets)
 
         # Non-discriminatory: every component of a grid area is coupled to the
-        # share of its area, components without area are not.
+        # share of its area, components without area are not, also without time
+        # budget.
         data = TestUtils.add_curtailment_14a!(
             TestUtils.small_network(opf_version=2, num_steps=4);
             pmax=fill(0.1, 4), days=zeros(Int, 4), area=1)
@@ -492,7 +513,7 @@ end
         for n in 1:4
             @test opf_indices(PowerModels.var(pm, n, :s14a)) == Set([1])
             @test opf_count_with(pm, n, "s14a", "1") == 2
-            @test opf_count_with(pm, n, "p14a", "3") == 2   # P and Q balance only
+            @test opf_count_with(pm, n, "p14a", "3") == 3   # balances and limit only
         end
     end
 

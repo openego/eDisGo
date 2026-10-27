@@ -370,9 +370,15 @@ class TestPowerModelsOPF:
             atol=1e-6,
         )
         assert (self.edisgo.timeseries.loads_active_power[cp] >= 0.0042 - 1e-6).all()
+        # curtailment and load shedding together never exceed the load
+        load_shedding = self.edisgo.opf_results.grid_slacks_t.load_shedding
+        assert (
+            curtailment + load_shedding[curtailment.columns]
+            <= loads_before[curtailment.columns] + 1e-6
+        ).all(axis=None)
 
     @pytest.mark.parametrize("kwargs", [{"method": "nc"}, {"warm_start": True}])
-    @pytest.mark.parametrize("curtailment_14a", [True, {"max_hours_per_day": 3}])
+    @pytest.mark.parametrize("curtailment_14a", [True, {}, {"max_hours_per_day": 3}])
     def test_pm_optimize_curtailment_14a_time_budget_needs_gurobi(
         self, kwargs, curtailment_14a
     ):

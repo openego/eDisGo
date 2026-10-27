@@ -14,10 +14,10 @@ the entry)
 
 ## Status (as of 2026-10-27)
 
-**91 of 91 entries done**, suite green: 3749 passing assertions, 6
+**92 of 92 entries done**, suite green: 3771 passing assertions, 6
 `@test_broken`, 0 failures, about 6 to 7 min with a Gurobi licence (about 4 min of
 that are the `Main.jl` subprocesses; without Gurobi, as in CI, the SOC runs
-are skipped). Line coverage of `src/`: 1023 of 1023 lines (100 %).
+are skipped). Line coverage of `src/`: 973 of 973 lines (100 %, counted with Julia 1.12.4).
 
 | Source file | Status |
 | --- | --- |
@@ -25,7 +25,7 @@ are skipped). Line coverage of `src/`: 1023 of 1023 lines (100 %).
 | `src/core/base.jl` | done (3/3) |
 | `src/core/data.jl` | done (3/3) |
 | `src/core/solution.jl` | done (2/2) |
-| `src/core/constraint.jl` | done (9/9) |
+| `src/core/constraint.jl` | done (10/10) |
 | `src/core/constraint_template.jl` | done (5/5) |
 | `src/core/objective.jl` | done (5/5) |
 | `src/io/json.jl` | done (1/1) |
@@ -244,6 +244,7 @@ measurably above the NC optimum.
 - [x] `constraint_cp_state` — AbstractBFModelEdisgo
 - [x] `constraint_hp_operation` — AbstractBFModelEdisgo
 - [x] `constraint_curtailment_14a_active` — AbstractBFModelEdisgo
+- [x] `constraint_curtailment_14a_load` — AbstractBFModelEdisgo
 - [x] `constraint_curtailment_14a_share` — AbstractBFModelEdisgo
 - [x] `constraint_curtailment_14a_time_budget` — AbstractBFModelEdisgo
 - [x] `constraint_HV_requirements` — AbstractBFModelEdisgo (bug: there is no

@@ -265,13 +265,21 @@ set by the Bundesnetzagentur in BK6-22-300 (Anlage 1). With ``curtailment_14a`` 
 :math:`p^\text{14a}_t` for every such device that is not optimised as a flexibility. It
 reduces the load at the device's bus and is bounded by the load minus the minimum power,
 :math:`0 \le p^\text{14a}_t \le \max(0, p^\text{load}_t - p^\text{min})`, so the
-remaining load never falls below the minimum. It enters the objective with half the
-weight of the grid slacks, so the OPF curtails before it sheds load, but not just to
-reduce losses.
+remaining load never falls below the minimum. Together with the load shedding of the
+device it may not exceed its load, :math:`p^\text{14a}_t + p^\text{shed}_t \le
+p^\text{load}_t`, so that a curtailed device never feeds in. It enters the objective
+with half the weight of the grid slacks, so the OPF curtails before it sheds load, but
+not just to reduce losses.
 
+* **Devices** (Ziffer 2.4): by default all heat pumps, charging points with a
+  sector other than ``public`` or ``hpc`` and storage units in the LV grid with a
+  nominal power above 4.2 kW. ``"components"`` selects the devices explicitly
+  instead; they are not filtered by voltage level, nominal power or sector, so that
+  e.g. devices in the MV grid or only those commissioned after 2023 can be chosen.
 * **Minimum power** (Ziffer 4.5): 4.2 kW, for heat pumps above 11 kW 40 % of their
   nominal power. With ``"control": "ems"``, all devices at one bus are controlled
-  together via an energy management system, with the minimum power
+  together via an energy management system, the heat pumps among them counting as
+  one device for the 11 kW threshold (Ziffer 2.4.2), with the minimum power
   :math:`\max(4.2\,\text{kW}, 0.4 \cdot P_\text{heat pumps}) + (n - 1) \cdot
   \text{GZF} \cdot 4.2\,\text{kW}` and the simultaneity factor GZF of the
   :math:`n` devices (0.8 for two down to 0.45 for nine and more).
@@ -291,7 +299,8 @@ reduce losses.
 The curtailment is subtracted from the load time series in ``edisgo.timeseries`` (for
 storage units, from their charging) and saved per device in
 ``edisgo.opf_results.grid_slacks_t.curtailment_14a``. Its energy is lost, not shifted:
-the curtailed devices keep their remaining time series.
+the curtailed devices keep their remaining time series. For storage units with a fixed
+schedule, the state of charge is not adjusted to the curtailed charging.
 
 .. code-block:: python
 

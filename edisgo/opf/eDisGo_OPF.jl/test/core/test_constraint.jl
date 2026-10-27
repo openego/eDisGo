@@ -700,7 +700,8 @@ end
 
 """
 Model on `TestUtils.small_network` with a §14a curtailment with time budget at
-bus 3 (`num_steps` time steps, `pmax` per step), carrying only the §14a variables.
+bus 3 (`num_steps` time steps, `pmax` per step), carrying only the §14a variables
+and the load slack `pds`.
 """
 function cst_14a_model(; num_steps::Int=2, pmax=fill(0.4, num_steps), area::Int=0)
     data = TestUtils.add_curtailment_14a!(TestUtils.small_network(num_steps=num_steps);
@@ -708,6 +709,7 @@ function cst_14a_model(; num_steps::Int=2, pmax=fill(0.4, num_steps), area::Int=
                                           days=zeros(Int, num_steps), area=area)
     build = pm -> for (n, _) in PowerModels.nws(pm)
         eDisGo_OPF.variable_curtailment_14a(pm, nw=n)
+        eDisGo_OPF.variable_load_slack(pm, nw=n)
     end
     return eDisGo_OPF.instantiate_model(TestUtils.multinetwork(data),
                                         eDisGo_OPF.NCBFPowerModelEdisgo, build)
@@ -733,6 +735,23 @@ end
                   Dict(PowerModels.var(pm, n, :p14a, 1) => 1.0,
                        PowerModels.var(pm, n, :z14a, 1) => -pmax),
                   0.0)
+    end
+end
+
+@testset "constraint_curtailment_14a_load" begin
+    pm = cst_14a_model()
+    for (n, pd) in ((1, 0.2), (2, 0.5))
+        PowerModels.ref(pm, n, :load, 1)["pd"] = pd
+        cons = cst_new_le_constraints(pm.model) do
+            eDisGo_OPF.constraint_curtailment_14a_load(pm, 1, n)
+        end
+        @test length(cons) == 1
+        # pds[1] + p14a <= pd of network n: curtailed and shed power together never
+        # exceed the load
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, n, :pds, 1) => 1.0,
+                       PowerModels.var(pm, n, :p14a, 1) => 1.0),
+                  pd)
     end
 end
 
