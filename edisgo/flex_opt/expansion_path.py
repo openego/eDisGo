@@ -58,9 +58,9 @@ class ExpansionPathResults:
             Sum of `costs` of this and all previous stages.
         cumulative_present_value : float
             Sum of `present_value` of this and all previous stages.
-        greenfield_costs : float
-            Only if `greenfield` is True: costs of reinforcing the original grid
-            directly for the scenario of this stage, see
+        direct_reinforce_costs : float
+            Only if `compare_direct_reinforce` is True: costs of reinforcing the
+            original grid directly for the scenario of this stage, see
             :func:`reinforce_expansion_path`.
 
     grid_expansion_costs : :pandas:`pandas.DataFrame<DataFrame>`
@@ -84,7 +84,7 @@ def reinforce_expansion_path(
     stages: dict[int, Callable[[EDisGo], None]],
     base_year: int | None = None,
     discount_rate: float = 0.05,
-    greenfield: bool = False,
+    compare_direct_reinforce: bool = False,
     reinforce_kwargs: dict | None = None,
 ) -> ExpansionPathResults:
     """
@@ -98,7 +98,8 @@ def reinforce_expansion_path(
 
     Applying the functions of all stages up to a year one after another to the
     original grid must give the grid of this year. The functions must be
-    deterministic, as `greenfield` calls them again on a copy of the original grid.
+    deterministic, as `compare_direct_reinforce` calls them again on a copy of the
+    original grid.
 
     The costs of a stage only comprise the measures taken in this stage. To this
     end, the equipment changes of earlier stages are set aside while a stage is
@@ -132,13 +133,14 @@ def reinforce_expansion_path(
     discount_rate : float
         Discount rate per year used to calculate the present value of the costs,
         e.g. 0.05 for 5 %. Default: 0.05.
-    greenfield : bool
+    compare_direct_reinforce : bool
         If True, the original grid is additionally reinforced directly for the
         scenario of every stage, i.e. with the functions of this and all previous
-        stages applied at once. The costs are given in column `greenfield_costs`
-        of the summary. Comparing them with column `cumulative_costs` shows the
-        additional costs of building in stages. This needs one additional
-        reinforcement per stage after the first. Default: False.
+        stages applied at once. The costs are given in column
+        `direct_reinforce_costs` of the summary. Comparing them with column
+        `cumulative_costs` shows the additional costs of building in stages. This
+        needs one additional reinforcement per stage after the first.
+        Default: False.
     reinforce_kwargs : dict or None
         Parameters passed to :meth:`~.edisgo.EDisGo.reinforce` in every stage.
         Default: None.
@@ -165,7 +167,7 @@ def reinforce_expansion_path(
     if reinforce_kwargs.get("copy_grid", False):
         raise ValueError("copy_grid cannot be used in an expansion path.")
 
-    original_edisgo = copy.deepcopy(edisgo_obj) if greenfield else None
+    original_edisgo = copy.deepcopy(edisgo_obj) if compare_direct_reinforce else None
 
     all_changes = [edisgo_obj.results.equipment_changes]
     stage_costs = []
@@ -189,9 +191,9 @@ def reinforce_expansion_path(
     costs_per_stage = pd.concat(stage_costs)
     summary = _summary(costs_per_stage, years, base_year, discount_rate)
 
-    if greenfield:
+    if compare_direct_reinforce:
         # reinforcing the original grid for the first stage is the first stage
-        summary["greenfield_costs"] = [summary.costs.iloc[0]] + [
+        summary["direct_reinforce_costs"] = [summary.costs.iloc[0]] + [
             _reinforce_stage(
                 copy.deepcopy(original_edisgo),
                 [stages[year] for year in years[: i + 1]],

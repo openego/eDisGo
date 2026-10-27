@@ -38,7 +38,7 @@ class TestReinforceExpansionPath:
     @pytest.mark.slow
     def test_expansion_path(self):
         results = reinforce_expansion_path(
-            self.edisgo, self.stages, discount_rate=0.1, greenfield=True
+            self.edisgo, self.stages, discount_rate=0.1, compare_direct_reinforce=True
         )
         summary = results.summary
 
@@ -51,7 +51,7 @@ class TestReinforceExpansionPath:
             "present_value",
             "cumulative_costs",
             "cumulative_present_value",
-            "greenfield_costs",
+            "direct_reinforce_costs",
         ]
         # every stage needs reinforcement in this grid
         assert (summary.costs > 0).all()
@@ -87,7 +87,7 @@ class TestReinforceExpansionPath:
         )
         assert summary.cumulative_costs.iloc[-1] == pytest.approx(summary.costs.sum())
         # the first stage is the same as reinforcing the original grid directly
-        assert summary.at[2030, "greenfield_costs"] == pytest.approx(
+        assert summary.at[2030, "direct_reinforce_costs"] == pytest.approx(
             summary.at[2030, "costs"]
         )
         # reinforcing directly for 2040 applies the stage functions of all years
@@ -95,7 +95,7 @@ class TestReinforceExpansionPath:
         edisgo_direct.topology.loads_df["p_set"] *= 2.0
         edisgo_direct.set_time_series_worst_case_analysis()
         edisgo_direct.reinforce()
-        assert summary.at[2040, "greenfield_costs"] == pytest.approx(
+        assert summary.at[2040, "direct_reinforce_costs"] == pytest.approx(
             edisgo_direct.results.grid_expansion_costs.total_costs.sum()
         )
 
@@ -134,7 +134,7 @@ class TestReinforceExpansionPath:
         assert results.summary.at[2030, "present_value"] == pytest.approx(
             results.summary.at[2030, "costs"] / 1.05**5
         )
-        assert "greenfield_costs" not in results.summary.columns
+        assert "direct_reinforce_costs" not in results.summary.columns
         assert (results.equipment_changes.year == 2030).all()
         assert (results.grid_expansion_costs.year == 2030).all()
 

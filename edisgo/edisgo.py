@@ -1517,7 +1517,7 @@ class EDisGo:
         stages: dict[int, Callable[[EDisGo], None]],
         base_year: int | None = None,
         discount_rate: float = 0.05,
-        greenfield: bool = False,
+        compare_direct_reinforce: bool = False,
         **kwargs,
     ) -> ExpansionPathResults:
         """
@@ -1532,7 +1532,7 @@ class EDisGo:
 
         Applying the functions of all stages up to a year one after another to the
         original grid must give the grid of this year. The functions must be
-        deterministic, as `greenfield` calls them again.
+        deterministic, as `compare_direct_reinforce` calls them again.
 
         The EDisGo object is changed in place and contains the grid reinforced for
         the last stage afterwards. Its
@@ -1554,7 +1554,7 @@ class EDisGo:
             stage. Default: None.
         discount_rate : float
             Discount rate per year, e.g. 0.05 for 5 %. Default: 0.05.
-        greenfield : bool
+        compare_direct_reinforce : bool
             If True, the original grid is additionally reinforced directly for the
             scenario of every stage, to compare the costs of the expansion path with
             building for the target year at once. Default: False.
@@ -1576,7 +1576,7 @@ class EDisGo:
             stages,
             base_year=base_year,
             discount_rate=discount_rate,
-            greenfield=greenfield,
+            compare_direct_reinforce=compare_direct_reinforce,
             reinforce_kwargs=kwargs,
         )
 
