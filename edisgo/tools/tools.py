@@ -86,7 +86,7 @@ def shift_timeindex_to_year(timeindex, year):
     return timeindex + pd.DateOffset(years=year - timeindex[0].year)
 
 
-def shift_timeindex_to_reference_year(edisgo_obj, timeindex):
+def shift_timeindex_to_reference_year(edisgo_obj, timeindex, name=""):
     """
     Relabels a time index to the reference year, keeping each date.
 
@@ -101,6 +101,9 @@ def shift_timeindex_to_reference_year(edisgo_obj, timeindex):
     edisgo_obj : :class:`~.EDisGo`
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
         Time index to relabel.
+    name : str, optional
+        Name of the time series `timeindex` belongs to, to mention in the log
+        warning. Default: "".
 
     Returns
     -------
@@ -124,14 +127,49 @@ def shift_timeindex_to_reference_year(edisgo_obj, timeindex):
         )
     reference_year = get_reference_year(edisgo_obj)
     if years[0] != reference_year:
+        subject = f"The time index of {name}" if name else "The given time index"
         logger.warning(
-            f"The given time index is set in year {years[0]}. It is relabelled to "
-            f"the reference year {reference_year} (see section 'timeindex' in the "
+            f"{subject} is set in year {years[0]}. It is relabelled to the "
+            f"reference year {reference_year} (see section 'timeindex' in the "
             f"timeseries config), keeping each date."
         )
     elif _not_feb_29(timeindex).all():
         return timeindex
     return shift_timeindex_to_year(timeindex, reference_year)
+
+
+def shift_to_reference_year(edisgo_obj, ts, name=""):
+    """
+    Relabels the index of a time series to the reference year, keeping each date.
+
+    This is used for time series provided by the user, so that they are indexed
+    in the same year as all other time series. Time steps on 29 February are
+    dropped. See :func:`shift_timeindex_to_reference_year` for details.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    ts : :pandas:`pandas.Series<Series>` or :pandas:`pandas.DataFrame<DataFrame>`\
+        or None
+        Time series to relabel. Returned unchanged if ``None``, empty or not
+        indexed by a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+    name : str, optional
+        Name of `ts` to mention in the log warning. Default: "".
+
+    Returns
+    -------
+    Same type as `ts`
+        `ts` with its index relabelled to the reference year.
+
+    """
+    if ts is None or ts.empty or not isinstance(ts.index, pd.DatetimeIndex):
+        return ts
+    timeindex = shift_timeindex_to_reference_year(edisgo_obj, ts.index, name=name)
+    if timeindex is ts.index:
+        return ts
+    ts = ts.loc[_not_feb_29(ts.index)].copy()
+    ts.index = timeindex
+    return ts
 
 
 def align_series_to_timeindex(ts, timeindex, extra_step=False):

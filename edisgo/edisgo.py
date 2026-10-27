@@ -2355,10 +2355,12 @@ class EDisGo:
         dsm_profiles = dsm_import.oedb(
             edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
         )
-        self.dsm.p_min = dsm_profiles["p_min"]
-        self.dsm.p_max = dsm_profiles["p_max"]
-        self.dsm.e_min = dsm_profiles["e_min"]
-        self.dsm.e_max = dsm_profiles["e_max"]
+        for attr in ["p_min", "p_max", "e_min", "e_max"]:
+            setattr(
+                self.dsm,
+                attr,
+                tools.shift_to_reference_year(self, dsm_profiles[attr], name=attr),
+            )
 
     def import_home_batteries(
         self,

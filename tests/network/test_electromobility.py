@@ -195,13 +195,10 @@ class TestElectromobility:
 
     def test_get_flexibility_bands_scopes_to_mismatched_timeindex(self):
         """
-        Regression test for eDisGo#703: get_flexibility_bands used to build
-        bands spanning SimBEV's own native calendar/range only, with no
-        alignment to edisgo.timeseries.timeindex - indexing the bands by a
-        timeindex in a different year (SimBEV's start_date here is 2011)
-        and/or a shorter window than SimBEV's simulated range raised
-        KeyError. The bands must now be year-aligned and trimmed to exactly
-        that timeindex.
+        The flexibility bands are aligned and trimmed to exactly
+        edisgo.timeseries.timeindex, also if it is shorter than SimBEV's
+        simulated range. A time index set in another year is relabelled to the
+        reference year first.
         """
         edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         electromobility_import.import_electromobility_from_dir(
@@ -213,8 +210,8 @@ class TestElectromobility:
         assert edisgo_obj.electromobility.simbev_config_df.start_date.values[
             0
         ] == np.datetime64("2011-01-01")
-        short_timeindex = pd.date_range("2035-01-15", periods=24, freq="h")
-        edisgo_obj.set_timeindex(short_timeindex)
+        edisgo_obj.set_timeindex(pd.date_range("2035-01-15", periods=24, freq="h"))
+        short_timeindex = pd.date_range("2011-01-15", periods=24, freq="h")
 
         bands = edisgo_obj.electromobility.get_flexibility_bands(
             edisgo_obj, ["work", "public"]

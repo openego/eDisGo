@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 
 from matplotlib import pyplot as plt
-from pandas.testing import assert_frame_equal, assert_series_equal
+from pandas.testing import assert_frame_equal, assert_index_equal, assert_series_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo
@@ -135,7 +135,7 @@ class TestEDisGo:
         shutil.rmtree(save_dir)
 
     def test_set_time_series_manual(self, caplog):
-        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        timeindex = pd.date_range("1/1/2011", periods=3, freq="H")
         gens_ts = pd.DataFrame(
             data={
                 "GeneratorFluctuating_15": [2.0, 5.0, 6.0],
@@ -180,7 +180,7 @@ class TestEDisGo:
         )
 
         # test overwriting time series and with some components that do not exist
-        timeindex2 = pd.date_range("1/1/2018", periods=4, freq="H")
+        timeindex2 = pd.date_range("1/1/2011", periods=4, freq="H")
         gens_ts2 = pd.DataFrame(
             data={
                 "GeneratorFluctuating_15": [1.0, 2.0, 5.0, 6.0],
@@ -228,6 +228,25 @@ class TestEDisGo:
         assert_frame_equal(
             storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
         )
+
+    def test_set_time_series_manual_relabels_to_reference_year(self, caplog):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        timeindex = pd.date_range("1/1/2020", periods=72, freq="H")
+        edisgo.set_timeindex(timeindex)
+        gens_ts = pd.DataFrame(
+            1.0,
+            index=timeindex,
+            columns=["GeneratorFluctuating_15", "GeneratorFluctuating_24"],
+        )
+        with caplog.at_level(logging.WARNING):
+            edisgo.set_time_series_manual(generators_p=gens_ts)
+        assert "The time index of ts_generators is set in year 2020" in caplog.text
+        gens_active_power = edisgo.timeseries.generators_active_power
+        assert_index_equal(
+            gens_active_power.index,
+            pd.date_range("1/1/2011", periods=72, freq="H"),
+        )
+        assert gens_active_power.notna().all().all()
 
     def test_set_time_series_active_power_predefined_demandlib_auto_sets_timeindex(
         self,
@@ -1711,6 +1730,28 @@ class TestEDisGo:
         )
         heat_demand_retrieval_mock.assert_called_once()
         cop_retrieval_mock.assert_called_once()
+
+    def test_import_dsm_relabels_to_reference_year(self, monkeypatch, caplog):
+        edisgo_object = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        timeindex = pd.date_range("1/1/2020", periods=3, freq="H")
+        dsm_profiles = {
+            attr: pd.DataFrame({"Load_1": [0.1, 0.2, 0.3]}, index=timeindex)
+            for attr in ["p_min", "p_max", "e_min", "e_max"]
+        }
+        monkeypatch.setattr(
+            edisgo_module.dsm_import, "oedb", Mock(return_value=dsm_profiles)
+        )
+
+        with caplog.at_level(logging.WARNING):
+            edisgo_object.import_dsm(scenario="eGon2035", engine=Mock())
+
+        assert "The time index of p_min is set in year 2020" in caplog.text
+        for attr in ["p_min", "p_max", "e_min", "e_max"]:
+            df = getattr(edisgo_object.dsm, attr)
+            assert_index_equal(
+                df.index, pd.date_range("1/1/2011", periods=3, freq="H")
+            )
+            assert df["Load_1"].tolist() == [0.1, 0.2, 0.3]
 
     @pytest.mark.slow
     def test_import_heat_pumps_reference_year_independent_of_scenario(self):

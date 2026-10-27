@@ -27,6 +27,7 @@ from edisgo.tools.tools import (
     align_to_edisgo_timeindex,
     assign_voltage_level_to_component,
     resample,
+    shift_to_reference_year,
 )
 
 if TYPE_CHECKING:
@@ -433,6 +434,14 @@ class TimeSeries:
             names of storage units to set time series for.
 
         """
+        ts_generators = shift_to_reference_year(
+            edisgo_object, ts_generators, name="ts_generators"
+        )
+        ts_loads = shift_to_reference_year(edisgo_object, ts_loads, name="ts_loads")
+        ts_storage_units = shift_to_reference_year(
+            edisgo_object, ts_storage_units, name="ts_storage_units"
+        )
+
         if ts_generators is not None:
             # check if all generators time series are provided for exist in the network
             # and only set time series for those that do
@@ -1388,6 +1397,9 @@ class TimeSeries:
         """
         if not isinstance(ts_generators, pd.DataFrame):
             raise ValueError("'ts_generators' must be a pandas DataFrame.")
+        ts_generators = shift_to_reference_year(
+            edisgo_object, ts_generators, name="ts_generators"
+        )
 
         # write to TimeSeriesRaw
         for col in ts_generators:
@@ -1561,6 +1573,7 @@ class TimeSeries:
         elif ts_loads.empty:
             logger.warning("The profile you entered is empty. Method is skipped.")
             return
+        ts_loads = shift_to_reference_year(edisgo_object, ts_loads, name="ts_loads")
 
         # write to TimeSeriesRaw
         for col in ts_loads:

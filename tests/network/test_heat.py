@@ -85,8 +85,9 @@ class TestHeatPump:
         )
         return hp_df
 
-    def test_set_cop(self):
+    def test_set_cop(self, caplog):
         # ################### test with dataframe ###################
+        edisgo_object = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         heat_pump = HeatPump()
         cop = pd.DataFrame(
             data={
@@ -94,7 +95,7 @@ class TestHeatPump:
             },
             index=self.timeindex,
         )
-        heat_pump.set_cop(None, cop)
+        heat_pump.set_cop(edisgo_object, cop)
         pd.testing.assert_frame_equal(
             heat_pump.cop_df,
             cop,
@@ -109,12 +110,24 @@ class TestHeatPump:
             },
             index=self.timeindex,
         )
-        heat_pump.set_cop(None, cop)
+        heat_pump.set_cop(edisgo_object, cop)
         pd.testing.assert_frame_equal(
             heat_pump.cop_df,
             cop,
             check_freq=False,
         )
+
+        # test that a dataframe in another year is relabelled to the reference year
+        heat_pump = HeatPump()
+        cop = pd.DataFrame(
+            data={"hp3": [5.0, 6.0]},
+            index=pd.date_range("1/1/2020 12:00", periods=2, freq="H"),
+        )
+        with caplog.at_level(logging.WARNING):
+            heat_pump.set_cop(edisgo_object, cop)
+        assert "The time index of ts_cop is set in year 2020" in caplog.text
+        pd.testing.assert_index_equal(heat_pump.cop_df.index, self.timeindex)
+        assert heat_pump.cop_df["hp3"].tolist() == [5.0, 6.0]
 
     def test_set_cop_oedb(self, caplog, mock_oep_heat_import):
         # ################### test with oedb ###################
@@ -222,8 +235,9 @@ class TestHeatPump:
             engine=None,
         )
 
-    def test_set_heat_demand(self):
+    def test_set_heat_demand(self, caplog):
         # test with dataframe
+        edisgo_object = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         heat_pump = HeatPump()
         heat_demand = pd.DataFrame(
             data={
@@ -232,7 +246,7 @@ class TestHeatPump:
             },
             index=self.timeindex,
         )
-        heat_pump.set_heat_demand(None, heat_demand)
+        heat_pump.set_heat_demand(edisgo_object, heat_demand)
         pd.testing.assert_frame_equal(
             heat_pump.heat_demand_df,
             heat_demand,
@@ -247,13 +261,25 @@ class TestHeatPump:
             },
             index=self.timeindex,
         )
-        heat_pump.set_heat_demand(None, heat_demand)
+        heat_pump.set_heat_demand(edisgo_object, heat_demand)
         heat_demand["hp4"] = pd.Series([1.0, 2.0], index=self.timeindex)
         pd.testing.assert_frame_equal(
             heat_pump.heat_demand_df[sorted(heat_pump.heat_demand_df)],
             heat_demand[sorted(heat_demand.columns)],
             check_freq=False,
         )
+
+        # test that a dataframe in another year is relabelled to the reference year
+        heat_pump = HeatPump()
+        heat_demand = pd.DataFrame(
+            data={"hp3": [1.0, 2.0]},
+            index=pd.date_range("1/1/2020 12:00", periods=2, freq="H"),
+        )
+        with caplog.at_level(logging.WARNING):
+            heat_pump.set_heat_demand(edisgo_object, heat_demand)
+        assert "The time index of ts_heat_demand is set in year 2020" in caplog.text
+        pd.testing.assert_index_equal(heat_pump.heat_demand_df.index, self.timeindex)
+        assert heat_pump.heat_demand_df["hp3"].tolist() == [1.0, 2.0]
 
     def test_set_heat_demand_oedb(self, mock_oep_heat_import):
         # test with oedb

@@ -331,6 +331,7 @@ class HeatPump:
             cop_df = ts_cop
         else:
             raise ValueError("'ts_cop' must either be a pandas DataFrame or 'oedb'.")
+        cop_df = tools.shift_to_reference_year(edisgo_object, cop_df, name="ts_cop")
         # concat new COP time series with existing ones and drop any duplicate entries
         self.cop_df = tools.drop_duplicated_columns(
             pd.concat([self.cop_df, cop_df], axis=1)
@@ -431,7 +432,11 @@ class HeatPump:
             raise ValueError(
                 "'ts_heat_demand' must either be a pandas DataFrame or 'oedb'."
             )
-        # concat new COP time series with existing ones and drop any duplicate entries
+        heat_demand_df = tools.shift_to_reference_year(
+            edisgo_object, heat_demand_df, name="ts_heat_demand"
+        )
+        # concat new heat demand time series with existing ones and drop any
+        # duplicate entries
         self.heat_demand_df = tools.drop_duplicated_columns(
             pd.concat([self.heat_demand_df, heat_demand_df], axis=1)
         )

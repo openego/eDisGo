@@ -57,8 +57,8 @@ class TestTimeSeries:
 
     def test_set_active_power_manual(self):
         # create dummy time series
-        index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
-        index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
+        index_2 = pd.date_range("1/1/2011", periods=2, freq="H")
+        index_3 = pd.date_range("1/1/2011", periods=3, freq="H")
         dummy_ts_1 = pd.Series([1.4, 2.3], index=index_2)
         dummy_ts_2 = pd.Series([1.4, 2.3, 1.5], index=index_3)
         # set TimeSeries timeindex
@@ -208,8 +208,8 @@ class TestTimeSeries:
 
     def test_set_reactive_power_manual(self):
         # create dummy time series
-        index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
-        index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
+        index_2 = pd.date_range("1/1/2011", periods=2, freq="H")
+        index_3 = pd.date_range("1/1/2011", periods=3, freq="H")
         dummy_ts_1 = pd.Series([1.4, 2.3], index=index_2)
         dummy_ts_2 = pd.Series([1.4, 2.3, 1.5], index=index_3)
         # set TimeSeries timeindex

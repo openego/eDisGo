@@ -118,14 +118,9 @@ class TestImportFlex:
 class TestBuildFlexibilityBands:
     def test_build_flexibility_bands_scopes_to_timeindex(self):
         """
-        Regression test for eDisGo#703: task_build_flexibility_bands used to
-        need an explicit reduce_timeseries_data_to_given_timeindex call after
-        get_flexibility_bands to trim/year-align the bands to the active
-        timeindex; get_flexibility_bands now does this itself, so the task
-        (which no longer makes that call) must still produce bands matching
-        edisgo.timeseries.timeindex exactly - including across the year
-        mismatch between SimBEV's own calendar (2011 in this fixture) and
-        the scenario timeindex (2035 here).
+        task_build_flexibility_bands produces bands matching
+        edisgo.timeseries.timeindex exactly, also for a time index shorter than
+        SimBEV's simulated range and set in another year than the reference year.
         """
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         electromobility_import.import_electromobility_from_dir(
@@ -136,8 +131,8 @@ class TestBuildFlexibilityBands:
         electromobility_import.distribute_charging_demand(edisgo)
         electromobility_import.integrate_charging_parks(edisgo)
 
-        short_timeindex = pd.date_range("2035-01-15", periods=24, freq="h")
-        edisgo.set_timeindex(short_timeindex)
+        edisgo.set_timeindex(pd.date_range("2035-01-15", periods=24, freq="h"))
+        short_timeindex = pd.date_range("2011-01-15", periods=24, freq="h")
 
         ctx = RunContext(flags={"has_electromobility": True})
         result = task_build_flexibility_bands(edisgo, ctx)
@@ -185,15 +180,13 @@ class TestImportOverlyingGridData:
 
     def test_etrago_dispatchable_ts_aligned_to_timeindex(self):
         """
-        eTraGo data is indexed in its weather year (2011), the EDisGo object in
-        the scenario year. The dispatchable generator time series must be
-        shifted onto the EDisGo time index like all other overlying-grid data
-        (regression: it was passed on unaligned, which left the dispatchable
-        generators without time series and the OPF failed on NaN).
+        The dispatchable generator time series from eTraGo are aligned to the
+        EDisGo time index like all other overlying-grid data, so that the
+        dispatchable generators get time series without NaN.
         """
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        timeindex = pd.date_range("2035-01-15", periods=3, freq="h")
-        edisgo.set_timeindex(timeindex)
+        edisgo.set_timeindex(pd.date_range("2035-01-15", periods=3, freq="h"))
+        timeindex = pd.date_range("2011-01-15", periods=3, freq="h")
         etrago_index = pd.date_range("2011-01-01", periods=8760, freq="h")
         disp_ts = pd.DataFrame({"gas": 0.5}, index=etrago_index)
         ctx = self._ctx(
