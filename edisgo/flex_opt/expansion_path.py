@@ -94,18 +94,26 @@ def reinforce_expansion_path(
     function given for this stage is applied to the grid as reinforced in the
     previous stage, e.g. to add the heat pumps and charging points expected up to
     this year, and then the grid is reinforced with
-    :attr:`~.edisgo.EDisGo.reinforce`. Changes made in a stage are kept for all
-    following stages, so the stage functions describe the growth between two
-    stages, not the whole scenario.
+    :meth:`~.edisgo.EDisGo.reinforce`.
 
-    The costs of a stage only comprise the measures taken in this stage. A line
-    that gets another parallel line in a later stage is therefore charged with
-    earthworks again, as the cable has to be laid in a new trench. The costs are
-    discounted to `base_year` with `discount_rate`.
+    Applying the functions of all stages up to a year one after another to the
+    original grid must give the grid of this year. The functions must be
+    deterministic, as `greenfield` calls them again on a copy of the original grid.
+
+    The costs of a stage only comprise the measures taken in this stage. To this
+    end, the equipment changes of earlier stages are set aside while a stage is
+    reinforced. A line that gets another parallel line in a later stage is
+    therefore charged with earthworks again, as the cable has to be laid in a new
+    trench, and :meth:`~.edisgo.EDisGo.reinforce` plans with these earthworks as
+    well. The costs are discounted to `base_year` with `discount_rate`.
 
     `edisgo_obj` is changed in place: after the function, it contains the grid
     reinforced for the last stage, with the equipment changes of all stages in
     :attr:`~.network.results.Results.equipment_changes`.
+    :attr:`~.network.results.Results.grid_expansion_costs` contains the costs of
+    all these changes as calculated by :meth:`~.edisgo.EDisGo.reinforce`, i.e. with
+    the earthworks of every line counted once. The costs per stage are in the
+    returned :class:`ExpansionPathResults`.
 
     Parameters
     ----------
@@ -113,10 +121,10 @@ def reinforce_expansion_path(
         Grid at the start of the expansion path.
     stages : dict(int, callable)
         Years of the stages and, for each year, a function that takes the
-        :class:`~.EDisGo` object and applies the changes up to this year to it.
-        The function has to leave the object with time series for all components,
-        e.g. by calling
-        :attr:`~.edisgo.EDisGo.set_time_series_worst_case_analysis` after adding
+        :class:`~.EDisGo` object and applies the changes up to this year to it, see
+        above. The function has to leave the object with time series for all
+        components, e.g. by calling
+        :meth:`~.edisgo.EDisGo.set_time_series_worst_case_analysis` after adding
         components.
     base_year : int or None
         Year the costs are discounted to. Per default, the year of the first stage
@@ -130,9 +138,9 @@ def reinforce_expansion_path(
         stages applied at once. The costs are given in column `greenfield_costs`
         of the summary. Comparing them with column `cumulative_costs` shows the
         additional costs of building in stages. This needs one additional
-        reinforcement per stage. Default: False.
+        reinforcement per stage after the first. Default: False.
     reinforce_kwargs : dict or None
-        Parameters passed to :attr:`~.edisgo.EDisGo.reinforce` in every stage.
+        Parameters passed to :meth:`~.edisgo.EDisGo.reinforce` in every stage.
         Default: None.
 
     Returns
@@ -156,34 +164,41 @@ def reinforce_expansion_path(
     reinforce_kwargs = dict(reinforce_kwargs or {})
     if reinforce_kwargs.get("copy_grid", False):
         raise ValueError("copy_grid cannot be used in an expansion path.")
-    without_generator_import = reinforce_kwargs.get("without_generator_import", False)
 
     original_edisgo = copy.deepcopy(edisgo_obj) if greenfield else None
 
+    all_changes = [edisgo_obj.results.equipment_changes]
     stage_costs = []
     stage_changes = []
     for year in years:
-        n_changes_before = len(edisgo_obj.results.equipment_changes)
-        stages[year](edisgo_obj)
-        logger.info(f"Reinforce grid for stage {year}.")
-        edisgo_obj.reinforce(**reinforce_kwargs)
-
-        changes = edisgo_obj.results.equipment_changes.iloc[n_changes_before:]
-        costs = _costs_of_changes(edisgo_obj, changes, without_generator_import)
+        changes, costs = _reinforce_stage(
+            edisgo_obj, [stages[year]], year, reinforce_kwargs
+        )
+        all_changes.append(changes)
         stage_changes.append(changes.assign(year=year))
         stage_costs.append(costs.assign(year=year))
+
+    edisgo_obj.results.equipment_changes = pd.concat(all_changes)
+    edisgo_obj.results.grid_expansion_costs = grid_expansion_costs(
+        edisgo_obj,
+        without_generator_import=reinforce_kwargs.get(
+            "without_generator_import", False
+        ),
+    )
 
     costs_per_stage = pd.concat(stage_costs)
     summary = _summary(costs_per_stage, years, base_year, discount_rate)
 
     if greenfield:
-        summary["greenfield_costs"] = [
-            _greenfield_costs(
-                original_edisgo,
+        # reinforcing the original grid for the first stage is the first stage
+        summary["greenfield_costs"] = [summary.costs.iloc[0]] + [
+            _reinforce_stage(
+                copy.deepcopy(original_edisgo),
                 [stages[year] for year in years[: i + 1]],
+                years[i],
                 reinforce_kwargs,
-            )
-            for i in range(len(years))
+            )[1].total_costs.sum()
+            for i in range(1, len(years))
         ]
 
     return ExpansionPathResults(
@@ -193,26 +208,58 @@ def reinforce_expansion_path(
     )
 
 
-def _costs_of_changes(edisgo_obj, changes, without_generator_import):
+def _reinforce_stage(edisgo_obj, stage_functions, year, reinforce_kwargs):
     """
-    Returns the grid expansion costs of the given equipment changes only.
+    Applies the stage functions, reinforces the grid and returns the equipment
+    changes and grid expansion costs of this stage only.
 
-    The costs are calculated with
-    :func:`~.flex_opt.costs.grid_expansion_costs` on the current topology, as if
-    `changes` were all equipment changes made so far.
+    Equipment changes made before are removed from `edisgo_obj`, so that
+    :meth:`~.edisgo.EDisGo.reinforce` and the costs treat every line as not
+    reinforced before. The caller has to keep them if needed.
 
     """
-    edisgo_view = copy.copy(edisgo_obj)
-    edisgo_view.results = copy.copy(edisgo_obj.results)
-    edisgo_view.results.equipment_changes = changes
+    edisgo_obj.results.equipment_changes = edisgo_obj.results.equipment_changes.iloc[:0]
+    for apply_stage in stage_functions:
+        apply_stage(edisgo_obj)
+    _check_time_series(edisgo_obj, year)
+    logger.info(f"Reinforce grid for stage {year}.")
+    edisgo_obj.reinforce(**reinforce_kwargs)
     costs = grid_expansion_costs(
-        edisgo_view, without_generator_import=without_generator_import
+        edisgo_obj,
+        without_generator_import=reinforce_kwargs.get(
+            "without_generator_import", False
+        ),
     )
-    if costs.empty:
-        costs = pd.DataFrame(
-            columns=["type", "total_costs", "quantity", "length", "voltage_level"]
+    # grid_expansion_costs returns a row with zero costs if nothing was changed
+    costs = costs.drop(index="No reinforced equipment.", errors="ignore")
+    return edisgo_obj.results.equipment_changes, costs
+
+
+def _check_time_series(edisgo_obj, year):
+    """
+    Raises a ValueError if a component has no active power time series.
+
+    Without time series, the power flow ignores the component and the stage would
+    silently need no reinforcement.
+
+    """
+    topology = edisgo_obj.topology
+    timeseries = edisgo_obj.timeseries
+    missing = [
+        name
+        for components_df, time_series_df in [
+            (topology.generators_df, timeseries.generators_active_power),
+            (topology.loads_df, timeseries.loads_active_power),
+            (topology.storage_units_df, timeseries.storage_units_active_power),
+        ]
+        for name in components_df.index.difference(time_series_df.columns)
+    ]
+    if missing:
+        raise ValueError(
+            f"After the stage of year {year}, {len(missing)} component(s) have no "
+            f"time series, e.g. {missing[:3]}. The stage function has to set time "
+            f"series for all components it adds."
         )
-    return costs
 
 
 def _summary(costs_per_stage, years, base_year, discount_rate):
@@ -235,22 +282,3 @@ def _summary(costs_per_stage, years, base_year, discount_rate):
     summary["cumulative_costs"] = summary.costs.cumsum()
     summary["cumulative_present_value"] = summary.present_value.cumsum()
     return summary
-
-
-def _greenfield_costs(original_edisgo, stage_functions, reinforce_kwargs):
-    """
-    Returns the costs of reinforcing the original grid for all given stages at once.
-
-    """
-    edisgo_obj = copy.deepcopy(original_edisgo)
-    n_changes_before = len(edisgo_obj.results.equipment_changes)
-    for apply_stage in stage_functions:
-        apply_stage(edisgo_obj)
-    edisgo_obj.reinforce(**reinforce_kwargs)
-    changes = edisgo_obj.results.equipment_changes.iloc[n_changes_before:]
-    costs = _costs_of_changes(
-        edisgo_obj,
-        changes,
-        reinforce_kwargs.get("without_generator_import", False),
-    )
-    return float(costs.total_costs.sum())

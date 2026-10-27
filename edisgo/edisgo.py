@@ -1527,11 +1527,17 @@ class EDisGo:
         result shows when which measure is needed. For each year in `stages`, the
         given function applies the changes up to this year to the grid, e.g. adds
         heat pumps and charging points, and the grid is reinforced with
-        :attr:`~.edisgo.EDisGo.reinforce`. The costs of each stage only comprise the
+        :meth:`~.edisgo.EDisGo.reinforce`. The costs of each stage only comprise the
         measures taken in this stage and are discounted to `base_year`.
 
+        Applying the functions of all stages up to a year one after another to the
+        original grid must give the grid of this year. The functions must be
+        deterministic, as `greenfield` calls them again.
+
         The EDisGo object is changed in place and contains the grid reinforced for
-        the last stage afterwards.
+        the last stage afterwards. Its
+        :attr:`~.network.results.Results.grid_expansion_costs` are the costs of all
+        stages calculated at once, with the earthworks of every line counted once.
 
         See :func:`~.flex_opt.expansion_path.reinforce_expansion_path` for more
         information.
@@ -1540,8 +1546,9 @@ class EDisGo:
         ----------
         stages : dict(int, callable)
             Years of the stages and, for each year, a function that takes the
-            EDisGo object and applies the changes up to this year to it. The
-            function has to leave the object with time series for all components.
+            EDisGo object and applies the changes up to this year to it, see
+            above. The function has to leave the object with time series for all
+            components.
         base_year : int or None
             Year the costs are discounted to. Per default, the year of the first
             stage. Default: None.
@@ -1555,7 +1562,7 @@ class EDisGo:
         Other Parameters
         -----------------
         kwargs : dict
-            Parameters passed to :attr:`~.edisgo.EDisGo.reinforce` in every stage.
+            Parameters passed to :meth:`~.edisgo.EDisGo.reinforce` in every stage.
 
         Returns
         -------
