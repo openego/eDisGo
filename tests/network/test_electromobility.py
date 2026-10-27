@@ -123,11 +123,10 @@ class TestElectromobility:
         assert eta_charging_points == 0.9
 
     def test_get_flexibility_bands(self):
-        # explicitly set the timeindex to SimBEV's own native calendar/range
-        # (start 2011-01-01, 15-min steps, 7 simulated days) so the alignment
-        # get_flexibility_bands now always applies is a no-op here, and the
-        # position-based assertions below (against the unaligned band values)
-        # remain valid
+        # set the timeindex to SimBEV's own calendar and range (start 2011-01-01,
+        # 15-min steps, 7 simulated days), so that aligning the bands to it in
+        # get_flexibility_bands does not change them and the position-based
+        # assertions below hold
         self.edisgo_obj.set_timeindex(
             pd.date_range("2011-01-01", periods=7 * 96, freq="15min")
         )

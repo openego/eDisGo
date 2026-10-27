@@ -645,8 +645,8 @@ class TimeSeries:
 
         The generated worst-case time steps are indexed starting 1 January 1970 (see
         :attr:`is_worst_case`). This is a deliberate marker for worst-case time steps,
-        not an actual calendar year, and does not follow the reference year configured
-        in ``[timeindex] reference_year`` (see :func:`~.tools.tools.get_reference_year`).
+        not an actual calendar year, and does not follow the reference year (see
+        :func:`~.tools.tools.get_reference_year`).
 
         """
 

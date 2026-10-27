@@ -586,14 +586,10 @@ def task_oedb_ts(
             periods=timeindex["periods"],
             freq=timeindex.get("freq", "h"),
         )
-    # Resolves the time index in the same order used everywhere else
-    # (explicit argument -> TimeSeries.timeindex -> configured reference
-    # year, see _timeindex_helper_func) instead of deriving a year from the
-    # scenario here. _timeindex_helper_func only writes TimeSeries.timeindex
-    # back itself when it fell back to TimeSeries.timeindex or the reference
-    # year (Fall b/c); set_timeindex here covers the explicit-argument case
-    # (Fall a) too, so TimeSeries.timeindex is always set afterwards for the
-    # dispatchable_df build below.
+    # resolve the time index from the given time index, TimeSeries.timeindex or
+    # the reference year (see _timeindex_helper_func), and set it, as
+    # _timeindex_helper_func does not set a given time index as
+    # TimeSeries.timeindex; it is needed to build dispatchable_df below
     resolved_timeindex, _ = _timeindex_helper_func(edisgo, ti_df)
     edisgo.set_timeindex(resolved_timeindex)
 

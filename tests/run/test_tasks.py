@@ -212,13 +212,10 @@ class TestImportOverlyingGridData:
 
     def test_etrago_dispatchable_generators_ts_is_aligned(self, edisgo_obj, caplog):
         """
-        Regression test: dispatchable_generators_active_power from eTraGo
-        results used to be applied to TimeSeries with no year alignment at
-        all (unlike renewables_potential, which was already aligned) - a
-        year mismatch against edisgo.timeseries.timeindex (2011 here) meant
-        the resulting active power series silently came back empty. Both are
-        now aligned identically by OverlyingGrid.from_etrago before the task
-        applies them.
+        dispatchable_generators_active_power and renewables_potential from
+        eTraGo are both aligned to edisgo.timeseries.timeindex by
+        OverlyingGrid.from_etrago before the task applies them, so the
+        resulting active power series are not empty.
         """
         disp_ts = pd.DataFrame(
             {"other": [1.0, 1.0, 1.0]},
@@ -615,16 +612,13 @@ class TestOedbTs:
     fluctuating/conventional_loads are disabled below to keep these tests
     DB-free, in line with this module's convention (see module docstring).
     Only the scenario validation and time-index resolution are exercised;
-    the actual oedb import is covered separately by the DB-backed tests in
+    the actual oedb import is covered separately in
     tests/io/test_timeseries_import.py.
     """
 
     def test_reference_year_independent_of_scenario(self, edisgo_obj):
-        # 'eGon100RE' used to map to year 2045 via the now removed
-        # get_year_based_on_scenario; the resulting time index must instead
-        # be in the configured reference year (default 2011), regardless of
-        # scenario, whenever neither an explicit timeindex nor
-        # TimeSeries.timeindex is set
+        # without timeindex, the time index is set to the reference year for
+        # every scenario
         edisgo_obj.set_timeindex(pd.DatetimeIndex([]))
         ctx = RunContext(scenario="eGon100RE")
         result = task_oedb_ts(
@@ -632,7 +626,6 @@ class TestOedbTs:
         )
         assert not result.timeseries.timeindex.empty
         assert result.timeseries.timeindex[0].year == 2011
-        assert result.timeseries.timeindex[0].year != 2045
 
     def test_invalid_scenario_raises(self, edisgo_obj):
         ctx = RunContext(scenario="invalid")

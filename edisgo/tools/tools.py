@@ -1825,11 +1825,10 @@ def get_year_based_on_scenario(scenario):
     Returns the year the given scenario was set up for.
 
     .. deprecated::
-        The scenario no longer determines the calendar year time series are
-        indexed by (see :func:`get_reference_year`). Use
-        :func:`validate_scenario` to validate a scenario name instead. This
-        function is kept for backwards compatibility and will be removed in a
-        future release.
+        Time series are indexed in the reference year, independent of the
+        scenario (see :func:`get_reference_year`). Use :func:`validate_scenario`
+        to validate a scenario name instead. This function is kept for backwards
+        compatibility and will be removed in a future release.
 
     Parameters
     ----------
@@ -1846,8 +1845,8 @@ def get_year_based_on_scenario(scenario):
     """
     warnings.warn(
         "get_year_based_on_scenario is deprecated and will be removed in a "
-        "future release. The scenario no longer determines the calendar year "
-        "time series are indexed by (see get_reference_year); use "
+        "future release. Time series are indexed in the reference year, "
+        "independent of the scenario (see get_reference_year); use "
         "validate_scenario to validate a scenario name instead.",
         DeprecationWarning,
         stacklevel=2,

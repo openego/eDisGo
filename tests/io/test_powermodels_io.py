@@ -338,8 +338,8 @@ class TestPowermodelsIO:
         assert str(soc_year) in caplog.text
         assert "1970" in caplog.text
 
-        # storage_units_soc now lives on edisgo_obj's own (1970) timeindex
-        # plus one trailing step, not the SOC series' original 2018 calendar
+        # storage_units_soc is aligned to edisgo_obj's (1970) timeindex plus one
+        # trailing step
         assert edisgo_obj.overlying_grid.storage_units_soc.index[0].year == 1970
         assert len(edisgo_obj.overlying_grid.storage_units_soc) == (
             len(edisgo_obj.timeseries.timeindex) + 1

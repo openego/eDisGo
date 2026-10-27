@@ -2412,13 +2412,11 @@ class TestEDisGo:
         self, caplog
     ):
         """
-        Regression test for the timeindex/reference-year refactor: a
-        user-provided DataFrame passed to
+        A user-provided DataFrame passed to
         predefined_fluctuating_generators_by_technology (via
-        set_time_series_active_power_predefined) may be indexed in a
-        different calendar year than TimeSeries.timeindex. It must be
-        aligned onto the reference year (not left in its own year), with
-        unchanged values, no NaN, and exactly one warning.
+        set_time_series_active_power_predefined) that is indexed in a
+        different calendar year than TimeSeries.timeindex is aligned onto the
+        reference year with unchanged values, no NaN and exactly one warning.
         """
         reference_year = get_reference_year(self.edisgo)
         self.edisgo.set_timeindex(
@@ -2466,10 +2464,9 @@ class TestEDisGo:
         self, caplog
     ):
         """
-        Regression test for the timeindex/reference-year refactor:
-        reduce_timeseries_data_to_given_timeindex must align HeatPump data
-        indexed in a different calendar year onto the given target
-        timeindex (with a warning) instead of raising a KeyError.
+        reduce_timeseries_data_to_given_timeindex aligns HeatPump data indexed
+        in a different calendar year onto the given target timeindex, with a
+        warning.
         """
         target_timeindex = pd.date_range("2011-01-01", periods=3, freq="h")
         self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
