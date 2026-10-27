@@ -872,12 +872,12 @@ end
 # ---------------------------------------------------------------------------
 
 @testset "variable_curtailment_14a" begin
-    @testset "creates the power and the binary variables" begin
+    @testset "creates the power, binary and share variables" begin
         data = TestUtils.add_curtailment_14a!(TestUtils.small_network();
-                                              max_hours_per_day=2)
+                                              max_hours_per_day=2, area=1)
         pm = vfx_bare_model(data)
         eDisGo_OPF.variable_curtailment_14a(pm, nw=1)
-        @test TestUtils.variable_keys(pm, 1) == [:p14a, :z14a]
+        @test TestUtils.variable_keys(pm, 1) == [:p14a, :s14a, :z14a]
     end
 
     @testset "forwards nw, bounded and report" begin
@@ -960,5 +960,29 @@ end
         pm = vfx_bare_model(data)
         eDisGo_OPF.variable_curtailment_14a_active(pm, nw=1, report=false)
         @test vfx_reported(pm, 1, :curtailment_14a) === nothing
+    end
+end
+
+@testset "variable_curtailment_14a_share" begin
+    @testset "one share per grid area" begin
+        data = TestUtils.add_curtailment_14a!(TestUtils.small_network(); area=2)
+        TestUtils.add_curtailment_14a!(data; i=2, area=2)
+        TestUtils.add_curtailment_14a!(data; i=3, area=5)
+        TestUtils.add_curtailment_14a!(data; i=4, area=0)
+        pm = vfx_bare_model(data)
+        @test vfx_added_variables(
+            () -> eDisGo_OPF.variable_curtailment_14a_share(pm, nw=1), pm) == 2
+        @test vfx_indices(pm, 1, :s14a) == Set([2, 5])
+        @test vfx_bounds(PowerModels.var(pm, 1, :s14a, 5)) == (0.0, 1.0)
+        @test JuMP.name(PowerModels.var(pm, 1, :s14a, 2)) == "1_s14a[2]"
+    end
+
+    @testset "individual control or no §14a curtailment" begin
+        for data in (TestUtils.add_curtailment_14a!(TestUtils.small_network()),
+                     TestUtils.small_network())
+            pm = vfx_bare_model(data)
+            eDisGo_OPF.variable_curtailment_14a_share(pm, nw=1)
+            @test isempty(PowerModels.var(pm, 1, :s14a))
+        end
     end
 end

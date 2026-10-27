@@ -257,33 +257,45 @@ on the previous step and the power chosen in between. With time-step length
 §14a EnWG curtailment
 ~~~~~~~~~~~~~~~~~~~~~
 
-Under §14a EnWG the grid operator may reduce the grid draw of heat pumps and charging
-points down to a minimum power of 4.2 kW; for heat pumps above 11 kW the minimum is
-40 % of their nominal power (BNetzA BK6-22-300). With ``curtailment_14a=True`` (versions
+Under §14a EnWG the grid operator may reduce the grid draw of controllable devices —
+heat pumps, non-public charging points and storage units when charging, each above
+4.2 kW and connected to the low voltage grid — down to a minimum power. The rules are
+set by the Bundesnetzagentur in BK6-22-300 (Anlage 1). With ``curtailment_14a`` (versions
 2 and 4 only), :meth:`~edisgo.edisgo.EDisGo.pm_optimize` adds a curtailment variable
-:math:`p^\text{14a}_t` for every inflexible heat pump and charging point in the low
-voltage grid, i.e. every one not passed in ``flexible_hps`` or ``flexible_cps``. It
-reduces the load at the component's bus and is bounded by the load minus the minimum
-power, :math:`0 \le p^\text{14a}_t \le \max(0, p^\text{load}_t - p^\text{min})`, so
-the remaining load never falls below the minimum. It enters the objective with half
-the weight of the grid slacks, so the OPF curtails before it sheds load, but not just
-to reduce losses.
+:math:`p^\text{14a}_t` for every such device that is not optimised as a flexibility. It
+reduces the load at the device's bus and is bounded by the load minus the minimum power,
+:math:`0 \le p^\text{14a}_t \le \max(0, p^\text{load}_t - p^\text{min})`, so the
+remaining load never falls below the minimum. It enters the objective with half the
+weight of the grid slacks, so the OPF curtails before it sheds load, but not just to
+reduce losses.
 
-A dict instead of ``True`` selects the components (``"components"``) and sets a time
-budget per calendar day (``"max_hours_per_day"``). The budget adds a binary variable
-per component and time step and therefore requires ``method="soc"`` (Gurobi) without
-warm start. If the time index is split into several intervals, each interval gets its
-own budget.
+* **Minimum power** (Ziffer 4.5): 4.2 kW, for heat pumps above 11 kW 40 % of their
+  nominal power. With ``"control": "ems"``, all devices at one bus are controlled
+  together via an energy management system, with the minimum power
+  :math:`\max(4.2\,\text{kW}, 0.4 \cdot P_\text{heat pumps}) + (n - 1) \cdot
+  \text{GZF} \cdot 4.2\,\text{kW}` and the simultaneity factor GZF of the
+  :math:`n` devices (0.8 for two down to 0.45 for nine and more).
+* **Time budget** (Ziffer 10.5): until the end of 2028, grid operators without a
+  measurement-based grid state estimation may curtail preventively, for at most two
+  hours per day. This is the default (``"max_hours_per_day": 2``), counted per calendar
+  day and device. Grid-oriented control based on the measured grid state (Ziffer 4)
+  has no time limit (``"max_hours_per_day": None``). The budget adds a binary variable
+  per device and time step and therefore requires ``method="soc"`` (Gurobi) without
+  warm start. If the time index is split into several intervals, each interval gets
+  its own budget.
+* **Non-discriminatory control** (Ziffer 4.3): the grid operator has to treat all
+  devices in a grid area alike. By default, all devices in one LV grid are therefore
+  curtailed by the same share of their curtailable power
+  (``"non_discriminatory": False`` lets the OPF choose each device individually).
 
-The curtailment is subtracted from the load time series in ``edisgo.timeseries`` and
-saved in ``edisgo.opf_results.grid_slacks_t.curtailment_14a``.
+The curtailment is subtracted from the load time series in ``edisgo.timeseries`` (for
+storage units, from their charging) and saved per device in
+``edisgo.opf_results.grid_slacks_t.curtailment_14a``. Its energy is lost, not shifted:
+the curtailed devices keep their remaining time series.
 
 .. code-block:: python
 
-   edisgo.pm_optimize(
-       opf_version=2,
-       curtailment_14a={"max_hours_per_day": 2},
-   )
+   edisgo.pm_optimize(opf_version=2, curtailment_14a=True)
 
 Multi-period structure
 ~~~~~~~~~~~~~~~~~~~~~~~~

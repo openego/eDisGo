@@ -96,7 +96,7 @@ opf_count_with(pm, nw, name, index="") =
 const OPF_COMMON_VARS = [:p, :q, :ccm, :w, :phss, :phps2, :ps, :se, :phs, :hse,
                          :php, :pcp, :cpe, :pdsm, :dsme, :pgs, :qgs]
 # Grid-restriction slacks and §14a curtailment of versions 2 and 4.
-const OPF_SLACK_VARS = [:pgc, :phps, :pds, :pgens, :pcps, :p14a, :z14a]
+const OPF_SLACK_VARS = [:pgc, :phps, :pds, :pgens, :pcps, :p14a, :z14a, :s14a]
 
 "Sorted variable keys `build_mn_opf_bf_flex` should create in network `nw`."
 function opf_expected_vars(v::Int, nw::Int)
@@ -476,6 +476,24 @@ end
                        occursin(opf_var_regex(2, "z14a"), s), budgets)
         @test any(s -> occursin(opf_var_regex(3, "z14a"), s) &&
                        occursin(opf_var_regex(4, "z14a"), s), budgets)
+
+        # Non-discriminatory: every component of a grid area is coupled to the
+        # share of its area, components without area are not.
+        data = TestUtils.add_curtailment_14a!(
+            TestUtils.small_network(opf_version=2, num_steps=4);
+            pmax=fill(0.1, 4), days=zeros(Int, 4), area=1)
+        TestUtils.add_curtailment_14a!(data; i=2, bus=2, pmax=fill(0.1, 4),
+                                       days=zeros(Int, 4), area=1)
+        TestUtils.add_curtailment_14a!(data; i=3, pmax=fill(0.1, 4),
+                                       days=zeros(Int, 4))
+        pm = eDisGo_OPF.instantiate_model(TestUtils.multinetwork(data),
+                                          eDisGo_OPF.NCBFPowerModelEdisgo,
+                                          eDisGo_OPF.build_mn_opf_bf_flex)
+        for n in 1:4
+            @test opf_indices(PowerModels.var(pm, n, :s14a)) == Set([1])
+            @test opf_count_with(pm, n, "s14a", "1") == 2
+            @test opf_count_with(pm, n, "p14a", "3") == 2   # P and Q balance only
+        end
     end
 
     @testset "overlying grid requirements" begin

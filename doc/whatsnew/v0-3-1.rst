@@ -421,10 +421,13 @@ Changes
   the component and the new MV line were connected to the existing bus. This could
   happen after components were removed or aggregated (openego/eDisGo#413)
 * New option ``curtailment_14a`` in :meth:`~.edisgo.EDisGo.pm_optimize` for
-  ``opf_version`` 2 and 4: the OPF may reduce the load of inflexible heat pumps and
-  charging points in the low voltage grid down to their §14a EnWG minimum power
-  (4.2 kW, for heat pumps above 11 kW 40 % of their nominal power) before it sheds
-  load. An optional daily time budget is set with ``max_hours_per_day``. The
-  curtailment is subtracted from the load time series and saved in
+  ``opf_version`` 2 and 4: following BNetzA BK6-22-300, the OPF may reduce the load of
+  heat pumps, non-public charging points and the charging of storage units in the low
+  voltage grid down to their §14a EnWG minimum power (4.2 kW, for heat pumps above
+  11 kW 40 % of their nominal power) before it sheds load. By default, a device may be
+  curtailed for at most two hours per day, as in the preventive control, and all
+  devices in one LV grid are curtailed alike. Control via an energy management system
+  with simultaneity factors is optional. The curtailment is subtracted from the load
+  time series and saved in
   :attr:`~.opf.results.opf_result_class.GridSlacks.curtailment_14a`
   (openego/eDisGo#830)

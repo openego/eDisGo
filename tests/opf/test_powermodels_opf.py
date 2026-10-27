@@ -352,7 +352,7 @@ class TestPowerModelsOPF:
             opf_version=2,
             silence_moi=True,
             method="nc",
-            curtailment_14a=True,
+            curtailment_14a={"max_hours_per_day": None},
         )
 
         curtailment = self.edisgo.opf_results.grid_slacks_t.curtailment_14a
@@ -372,13 +372,13 @@ class TestPowerModelsOPF:
         assert (self.edisgo.timeseries.loads_active_power[cp] >= 0.0042 - 1e-6).all()
 
     @pytest.mark.parametrize("kwargs", [{"method": "nc"}, {"warm_start": True}])
-    def test_pm_optimize_curtailment_14a_time_budget_needs_gurobi(self, kwargs):
+    @pytest.mark.parametrize("curtailment_14a", [True, {"max_hours_per_day": 3}])
+    def test_pm_optimize_curtailment_14a_time_budget_needs_gurobi(
+        self, kwargs, curtailment_14a
+    ):
         with pytest.raises(ValueError, match="Ipopt cannot handle"):
             pm_optimize(
-                self.edisgo,
-                opf_version=2,
-                curtailment_14a={"max_hours_per_day": 2},
-                **kwargs,
+                self.edisgo, opf_version=2, curtailment_14a=curtailment_14a, **kwargs
             )
 
 

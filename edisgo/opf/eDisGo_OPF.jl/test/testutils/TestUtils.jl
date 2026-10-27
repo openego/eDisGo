@@ -252,20 +252,21 @@ function small_network(; opf_version::Int=2, num_steps::Int=2,
 end
 
 """
-    add_curtailment_14a!(data; pmax=[0.1, 0.1], max_hours_per_day=24, days=[0, 0], i=1, bus=3)
+    add_curtailment_14a!(data; pmax=[0.1, 0.1], max_hours_per_day=24, days=[0, 0], i=1, bus=3, area=0)
 
 Add the §14a curtailment `i` of a heat pump or charging point at `bus` to the
 single-network `data` of [`small_network`](@ref), with the upper bound `pmax` per
 time step and the calendar `days` of the time steps (time series `day_14a`).
-`max_hours_per_day < 24` sets a daily time budget.
+`max_hours_per_day < 24` sets a daily time budget, `area > 0` the grid area for
+non-discriminatory control.
 """
 function add_curtailment_14a!(data::Dict{String,<:Any}; pmax::Vector=[0.1, 0.1],
                               max_hours_per_day::Real=24, days::Vector=[0, 0],
-                              i::Int=1, bus::Int=3)
+                              i::Int=1, bus::Int=3, area::Int=0)
     get!(data, "curtailment_14a", Dict{String,Any}())[string(i)] = Dict{String,Any}(
         "index" => i, "name" => "Curtailment_14a_$i", "load_bus" => bus,
         "pmax" => pmax[1], "pf" => 0.95, "sign" => 1,
-        "max_hours_per_day" => max_hours_per_day,
+        "max_hours_per_day" => max_hours_per_day, "area" => area,
     )
     get!(data["time_series"], "curtailment_14a", Dict{String,Any}())[string(i)] =
         Dict{String,Any}("pmax" => pmax)

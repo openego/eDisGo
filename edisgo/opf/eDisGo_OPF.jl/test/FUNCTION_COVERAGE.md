@@ -14,10 +14,10 @@ the entry)
 
 ## Status (as of 2026-10-27)
 
-**89 of 89 entries done**, suite green: 3721 passing assertions, 6
+**91 of 91 entries done**, suite green: 3749 passing assertions, 6
 `@test_broken`, 0 failures, about 6 to 7 min with a Gurobi licence (about 4 min of
 that are the `Main.jl` subprocesses; without Gurobi, as in CI, the SOC runs
-are skipped). Line coverage of `src/`: 955 of 955 lines (100 %).
+are skipped). Line coverage of `src/`: 1023 of 1023 lines (100 %).
 
 | Source file | Status |
 | --- | --- |
@@ -25,12 +25,12 @@ are skipped). Line coverage of `src/`: 955 of 955 lines (100 %).
 | `src/core/base.jl` | done (3/3) |
 | `src/core/data.jl` | done (3/3) |
 | `src/core/solution.jl` | done (2/2) |
-| `src/core/constraint.jl` | done (8/8) |
+| `src/core/constraint.jl` | done (9/9) |
 | `src/core/constraint_template.jl` | done (5/5) |
 | `src/core/objective.jl` | done (5/5) |
 | `src/io/json.jl` | done (1/1) |
 | `src/io/common.jl` | done (1/1) |
-| `src/core/variables.jl` | done (43/43) — split into `test/core/variables/test_flow_and_curtailment.jl` (16), `test_flexibilities.jl` (13), `test_slacks.jl` (14) |
+| `src/core/variables.jl` | done (44/44) — split into `test/core/variables/test_flow_and_curtailment.jl` (16), `test_flexibilities.jl` (14), `test_slacks.jl` (14) |
 | `src/form/bf.jl` | done (9/9) |
 | `src/prob/opf_bf.jl` | done (2/2) |
 | `Main.jl` | done (1/1) |
@@ -220,6 +220,7 @@ measurably above the NC optimum.
 - [x] `variable_curtailment_14a` — AbstractPowerModel
 - [x] `variable_curtailment_14a_power` — AbstractPowerModel
 - [x] `variable_curtailment_14a_active` — AbstractPowerModel
+- [x] `variable_curtailment_14a_share` — AbstractPowerModel
 - [x] `variable_slack_grid_restrictions` — AbstractBFModelEdisgo
 - [x] `variable_slack_heat_pump_storage` — AbstractBFModelEdisgo
 - [x] `variable_hs_slack` — AbstractBFModelEdisgo
@@ -243,6 +244,7 @@ measurably above the NC optimum.
 - [x] `constraint_cp_state` — AbstractBFModelEdisgo
 - [x] `constraint_hp_operation` — AbstractBFModelEdisgo
 - [x] `constraint_curtailment_14a_active` — AbstractBFModelEdisgo
+- [x] `constraint_curtailment_14a_share` — AbstractBFModelEdisgo
 - [x] `constraint_curtailment_14a_time_budget` — AbstractBFModelEdisgo
 - [x] `constraint_HV_requirements` — AbstractBFModelEdisgo (bug: there is no
   `else` branch for an unknown `hv_req["name"]`; `pflex` stays undefined and the

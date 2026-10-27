@@ -702,10 +702,10 @@ end
 Model on `TestUtils.small_network` with a §14a curtailment with time budget at
 bus 3 (`num_steps` time steps, `pmax` per step), carrying only the §14a variables.
 """
-function cst_14a_model(; num_steps::Int=2, pmax=fill(0.4, num_steps))
+function cst_14a_model(; num_steps::Int=2, pmax=fill(0.4, num_steps), area::Int=0)
     data = TestUtils.add_curtailment_14a!(TestUtils.small_network(num_steps=num_steps);
                                           pmax=pmax, max_hours_per_day=2,
-                                          days=zeros(Int, num_steps))
+                                          days=zeros(Int, num_steps), area=area)
     build = pm -> for (n, _) in PowerModels.nws(pm)
         eDisGo_OPF.variable_curtailment_14a(pm, nw=n)
     end
@@ -776,5 +776,20 @@ end
                   Dict(PowerModels.var(pm, 1, :z14a, 1) => 1.0,
                        PowerModels.var(pm, 2, :z14a, 1) => 1.0),
                   2.0)
+    end
+end
+
+@testset "constraint_curtailment_14a_share" begin
+    pm = cst_14a_model(pmax=[0.4, 0.25], area=3)
+    for (n, pmax) in ((1, 0.4), (2, 0.25))
+        cons = cst_new_constraints(pm.model) do
+            eDisGo_OPF.constraint_curtailment_14a_share(pm, 1, n)
+        end
+        @test length(cons) == 1
+        # p14a == pmax * s14a[area]  ⇔  p14a - pmax * s14a[3] == 0
+        cst_check(cons[1],
+                  Dict(PowerModels.var(pm, n, :p14a, 1) => 1.0,
+                       PowerModels.var(pm, n, :s14a, 3) => -pmax),
+                  0.0)
     end
 end

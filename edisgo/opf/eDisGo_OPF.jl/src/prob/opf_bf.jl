@@ -62,6 +62,9 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             for i in axes(PowerModels.var(pm, n, :z14a), 1)
                 eDisGo_OPF.constraint_curtailment_14a_active(pm, i, n)  # §14a EnWG
             end
+            for (i, c) in PowerModels.ref(pm, n, :curtailment_14a)
+                get(c, "area", 0) > 0 && eDisGo_OPF.constraint_curtailment_14a_share(pm, i, n)
+            end
         end
 
     end

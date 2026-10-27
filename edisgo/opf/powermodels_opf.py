@@ -446,24 +446,39 @@ def _pm_optimize_single(
         process.
         Default: False.
     curtailment_14a : bool or dict
-        §14a EnWG curtailment of heat pumps and charging points: the grid operator
-        may reduce their load down to a minimum power of 4.2 kW, for heat pumps
-        above 11 kW down to 40 % of their nominal power. Covers all inflexible
-        heat pumps and charging points in the low voltage grid, i.e. those not
-        given in `flexible_hps` or `flexible_cps`. The curtailment is used before
-        load shedding, the controlled load time series are reduced accordingly and
-        the curtailment is saved in
+        §14a EnWG curtailment (BNetzA BK6-22-300): the grid operator may reduce the
+        load of heat pumps, non-public charging points and the charging of storage
+        units above 4.2 kW in the low voltage grid down to a minimum power of
+        4.2 kW, for heat pumps above 11 kW down to 40 % of their nominal power.
+        Covers all such devices that are not optimized as flexibilities, i.e. not
+        given in `flexible_hps`, `flexible_cps` or `flexible_storage_units`. The
+        curtailment is used before load shedding, the load time series of the
+        devices are reduced accordingly and the curtailment is saved in
         :attr:`~.opf.results.opf_result_class.GridSlacks.curtailment_14a`.
-        Requires `opf_version` 2 or 4. If True, all eligible components are
-        curtailed without time budget. A dict may contain:
+        Requires `opf_version` 2 or 4. If True, the default settings below are
+        used. A dict may contain:
 
         * "components" : list(str)
-            Names of the inflexible heat pumps and charging points to curtail,
-            also in the medium voltage grid. Default: all in the low voltage grid.
-        * "max_hours_per_day" : float
-            Maximum time per calendar day in hours during which a component may be
-            curtailed. Adds binary variables, so it requires method "soc" without
-            warm start. Default: None (no time budget).
+            Names of the devices to curtail, also in the medium voltage grid.
+            Default: all in the low voltage grid, see above.
+        * "max_hours_per_day" : float or None
+            Maximum time per calendar day in hours during which a device may be
+            curtailed. The default of 2 hours applies to the preventive control
+            that grid operators may use until 2028 (Anlage 1, Ziffer 10.5). None
+            means no time budget, as in grid-oriented control based on the
+            measured grid state (Ziffer 4). The time budget adds binary variables
+            and therefore requires method "soc" without warm start.
+            Default: 2.
+        * "control" : str
+            "direct" (each device gets its own minimum power) or "ems" (all
+            devices at one bus are controlled together via an energy management
+            system, with a minimum power that accounts for their simultaneity,
+            Ziffer 4.5.2). Default: "direct".
+        * "non_discriminatory" : bool
+            If True, all devices in one LV grid are curtailed by the same share
+            of their curtailable power, as the grid operator may not pick
+            devices by their location within a grid area (Ziffer 4.3).
+            Default: True.
 
         Default: False.
     save_heat_storage : bool
@@ -481,14 +496,16 @@ def _pm_optimize_single(
         Default: True.
 
     """
+    settings_14a = curtailment_14a if isinstance(curtailment_14a, dict) else {}
     if (
-        isinstance(curtailment_14a, dict)
-        and curtailment_14a.get("max_hours_per_day") is not None
+        curtailment_14a
+        and settings_14a.get("max_hours_per_day", 2) is not None
         and (method == "nc" or warm_start)
     ):
         raise ValueError(
             "A time budget for §14a curtailment adds binary variables, which "
-            "Ipopt cannot handle. Use method 'soc' without warm start."
+            "Ipopt cannot handle. Use method 'soc' without warm start or set "
+            "'max_hours_per_day' to None."
         )
     Topology.find_meshes(edisgo_obj)
     opf_dir = os.path.dirname(os.path.abspath(__file__))

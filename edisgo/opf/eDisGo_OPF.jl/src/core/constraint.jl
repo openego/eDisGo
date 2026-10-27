@@ -155,6 +155,19 @@ function constraint_curtailment_14a_active(pm::AbstractBFModelEdisgo, i::Int, nw
 end
 
 """
+Non-discriminatory §14a curtailment of component `i` in network `nw`: it is
+curtailed by the share `s14a` of its grid area, `p14a = pmax · s14a`, like every
+other component of the area.
+"""
+function constraint_curtailment_14a_share(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
+    c = PowerModels.ref(pm, nw, :curtailment_14a, i)
+    p14a = PowerModels.var(pm, nw, :p14a, i)
+    s14a = PowerModels.var(pm, nw, :s14a, c["area"])
+
+    JuMP.@constraint(pm.model, p14a == c["pmax"] * s14a)
+end
+
+"""
 Daily time budget of the §14a curtailment of component `i`: summed over the
 networks `nws` of one day, the time with active curtailment must not exceed
 `max_hours_per_day`.

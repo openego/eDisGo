@@ -872,8 +872,8 @@ class EDisGo:
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: 1.
         curtailment_14a : bool or dict
-            §14a EnWG curtailment of heat pumps and charging points. For more
-            information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            §14a EnWG curtailment of heat pumps, charging points and storage units.
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: False.
 
         Returns
@@ -957,9 +957,10 @@ class EDisGo:
             process.
             Default: False.
         curtailment_14a : bool or dict
-            §14a EnWG curtailment of heat pumps and charging points down to their
-            §14a minimum power. Requires `opf_version` 2 or 4. For more information
-            see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            §14a EnWG curtailment of heat pumps, charging points and storage units
+            down to their §14a minimum power, by default for at most two hours per
+            day. Requires `opf_version` 2 or 4. For more information see
+            :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: False.
         """
         return powermodels_opf.pm_optimize(

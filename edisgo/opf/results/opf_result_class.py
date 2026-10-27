@@ -122,7 +122,8 @@ class GridSlacks:
     hp_operation_slack : :pandas:`pandas.DataFrame<DataFrame>`
         Slack on the heat-pump operation constraints in MW.
     curtailment_14a : :pandas:`pandas.DataFrame<DataFrame>`
-        Curtailment of heat pumps and charging points under §14a EnWG in MW.
+        Curtailment of heat pumps, charging points and storage units under §14a
+        EnWG in MW, per device.
 
     """
 

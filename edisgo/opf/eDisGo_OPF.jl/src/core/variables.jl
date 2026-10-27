@@ -442,6 +442,7 @@ end
 function variable_curtailment_14a(pm::AbstractPowerModel; kwargs...)
     eDisGo_OPF.variable_curtailment_14a_power(pm; kwargs...)
     eDisGo_OPF.variable_curtailment_14a_active(pm; kwargs...)
+    eDisGo_OPF.variable_curtailment_14a_share(pm; kwargs...)
 end
 
 """
@@ -478,6 +479,20 @@ function variable_curtailment_14a_active(pm::AbstractPowerModel; nw::Int=nw_id_d
     )
 
     report && PowerModels.sol_component_value(pm, nw, :curtailment_14a, :z14a, ids_budget, z14a)
+end
+
+"""
+Variable `s14a[a]` in `[0, 1]` for every grid area `a > 0` of the §14a curtailment:
+the share of their curtailable power `pmax` by which all components of the area
+are curtailed alike, as the grid operator may not pick components by their location
+(non-discriminatory control). Components with area 0 are curtailed individually.
+"""
+function variable_curtailment_14a_share(pm::AbstractPowerModel; nw::Int=nw_id_default, kwargs...)
+    areas = unique(Int[get(c, "area", 0) for c in values(PowerModels.ref(pm, nw, :curtailment_14a))])
+    PowerModels.var(pm, nw)[:s14a] = JuMP.@variable(pm.model,
+        [a in sort(filter(>(0), areas))], base_name="$(nw)_s14a",
+        lower_bound = 0.0, upper_bound = 1.0
+    )
 end
 
 "slack variables for grid restrictions"
