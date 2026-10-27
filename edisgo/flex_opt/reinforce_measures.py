@@ -297,7 +297,9 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
     return transformers_changes
 
 
-def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
+def reinforce_mv_lv_station_voltage_issues(
+    edisgo_obj, critical_stations, return_node_mapping=False
+):
     """
     Reinforce MV/LV substations due to voltage issues.
 
@@ -310,6 +312,10 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         Dataframe with maximum deviations from allowed lower or upper voltage limits
         in p.u. for all MV-LV stations with voltage issues. For more information on
         dataframe see :func:`~.flex_opt.check_tech_constraints.voltage_issues`.
+    return_node_mapping : bool
+        If True, additionally returns a dictionary mapping each added
+        transformer to the critical station (as in the index of
+        `critical_stations`) that triggered its reinforcement. Default: False.
 
     Returns
     -------
@@ -322,6 +328,10 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
                        'Grid_10': ['transformer_reinforced_10']
                        }
             }
+    dict
+        Only returned if `return_node_mapping` is True. Dictionary with name
+        of added transformers as keys and the name of the critical station
+        that triggered the transformer's addition as values.
 
     """
 
@@ -336,6 +346,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         raise KeyError("Standard MV/LV transformer is not in equipment list.")
 
     transformers_changes = {"added": {}}
+    node_mapping = {}
     # Collect the per-station new transformer frames so the topology dataframe is
     # rebuilt only once after the loop instead of once per station (avoids
     # O(stations x total_transformers) behaviour). Output is identical: the new
@@ -358,6 +369,8 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         # collect new transformer to be added to topology (batched after the loop)
         new_transformers_collected.append(duplicated_transformer)
         transformers_changes["added"][str(grid)] = duplicated_transformer.index.tolist()
+        for new_transformer_name in duplicated_transformer.index:
+            node_mapping[new_transformer_name] = station
 
     # add all new transformers to topology in a single concat, in station order,
     # matching the per-iteration concat behaviour.
@@ -372,11 +385,17 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
             "issues.".format(len(transformers_changes["added"]))
         )
 
+    if return_node_mapping:
+        return transformers_changes, node_mapping
     return transformers_changes
 
 
 def reinforce_lines_voltage_issues(
-    edisgo_obj, grid, crit_nodes, choose_cheaper_measure=False
+    edisgo_obj,
+    grid,
+    crit_nodes,
+    choose_cheaper_measure=False,
+    return_node_mapping=False,
 ):
     """
     Reinforce lines in MV and LV topology due to voltage issues.
@@ -393,12 +412,19 @@ def reinforce_lines_voltage_issues(
         If True, a line is only disconnected if this is cheaper than reinforcing
         the lines on the path between station and critical node. If False, a line
         is always disconnected if possible. Default: False.
+    return_node_mapping : bool
+        If True, additionally returns a dictionary mapping each reinforced line
+        to the critical node that triggered its reinforcement. Default: False.
 
     Returns
     -------
     dict
         Dictionary with name of lines as keys and the corresponding number of
         lines added as values.
+    dict
+        Only returned if `return_node_mapping` is True. Dictionary with name
+        of reinforced lines as keys and the name of the critical node that
+        triggered the line's reinforcement as values.
 
     Notes
     -----
@@ -465,6 +491,7 @@ def reinforce_lines_voltage_issues(
         nodes_feeder.setdefault(path[1], []).append(node)
 
     lines_changes = {}
+    node_mapping = {}
     for repr_node in nodes_feeder.keys():
         # find node farthest away
         get_weight = lambda u, v, data: data["length"]  # noqa: E731
@@ -553,11 +580,11 @@ def reinforce_lines_voltage_issues(
             )
 
         if not disconnect:
-            lines_changes.update(
-                _reinforce_lines_on_path(
-                    edisgo_obj, grid, path_lines, standard_line, share, current
-                )
+            path_changes = _reinforce_lines_on_path(
+                edisgo_obj, grid, path_lines, standard_line, share, current
             )
+            lines_changes.update(path_changes)
+            node_mapping.update(dict.fromkeys(path_changes, node))
 
         # disconnect line
         else:
@@ -573,6 +600,7 @@ def reinforce_lines_voltage_issues(
             )
             edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
             lines_changes[crit_line_name] = 1
+            node_mapping[crit_line_name] = node
             # TODO: Include switch disconnector
 
     if not lines_changes:
@@ -581,6 +609,8 @@ def reinforce_lines_voltage_issues(
             "issues."
         )
 
+    if return_node_mapping:
+        return lines_changes, node_mapping
     return lines_changes
 
 
