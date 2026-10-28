@@ -420,3 +420,8 @@ Changes
   ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
   the component and the new MV line were connected to the existing bus. This could
   happen after components were removed or aggregated (openego/eDisGo#413)
+* Fixed :func:`~.flex_opt.reinforce_grid.catch_convergence_reinforce_grid`, which
+  changed the mode of the reinforcement to the mode of the power flow analysis after
+  the first non-converging reinforcement. With ``mode="lv"`` the grid was then
+  reinforced in all voltage levels, including the MV grid and the HV/MV station with
+  the LV worst cases
