@@ -574,27 +574,24 @@ def task_oedb_ts(
         The modified EDisGo instance.
 
     """
+    from edisgo.io.timeseries_import import _timeindex_helper_func
+    from edisgo.tools.tools import validate_scenario
+
+    validate_scenario(ctx.scenario)
+
+    ti_df = None
     if timeindex is not None:
         ti_df = pd.date_range(
             start=timeindex["start"],
             periods=timeindex["periods"],
             freq=timeindex.get("freq", "h"),
         )
-        edisgo.set_timeindex(ti_df)
-    elif edisgo.timeseries.timeindex.empty:
-        # No explicit timeindex and none set yet (e.g. no set_timeindex step
-        # earlier): fall back to a full year derived from the scenario, the
-        # same default the flex imports use.
-        from edisgo.tools.tools import get_year_based_on_scenario
-
-        year = get_year_based_on_scenario(ctx.scenario)
-        if year is None:
-            raise ValueError(
-                f"Cannot derive a default time index: invalid scenario "
-                f"{ctx.scenario!r}. Provide a 'timeindex' or a valid scenario "
-                f"('eGon2035', 'eGon100RE')."
-            )
-        edisgo.set_timeindex(pd.date_range(f"1/1/{year}", periods=8760, freq="h"))
+    # resolve the time index from the given time index, TimeSeries.timeindex or
+    # the reference year (see _timeindex_helper_func), and set it, as
+    # _timeindex_helper_func does not set a given time index as
+    # TimeSeries.timeindex; it is needed to build dispatchable_df below
+    resolved_timeindex, _ = _timeindex_helper_func(edisgo, ti_df)
+    edisgo.set_timeindex(resolved_timeindex)
 
     dispatchable_df = None
     if dispatchable is not None:

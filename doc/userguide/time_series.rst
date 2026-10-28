@@ -13,6 +13,37 @@ active- and reactive-power time series. eDisGo offers several ways to set them.
    :meth:`~edisgo.edisgo.EDisGo.set_timeindex`. And remember the
    :ref:`ordering rules <ordering-rules>`: reactive power is always set last.
 
+.. _reference-year:
+
+Reference year
+--------------
+
+All time series of an EDisGo object are indexed in one calendar year, the
+*reference year*. It defaults to 2011, the weather year of the model data, and is set
+in section ``timeindex`` of ``config_timeseries.cfg`` (see :ref:`config_timeseries`):
+
+.. code-block:: ini
+
+    [timeindex]
+    reference_year = 2011
+
+It can also be changed on an existing object before any time series is set:
+
+.. code-block:: python
+
+    edisgo.config["timeindex"]["reference_year"] = 2013
+
+A time index or time series in another year, e.g. one passed to
+:meth:`~edisgo.edisgo.EDisGo.set_timeindex` or to an import, is relabelled to the
+reference year with a warning. The data is only relabelled, not changed: each time
+step keeps its date and time, so 1 March stays 1 March. The scenario of a database
+import only selects which data is loaded, it does not set the year.
+
+29 February is always left out, also if the reference year is a leap year, so a year
+always has 365 days. A time index across the year boundary, e.g. from 31 December to
+1 January, raises a ``ValueError``. The worst-case time index starting
+1970-01-01 (see :ref:`worst-case-ts`) is not changed.
+
 Active power
 ------------
 
@@ -94,7 +125,8 @@ at all**, so you have to specify the desired source explicitly, e.g.:
   which covers all charging points (``public``/``hpc`` charged "dumb").
 
 See :meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined` for all
-options. If no time index has been set, a default full-year index is set automatically.
+options. If no time index has been set, a full-year index in the reference year is
+set automatically.
 
 Optimised
 ~~~~~~~~~

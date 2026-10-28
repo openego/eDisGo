@@ -30,25 +30,31 @@ from edisgo.tools.config import Config
 logger = logging.getLogger(__name__)
 
 
-def _timeindex_helper_func(
-    edisgo_object, timeindex, default_year=2011, allow_leap_year=False
-):
+def _timeindex_helper_func(edisgo_object, timeindex=None):
     """
     Helper function to set up a timeindex for an entire year to initially set an index
     on the imported data and timeindex to select certain time steps.
+
+    The time index to select time steps is determined as follows:
+
+    1. `timeindex` is given: it is relabelled to the configured reference year
+       (see :func:`~.tools.tools.shift_timeindex_to_reference_year`).
+    2. `timeindex` is not given, but
+       :py:attr:`~.network.timeseries.TimeSeries.timeindex` is set: it is used
+       instead and set again via :attr:`~.EDisGo.set_timeindex`, which relabels it
+       to the reference year.
+    3. Neither is given: a warning is logged and the full year in the reference
+       year is used and set as :py:attr:`~.network.timeseries.TimeSeries.timeindex`.
+
+    The time index for the entire year contains the 8760 hours of the model data
+    (weather year 2011), relabelled to the reference year by date, so that each
+    time step keeps its date also in case the reference year is a leap year.
 
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
-        Timeindex that was provided by the user.
-    default_year : int
-        Default year to use in case no timeindex was provided by the user and no
-        timeindex is set in :py:attr:`~.network.timeseries.TimeSeries.timeindex`.
-    allow_leap_year : bool
-        If False and a leap year is given, either in `timeindex` given by the user or
-        set in :py:attr:`~.network.timeseries.TimeSeries.timeindex`, the default
-        year is used instead.
+        Timeindex that was provided by the user. See above for how it is used.
 
     Returns
     -------
@@ -57,25 +63,24 @@ def _timeindex_helper_func(
         Returns timeindex to select certain time steps and timeindex for entire year.
 
     """
-    if timeindex is None:
-        year = tools.get_year_based_on_timeindex(edisgo_object)
-        if year is None:
-            year = default_year
-            timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
-        else:
-            timeindex = edisgo_object.timeseries.timeindex
-        timeindex_full = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+    reference_year = tools.get_reference_year(edisgo_object)
+    timeindex_full = tools.shift_timeindex_to_year(
+        pd.date_range("1/1/2011", periods=8760, freq="h"), reference_year
+    )
+
+    if timeindex is not None:
+        timeindex = tools.shift_timeindex_to_reference_year(edisgo_object, timeindex)
+    elif not edisgo_object.timeseries.timeindex.empty:
+        edisgo_object.set_timeindex(edisgo_object.timeseries.timeindex)
+        timeindex = edisgo_object.timeseries.timeindex
     else:
-        year = timeindex.year[0]
-        if allow_leap_year is False and pd.Timestamp(year, 1, 1).is_leap_year:
-            year = default_year
-            logger.warning(
-                f"A leap year was given. This is currently not valid. The year the "
-                f"data is indexed by is therefore set to the default value of "
-                f"{default_year}."
-            )
-            timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
-        timeindex_full = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+        logger.warning(
+            f"No timeindex was set. TimeSeries.timeindex is set to reference "
+            f"year {reference_year}."
+        )
+        edisgo_object.set_timeindex(timeindex_full)
+        timeindex = timeindex_full
+
     return timeindex, timeindex_full
 
 
@@ -88,13 +93,12 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
     ----------
     edisgo_obj : :class:`~.EDisGo`
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
-        Specifies time steps for which to return feed-in data. Leap years can currently
-        not be handled. In case the given timeindex contains a leap year, the data will
-        be indexed using the default year 2011 and returned for the whole year.
+        Specifies time steps for which to return feed-in data.
         If no timeindex is provided, the timeindex set in
         :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
         If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-        is indexed using the default year 2011 and returned for the whole year.
+        is indexed using the reference year set in the config (default 2011) and
+        returned for the whole year.
 
     Returns
     -------
@@ -124,9 +128,7 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
     )
 
     # set time index
-    timeindex, timeindex_full = _timeindex_helper_func(
-        edisgo_object, timeindex, default_year=2011, allow_leap_year=False
-    )
+    timeindex, timeindex_full = _timeindex_helper_func(edisgo_object, timeindex)
     feedin_df.index = timeindex_full
 
     return feedin_df.loc[timeindex, :].astype("float")
@@ -156,6 +158,7 @@ def _query_feedin_oedb_legacy(edisgo_object, weather_cell_ids, engine=None):
     session_context = (
         session_scope() if engine is None else session_scope_egon_data(engine)
     )
+    reference_year = tools.get_reference_year(edisgo_object)
     with session_context as session:
         query = session.query(
             orm_feedin.w_id.label("weather_cell_id"),
@@ -165,9 +168,22 @@ def _query_feedin_oedb_legacy(edisgo_object, weather_cell_ids, engine=None):
             orm_feedin.w_id.in_(weather_cell_ids),
             orm_feedin.power_class.in_([0, 4]),
             orm_feedin_version,
-            orm_feedin.weather_year == 2011,
+            orm_feedin.weather_year == reference_year,
         )
-        return pd.read_sql_query(query.statement, session.bind)
+        feedin_df = pd.read_sql_query(query.statement, session.bind)
+        if feedin_df.empty:
+            available_years = sorted(
+                year
+                for (year,) in session.query(orm_feedin.weather_year)
+                .filter(orm_feedin_version)
+                .distinct()
+            )
+            raise ValueError(
+                f"The legacy feed-in data contains no data for weather year "
+                f"{reference_year}, the configured reference year. Available "
+                f"weather years are: {', '.join(map(str, available_years))}."
+            )
+    return feedin_df
 
 
 def feedin_oedb(
@@ -185,13 +201,12 @@ def feedin_oedb(
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
-        Specifies time steps for which to return feed-in data. Leap years can currently
-        not be handled. In case the given timeindex contains a leap year, the data will
-        be indexed using the default year 2011 and returned for the whole year.
+        Specifies time steps for which to return feed-in data.
         If no timeindex is provided, the timeindex set in
         :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
         If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-        is indexed using the default year 2011 and returned for the whole year.
+        is indexed using the reference year set in the config (default 2011) and
+        returned for the whole year.
 
     Returns
     -------
@@ -221,9 +236,7 @@ def feedin_oedb(
     )
 
     # set time index
-    timeindex, timeindex_full = _timeindex_helper_func(
-        edisgo_object, timeindex, default_year=2011, allow_leap_year=False
-    )
+    timeindex, timeindex_full = _timeindex_helper_func(edisgo_object, timeindex)
     feedin_df.index = timeindex_full
 
     return feedin_df.loc[timeindex, :].astype("float")
@@ -271,7 +284,8 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
         Specifies time steps for which to return data. If no timeindex is provided, the
         timeindex set in :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
         If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-        is indexed using the default year 2011 and returned for the whole year.
+        is indexed using the reference year set in the config (default 2011) and
+        returned for the whole year.
 
     Returns
     -------
@@ -282,9 +296,7 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
         hold the sector type.
 
     """
-    timeindex, _ = _timeindex_helper_func(
-        edisgo_obj, timeindex, default_year=2011, allow_leap_year=True
-    )
+    timeindex, _ = _timeindex_helper_func(edisgo_obj, timeindex)
 
     year = timeindex[0].year
 
@@ -334,6 +346,13 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
     # Resample 15-minute values to hourly values and sum across sectors
     elec_demand = elec_demand.resample("H").mean()
 
+    # time series are indexed without 29 February, see shift_timeindex_to_year, so
+    # in a leap year it is dropped and the profiles are normalized again
+    feb_29 = (elec_demand.index.month == 2) & (elec_demand.index.day == 29)
+    if feb_29.any():
+        elec_demand = elec_demand.loc[~feb_29]
+        elec_demand = elec_demand / elec_demand.sum()
+
     elec_demand.rename(
         columns={
             "g0": "cts",
@@ -360,13 +379,12 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
     weather_cell_ids : list(int) or list(float)
         List (or array) of weather cell IDs to obtain COP data for.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
-        Specifies time steps for which to return data. Leap years can currently
-        not be handled. In case the given timeindex contains a leap year, the data will
-        be indexed using the default year 2011 and returned for the whole year.
+        Specifies time steps for which to return data.
         If no timeindex is provided, the timeindex set in
         :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
         If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-        is indexed using the default year 2011 and returned for the whole year.
+        is indexed using the reference year set in the config (default 2011) and
+        returned for the whole year.
 
 
     Returns
@@ -377,9 +395,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
 
     """
     # set up time index to index COP data by
-    timeindex, timeindex_full = _timeindex_helper_func(
-        edisgo_object, timeindex, default_year=2011, allow_leap_year=False
-    )
+    timeindex, timeindex_full = _timeindex_helper_func(edisgo_object, timeindex)
 
     cop = _query_cop_oedb(engine, weather_cell_ids)
 
@@ -434,14 +450,13 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
-        Specifies time steps for which to return data. Leap years can currently
-        not be handled. In case the given timeindex contains a leap year, the data will
-        be indexed using the default year (2035 in case of the 'eGon2035' and to 2045
-        in case of the 'eGon100RE' scenario) and returned for the whole year.
+        Specifies time steps for which to return data.
         If no timeindex is provided, the timeindex set in
-        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
-        If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-        is indexed using the default year and returned for the whole year.
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used. If that is
+        not set either, the time index to use is determined by
+        :func:`~.io.timeseries_import._timeindex_helper_func`, setting
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` to the configured
+        reference year (see :func:`~.tools.tools.get_reference_year`).
 
     Returns
     -------
@@ -451,19 +466,10 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         :attr:`~.network.topology.Topology.loads_df`.
 
     """
-    if scenario not in ["eGon2035", "eGon100RE"]:
-        raise ValueError(
-            "Invalid input for parameter 'scenario'. Possible options are "
-            "'eGon2035' and 'eGon100RE'."
-        )
+    tools.validate_scenario(scenario)
 
     # set up time index to index data by
-    timeindex, timeindex_full = _timeindex_helper_func(
-        edisgo_obj,
-        timeindex,
-        default_year=tools.get_year_based_on_scenario(scenario),
-        allow_leap_year=False,
-    )
+    timeindex, timeindex_full = _timeindex_helper_func(edisgo_obj, timeindex)
 
     pth_df = edisgo_obj.topology.loads_df[
         edisgo_obj.topology.loads_df.type == "heat_pump"
@@ -555,14 +561,13 @@ def electricity_demand_oedb(
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
-        Specifies time steps for which to return data. Leap years can currently
-        not be handled. In case the given timeindex contains a leap year, the data will
-        be indexed using the default year (2035 in case of the 'eGon2035' and to 2045
-        in case of the 'eGon100RE' scenario) and returned for the whole year.
+        Specifies time steps for which to return data.
         If no timeindex is provided, the timeindex set in
-        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
-        If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-        is indexed using the default year and returned for the whole year.
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used. If that is
+        not set either, the time index to use is determined by
+        :func:`~.io.timeseries_import._timeindex_helper_func`, setting
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` to the configured
+        reference year (see :func:`~.tools.tools.get_reference_year`).
     load_names : list(str) or None
         Conventional loads (as in index of :attr:`~.network.topology.Topology.loads_df`)
         for which to retrieve electricity demand time series. If none are provided,
@@ -576,19 +581,10 @@ def electricity_demand_oedb(
         in index of :attr:`~.network.topology.Topology.loads_df`.
 
     """
-    if scenario not in ["eGon2035", "eGon100RE"]:
-        raise ValueError(
-            "Invalid input for parameter 'scenario'. Possible options are "
-            "'eGon2035' and 'eGon100RE'."
-        )
+    tools.validate_scenario(scenario)
 
     # set up time index to index data by
-    timeindex, timeindex_full = _timeindex_helper_func(
-        edisgo_obj,
-        timeindex,
-        default_year=tools.get_year_based_on_scenario(scenario),
-        allow_leap_year=False,
-    )
+    timeindex, timeindex_full = _timeindex_helper_func(edisgo_obj, timeindex)
 
     # set loads for which to retrieve electricity profiles
     if load_names is None:

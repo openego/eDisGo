@@ -27,6 +27,7 @@ from edisgo.tools.tools import (
     assign_voltage_level_to_component,
     check_timeindex_coverage,
     resample,
+    shift_to_reference_year,
     split_into_contiguous_runs,
 )
 
@@ -74,6 +75,9 @@ class TimeSeries:
         Is used to distinguish between normal time series analysis and worst-case
         analysis. Is determined by checking if the timindex starts before 1971 as the
         default for worst-case is 1970. Be mindful when creating your own worst-cases.
+        1970 is a deliberate marker for worst-case time steps and does not follow the
+        reference year configured in ``[timeindex] reference_year`` (see
+        :func:`~.tools.tools.get_reference_year`).
 
         Returns
         -------
@@ -120,8 +124,19 @@ class TimeSeries:
         except AttributeError:
             return pd.DataFrame(index=self.timeindex)
         except KeyError:
+            data_index = getattr(self, f"_{attribute}").index
+            cause = ""
+            if (
+                isinstance(data_index, pd.DatetimeIndex)
+                and len(data_index) > 0
+                and data_index[0].year != self.timeindex[0].year
+            ):
+                cause = (
+                    f" {attribute} is indexed in year {data_index[0].year}, the "
+                    f"time index in year {self.timeindex[0].year}."
+                )
             logger.warning(
-                f"Timeindex and {attribute} have deviating indices. "
+                f"Timeindex and {attribute} have deviating indices.{cause} "
                 "Empty dataframe will be returned."
             )
             return pd.DataFrame(index=self.timeindex)
@@ -431,6 +446,14 @@ class TimeSeries:
             names of storage units to set time series for.
 
         """
+        ts_generators = shift_to_reference_year(
+            edisgo_object, ts_generators, name="ts_generators"
+        )
+        ts_loads = shift_to_reference_year(edisgo_object, ts_loads, name="ts_loads")
+        ts_storage_units = shift_to_reference_year(
+            edisgo_object, ts_storage_units, name="ts_storage_units"
+        )
+
         if ts_generators is not None:
             # check if all generators time series are provided for exist in the network
             # and only set time series for those that do
@@ -620,6 +643,11 @@ class TimeSeries:
 
         Also be aware that loads for which type information is not set are handled
         as conventional loads.
+
+        The generated worst-case time steps are indexed starting 1 January 1970 (see
+        :attr:`is_worst_case`). This is a deliberate marker for worst-case time steps,
+        not an actual calendar year, and does not follow the reference year (see
+        :func:`~.tools.tools.get_reference_year`).
 
         """
 
@@ -1243,6 +1271,9 @@ class TimeSeries:
                 first level containing the technology as string and the second level
                 the weather cell ID as integer.
                 Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+                If indexed in a different year than the reference year, it is
+                relabelled to it with a warning, see
+                :func:`~.tools.tools.shift_to_reference_year`.
 
                 When importing a ding0 grid and/or using predefined scenarios
                 of the future generator park,
@@ -1296,6 +1327,9 @@ class TimeSeries:
         else:
             # self-provided DataFrame - the oedb path above is already scoped
             # to edisgo_object's timeindex by feedin_oedb/feedin_oedb_legacy
+            ts_generators = shift_to_reference_year(
+                edisgo_object, ts_generators, name="ts_generators"
+            )
             if not edisgo_object.timeseries.timeindex.empty:
                 check_timeindex_coverage(
                     edisgo_object.timeseries.timeindex,
@@ -1394,6 +1428,9 @@ class TimeSeries:
         """
         if not isinstance(ts_generators, pd.DataFrame):
             raise ValueError("'ts_generators' must be a pandas DataFrame.")
+        ts_generators = shift_to_reference_year(
+            edisgo_object, ts_generators, name="ts_generators"
+        )
         if not edisgo_object.timeseries.timeindex.empty:
             check_timeindex_coverage(
                 edisgo_object.timeseries.timeindex,
@@ -1467,7 +1504,9 @@ class TimeSeries:
 
                 See parameter `conventional_loads_ts` in
                 :func:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for
-                more information.
+                more information. If indexed in a different year than the
+                reference year, it is relabelled to it with a warning, see
+                :func:`~.tools.tools.shift_to_reference_year`.
 
         load_names : list(str)
             Defines for which conventional loads to use sector-specific time series.
@@ -1501,12 +1540,14 @@ class TimeSeries:
         elif ts_loads.empty:
             logger.warning("The profile you entered is empty. Method is skipped.")
             return
-        elif not edisgo_object.timeseries.timeindex.empty:
+        else:
             # self-provided DataFrame - the demandlib path above is already
             # scoped to edisgo_object's timeindex by load_time_series_demandlib
-            check_timeindex_coverage(
-                edisgo_object.timeseries.timeindex, "conventional loads", ts_loads
-            )
+            ts_loads = shift_to_reference_year(edisgo_object, ts_loads, name="ts_loads")
+            if not edisgo_object.timeseries.timeindex.empty:
+                check_timeindex_coverage(
+                    edisgo_object.timeseries.timeindex, "conventional loads", ts_loads
+                )
 
         # write to TimeSeriesRaw
         for col in ts_loads:
@@ -1583,7 +1624,8 @@ class TimeSeries:
         elif ts_loads.empty:
             logger.warning("The profile you entered is empty. Method is skipped.")
             return
-        elif not edisgo_object.timeseries.timeindex.empty:
+        ts_loads = shift_to_reference_year(edisgo_object, ts_loads, name="ts_loads")
+        if not edisgo_object.timeseries.timeindex.empty:
             check_timeindex_coverage(
                 edisgo_object.timeseries.timeindex, "charging points", ts_loads
             )

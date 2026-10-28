@@ -191,13 +191,17 @@ class EDisGo:
         # instantiate other data classes
         self.results = Results(self)
         self.opf_results = OPFResults()
-        self.timeseries = timeseries.TimeSeries(
-            timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
-        )
+        self.timeseries = timeseries.TimeSeries()
         self.electromobility = Electromobility(edisgo_obj=self)
         self.heat_pump = HeatPump()
         self.dsm = DSM()
         self.overlying_grid = OverlyingGrid()
+
+        # set initial time index via set_timeindex (rather than passing it
+        # straight to TimeSeries()) so a leap year given here is shifted to
+        # the reference year immediately, before anything else is indexed by
+        # it - see set_timeindex
+        self.set_timeindex(kwargs.get("timeindex", pd.DatetimeIndex([])))
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
@@ -272,13 +276,20 @@ class EDisGo:
         The time index is for example used as default for time steps considered in
         the power flow analysis and when checking the integrity of the network.
 
+        In case `timeindex` is set in a different year than the configured
+        reference year (see :func:`~.tools.tools.get_reference_year`), a warning is
+        logged and `timeindex` is relabelled to the reference year before it is
+        set (see :func:`~.tools.tools.shift_timeindex_to_reference_year`).
+
         Parameters
         -----------
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
             Time index to set.
 
         """
-        self.timeseries.timeindex = timeindex
+        self.timeseries.timeindex = tools.shift_timeindex_to_reference_year(
+            self, timeindex
+        )
 
     def set_time_series_manual(
         self,
@@ -332,6 +343,19 @@ class EDisGo:
         step in :attr:`~.network.timeseries.TimeSeries.timeindex`.
 
         """
+        # relabel the given time series to the reference year before checking
+        # that they cover the time index
+        ts = {
+            name: tools.shift_to_reference_year(self, df, name=name)
+            for name, df in (
+                ("generators_p", generators_p),
+                ("loads_p", loads_p),
+                ("storage_units_p", storage_units_p),
+                ("generators_q", generators_q),
+                ("loads_q", loads_q),
+                ("storage_units_q", storage_units_q),
+            )
+        }
         # check if time index is already set, otherwise raise warning
         if self.timeseries.timeindex.empty:
             logger.warning(
@@ -341,26 +365,19 @@ class EDisGo:
                 "parameter 'timeindex' or using the function EDisGo.set_timeindex()."
             )
         else:
-            for name, df in (
-                ("generators_p", generators_p),
-                ("loads_p", loads_p),
-                ("storage_units_p", storage_units_p),
-                ("generators_q", generators_q),
-                ("loads_q", loads_q),
-                ("storage_units_q", storage_units_q),
-            ):
+            for name, df in ts.items():
                 check_timeindex_coverage(self.timeseries.timeindex, f"'{name}'", df)
         self.timeseries.set_active_power_manual(
             self,
-            ts_generators=generators_p,
-            ts_loads=loads_p,
-            ts_storage_units=storage_units_p,
+            ts_generators=ts["generators_p"],
+            ts_loads=ts["loads_p"],
+            ts_storage_units=ts["storage_units_p"],
         )
         self.timeseries.set_reactive_power_manual(
             self,
-            ts_generators=generators_q,
-            ts_loads=loads_q,
-            ts_storage_units=storage_units_q,
+            ts_generators=ts["generators_q"],
+            ts_loads=ts["loads_q"],
+            ts_storage_units=ts["storage_units_q"],
         )
 
     def set_time_series_worst_case_analysis(
@@ -577,35 +594,19 @@ class EDisGo:
             This parameter can optionally be provided in case `conventional_loads_ts`
             is 'oedb' or 'demandlib' and in case `fluctuating_generators_ts` is
             'oedb'. It is used to specify time steps for which to set active power data.
-            Leap years can currently not be handled when data is retrieved from the
-            oedb. In case the given timeindex contains a leap year, the data will
-            be indexed using a default year and set for the whole year.
             If no timeindex is provided, the timeindex set in
-            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
-            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-            is indexed using a default year and set for the whole year.
-            In this case, the EDisGo TimeSeries timeindex is automatically set to
-            the selected default year so that imported data is linked to a valid
-            time index.
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used. If that is
+            not set either, the respective import function determines the time
+            index to use (see
+            :func:`edisgo.io.timeseries_import._timeindex_helper_func`), setting
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` to the configured
+            reference year (see :func:`~.tools.tools.get_reference_year`). A leap
+            year is currently not supported and is shifted to the reference year
+            instead.
 
         """
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
-        if self.timeseries.timeindex.empty and kwargs.get("timeindex", None) is None:
-            if conventional_loads_ts == "oedb":
-                default_year = tools.get_year_based_on_scenario(kwargs.get("scenario"))
-                if default_year is None:
-                    default_year = 2011
-            else:
-                default_year = 2011
-            self.timeseries.timeindex = pd.date_range(
-                f"1/1/{default_year}", periods=8760, freq="H"
-            )
-            logger.warning(
-                "No timeindex was set. TimeSeries.timeindex is automatically "
-                f"set to the default year {default_year} to match imported "
-                "time series."
-            )
-        elif self.timeseries.timeindex.empty:
+        if self.timeseries.timeindex.empty:
             logger.warning(
                 "When setting time series using predefined profiles it is better to "
                 "set a time index as all data in TimeSeries class is indexed by the"
@@ -2291,50 +2292,22 @@ class EDisGo:
             Database engine. If None, a default engine to the open energy platform
             is created.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
-            Specifies time steps for which to set COP and heat demand data. Leap years
-            can currently not be handled. In case the given
-            timeindex contains a leap year, the data will be indexed using the default
-            year (2035 in case of the 'eGon2035' and to 2045 in case of the
-            'eGon100RE' scenario) and returned for the whole year.
+            Specifies time steps for which to set COP and heat demand data.
             If no timeindex is provided, the timeindex set in
-            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
-            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-            is indexed using the default year and returned for the whole year.
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used. If that is
+            not set either, the respective import function determines the time
+            index to use (see
+            :func:`edisgo.io.timeseries_import._timeindex_helper_func`), setting
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` to the configured
+            reference year (see :func:`~.tools.tools.get_reference_year`).
         import_types : list(str) or None
             Specifies which technologies to import. Possible options are
             "individual_heat_pumps", "central_heat_pumps" and
             "central_resistive_heaters". If None, all are imported.
 
         """
+        tools.validate_scenario(scenario)
         engine = engine if engine is not None else egon_engine()
-        # set up year to index data by
-        # first try to get index from time index
-        if timeindex is None:
-            timeindex = self.timeseries.timeindex
-            # if time index is not set get year from scenario
-            if timeindex.empty:
-                year = tools.get_year_based_on_scenario(scenario)
-                # if year is still None, scenario is not valid
-                if year is None:
-                    raise ValueError(
-                        "Invalid input for parameter 'scenario'. Possible options are "
-                        "'eGon2035' and 'eGon100RE'."
-                    )
-                timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
-        # if year is leap year set year according to scenario
-        if pd.Timestamp(timeindex.year[0], 1, 1).is_leap_year:
-            logger.warning(
-                "A leap year was given to 'heat_demand_oedb' function. This is "
-                "currently not valid. The year the data is indexed by is therefore set "
-                "according to the given scenario."
-            )
-            year = tools.get_year_based_on_scenario(scenario)
-            return self.import_heat_pumps(
-                scenario,
-                engine,
-                timeindex=pd.date_range(f"1/1/{year}", periods=8760, freq="H"),
-                import_types=import_types,
-            )
 
         integrated_heat_pumps = import_heat_pumps_oedb(
             edisgo_object=self,
@@ -2436,24 +2409,25 @@ class EDisGo:
             Database engine. If None, a default engine to the open energy platform
             is created.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
-            Specifies time steps for which to get data. Leap years can currently not be
-            handled. In case the given timeindex contains a leap year, the data will be
-            indexed using the default year (2035 in case of the 'eGon2035' and to 2045
-            in case of the 'eGon100RE' scenario) and returned for the whole year.
+            Specifies time steps for which to get data.
             If no timeindex is provided, the timeindex set in
-            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
-            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-            is indexed using the default year and returned for the whole year.
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used. If that is
+            not set either, the time index to use is determined by
+            :func:`~.io.timeseries_import._timeindex_helper_func`, setting
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` to the configured
+            reference year (see :func:`~.tools.tools.get_reference_year`).
 
         """
         engine = engine if engine is not None else egon_engine()
         dsm_profiles = dsm_import.oedb(
             edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
         )
-        self.dsm.p_min = dsm_profiles["p_min"]
-        self.dsm.p_max = dsm_profiles["p_max"]
-        self.dsm.e_min = dsm_profiles["e_min"]
-        self.dsm.e_max = dsm_profiles["e_max"]
+        for attr in ["p_min", "p_max", "e_min", "e_max"]:
+            setattr(
+                self.dsm,
+                attr,
+                tools.shift_to_reference_year(self, dsm_profiles[attr], name=attr),
+            )
 
     def import_home_batteries(
         self,
