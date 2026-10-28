@@ -615,6 +615,46 @@ class TestPmOptimizeIntervalSplit:
         assert edisgo_obj.heat_pump.cop_df.index.equals(full)
 
 
+class TestJuliaSubprocessArguments:
+    """Arguments _pm_optimize_single hands to Main.jl, with the Julia process
+    stubbed."""
+
+    @pytest.fixture
+    def julia_args(self, monkeypatch):
+        import io
+
+        import edisgo.opf.powermodels_opf as pmo
+
+        calls = []
+
+        class FakeProcess:
+            def __init__(self, args, **kwargs):
+                calls.append(args)
+                self.stdin = io.StringIO()
+                self.stdout = io.StringIO("")
+
+            def poll(self):
+                return 1
+
+        monkeypatch.setattr(pmo.subprocess, "Popen", FakeProcess)
+        return calls
+
+    @pytest.fixture
+    def edisgo_obj(self, monkeypatch):
+        e = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        e.set_timeindex(pd.date_range("2035-01-01", periods=4, freq="h"))
+        monkeypatch.setattr(e, "to_powermodels", lambda **kw: ({"name": "grid"}, {}))
+        return e
+
+    @pytest.mark.parametrize("kwargs, expected", [({}, "8"), ({"threads": 4}, "4")])
+    def test_threads_passed_to_julia(self, edisgo_obj, julia_args, kwargs, expected):
+        from edisgo.flex_opt.exceptions import InfeasibleModelError
+
+        with pytest.raises(InfeasibleModelError):
+            edisgo_obj.pm_optimize(**kwargs)
+        assert julia_args[0][-1] == expected
+
+
 class TestHeatStorageStandingLoss:
     """
     The standing loss of a thermal storage has to scale with the time step.

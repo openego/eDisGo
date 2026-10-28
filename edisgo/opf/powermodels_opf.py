@@ -189,6 +189,7 @@ def pm_optimize(
     method: str = "soc",
     warm_start: bool = False,
     silence_moi: bool = False,
+    threads: int = 8,
 ) -> None:
     """
     Run OPF for the edisgo object and write results back to it.
@@ -226,6 +227,7 @@ def pm_optimize(
         method=method,
         warm_start=warm_start,
         silence_moi=silence_moi,
+        threads=threads,
     )
 
     intervals = _contiguous_intervals(edisgo_obj.timeseries.timeindex)
@@ -373,6 +375,7 @@ def _pm_optimize_single(
     method: str = "soc",
     warm_start: bool = False,
     silence_moi: bool = False,
+    threads: int = 8,
 ) -> None:
     """
     Run a single-interval OPF for the edisgo object in a julia subprocess and
@@ -442,6 +445,11 @@ def _pm_optimize_single(
         hence there will be no logging coming from julia subprocess in python
         process.
         Default: False.
+    threads : int
+        Number of threads Gurobi may use for the SOC model (Gurobi parameter
+        ``Threads``). 0 lets Gurobi use all cores of the machine, which slows down
+        other processes on shared machines and parallel runs of several grids.
+        Default: 8.
     save_heat_storage : bool
         Indicates whether to save results of heat storage variables from the
         optimization to eDisGo object.
@@ -488,6 +496,7 @@ def _pm_optimize_single(
             method,
             str(silence_moi),
             str(warm_start),
+            str(threads),
         ],
         stdin=subprocess.PIPE,
         text=True,
