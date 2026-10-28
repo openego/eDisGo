@@ -939,8 +939,8 @@ def catch_convergence_reinforce_grid(
         analyze_mode = None
     else:
         analyze_mode = kwargs.get("mode", None)
-    kwargs_analyze = kwargs
-    kwargs_analyze["mode"] = analyze_mode
+    # copy, so that the reinforcement below keeps its mode
+    kwargs_analyze = {**kwargs, "mode": analyze_mode}
     converging_timesteps, non_converging_timesteps = edisgo.analyze(
         timesteps=timesteps_pfa, raise_not_converged=False, **kwargs_analyze
     )

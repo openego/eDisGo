@@ -15,6 +15,7 @@ from edisgo.flex_opt.reinforce_grid import (
     _add_reinforcement_log_entries,
     _analyze_after_voltage_reinforcement,
     _separate_lv_grid_not_converged,
+    catch_convergence_reinforce_grid,
     reinforce_grid,
     run_separate_lv_grids,
 )
@@ -281,6 +282,33 @@ class TestReinforceGrid:
             return timeindex[1:], timeindex[:1]
 
         return analyze
+
+    def test_catch_convergence_reinforce_grid_keeps_mode(self, monkeypatch):
+        # the first reinforcement does not converge, the time steps that converge
+        # and those that do not are then reinforced separately; all three runs
+        # must keep mode "lv", although the grid is analyzed in mode None
+        edisgo = copy.deepcopy(self.edisgo)
+        timesteps = edisgo.timeseries.timeindex
+        modes = []
+
+        def fake_reinforce_grid(edisgo_obj, **kwargs):
+            modes.append(kwargs["mode"])
+            if len(modes) == 1:
+                raise ValueError("Power flow analysis did not converge for the")
+
+        analyze_modes = []
+
+        def fake_analyze(**kwargs):
+            analyze_modes.append(kwargs["mode"])
+            return timesteps[:2], timesteps[2:]
+
+        monkeypatch.setattr(
+            "edisgo.flex_opt.reinforce_grid.reinforce_grid", fake_reinforce_grid
+        )
+        monkeypatch.setattr(edisgo, "analyze", fake_analyze)
+        catch_convergence_reinforce_grid(edisgo, mode="lv")
+        assert modes == ["lv", "lv", "lv"]
+        assert analyze_modes == [None]
 
     def test_analyze_after_voltage_reinforcement_without_split(self, monkeypatch):
         edisgo = copy.deepcopy(self.edisgo)

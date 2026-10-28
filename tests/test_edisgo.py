@@ -722,10 +722,12 @@ class TestEDisGo:
         )
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 134
+        # the LV reinforcement does not touch the HV/MV station, so there is one
+        # transformer less than without worst cases
+        assert len(results.grid_expansion_costs) == 133
         # house connections are not reinforced due to voltage issues, so there are
         # no equipment changes for them here
-        assert len(results.equipment_changes) == 218
+        assert len(results.equipment_changes) == 217
         assert results.v_res.shape == (4, 142)
 
     @pytest.mark.slow
