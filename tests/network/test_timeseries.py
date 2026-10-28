@@ -1445,6 +1445,28 @@ class TestTimeSeries:
         )
         # fmt: on
 
+    def test_predefined_fluctuating_generators_by_technology_missing_timesteps(
+        self,
+    ):
+        """
+        A self-provided DataFrame missing time steps of the time index raises a
+        ValueError.
+        """
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        incomplete_ts = pd.DataFrame(
+            data={"wind": [1], "solar": [3]},
+            index=timeindex[:1],
+        )
+
+        with pytest.raises(
+            ValueError, match="fluctuating generators time series miss 1 of 2"
+        ):
+            self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
+                self.edisgo, incomplete_ts
+            )
+
     def test_predefined_fluctuating_generators_by_technology_oedb(
         self,
         mock_oep_feedin,
@@ -1616,6 +1638,28 @@ class TestTimeSeries:
             check_dtype=False,
         )
         # fmt: on
+
+    def test_predefined_dispatchable_generators_by_technology_missing_timesteps(
+        self,
+    ):
+        """
+        A self-provided DataFrame missing time steps of the time index raises a
+        ValueError.
+        """
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        incomplete_ts = pd.DataFrame(
+            data={"other": [5]},
+            index=timeindex[:1],
+        )
+
+        with pytest.raises(
+            ValueError, match="dispatchable generators time series miss 1 of 2"
+        ):
+            self.edisgo.timeseries.predefined_dispatchable_generators_by_technology(
+                self.edisgo, incomplete_ts
+            )
 
     def test_predefined_conventional_loads_by_sector(self, caplog):
         index = pd.date_range("1/1/2011", periods=3, freq="H")
@@ -1881,6 +1925,28 @@ class TestTimeSeries:
             original_annual_consumption
         )
 
+    def test_predefined_conventional_loads_by_sector_raises_on_missing_timesteps(
+        self,
+    ):
+        """
+        A self-provided DataFrame missing time steps of the time index raises a
+        ValueError.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=3, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        incomplete_ts = pd.DataFrame(
+            data={"residential": [1, 2]},
+            index=timeindex[:2],
+        )
+
+        with pytest.raises(
+            ValueError, match="conventional loads time series miss 1 of 3"
+        ):
+            self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+                self.edisgo, incomplete_ts
+            )
+
     def test_predefined_charging_points_by_use_case(self, caplog):
         index = pd.date_range("1/1/2011", periods=3, freq="H")
         self.edisgo.timeseries.timeindex = index
@@ -1987,6 +2053,26 @@ class TestTimeSeries:
             charging_points_active_power_by_use_case.shape\
                == (3, 5)
         # fmt: on
+
+    def test_predefined_charging_points_by_use_case_raises_on_missing_timesteps(
+        self,
+    ):
+        """
+        A self-provided DataFrame missing time steps of the time index raises a
+        ValueError.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=3, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        incomplete_ts = pd.DataFrame(
+            data={"home": [1, 2]},
+            index=timeindex[:2],
+        )
+
+        with pytest.raises(ValueError, match="charging points time series miss 1 of 3"):
+            self.edisgo.timeseries.predefined_charging_points_by_use_case(
+                self.edisgo, incomplete_ts
+            )
 
     def test_fixed_cosphi(self):
         # set active power time series for fixed cosphi
@@ -2565,6 +2651,30 @@ class TestTimeSeries:
             / 2,
             atol=1e-5,
         )
+
+    def test_resample_preserves_gapped_timeindex(self):
+        """
+        Regression test: resampling a gapped timeindex (as produced by
+        select_timesteps in auto mode, which deliberately keeps two disjoint
+        intervals separate) must not bridge the gap with resample artifacts -
+        the gap must survive an up-sample/down-sample round-trip, and the
+        timeindex must be restored exactly.
+        """
+        gapped_index = pd.date_range("2011-01-08", periods=24, freq="h").union(
+            pd.date_range("2011-06-10", periods=24, freq="h")
+        )
+        self.edisgo.set_timeindex(gapped_index)
+        gen = self.edisgo.topology.generators_df.index[0]
+        self.edisgo.set_time_series_manual(
+            generators_p=pd.DataFrame({gen: [0.1] * 48}, index=gapped_index)
+        )
+
+        self.edisgo.timeseries.resample(freq="15min")
+        gap = self.edisgo.timeseries.timeindex.to_series().diff().max()
+        assert gap > pd.Timedelta("15min")
+
+        self.edisgo.timeseries.resample(freq="1h")
+        assert_index_equal(self.edisgo.timeseries.timeindex, gapped_index)
 
     def test_scale_timeseries(self):
         self.edisgo.set_time_series_worst_case_analysis()

@@ -24,10 +24,11 @@ import pandas as pd
 from edisgo.flex_opt import q_control
 from edisgo.io import timeseries_import
 from edisgo.tools.tools import (
-    align_to_edisgo_timeindex,
     assign_voltage_level_to_component,
+    check_timeindex_coverage,
     resample,
     shift_to_reference_year,
+    split_into_contiguous_runs,
 )
 
 if TYPE_CHECKING:
@@ -1270,10 +1271,9 @@ class TimeSeries:
                 first level containing the technology as string and the second level
                 the weather cell ID as integer.
                 Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-                If indexed in a different year than
-                :py:attr:`~.network.timeseries.TimeSeries.timeindex`, it is
-                shifted onto it (with a warning) - see
-                :func:`~.tools.tools.align_to_edisgo_timeindex`.
+                If indexed in a different year than the reference year, it is
+                relabelled to it with a warning, see
+                :func:`~.tools.tools.shift_to_reference_year`.
 
                 When importing a ding0 grid and/or using predefined scenarios
                 of the future generator park,
@@ -1300,6 +1300,14 @@ class TimeSeries:
             `ts_generators` is 'oedb' and new ding0 grids with geo-referenced LV grids
             are used.
 
+        Notes
+        -----
+        When `ts_generators` is a self-provided DataFrame and a timeindex is
+        already set on `edisgo_object`, its index must cover that timeindex -
+        a `ValueError` is raised naming any missing time steps, rather than
+        silently writing a partially-covering series. Not checked for the
+        `'oedb'` option, which is already scoped to the timeindex.
+
         """
         # in case time series from oedb are used, retrieve oedb time series
         if isinstance(ts_generators, str) and ts_generators == "oedb":
@@ -1312,17 +1320,22 @@ class TimeSeries:
                 ts_generators = timeseries_import.feedin_oedb(
                     edisgo_object, engine=engine, timeindex=timeindex
                 )
-        elif isinstance(ts_generators, pd.DataFrame):
-            # user-provided data may have its own calendar - align it to
-            # edisgo_object's own time index instead of relying on it to
-            # already match (oedb data above is already indexed correctly)
-            ts_generators = align_to_edisgo_timeindex(
-                edisgo_object, ts_generators, name="ts_generators"
-            )
-        else:
+        elif not isinstance(ts_generators, pd.DataFrame):
             raise ValueError(
                 "'ts_generators' must either be a pandas DataFrame or 'oedb'."
             )
+        else:
+            # self-provided DataFrame - the oedb path above is already scoped
+            # to edisgo_object's timeindex by feedin_oedb/feedin_oedb_legacy
+            ts_generators = shift_to_reference_year(
+                edisgo_object, ts_generators, name="ts_generators"
+            )
+            if not edisgo_object.timeseries.timeindex.empty:
+                check_timeindex_coverage(
+                    edisgo_object.timeseries.timeindex,
+                    "fluctuating generators",
+                    ts_generators,
+                )
 
         # set generator_names if None
         if generator_names is None:
@@ -1405,12 +1418,25 @@ class TimeSeries:
             'other', all dispatchable generators in the network (i.e. all but solar and
             wind generators) are used.
 
+        Notes
+        -----
+        If a timeindex is already set on `edisgo_object`, `ts_generators`'
+        index must cover it - a `ValueError` is raised naming any missing
+        time steps, rather than silently writing a partially-covering
+        series.
+
         """
         if not isinstance(ts_generators, pd.DataFrame):
             raise ValueError("'ts_generators' must be a pandas DataFrame.")
         ts_generators = shift_to_reference_year(
             edisgo_object, ts_generators, name="ts_generators"
         )
+        if not edisgo_object.timeseries.timeindex.empty:
+            check_timeindex_coverage(
+                edisgo_object.timeseries.timeindex,
+                "dispatchable generators",
+                ts_generators,
+            )
 
         # write to TimeSeriesRaw
         for col in ts_generators:
@@ -1478,10 +1504,9 @@ class TimeSeries:
 
                 See parameter `conventional_loads_ts` in
                 :func:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for
-                more information. If indexed in a different year than
-                :py:attr:`~.network.timeseries.TimeSeries.timeindex`, it is
-                shifted onto it (with a warning) - see
-                :func:`~.tools.tools.align_to_edisgo_timeindex`.
+                more information. If indexed in a different year than the
+                reference year, it is relabelled to it with a warning, see
+                :func:`~.tools.tools.shift_to_reference_year`.
 
         load_names : list(str)
             Defines for which conventional loads to use sector-specific time series.
@@ -1494,27 +1519,35 @@ class TimeSeries:
             in :func:`edisgo.io.timeseries_import.load_time_series_demandlib` for
             more information.
 
+        Notes
+        -----
+        When `ts_loads` is a self-provided DataFrame and a timeindex is
+        already set on `edisgo_object`, its index must cover that timeindex -
+        a `ValueError` is raised naming any missing time steps, rather than
+        silently writing a partially-covering series. Not checked for the
+        `'demandlib'` option, which is already scoped to the timeindex.
+
         """
         # in case time series from demandlib are used, retrieve demandlib time series
         if isinstance(ts_loads, str) and ts_loads == "demandlib":
             ts_loads = timeseries_import.load_time_series_demandlib(
                 edisgo_object, timeindex=timeindex
             )
-        elif isinstance(ts_loads, pd.DataFrame):
-            if ts_loads.empty:
-                logger.warning("The profile you entered is empty. Method is skipped.")
-                return
-            # user-provided data may have its own calendar - align it to
-            # edisgo_object's own time index instead of relying on it to
-            # already match (demandlib data above is already indexed
-            # correctly)
-            ts_loads = align_to_edisgo_timeindex(
-                edisgo_object, ts_loads, name="ts_loads"
-            )
-        else:
+        elif not isinstance(ts_loads, pd.DataFrame):
             raise ValueError(
                 "'ts_loads' must either be a pandas DataFrame or 'demandlib'."
             )
+        elif ts_loads.empty:
+            logger.warning("The profile you entered is empty. Method is skipped.")
+            return
+        else:
+            # self-provided DataFrame - the demandlib path above is already
+            # scoped to edisgo_object's timeindex by load_time_series_demandlib
+            ts_loads = shift_to_reference_year(edisgo_object, ts_loads, name="ts_loads")
+            if not edisgo_object.timeseries.timeindex.empty:
+                check_timeindex_coverage(
+                    edisgo_object.timeseries.timeindex, "conventional loads", ts_loads
+                )
 
         # write to TimeSeriesRaw
         for col in ts_loads:
@@ -1578,6 +1611,13 @@ class TimeSeries:
             If None, all charging points of use cases for which use-case-specific time
             series are provided are used.
 
+        Notes
+        -----
+        If a timeindex is already set on `edisgo_object`, `ts_loads`' index
+        must cover that timeindex - a `ValueError` is raised naming any
+        missing time steps, rather than silently writing a
+        partially-covering series.
+
         """
         if not isinstance(ts_loads, pd.DataFrame):
             raise ValueError("'ts_loads' must be a pandas DataFrame.")
@@ -1585,6 +1625,10 @@ class TimeSeries:
             logger.warning("The profile you entered is empty. Method is skipped.")
             return
         ts_loads = shift_to_reference_year(edisgo_object, ts_loads, name="ts_loads")
+        if not edisgo_object.timeseries.timeindex.empty:
+            check_timeindex_coverage(
+                edisgo_object.timeseries.timeindex, "charging points", ts_loads
+            )
 
         # write to TimeSeriesRaw
         for col in ts_loads:
@@ -2325,24 +2369,34 @@ class TimeSeries:
             )
             return
 
-        freq_orig = self.timeindex[1] - self.timeindex[0]
+        freq_orig = (self.timeindex[1:] - self.timeindex[:-1]).min()
 
         resample(self, freq_orig, method, freq)
 
-        # create new index
-        if pd.Timedelta(freq) < freq_orig:  # up-sampling
-            index = pd.date_range(
-                self.timeindex[0],
-                self.timeindex[-1] + freq_orig,
-                freq=freq,
-                inclusive="left",
-            )
-        else:  # down-sampling
-            index = pd.date_range(
-                self.timeindex[0],
-                self.timeindex[-1],
-                freq=freq,
-            )
+        # Build the new index per contiguous run of the time index, like the
+        # data above, so gaps in the time index (e.g. two separate weeks) are
+        # kept.
+        freq_td = pd.Timedelta(freq)
+        new_indices = []
+        for run in split_into_contiguous_runs(
+            pd.DataFrame(index=self.timeindex), freq_orig
+        ):
+            if freq_td < freq_orig:  # up-sampling
+                new_indices.append(
+                    pd.date_range(
+                        run.index[0],
+                        run.index[-1] + freq_orig,
+                        freq=freq,
+                        inclusive="left",
+                    )
+                )
+            else:  # down-sampling
+                new_indices.append(
+                    pd.date_range(run.index[0], run.index[-1], freq=freq)
+                )
+        index = new_indices[0]
+        for other in new_indices[1:]:
+            index = index.union(other)
 
         # set new timeindex
         self._timeindex = index

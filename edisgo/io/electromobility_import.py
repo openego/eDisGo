@@ -974,13 +974,6 @@ def distribute_private_charging_demand(edisgo_obj: EDisGo) -> None:
     assigned_park_id = {}
     assigned_point_id = {}
 
-    # NOTE: in the home branch below `charging_park_id` is intentionally not
-    # updated per car; it keeps the value drawn for the last work car. This
-    # reproduces a pre-existing bug in the capacity bookkeeping (home capacity is
-    # booked to a stale charging park) so this performance refactor leaves the
-    # output unchanged. The bug is tracked separately in #679.
-    charging_park_id = None
-
     for destination in private_charging_df.destination.sort_values().unique():
         private_charging_destination_df = private_charging_df.loc[
             private_charging_df.destination == destination
@@ -1049,9 +1042,8 @@ def distribute_private_charging_demand(edisgo_obj: EDisGo) -> None:
 
                     charging_capacity = capacity_per_car.at[car_id]
 
-                    # booked to the stale charging_park_id (see NOTE above, #679)
                     designated_charging_point_capacity_df.at[
-                        charging_park_id, "designated_charging_point_capacity"
+                        drawn_charging_park_id, "designated_charging_point_capacity"
                     ] += charging_capacity
 
                     charging_point_id += 1
@@ -1228,7 +1220,9 @@ def determine_grid_connection_capacity(
 
     Applies a simultaneity (diversity) factor: capacities up to ``lower_limit`` are
     connected in full, capacities of ``upper_limit`` and above are scaled by
-    ``minimum_factor``, and in between the factor is interpolated linearly.
+    ``minimum_factor``, and in between the connection capacity is interpolated
+    linearly from ``lower_limit`` to ``minimum_factor * upper_limit``. The returned
+    capacity therefore never decreases with a larger total charging-point capacity.
 
     Parameters
     ----------
@@ -1247,31 +1241,32 @@ def determine_grid_connection_capacity(
     float
         Required grid connection capacity in MW.
 
-    Notes
-    -----
-    The factor is interpolated linearly but applied *multiplicatively*, so between
-    ``lower_limit`` and ``upper_limit`` the returned capacity is quadratic in
-    ``total_charging_point_capacity`` and therefore **not monotonic**: with the default
-    limits it peaks at an input of about ``0.79 MW`` (output ≈ ``0.486 MW``) before
-    decreasing again to ``minimum_factor * upper_limit`` (``0.45 MW``) at
-    ``upper_limit``. A larger park can thus receive a slightly smaller connection rating
-    in that narrow range, which is likely unintended (see
-    `issue #650 <https://github.com/openego/eDisGo/issues/650>`_).
+    Raises
+    ------
+    ValueError
+        If ``minimum_factor * upper_limit`` is smaller than ``lower_limit``. The
+        connection capacity would then drop between ``lower_limit`` and
+        ``upper_limit``, so a larger park would get a smaller connection.
 
     """
+    if minimum_factor * upper_limit < lower_limit:
+        raise ValueError(
+            "The grid connection capacity is not monotonic for these parameters: "
+            f"minimum_factor * upper_limit ({minimum_factor * upper_limit}) is "
+            f"smaller than lower_limit ({lower_limit})."
+        )
+
     if total_charging_point_capacity <= lower_limit:
         return total_charging_point_capacity
     elif total_charging_point_capacity >= upper_limit:
         return minimum_factor * total_charging_point_capacity
     else:
-        return (
-            ((minimum_factor - 1) / (upper_limit - lower_limit))
-            * (total_charging_point_capacity - lower_limit)
-            + 1
-        ) * total_charging_point_capacity
+        return lower_limit + (minimum_factor * upper_limit - lower_limit) / (
+            upper_limit - lower_limit
+        ) * (total_charging_point_capacity - lower_limit)
 
 
-def integrate_charging_parks(edisgo_obj):
+def integrate_charging_parks(edisgo_obj, **kwargs):
     """
     Integrates all designated charging parks into the grid.
 
@@ -1280,6 +1275,13 @@ def integrate_charging_parks(edisgo_obj):
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+
+    Other Parameters
+    ----------------
+    kwargs :
+        Options of the grid connection, e.g. `connect_to_load_bus`, that are passed
+        on to
+        :attr:`~.edisgo.EDisGo.integrate_component_based_on_geolocation`.
 
     """
     charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
@@ -1303,6 +1305,7 @@ def integrate_charging_parks(edisgo_obj):
             sector=cp.use_case,
             add_ts=False,
             p_set=cp.grid_connection_capacity,
+            **kwargs,
         )
         for cp in designated_charging_parks
     ]

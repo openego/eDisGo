@@ -117,6 +117,7 @@ class OverlyingGrid:
         self.renewables_potential = kwargs.get(
             "renewables_potential", pd.Series(dtype="float64")
         )
+
     @property
     def _attributes(self):
         return [
@@ -337,6 +338,11 @@ class OverlyingGrid:
         freq : str, optional
             See :attr:`~.EDisGo.resample_timeseries` for more information.
 
+        Notes
+        -----
+        A gapped index is resampled per contiguous run - see
+        :func:`edisgo.tools.tools.split_into_contiguous_runs`.
+
         """
         # get frequency of time series data
         timeindex = []
@@ -353,7 +359,7 @@ class OverlyingGrid:
             )
             return
 
-        freq_orig = timeindex[1] - timeindex[0]
+        freq_orig = (timeindex[1:] - timeindex[:-1]).min()
         resample(self, freq_orig, method, freq)
 
 

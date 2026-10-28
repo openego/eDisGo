@@ -372,6 +372,96 @@ class TestPowermodelsIO:
         assert all(storage["capacity"] == 0.0 for storage in heat_storage)
         assert all(storage["charge_efficiency"] == 0.0 for storage in heat_storage)
 
+    def test_to_powermodels_flexibility_bands_wider_than_timeindex(self):
+        """
+        Flexibility bands that span more time steps than the time index are read
+        for the time steps of the time index only, both for the static values
+        (p_max, e_min, e_max of the first time step) and for the time series.
+        """
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        timeindex = edisgo.timeseries.timeindex
+
+        edisgo.add_component(
+            comp_type="load",
+            type="charging_point",
+            ts_active_power=pd.Series(index=timeindex, data=[0.5] * 4),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[32],
+            p_set=3,
+        )
+
+        # the flexibility bands start two time steps before the time index and
+        # end two after it, so reading them by position gives other values
+        wide_index = pd.date_range(
+            timeindex[0] - 2 * timeindex.freq, periods=8, freq=timeindex.freq
+        )
+        edisgo.electromobility.flexibility_bands = {
+            "lower_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [0.0] * 8}, index=wide_index
+            ),
+            "upper_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [5.0, 6, 9, 1, 2, 3, 4, 7]},
+                index=wide_index,
+            ),
+            "upper_power": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [5.0, 6, 9, 1, 2, 3, 4, 7]},
+                index=wide_index,
+            ),
+        }
+
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo, flexible_cps=["Charging_Point_LVGrid_6_1"]
+        )
+
+        num_steps = pm["time_series"]["num_steps"]
+        assert num_steps == len(timeindex)
+        for key in ("p_max", "e_min", "e_max"):
+            assert len(pm["time_series"]["electromobility"]["1"][key]) == num_steps
+        assert pm["time_series"]["electromobility"]["1"]["p_max"] == [
+            9.0,
+            1.0,
+            2.0,
+            3.0,
+        ]
+        assert pm["electromobility"]["1"]["p_max"] == pytest.approx(9.0)
+
+    def test_to_powermodels_flexibility_bands_wrong_calendar_raises(self):
+        """
+        Flexibility bands that do not cover the time index raise a KeyError
+        instead of handing the OPF the values of other time steps.
+        """
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        timeindex = edisgo.timeseries.timeindex
+
+        edisgo.add_component(
+            comp_type="load",
+            type="charging_point",
+            ts_active_power=pd.Series(index=timeindex, data=[0.5] * 4),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[32],
+            p_set=3,
+        )
+
+        wrong_index = pd.date_range("2035-01-01", periods=4, freq=timeindex.freq)
+        edisgo.electromobility.flexibility_bands = {
+            "lower_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [0.0] * 4}, index=wrong_index
+            ),
+            "upper_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [1.0] * 4}, index=wrong_index
+            ),
+            "upper_power": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [1.0] * 4}, index=wrong_index
+            ),
+        }
+
+        with pytest.raises(KeyError):
+            powermodels_io.to_powermodels(
+                edisgo, flexible_cps=["Charging_Point_LVGrid_6_1"]
+            )
+
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
