@@ -715,6 +715,7 @@ class TestOptimizeTaskDelegation:
         # shortcut expanded to explicit name lists (empty ok if grid lacks type)
         assert "flexible_hps" in captured and "flexible_storage_units" in captured
         assert isinstance(captured["flexible_hps"], list)
+        assert captured["threads"] == 8
 
     def test_flexible_defaults_to_config_flexibilities(self, edisgo_obj):
         """

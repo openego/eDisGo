@@ -899,6 +899,7 @@ class EDisGo:
         method="soc",
         warm_start=False,
         silence_moi=False,
+        threads=8,
         save_heat_storage=True,
         save_slack_gen=True,
         save_slacks=True,
@@ -949,6 +950,11 @@ class EDisGo:
             hence there will be no logging coming from julia subprocess in python
             process.
             Default: False.
+        threads : int
+            Number of threads Gurobi may use for the SOC model. 0 lets Gurobi use all
+            cores. For more information see
+            :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 8.
         """
         return powermodels_opf.pm_optimize(
             self,
@@ -961,6 +967,7 @@ class EDisGo:
             method=method,
             warm_start=warm_start,
             silence_moi=silence_moi,
+            threads=threads,
         )
 
     def to_graph(self):

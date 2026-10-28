@@ -420,3 +420,7 @@ Changes
   ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
   the component and the new MV line were connected to the existing bus. This could
   happen after components were removed or aggregated (openego/eDisGo#413)
+* The OPF limits Gurobi to 8 threads by default instead of all cores of the machine,
+  so that other processes and parallel runs of several grids keep running. The number
+  is set with the new parameter ``threads`` of :meth:`~.edisgo.EDisGo.pm_optimize`
+  and of the runner step ``optimize``; ``threads=0`` uses all cores as before
