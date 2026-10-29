@@ -1,9 +1,13 @@
+import copy
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from edisgo import EDisGo
 from edisgo.io import powermodels_io
+from edisgo.io.powermodels_io import _get_time_elapsed_in_hours
 from edisgo.tools.tools import aggregate_district_heating_components
 
 
@@ -304,6 +308,119 @@ class TestPowermodelsIO:
             )
         )
 
+    def test_to_powermodels_flexible_hps_without_thermal_storage(self):
+        # flexible heat pumps without thermal storage get a storage with zero
+        # capacity, also if no thermal storage is defined at all
+        edisgo = copy.deepcopy(self.edisgo)
+        flexible_hps = edisgo.heat_pump.thermal_storage_units_df.index.values
+        edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
+            columns=["capacity", "efficiency", "state_of_charge_initial"]
+        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "error",
+                message="The behavior of DataFrame concatenation with empty",
+                category=FutureWarning,
+            )
+            powermodels_network, _ = powermodels_io.to_powermodels(
+                edisgo, opf_version=1, flexible_hps=flexible_hps
+            )
+
+        heat_storage = powermodels_network["heat_storage"].values()
+        assert len(heat_storage) == len(flexible_hps)
+        assert all(storage["capacity"] == 0.0 for storage in heat_storage)
+        assert all(storage["charge_efficiency"] == 0.0 for storage in heat_storage)
+
+    def test_to_powermodels_flexibility_bands_wider_than_timeindex(self):
+        """
+        Flexibility bands that span more time steps than the time index are read
+        for the time steps of the time index only, both for the static values
+        (p_max, e_min, e_max of the first time step) and for the time series.
+        """
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        timeindex = edisgo.timeseries.timeindex
+
+        edisgo.add_component(
+            comp_type="load",
+            type="charging_point",
+            ts_active_power=pd.Series(index=timeindex, data=[0.5] * 4),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[32],
+            p_set=3,
+        )
+
+        # the flexibility bands start two time steps before the time index and
+        # end two after it, so reading them by position gives other values
+        wide_index = pd.date_range(
+            timeindex[0] - 2 * timeindex.freq, periods=8, freq=timeindex.freq
+        )
+        edisgo.electromobility.flexibility_bands = {
+            "lower_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [0.0] * 8}, index=wide_index
+            ),
+            "upper_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [5.0, 6, 9, 1, 2, 3, 4, 7]},
+                index=wide_index,
+            ),
+            "upper_power": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [5.0, 6, 9, 1, 2, 3, 4, 7]},
+                index=wide_index,
+            ),
+        }
+
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo, flexible_cps=["Charging_Point_LVGrid_6_1"]
+        )
+
+        num_steps = pm["time_series"]["num_steps"]
+        assert num_steps == len(timeindex)
+        for key in ("p_max", "e_min", "e_max"):
+            assert len(pm["time_series"]["electromobility"]["1"][key]) == num_steps
+        assert pm["time_series"]["electromobility"]["1"]["p_max"] == [
+            9.0,
+            1.0,
+            2.0,
+            3.0,
+        ]
+        assert pm["electromobility"]["1"]["p_max"] == pytest.approx(9.0)
+
+    def test_to_powermodels_flexibility_bands_wrong_calendar_raises(self):
+        """
+        Flexibility bands that do not cover the time index raise a KeyError
+        instead of handing the OPF the values of other time steps.
+        """
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        timeindex = edisgo.timeseries.timeindex
+
+        edisgo.add_component(
+            comp_type="load",
+            type="charging_point",
+            ts_active_power=pd.Series(index=timeindex, data=[0.5] * 4),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[32],
+            p_set=3,
+        )
+
+        wrong_index = pd.date_range("2035-01-01", periods=4, freq=timeindex.freq)
+        edisgo.electromobility.flexibility_bands = {
+            "lower_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [0.0] * 4}, index=wrong_index
+            ),
+            "upper_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [1.0] * 4}, index=wrong_index
+            ),
+            "upper_power": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [1.0] * 4}, index=wrong_index
+            ),
+        }
+
+        with pytest.raises(KeyError):
+            powermodels_io.to_powermodels(
+                edisgo, flexible_cps=["Charging_Point_LVGrid_6_1"]
+            )
+
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
@@ -427,3 +544,61 @@ class TestOverlyingGridTimeindexAlignment:
         self._set_overlying_grid(edisgo_obj, full[:1], [1.0])
         pm, hv_flex_dict = powermodels_io.to_powermodels(edisgo_obj, opf_version=2)
         assert pm["opf_version"] == 2
+
+
+# test _get_time_elapsed_in_hours for inter-timestep couplings in
+# Julia to simulate
+# 1) timesteps <1h, 1h, 2h, >24h and
+# 2) whether too few, non-equidistant or
+#    negative timestamps raise an error
+def _snapshots(*timestamps):
+    return pd.to_datetime(timestamps)
+
+
+# 1) test various snapshot intervals and expected time elapsed in hours
+@pytest.mark.parametrize(
+    ("snapshots", "expected"),
+    [
+        (pd.date_range("2035-01-01", periods=3, freq="15min"), 0.25),
+        (pd.date_range("2035-01-01", periods=3, freq="h"), 1.0),
+        (pd.date_range("2035-01-01", periods=3, freq="2h"), 2.0),
+        (_snapshots("2035-01-01 00:00", "2035-01-02 01:00"), 25.0),
+    ],
+)
+# test expected time elapsed in hours for above defined snapshot intervals
+def test_get_time_elapsed_in_hours(snapshots, expected):
+    assert _get_time_elapsed_in_hours(snapshots) == pytest.approx(expected)
+
+
+# 2) test three other cases:
+# 1. not enough snapshots (1 snapshot)
+# 2. non-equidistant snapshots (15min, 1h, 1h 15min)
+# 3. negative time elapsed (snapshots in reverse order)
+@pytest.mark.parametrize(
+    ("snapshots", "error_message"),
+    [
+        (
+            _snapshots("2035-01-01 00:00"),
+            "At least two snapshots",
+        ),
+        (
+            _snapshots(
+                "2035-01-01 00:00",
+                "2035-01-01 00:15",
+                "2035-01-01 01:15",
+            ),
+            "equidistant",
+        ),
+        (
+            _snapshots(
+                "2035-01-01 01:00",
+                "2035-01-01 00:00",
+            ),
+            "positive",
+        ),
+    ],
+)
+# test that ValueError is raised for the above three cases
+def test_get_time_elapsed_in_hours_raises(snapshots, error_message):
+    with pytest.raises(ValueError, match=error_message):
+        _get_time_elapsed_in_hours(snapshots)

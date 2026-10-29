@@ -513,6 +513,10 @@ class Topology:
                 Resistance of line (or in case of multiple parallel lines
                 total resistance of lines) in Ohm.
 
+            b : float
+                Shunt susceptance of line (or in case of multiple parallel lines
+                total shunt susceptance of lines) in Siemens.
+
             s_nom : float
                 Apparent power which can pass through the line (or in case of
                 multiple parallel lines total apparent power which can pass
@@ -1902,7 +1906,7 @@ class Topology:
                 f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
             )
 
-        self.add_bus(
+        bus = self.add_bus(
             bus_name=bus,
             v_nom=self.mv_grid.nominal_voltage,
             x=geom.x,
@@ -2213,44 +2217,9 @@ class Topology:
         # v_level 7 -> connect in LV grid
         elif voltage_level == 7:
             # get valid buses to connect new component to
-            lv_loads = lv_grid.loads_df
-            if comp_type == "generator" or comp_type == "storage_unit":
-                if power <= 0.030:
-                    tmp = lv_loads[lv_loads.sector == "residential"]
-                    target_buses = tmp.bus.values
-                else:
-                    tmp = lv_loads[
-                        lv_loads.sector.isin(["industrial", "agricultural", "cts"])
-                    ]
-                    target_buses = tmp.bus.values
-            elif comp_type == "charging_point":
-                if comp_data["sector"] == "home":
-                    tmp = lv_loads[lv_loads.sector == "residential"]
-                    target_buses = tmp.bus.values
-                elif comp_data["sector"] == "work":
-                    tmp = lv_loads[
-                        lv_loads.sector.isin(["industrial", "agricultural", "cts"])
-                    ]
-                    target_buses = tmp.bus.values
-                else:
-                    target_buses = lv_grid.buses_df[
-                        ~lv_grid.buses_df.in_building.astype(bool)
-                    ].index
-            else:
-                if comp_data["sector"] in [
-                    "individual_heating",
-                    "individual_heating_resistive_heater",
-                ]:
-                    target_buses = lv_loads.bus.values
-                elif comp_data["sector"] in [
-                    "district_heating",
-                    "district_heating_resistive_heater",
-                ]:
-                    target_buses = lv_grid.buses_df[
-                        ~lv_grid.buses_df.in_building.astype(bool)
-                    ].index
-                else:
-                    target_buses = lv_grid.buses_df.index
+            target_buses = self._get_suitable_lv_buses(
+                comp_type, comp_data, power, lv_grid.buses_df, lv_grid.loads_df
+            )
 
             # generate random list (unique elements) of possible target buses
             # to connect components to
@@ -2292,24 +2261,13 @@ class Topology:
             # than or equal the allowed number of components of the same type
             # already connected to it
             lv_conn_target = None
+            comps_df = self._get_components_of_type(comp_type)
 
             while len(lv_buses_rnd) > 0 and lv_conn_target is None:
                 lv_bus = lv_buses_rnd.pop()
 
                 # determine number of components of the same type at LV bus
-                if comp_type == "generator":
-                    comps_at_bus = self.generators_df[self.generators_df.bus == lv_bus]
-                elif comp_type == "charging_point":
-                    comps_at_bus = self.charging_points_df[
-                        self.charging_points_df.bus == lv_bus
-                    ]
-                elif comp_type == "heat_pump":
-                    hp_df = self.loads_df[self.loads_df.type == "heat_pump"]
-                    comps_at_bus = hp_df[hp_df.bus == lv_bus]
-                else:
-                    comps_at_bus = self.storage_units_df[
-                        self.storage_units_df.bus == lv_bus
-                    ]
+                comps_at_bus = comps_df[comps_df.bus == lv_bus]
 
                 # ToDo: Increase number of generators/charging points
                 #  allowed at one load in case all loads already have one
@@ -2340,6 +2298,8 @@ class Topology:
         comp_data,
         comp_type,
         max_distance_from_target_bus=0.02,
+        connect_to_load_bus=False,
+        allowed_number_of_comp_per_bus=2,
     ):
         """
         Add and connect new component to LV grid topology based on its geolocation.
@@ -2360,6 +2320,20 @@ class Topology:
         bus is farther away than what is specified through parameter
         `max_distance_from_target_bus`. Otherwise, the new component is directly
         connected to the nearest bus.
+
+        If `connect_to_load_bus` is True, a component in voltage level 7 is
+        preferably connected to a bus with a matching load. This applies to home
+        charging points (residential loads), work charging points (CTS, industrial
+        or agricultural loads), generators and storage units (residential loads up
+        to 30 kW, CTS, industrial or agricultural loads above) and heat pumps for
+        individual heating (any load), as in
+        :attr:`~.network.topology.Topology.connect_to_lv`. All other components,
+        e.g. public charging points, are not affected. A bus only qualifies if it is
+        not farther away than `max_distance_from_target_bus` and if no more than
+        `allowed_number_of_comp_per_bus` components of the same type are already
+        connected to it. In that case, the component is connected directly to that
+        bus. If no bus qualifies, the component is connected as described above,
+        i.e. to the closest LV bus or via a new bus.
 
         Parameters
         ----------
@@ -2382,11 +2356,19 @@ class Topology:
         comp_type : str
             Type of new component. Can be 'generator', 'charging_point', 'heat_pump'
             or 'storage_unit'.
-        max_distance_from_target_bus : int
+        max_distance_from_target_bus : float
             Specifies the maximum distance of the component to the target bus in km
             before a new bus is created. If the new component is closer to the target
             bus than the maximum specified distance, it is directly connected to that
-            target bus. Default: 0.1.
+            target bus. Default: 0.02.
+        connect_to_load_bus : bool
+            If True, a component in voltage level 7 is preferably connected to a bus
+            with a matching load, see above. Default: False.
+        allowed_number_of_comp_per_bus : int
+            Only used if `connect_to_load_bus` is True. A bus with a matching load
+            only qualifies if no more than this number of components of the same
+            type are already connected to it, as in
+            :attr:`~.network.topology.Topology.connect_to_lv`. Default: 2.
 
         Returns
         -------
@@ -2436,6 +2418,40 @@ class Topology:
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, lv_buses
             )
+            # only components that are matched with loads, e.g. public charging
+            # points would otherwise be moved to house connections in grids where no
+            # bus is marked as inside a building
+            sector = comp_data.get("sector")
+            matched_with_loads = (
+                comp_type in ["generator", "storage_unit"]
+                or (comp_type == "charging_point" and sector in ["home", "work"])
+                or (
+                    comp_type == "heat_pump"
+                    and sector
+                    in ["individual_heating", "individual_heating_resistive_heater"]
+                )
+            )
+            if connect_to_load_bus and matched_with_loads:
+                # prefer the closest bus with a matching load, if it is close enough
+                # and has room for another component of the same type
+                suitable_buses = self._get_suitable_lv_buses(
+                    comp_type, comp_data, comp_data["p"], lv_buses, self.loads_df
+                )
+                comps_per_bus = (
+                    self._get_components_of_type(comp_type)
+                    .bus.value_counts()
+                    .reindex(lv_buses.index, fill_value=0)
+                )
+                candidates = lv_buses[
+                    lv_buses.index.isin(suitable_buses)
+                    & (comps_per_bus <= allowed_number_of_comp_per_bus).to_numpy()
+                ]
+                if not candidates.empty:
+                    load_bus, load_bus_distance = geo.find_nearest_bus(
+                        geolocation, candidates
+                    )
+                    if load_bus_distance <= max_distance_from_target_bus:
+                        target_bus, target_bus_distance = load_bus, load_bus_distance
 
         # check distance from target bus
         if target_bus_distance > max_distance_from_target_bus:
@@ -2452,6 +2468,109 @@ class Topology:
         comp_data.pop("p")
         comp_name = add_func(bus=bus, **comp_data)
         return comp_name
+
+    @staticmethod
+    def _get_suitable_lv_buses(comp_type, comp_data, power, buses_df, loads_df):
+        """
+        Returns the LV buses a new component may be connected to.
+
+        The buses are chosen based on the loads connected to them or on whether they
+        lie inside a building.
+
+        Generators and storage units up to 30 kW are matched with residential loads,
+        larger ones with industrial, agricultural and CTS loads. Home charging points
+        are matched with residential loads, work charging points with industrial,
+        agricultural and CTS loads, and all other charging points with buses that are
+        not inside a building. Heat pumps for individual heating are matched with all
+        loads, heat pumps for district heating with buses that are not inside a
+        building, and all other heat pumps with all buses.
+
+        Parameters
+        ----------
+        comp_type : str
+            Type of new component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
+        comp_data : dict
+            Data of the new component. Charging points and heat pumps need the key
+            'sector'.
+        power : float
+            Nominal power of the new component in MW.
+        buses_df : :pandas:`pandas.DataFrame<DataFrame>`
+            Candidate buses in the format of
+            :attr:`~.network.topology.Topology.buses_df`.
+        loads_df : :pandas:`pandas.DataFrame<DataFrame>`
+            Loads to match the new component with in the format of
+            :attr:`~.network.topology.Topology.loads_df`. Buses of loads that are not
+            in `buses_df` are returned as well.
+
+        Returns
+        -------
+        array-like
+            Names of the suitable buses. A bus occurs several times if several
+            matching loads are connected to it.
+
+        """
+        if comp_type == "generator" or comp_type == "storage_unit":
+            if power <= 0.030:
+                tmp = loads_df[loads_df.sector == "residential"]
+                return tmp.bus.values
+            else:
+                tmp = loads_df[
+                    loads_df.sector.isin(["industrial", "agricultural", "cts"])
+                ]
+                return tmp.bus.values
+        elif comp_type == "charging_point":
+            if comp_data["sector"] == "home":
+                tmp = loads_df[loads_df.sector == "residential"]
+                return tmp.bus.values
+            elif comp_data["sector"] == "work":
+                tmp = loads_df[
+                    loads_df.sector.isin(["industrial", "agricultural", "cts"])
+                ]
+                return tmp.bus.values
+            else:
+                return buses_df[~buses_df.in_building.astype(bool)].index
+        else:
+            if comp_data["sector"] in [
+                "individual_heating",
+                "individual_heating_resistive_heater",
+            ]:
+                return loads_df.bus.values
+            elif comp_data["sector"] in [
+                "district_heating",
+                "district_heating_resistive_heater",
+            ]:
+                return buses_df[~buses_df.in_building.astype(bool)].index
+            else:
+                return buses_df.index
+
+    def _get_components_of_type(self, comp_type):
+        """
+        Returns all components of the given type.
+
+        Parameters
+        ----------
+        comp_type : str
+            Type of component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Components of the given type as in
+            :attr:`~.network.topology.Topology.generators_df`,
+            :attr:`~.network.topology.Topology.loads_df` or
+            :attr:`~.network.topology.Topology.storage_units_df`.
+
+        """
+        if comp_type == "generator":
+            return self.generators_df
+        elif comp_type == "charging_point":
+            return self.charging_points_df
+        elif comp_type == "heat_pump":
+            return self.loads_df[self.loads_df.type == "heat_pump"]
+        else:
+            return self.storage_units_df
 
     def _connect_mv_bus_to_target_object(
         self,

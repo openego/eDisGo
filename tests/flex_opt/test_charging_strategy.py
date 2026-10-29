@@ -97,6 +97,491 @@ class TestChargingStrategy:
         charging_strategy(self.edisgo_obj, strategy="dumb")
         assert ts._loads_active_power.index.freqstr == "15T"
 
+    def test_charging_strategy_keeps_non_contiguous_time_index(self):
+        """
+        Resampling to the charging processes' frequency and back must not fill
+        the gap of a non-contiguous time index.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=24, freq="H").append(
+            pd.date_range("1/5/2011", periods=24, freq="H")
+        )
+        self.edisgo_obj.set_timeindex(timeindex)
+        charging_strategy(self.edisgo_obj, strategy="dumb")
+
+        ts = self.edisgo_obj.timeseries
+        assert ts.timeindex.equals(timeindex)
+        assert ts.charging_points_active_power(self.edisgo_obj).index.equals(timeindex)
+
+    @pytest.mark.parametrize("freq, periods", [("15min", 96), ("h", 24)])
+    @pytest.mark.parametrize("strategy", ["dumb", "reduced", "residual"])
+    def test_charging_strategy_trims_to_short_timeindex(self, strategy, freq, periods):
+        """
+        The stored charging time series cover exactly the time index, also if
+        the charging processes span a longer period (here one day of a week).
+        With the 15-min frequency of the charging processes, the time series are
+        not resampled; with an hourly frequency, they are.
+        """
+        edisgo = EDisGo(ding0_grid=self.ding0_path)
+        short_timeindex = pd.date_range("1/1/2011", periods=periods, freq=freq)
+        edisgo.set_timeindex(short_timeindex)
+        edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=self.simbev_path,
+            potential_charging_points_dir=self.tracbev_path,
+        )
+
+        charging_strategy(edisgo, strategy=strategy)
+
+        pd.testing.assert_index_equal(
+            edisgo.timeseries._loads_active_power.index, short_timeindex
+        )
+        pd.testing.assert_index_equal(
+            edisgo.timeseries._loads_reactive_power.index, short_timeindex
+        )
+        assert not edisgo.timeseries.loads_active_power.isna().any().any()
+
+    def test_charging_strategy_trims_to_gapped_timeindex(self):
+        """
+        The stored charging time series cover exactly a time index with a gap,
+        not a contiguous range spanning it.
+        """
+        edisgo = EDisGo(ding0_grid=self.ding0_path)
+        gapped_timeindex = pd.date_range("1/1/2011", periods=24, freq="15min").union(
+            pd.date_range("1/6/2011 18:00", periods=24, freq="15min")
+        )
+        edisgo.set_timeindex(gapped_timeindex)
+        edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=self.simbev_path,
+            potential_charging_points_dir=self.tracbev_path,
+        )
+
+        charging_strategy(edisgo, strategy="dumb")
+
+        pd.testing.assert_index_equal(
+            edisgo.timeseries._loads_active_power.index, gapped_timeindex
+        )
+
+    def _setup_edisgo_with_single_synthetic_event(
+        self,
+        timeindex,
+        park_start_timesteps,
+        park_end_timesteps,
+        chargingdemand_kWh,
+        nominal_charging_capacity_kW=None,
+    ):
+        """
+        Helper for the tests of the residual strategy below: imports the real
+        SimBEV/TracBEV fixture (so charging park integration/topology wiring
+        is realistic), then overwrites charging_processes_df with a single,
+        fully controlled synthetic event on one of the fixture's own
+        integrated charging parks, reusing that park's own use_case/capacity
+        so `harmonize_charging_processes_df` sees realistic values, unless
+        `nominal_charging_capacity_kW` is given.
+        """
+        edisgo = EDisGo(ding0_grid=self.ding0_path)
+        edisgo.set_timeindex(timeindex)
+        edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=self.simbev_path,
+            potential_charging_points_dir=self.tracbev_path,
+        )
+        integrated = edisgo.electromobility.integrated_charging_parks_df
+        park_id = integrated.index[0]
+        template = edisgo.electromobility.charging_processes_df[
+            edisgo.electromobility.charging_processes_df.charging_park_id == park_id
+        ].iloc[0]
+
+        park_time_timesteps = park_end_timesteps - park_start_timesteps + 1
+        edisgo.electromobility.charging_processes_df = pd.DataFrame(
+            {
+                "ags": [template.ags],
+                "car_id": [0],
+                "destination": [template.destination],
+                # avoid public/hpc (always dumb-charged even under
+                # "residual") so these events exercise the flex-ranking path
+                "use_case": ["work"],
+                "nominal_charging_capacity_kW": [
+                    nominal_charging_capacity_kW
+                    or template.nominal_charging_capacity_kW
+                ],
+                "grid_charging_capacity_kW": [
+                    nominal_charging_capacity_kW or template.grid_charging_capacity_kW
+                ],
+                "chargingdemand_kWh": [chargingdemand_kWh],
+                "park_time_timesteps": [park_time_timesteps],
+                "park_start_timesteps": [park_start_timesteps],
+                "park_end_timesteps": [park_end_timesteps],
+                "charging_park_id": [park_id],
+                "charging_point_id": [template.charging_point_id],
+            }
+        )
+        return edisgo, park_id
+
+    def test_residual_drops_fully_out_of_window_events(self):
+        """
+        A charging event whose parking window
+        has zero overlap with the active timeindex must contribute nothing -
+        not be tiled/fabricated against repeated residual_load data.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")  # 1 day
+        # park window entirely on day 3, well beyond the 1-day active window
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=300,
+            park_end_timesteps=320,
+            chargingdemand_kWh=10.0,
+        )
+
+        charging_strategy(edisgo, strategy="residual")
+
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+        assert (written == 0).all()
+
+    def test_residual_prorates_boundary_straddling_event(self):
+        """
+        A charging event whose parking window
+        straddles the active timeindex boundary must have its charging
+        demand prorated by the in-window fraction of its parking time, not
+        fully charged (which would require tiled/fabricated residual_load
+        data beyond the active timeindex) and not dropped.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")  # steps 0-95
+        # park window [90, 149] (60 steps), only steps 90-95 (6 steps) are
+        # in-window; 12 kWh at 4 kW need 12 steps, 6/60 of it rounded up are 2
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=90,
+            park_end_timesteps=149,
+            chargingdemand_kWh=12.0,
+            nominal_charging_capacity_kW=4.0,
+        )
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+
+        charging_strategy(edisgo, strategy="residual")
+
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+
+        # only in-window steps (90-95) may carry any charging
+        assert (written.iloc[:90] == 0).all()
+        assert (written.iloc[90:] > 0).sum() == 2
+
+        # compare against the same event fully inside a timeindex covering
+        # its whole parking window - the straddling case must deliver
+        # strictly less energy than the fully-observable case, since only
+        # 1/10th of its parking time is actually in-window here
+        full_timeindex = pd.date_range("1/1/2011", periods=150, freq="15min")
+        edisgo_full, park_id_full = self._setup_edisgo_with_single_synthetic_event(
+            full_timeindex,
+            park_start_timesteps=90,
+            park_end_timesteps=149,
+            chargingdemand_kWh=12.0,
+            nominal_charging_capacity_kW=4.0,
+        )
+        charging_strategy(edisgo_full, strategy="residual")
+        edisgo_id_full = edisgo_full.electromobility.integrated_charging_parks_df.at[
+            park_id_full, "edisgo_id"
+        ]
+        full_energy = edisgo_full.timeseries.loads_active_power[edisgo_id_full].sum()
+
+        straddling_energy = written.sum()
+        assert 0 < straddling_energy < full_energy
+
+    def test_residual_fully_inside_event_unaffected(self):
+        """
+        An event whose parking window is
+        entirely inside the active timeindex must be scheduled exactly the
+        same regardless of how much longer the active timeindex extends
+        beyond the event's own window - proration must not affect
+        fully-observable events at all.
+        """
+        edisgo_short, park_id_short = self._setup_edisgo_with_single_synthetic_event(
+            pd.date_range("1/1/2011", periods=60, freq="15min"),
+            park_start_timesteps=10,
+            park_end_timesteps=50,
+            chargingdemand_kWh=8.0,
+        )
+        edisgo_long, park_id_long = self._setup_edisgo_with_single_synthetic_event(
+            pd.date_range("1/1/2011", periods=200, freq="15min"),
+            park_start_timesteps=10,
+            park_end_timesteps=50,
+            chargingdemand_kWh=8.0,
+        )
+
+        charging_strategy(edisgo_short, strategy="residual")
+        charging_strategy(edisgo_long, strategy="residual")
+
+        edisgo_id_short = edisgo_short.electromobility.integrated_charging_parks_df.at[
+            park_id_short, "edisgo_id"
+        ]
+        edisgo_id_long = edisgo_long.electromobility.integrated_charging_parks_df.at[
+            park_id_long, "edisgo_id"
+        ]
+        energy_short = edisgo_short.timeseries.loads_active_power[edisgo_id_short].sum()
+        energy_long = edisgo_long.timeseries.loads_active_power[edisgo_id_long].sum()
+
+        assert energy_short > 0
+        assert energy_short == pytest.approx(energy_long)
+
+    def test_residual_fully_inside_event_keeps_minimum_charging_time(self):
+        """
+        An event inside the time index is charged for exactly its minimum
+        charging time. 2.1 kWh at 1.2 kW need 7 steps of 15 min; deriving the
+        steps from the energy in floating point gives 7.000000000000001.
+        """
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            pd.date_range("1/1/2011", periods=96, freq="15min"),
+            park_start_timesteps=10,
+            park_end_timesteps=50,
+            chargingdemand_kWh=2.1,
+            nominal_charging_capacity_kW=1.2,
+        )
+
+        charging_strategy(edisgo, strategy="residual")
+
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+        assert (edisgo.timeseries.loads_active_power[edisgo_id] > 0).sum() == 7
+
+    def test_residual_no_tiling_across_gapped_timeindex(self):
+        """
+        With a gapped active timeindex, an
+        event that overlaps both disjoint runs must only ever be scheduled
+        into steps actually present in the active timeindex - never into the
+        gap, and never against fabricated/tiled residual_load data.
+        """
+        # two disjoint 15-min runs: steps 0-23 and steps 100-123 (gap of 76
+        # steps in between, well beyond any real residual_load coverage)
+        run_1 = pd.date_range("1/1/2011", periods=24, freq="15min")
+        run_2 = pd.date_range("1/1/2011", periods=24, freq="15min") + pd.Timedelta(
+            minutes=15 * 100
+        )
+        gapped_timeindex = run_1.union(run_2)
+
+        # 25 of the 101 parking steps are in the time index; 6 kWh at 4 kW
+        # need 6 steps, 25/101 of it rounded up are 2
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            gapped_timeindex,
+            park_start_timesteps=10,
+            park_end_timesteps=110,
+            chargingdemand_kWh=6.0,
+            nominal_charging_capacity_kW=4.0,
+        )
+
+        charging_strategy(edisgo, strategy="residual")
+
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+
+        # written series must exactly match the gapped index - nothing
+        # fabricated to bridge the gap
+        pd.testing.assert_index_equal(written.index, gapped_timeindex)
+        assert (written > 0).sum() == 2
+
+    def test_residual_dumb_subbucket_respects_internal_gap(self):
+        """
+        A "dumb-charged" event within the
+        residual strategy (use_case in {public, hpc} or flex_time == 0)
+        whose deterministic charging interval spans a gap in the active
+        timeindex must only ever write to in-window positions - never a
+        blind contiguous slice bridging the gap.
+        """
+        run_1 = pd.date_range("1/1/2011", periods=10, freq="15min")
+        run_2 = pd.date_range("1/1/2011", periods=10, freq="15min") + pd.Timedelta(
+            minutes=15 * 20
+        )
+        gapped_timeindex = run_1.union(run_2)
+
+        edisgo = EDisGo(ding0_grid=self.ding0_path)
+        edisgo.set_timeindex(gapped_timeindex)
+        edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=self.simbev_path,
+            potential_charging_points_dir=self.tracbev_path,
+        )
+        integrated = edisgo.electromobility.integrated_charging_parks_df
+        park_id = integrated.index[0]
+        template = edisgo.electromobility.charging_processes_df[
+            edisgo.electromobility.charging_processes_df.charging_park_id == park_id
+        ].iloc[0]
+
+        # public use_case -> always dumb-charged even under "residual";
+        # park window [5, 24] straddles the gap (steps 10-19)
+        edisgo.electromobility.charging_processes_df = pd.DataFrame(
+            {
+                "ags": [template.ags],
+                "car_id": [0],
+                "destination": [template.destination],
+                "use_case": ["public"],
+                "nominal_charging_capacity_kW": [template.nominal_charging_capacity_kW],
+                "grid_charging_capacity_kW": [template.grid_charging_capacity_kW],
+                "chargingdemand_kWh": [2.0],
+                "park_time_timesteps": [20],
+                "park_start_timesteps": [5],
+                "park_end_timesteps": [24],
+                "charging_park_id": [park_id],
+                "charging_point_id": [template.charging_point_id],
+            }
+        )
+
+        charging_strategy(edisgo, strategy="residual")
+
+        edisgo_id = integrated.at[park_id, "edisgo_id"]
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+
+        pd.testing.assert_index_equal(written.index, gapped_timeindex)
+        # no NaNs, no crash from writing into a position that doesn't exist
+        assert not written.isna().any()
+
+    @pytest.mark.parametrize("strategy", ["dumb", "reduced"])
+    def test_dumb_reduced_clip_placement_to_active_timeindex(self, strategy):
+        """
+        Dumb/reduced must clip their
+        deterministic charging placement slice to the active timeindex
+        instead of building the full-SimBEV-length series and relying on a
+        later crop - a charging interval that extends beyond the active
+        timeindex must only ever be written for its in-window positions,
+        at unchanged (unscaled) power.
+        """
+        # active timeindex ends at step 92 (93 steps: 0-92)
+        timeindex = pd.date_range("1/1/2011", periods=93, freq="15min")
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=90,
+            park_end_timesteps=149,
+            chargingdemand_kWh=12.0,
+        )
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+
+        charging_strategy(edisgo, strategy=strategy)
+
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+        nonzero = written[written != 0]
+
+        # written series must match the active timeindex exactly - no extra
+        # rows for steps beyond it (nothing fabricated/built past the window)
+        pd.testing.assert_index_equal(written.index, timeindex)
+        # only in-window steps (<= step 92, i.e. before 1/1/2011 23:15) may
+        # ever carry a nonzero value
+        assert (nonzero.index <= timeindex[-1]).all()
+        assert len(nonzero) > 0
+
+        # compare against the same event given a timeindex long enough to
+        # cover its whole charging interval - the clipped case must report
+        # strictly less energy, since some of its charging steps fall
+        # outside the shorter active timeindex
+        long_timeindex = pd.date_range("1/1/2011", periods=150, freq="15min")
+        edisgo_long, park_id_long = self._setup_edisgo_with_single_synthetic_event(
+            long_timeindex,
+            park_start_timesteps=90,
+            park_end_timesteps=149,
+            chargingdemand_kWh=12.0,
+        )
+        edisgo_id_long = edisgo_long.electromobility.integrated_charging_parks_df.at[
+            park_id_long, "edisgo_id"
+        ]
+        charging_strategy(edisgo_long, strategy=strategy)
+        full_energy = edisgo_long.timeseries.loads_active_power[edisgo_id_long].sum()
+
+        assert 0 < written.sum() < full_energy
+
+        # power at each in-window step must be unchanged (no proration of
+        # the rate itself) - every nonzero value equals the same per-step
+        # power the long-timeindex (unclipped) run reports
+        long_nonzero_values = edisgo_long.timeseries.loads_active_power[edisgo_id_long]
+        long_nonzero_values = long_nonzero_values[long_nonzero_values != 0]
+        assert nonzero.iloc[0] == pytest.approx(long_nonzero_values.iloc[0])
+
+    @pytest.mark.parametrize("strategy", ["dumb", "reduced"])
+    def test_dumb_reduced_fully_out_of_window_event_contributes_nothing(self, strategy):
+        """
+        An event whose deterministic charging
+        interval has zero overlap with the active timeindex must contribute
+        nothing.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")  # 1 day
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=300,
+            park_end_timesteps=320,
+            chargingdemand_kWh=10.0,
+        )
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+
+        charging_strategy(edisgo, strategy=strategy)
+
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+        assert (written == 0).all()
+
+    @pytest.mark.parametrize("strategy", ["dumb", "reduced"])
+    def test_dumb_reduced_respect_internal_gap(self, strategy):
+        """
+        If an event's deterministic charging
+        interval itself spans a gap in a non-contiguous active timeindex,
+        every in-window sub-slice of that interval must be written
+        independently, at full unscaled power - never a blind contiguous
+        write bridging the gap.
+        """
+        run_1 = pd.date_range("1/1/2011", periods=10, freq="15min")
+        run_2 = pd.date_range("1/1/2011", periods=10, freq="15min") + pd.Timedelta(
+            minutes=15 * 20
+        )
+        gapped_timeindex = run_1.union(run_2)
+
+        edisgo = EDisGo(ding0_grid=self.ding0_path)
+        edisgo.set_timeindex(gapped_timeindex)
+        edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=self.simbev_path,
+            potential_charging_points_dir=self.tracbev_path,
+        )
+        integrated = edisgo.electromobility.integrated_charging_parks_df
+        park_id = integrated.index[0]
+        template = edisgo.electromobility.charging_processes_df[
+            edisgo.electromobility.charging_processes_df.charging_park_id == park_id
+        ].iloc[0]
+
+        # work use_case, small enough demand that minimum_charging_time (or
+        # reduced_charging_time) spans steps 5-24, straddling the gap
+        # (steps 10-19, absent from the active timeindex)
+        edisgo.electromobility.charging_processes_df = pd.DataFrame(
+            {
+                "ags": [template.ags],
+                "car_id": [0],
+                "destination": [template.destination],
+                "use_case": ["work"],
+                "nominal_charging_capacity_kW": [template.nominal_charging_capacity_kW],
+                "grid_charging_capacity_kW": [template.grid_charging_capacity_kW],
+                "chargingdemand_kWh": [2.0],
+                "park_time_timesteps": [20],
+                "park_start_timesteps": [5],
+                "park_end_timesteps": [24],
+                "charging_park_id": [park_id],
+                "charging_point_id": [template.charging_point_id],
+            }
+        )
+
+        charging_strategy(edisgo, strategy=strategy)
+
+        edisgo_id = integrated.at[park_id, "edisgo_id"]
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+
+        pd.testing.assert_index_equal(written.index, gapped_timeindex)
+        # no NaNs, no crash from writing into a position that doesn't exist
+        assert not written.isna().any()
+
     def test_charging_strategy_with_subset_of_parks(self):
         """
         Charging strategies can be applied to different subsets of charging parks
@@ -128,7 +613,6 @@ class TestChargingStrategy:
 
         # store baseline time series for both parks
         loads_before = ts._loads_active_power.copy()
-        ts_a_before = loads_before[edisgo_id_a].copy()
         ts_b_before = loads_before[edisgo_id_b].copy()
 
         # 1) apply a strategy only to park A
@@ -152,7 +636,6 @@ class TestChargingStrategy:
 
         loads_after_second = ts._loads_active_power
         ts_a_after_second = loads_after_second[edisgo_id_a].copy()
-        ts_b_after_second = loads_after_second[edisgo_id_b].copy()
 
         # park A must not be changed by the second call that targets only park B
         pd.testing.assert_series_equal(

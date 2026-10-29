@@ -191,8 +191,8 @@ def to_powermodels(
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps
     pm["name"] = f"ding0_{edisgo_object.topology.id}_t_{timesteps}"
-    pm["time_elapsed"] = int(
-        (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
+    pm["time_elapsed"] = _get_time_elapsed_in_hours(
+        psa_net.snapshots
     )  # length of timesteps in hours
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
@@ -1273,7 +1273,13 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         Updated array containing all charging points that allow for flexible charging.
 
     """
-    flex_bands_df = edisgo_obj.electromobility.flexibility_bands
+    # Select the flexibility bands by time stamp, as they can cover more or
+    # other time steps than the time index.
+    timeindex = edisgo_obj.timeseries.timeindex
+    flex_bands_df = {
+        key: df.loc[timeindex]
+        for key, df in edisgo_obj.electromobility.flexibility_bands.items()
+    }
     if (flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]).any().any():
         logger.warning(
             "Upper energy level is smaller than lower energy level for "
@@ -1402,12 +1408,10 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
 
     """
-    # add TES with 0 capacity for every flexible hp without TES
-    hp_no_tes = np.setdiff1d(
-        flexible_hps, edisgo_obj.heat_pump.thermal_storage_units_df.index.values
-    )
-    df = pd.DataFrame(index=hp_no_tes, columns=["efficiency", "capacity"], data=0.0)
-    heat_storage_df = pd.concat([edisgo_obj.heat_pump.thermal_storage_units_df, df])
+    # TES of every flexible hp, with 0 capacity and efficiency for hps without TES
+    heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df.reindex(
+        flexible_hps, columns=["capacity", "efficiency"], fill_value=0.0
+    ).astype(float)
     decentral_hps = np.intersect1d(
         edisgo_obj.topology.loads_df.loc[
             edisgo_obj.topology.loads_df.sector == "individual_heating"
@@ -2012,21 +2016,24 @@ def _build_component_timeseries(
             }
     elif kind == "electromobility":
         if len(flexible_cps) > 0:
+            # Select the flexibility bands by time stamp, so that their length
+            # matches pm["time_series"]["num_steps"].
+            timeindex = edisgo_obj.timeseries.timeindex
             p_set = (
-                edisgo_obj.electromobility.flexibility_bands["upper_power"][
-                    flexible_cps
+                edisgo_obj.electromobility.flexibility_bands["upper_power"].loc[
+                    timeindex, flexible_cps
                 ]
                 / s_base
             ).round(20)
             e_min = (
-                edisgo_obj.electromobility.flexibility_bands["lower_energy"][
-                    flexible_cps
+                edisgo_obj.electromobility.flexibility_bands["lower_energy"].loc[
+                    timeindex, flexible_cps
                 ]
                 / s_base
             ).round(20)
             e_max = (
-                edisgo_obj.electromobility.flexibility_bands["upper_energy"][
-                    flexible_cps
+                edisgo_obj.electromobility.flexibility_bands["upper_energy"].loc[
+                    timeindex, flexible_cps
                 ]
                 / s_base
             ).round(20)
@@ -2082,6 +2089,42 @@ def _build_component_timeseries(
                 }
 
     pm["time_series"][kind] = pm_comp
+
+
+def _get_time_elapsed_in_hours(snapshots):
+    """
+    Calculate time elapsed in hours between two consecutive snapshots.
+
+    Parameters
+    ----------
+    snapshots : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        DatetimeIndex of snapshots.
+
+    Returns
+    -------
+    float
+        Time elapsed in hours between two consecutive snapshots.
+    """
+    if len(snapshots) < 2:
+        raise ValueError(
+            "At least two snapshots are required to determine time_elapsed "
+            "for the PowerModels OPF."
+        )
+
+    snapshot_deltas = snapshots.to_series().diff().dropna()
+
+    if not (snapshot_deltas == snapshot_deltas.iloc[0]).all():
+        raise ValueError(
+            "PowerModels OPF requires equidistant snapshots because "
+            "inter-timestep couplings use one global time_elapsed value."
+        )
+
+    time_elapsed = snapshot_deltas.iloc[0].total_seconds() / 3600
+
+    if time_elapsed <= 0:
+        raise ValueError("Snapshot time step must be positive.")
+
+    return time_elapsed
 
 
 def _mapping(

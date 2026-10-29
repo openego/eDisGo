@@ -413,7 +413,7 @@ class TestCheckTechConstraints:
             self.edisgo, voltage_level="mv"
         )
         # check shape of dataframe
-        assert (3, 3) == voltage_issues.shape
+        assert (3, 4) == voltage_issues.shape
         # check under- and overvoltage deviation values
         assert list(voltage_issues.index.values) == [
             "Bus_Generator_1",
@@ -431,7 +431,7 @@ class TestCheckTechConstraints:
             self.edisgo, split_voltage_band=False, voltage_level="mv"
         )
         # check shape of dataframe
-        assert (3, 3) == voltage_issues.shape
+        assert (3, 4) == voltage_issues.shape
         # check under- and overvoltage deviation values
         assert list(voltage_issues.index.values) == [
             "Bus_Generator_1",
@@ -534,7 +534,7 @@ class TestCheckTechConstraints:
             self.edisgo, voltage_level=None
         )
         # check shape of dataframe
-        assert (6, 3) == voltage_issues.shape
+        assert (6, 4) == voltage_issues.shape
 
     def test__voltage_issues_helper(self):
         # create voltage issues
@@ -547,7 +547,7 @@ class TestCheckTechConstraints:
         )
 
         # check shape of dataframe
-        assert (3, 2) == v_violations.shape
+        assert (3, 3) == v_violations.shape
         # check under- and overvoltage deviation values
         assert list(v_violations.index.values) == [
             "Bus_Generator_1",
@@ -558,6 +558,52 @@ class TestCheckTechConstraints:
             v_violations.at["Bus_GeneratorFluctuating_2", "abs_max_voltage_dev"], 0.01
         )
         assert v_violations.at["Bus_Generator_1", "time_index"] == self.timesteps[1]
+
+    def test__voltage_issues_helper_max_voltage_dev_sign(self):
+        # create voltage issues: Bus_GeneratorFluctuating_2 has only
+        # overvoltage, Bus_GeneratorFluctuating_3 has only undervoltage, and
+        # Bus_Generator_1 has both, with the undervoltage being the larger
+        # (and therefore selected) deviation
+        self.mv_voltage_issues()
+
+        v_violations = check_tech_constraints._voltage_issues_helper(
+            self.edisgo,
+            self.edisgo.topology.mv_grid.buses_df.index,
+            split_voltage_band=False,
+        )
+
+        # overvoltage-only bus: max_voltage_dev is positive
+        assert (
+            v_violations.at["Bus_GeneratorFluctuating_2", "max_voltage_dev"] > 0
+        )
+        assert np.isclose(
+            v_violations.at["Bus_GeneratorFluctuating_2", "max_voltage_dev"], 0.01
+        )
+
+        # undervoltage-only bus: max_voltage_dev is negative
+        assert (
+            v_violations.at["Bus_GeneratorFluctuating_3", "max_voltage_dev"] < 0
+        )
+        assert np.isclose(
+            v_violations.at["Bus_GeneratorFluctuating_3", "max_voltage_dev"], -0.005
+        )
+
+        # bus with both: the larger (undervoltage) deviation is selected,
+        # matching abs_max_voltage_dev's own selection (see
+        # test__voltage_issues_helper)
+        assert v_violations.at["Bus_Generator_1", "max_voltage_dev"] < 0
+        assert np.isclose(
+            v_violations.at["Bus_Generator_1", "max_voltage_dev"], -0.02
+        )
+
+        # abs_max_voltage_dev stays positive and equal in magnitude to
+        # max_voltage_dev for all buses, regardless of over-/undervoltage
+        for bus in v_violations.index:
+            assert v_violations.at[bus, "abs_max_voltage_dev"] > 0
+            assert np.isclose(
+                v_violations.at[bus, "abs_max_voltage_dev"],
+                abs(v_violations.at[bus, "max_voltage_dev"]),
+            )
 
     def test_allowed_voltage_limits(self):
         lv_grid_1 = self.edisgo.topology.get_lv_grid(1)

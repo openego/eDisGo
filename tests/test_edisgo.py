@@ -4,8 +4,10 @@ import os
 import shutil
 
 from copy import deepcopy
+from unittest.mock import Mock
 from zipfile import ZipFile
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pytest
@@ -15,9 +17,69 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo
+from edisgo import edisgo as edisgo_module
 from edisgo.edisgo import import_edisgo_from_files
 from edisgo.flex_opt.reinforce_grid import enhanced_reinforce_grid
+from edisgo.io import electromobility_import, generators_import, timeseries_import
 from edisgo.network.results import Results
+from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
+
+
+@pytest.fixture
+def mock_oep_time_series_import(monkeypatch):
+    """Replace OEP time-series retrieval with small local DataFrames."""
+
+    def apply_mocks(*, edisgo_object, timeindex, load_name):
+        """Defines the helper function that applies the mocks
+        for the OEP time-series retrieval functions."""
+
+        # Create minimal load and feed-in profiles
+        # for the requested timeindex:
+        load_profiles = pd.DataFrame(
+            {
+                load_name: np.linspace(
+                    0.1,
+                    0.2,
+                    len(timeindex),
+                )
+            },
+            index=timeindex,
+        )
+
+        fluctuating_gens = edisgo_object.topology.generators_df.query(
+            "type in ['wind', 'solar']"
+        )
+        profile_columns = pd.MultiIndex.from_frame(
+            fluctuating_gens[["type", "weather_cell_id"]].drop_duplicates()
+        )
+
+        feedin_profiles = pd.DataFrame(
+            0.5,
+            index=timeindex,
+            columns=profile_columns,
+        )
+
+        # Creates replacement functions that return the mock profiles
+        # instead of querying the OEP database:
+        demand_mock = Mock(return_value=load_profiles)
+        feedin_mock = Mock(return_value=feedin_profiles)
+
+        # Temporarily replace the OEP time-series retrieval functions
+        # with the mocks:
+        monkeypatch.setattr(
+            timeseries_import,
+            "electricity_demand_oedb",
+            demand_mock,
+        )
+        monkeypatch.setattr(
+            timeseries_import,
+            "feedin_oedb",
+            feedin_mock,
+        )
+
+        return demand_mock, feedin_mock
+
+    return apply_mocks
 
 
 class TestEDisGo:
@@ -164,7 +226,62 @@ class TestEDisGo:
             storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
         )
 
-    def test_set_time_series_active_power_predefined_demandlib_auto_sets_timeindex(self):
+    def test_set_time_series_manual_raises_on_missing_timesteps(self):
+        """
+        A DataFrame missing time steps of the time index raises a ValueError
+        instead of leaving NaN in the time series.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        # only 2 of the 3 required time steps
+        incomplete_ts = pd.DataFrame(
+            data={"GeneratorFluctuating_15": [2.0, 5.0]},
+            index=timeindex[:2],
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"'generators_p' time series miss 1 of 3 time steps of the time "
+            r"index \(first 2018-01-01 02:00:00, last 2018-01-01 02:00:00\)",
+        ):
+            self.edisgo.set_time_series_manual(generators_p=incomplete_ts)
+
+    def test_set_time_series_manual_exempts_zero_column_dataframe(self):
+        """
+        A DataFrame with no columns writes nothing, so it must be exempt
+        from the timeindex-coverage check even if its (empty) column
+        selection would otherwise be checked against a mismatched index.
+        eGo passes such a DataFrame as a placeholder.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        empty_cols_ts = pd.DataFrame(index=pd.date_range("1/1/1970", periods=1))
+
+        # must not raise
+        self.edisgo.set_time_series_manual(generators_q=empty_cols_ts)
+
+    def test_set_time_series_manual_allows_covering_superset(self):
+        """
+        A DataFrame covering the active timeindex (even as a superset with
+        extra time steps outside it) must still be accepted.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        wider_timeindex = pd.date_range("1/1/2018", periods=5, freq="H")
+        wider_ts = pd.DataFrame(
+            data={"GeneratorFluctuating_15": [2.0, 5.0, 6.0, 7.0, 8.0]},
+            index=wider_timeindex,
+        )
+
+        # must not raise
+        self.edisgo.set_time_series_manual(generators_p=wider_ts)
+
+    def test_set_time_series_active_power_predefined_demandlib_auto_sets_timeindex(
+        self,
+    ):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         # Ensure timeindex is empty initially
         assert edisgo.timeseries.timeindex.empty
@@ -219,7 +336,9 @@ class TestEDisGo:
 
         # check warning
         self.edisgo.set_time_series_active_power_predefined()
-        assert "No timeindex was set. TimeSeries.timeindex is automatically" in caplog.text
+        assert (
+            "No timeindex was set. TimeSeries.timeindex is automatically" in caplog.text
+        )
 
         # check if right functions are called
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
@@ -267,57 +386,97 @@ class TestEDisGo:
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 0)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
 
-    def test_set_time_series_active_power_predefined_oedb(self):
-        # test conventional_loads_ts="oedb" for all loads in grid
-        edisgo_object = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
-        )
-        edisgo_object.set_timeindex(pd.date_range("1/1/2011", periods=8760, freq="H"))
-        edisgo_object.set_time_series_active_power_predefined(
-            conventional_loads_ts="oedb",
-            fluctuating_generators_ts="oedb",
-            scenario="eGon2035",
-            engine=pytest.engine,
-            timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
-            conventional_loads_names=[
-                "Load_mvgd_33535_lvgd_1164210000_244_residential"
-            ],
-        )
-
-        assert edisgo_object.timeseries.loads_active_power.dropna().shape == (
-            2,
-            1,
-        )
-        fluctuating_gens = edisgo_object.topology.generators_df[
-            edisgo_object.topology.generators_df.type.isin(["wind", "solar"])
-        ]
-        assert edisgo_object.timeseries.generators_active_power.dropna().shape == (
-            2,
-            len(fluctuating_gens),
-        )
-
-    @pytest.mark.slow
-    def test_set_time_series_active_power_predefined_oedb_auto_sets_timeindex(
-        self,
+    def test_set_time_series_active_power_predefined_oedb(
+        self, mock_oep_time_series_import
     ):
+        """Test processing mocked OEDB profiles for a two-hour time range."""
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path,
             legacy_ding0_grids=False,
         )
 
+        edisgo_object.set_timeindex(pd.date_range("1/1/2011", periods=8760, freq="H"))
+        requested_timeindex = pd.date_range(
+            "1/1/2011 12:00",
+            periods=2,
+            freq="H",
+        )
+        load_name = "Load_mvgd_33535_lvgd_1164210000_244_residential"
+
+        # Create the fake data (mocks)
+        demand_mock, feedin_mock = mock_oep_time_series_import(
+            edisgo_object=edisgo_object,
+            timeindex=requested_timeindex,
+            load_name=load_name,
+        )
+
+        # Execute the function using its real "oedb" code paths. Only the OEP
+        # time-series retrieval functions are mocked.
         edisgo_object.set_time_series_active_power_predefined(
             conventional_loads_ts="oedb",
             fluctuating_generators_ts="oedb",
             scenario="eGon2035",
-            engine=pytest.engine,
-            conventional_loads_names=[
-                "Load_mvgd_33535_lvgd_1164210000_244_residential"
-            ],
+            engine=None,
+            timeindex=requested_timeindex,
+            conventional_loads_names=[load_name],
         )
 
-        assert not edisgo_object.timeseries.timeindex.empty
-        assert edisgo_object.timeseries.timeindex[0].year == 2035
-        assert edisgo_object.timeseries.timeindex.shape == (8760,)
+        fluctuating_gens = edisgo_object.topology.generators_df.query(
+            "type in ['wind', 'solar']"
+        )
+
+        assert edisgo_object.timeseries.loads_active_power.dropna().shape == (2, 1)
+        assert edisgo_object.timeseries.generators_active_power.dropna().shape == (
+            2,
+            len(fluctuating_gens),
+        )
+
+        demand_mock.assert_called_once()
+        feedin_mock.assert_called_once()
+
+        assert demand_mock.call_args.kwargs["timeindex"] is requested_timeindex
+        assert feedin_mock.call_args.kwargs["timeindex"] is requested_timeindex
+
+    @pytest.mark.slow
+    def test_set_time_series_active_power_predefined_oedb_auto_sets_timeindex(
+        self, mock_oep_time_series_import
+    ):
+        """Test automatic time-index creation for mocked OEDB data."""
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path,
+            legacy_ding0_grids=False,
+        )
+
+        expected_timeindex = pd.date_range(
+            "1/1/2035",
+            periods=8760,
+            freq="H",
+        )
+        load_name = "Load_mvgd_33535_lvgd_1164210000_244_residential"
+
+        # Create the fake data (mocks)
+        demand_mock, feedin_mock = mock_oep_time_series_import(
+            edisgo_object=edisgo_object,
+            timeindex=expected_timeindex,
+            load_name=load_name,
+        )
+        # Execute the function using its real "oedb" code paths. Only the OEP
+        # time-series retrieval functions are mocked.
+        edisgo_object.set_time_series_active_power_predefined(
+            conventional_loads_ts="oedb",
+            fluctuating_generators_ts="oedb",
+            scenario="eGon2035",
+            engine=None,
+            conventional_loads_names=[load_name],
+        )
+
+        assert edisgo_object.timeseries.timeindex.equals(expected_timeindex)
+
+        demand_mock.assert_called_once()
+        feedin_mock.assert_called_once()
+
+        assert demand_mock.call_args.kwargs["timeindex"] is None
+        assert feedin_mock.call_args.kwargs["timeindex"] is None
 
     def test_set_time_series_reactive_power_control(self):
         # set active power time series for fixed cosphi
@@ -413,19 +572,19 @@ class TestEDisGo:
             + len(self.edisgo.topology.transformers_df.bus0.unique())
         )
 
-    @pytest.mark.slow
-    def test_generator_import(self):
-        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
-        try:
-            edisgo.import_generators("nep2035")
-            assert len(edisgo.topology.generators_df) == 524
-        except Exception as e:
-            if "Table does not exist" in str(e) or "HTTP 404" in str(e):
-                pytest.skip(
-                    "Database table not accessible (requires external database connection)"
-                )
-            else:
-                raise
+    def test_generator_import(self, monkeypatch):
+        """Test delegation from the public API to the legacy importer offline."""
+
+        edisgo_object = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        import_mock = Mock()
+        monkeypatch.setattr(generators_import, "oedb_legacy", import_mock)
+
+        edisgo_object.import_generators("nep2035")
+
+        import_mock.assert_called_once_with(
+            edisgo_object=edisgo_object,
+            generator_scenario="nep2035",
+        )
 
     def test_analyze(self, caplog):
         self.setup_worst_case_time_series()
@@ -551,6 +710,8 @@ class TestEDisGo:
         )
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 134
+        # house connections are not reinforced due to voltage issues, so there are
+        # no equipment changes for them here
         assert len(results.equipment_changes) == 230
         assert results.v_res.shape == (4, 142)
 
@@ -562,6 +723,8 @@ class TestEDisGo:
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 134
+        # house connections are not reinforced due to voltage issues, so there are
+        # no equipment changes for them here
         assert len(results.equipment_changes) == 218
         assert results.v_res.shape == (4, 142)
 
@@ -583,8 +746,10 @@ class TestEDisGo:
 
         results = edisgo_obj.results
 
-        assert len(results.grid_expansion_costs) == 454
-        assert len(results.equipment_changes) == 892
+        assert len(results.grid_expansion_costs) == 453
+        # counts the parallel standard lines to new stations after LV grid separation;
+        # house connections are not reinforced due to voltage issues
+        assert len(results.equipment_changes) == 827
         assert results.v_res.shape == (4, 148)
 
         edisgo_obj = copy.deepcopy(self.edisgo)
@@ -1320,7 +1485,7 @@ class TestEDisGo:
         )
         assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
 
-        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 3
+        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 2
 
         # fmt: off
         assert set(
@@ -1335,20 +1500,90 @@ class TestEDisGo:
         )
         # fmt: on
 
-    def test_import_electromobility_oedb(self):
-        """
-        Test import from oedb.
-        """
+    def test_import_electromobility_oedb(self, monkeypatch):
+        """Test the OEDB import branch with synthetic retrieval results."""
+
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+            ding0_grid=pytest.ding0_test_network_3_path,
+            legacy_ding0_grids=False,
         )
 
-        # test with default parameters
+        charging_processes = pd.DataFrame(
+            {
+                "ags": [0, 0, 0],
+                "car_id": [0, 1, 2],
+                "destination": ["0_work", "3_shopping", "7_charging_hub"],
+                "use_case": ["work", "public", "hpc"],
+                "nominal_charging_capacity_kW": [11.0, 22.0, 50.0],
+                "grid_charging_capacity_kW": [12.0, 24.0, 55.0],
+                "chargingdemand_kWh": [5.0, 6.0, 7.0],
+                "park_time_timesteps": [4, 4, 4],
+                "park_start_timesteps": [0, 10, 20],
+                "park_end_timesteps": [3, 13, 23],
+                "charging_park_id": [np.nan, np.nan, np.nan],
+                "charging_point_id": [np.nan, np.nan, np.nan],
+            }
+        )
+        simbev_config = pd.DataFrame(
+            {
+                "eta_cp": [0.9],
+                "stepsize": [15],
+                "start_date": [pd.Timestamp("2035-01-01")],
+                "end_date": [pd.Timestamp("2035-01-02")],
+                "soc_min": [0.1],
+                "grid_timeseries": [False],
+                "grid_timeseries_by_usecase": [False],
+                "days": [2],
+            }
+        )
+        point = self.edisgo.topology.grid_district["geom"].representative_point()
+        potential_charging_parks = gpd.GeoDataFrame(
+            {
+                "ags": [0, 0, 0, 0],
+                "use_case": ["home", "work", "public", "hpc"],
+                "user_centric_weight": [1.0, 1.0, 1.0, 1.0],
+            },
+            geometry=[point, point, point, point],
+            crs=f"EPSG:{self.edisgo.topology.grid_district['srid']}",
+        )
+
+        charging_processes_mock = Mock(return_value=charging_processes)
+        simbev_config_mock = Mock(return_value=simbev_config)
+        charging_parks_mock = Mock(return_value=potential_charging_parks)
+        monkeypatch.setattr(
+            electromobility_import,
+            "charging_processes_from_oedb",
+            charging_processes_mock,
+        )
+        monkeypatch.setattr(
+            electromobility_import,
+            "simbev_config_from_oedb",
+            simbev_config_mock,
+        )
+        monkeypatch.setattr(
+            electromobility_import,
+            "potential_charging_parks_from_oedb",
+            charging_parks_mock,
+        )
+        integrate_charging_parks_spy = Mock(
+            wraps=edisgo_module.integrate_charging_parks
+        )
+        monkeypatch.setattr(
+            edisgo_module, "integrate_charging_parks", integrate_charging_parks_spy
+        )
+
         self.edisgo.import_electromobility(
-            data_source="oedb", scenario="eGon2035", engine=pytest.engine
+            data_source="oedb",
+            scenario="eGon2035",
+            engine=None,
+            integrate_charging_parks_kwds={"connect_to_load_bus": True},
         )
 
-        assert len(self.edisgo.electromobility.charging_processes_df) == 324117
+        integrate_charging_parks_spy.assert_called_once_with(
+            self.edisgo, connect_to_load_bus=True
+        )
+
+        assert len(self.edisgo.electromobility.charging_processes_df) == 3
         assert self.edisgo.electromobility.eta_charging_points == 0.9
 
         total_charging_demand_at_charging_parks = sum(
@@ -1363,10 +1598,10 @@ class TestEDisGo:
             total_charging_demand_at_charging_parks, total_charging_demand
         )
 
-        # fmt: off
         charging_park_ids = (
-            self.edisgo.electromobility.charging_processes_df.charging_park_id.
-            sort_values().unique()
+            self.edisgo.electromobility.charging_processes_df["charging_park_id"]
+            .sort_values()
+            .unique()
         )
         potential_charging_parks_with_capacity = np.sort(
             [
@@ -1375,14 +1610,10 @@ class TestEDisGo:
                 if cp.designated_charging_point_capacity > 0.0
             ]
         )
-        # fmt: on
-
         assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
 
-        # fmt: off
         assert set(
-            self.edisgo.electromobility.integrated_charging_parks_df.edisgo_id.
-            sort_values().values
+            self.edisgo.electromobility.integrated_charging_parks_df.edisgo_id.sort_values().values
         ) == set(
             self.edisgo.topology.loads_df[
                 self.edisgo.topology.loads_df.type == "charging_point"
@@ -1390,35 +1621,122 @@ class TestEDisGo:
             .index.sort_values()
             .values
         )
-        # fmt: on
 
-    def test_import_heat_pumps(self):
+        charging_processes_mock.assert_called_once_with(
+            edisgo_obj=self.edisgo,
+            engine=None,
+            scenario="eGon2035",
+        )
+        simbev_config_mock.assert_called_once_with(
+            scenario="eGon2035",
+            engine=None,
+        )
+        charging_parks_mock.assert_called_once_with(
+            edisgo_obj=self.edisgo,
+            engine=None,
+        )
+
+    def test_import_heat_pumps(self, monkeypatch):
+        """Test heat-pump import orchestration with synthetic retrieval results."""
+
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        engine_mock = Mock(name="offline_engine")
+        heat_pump_names = []
+
+        def import_heat_pumps_mock(
+            edisgo_object,
+            scenario,
+            engine,
+            import_types,
+        ):
+            bus = edisgo_object.topology.loads_df.iloc[0].bus
+            for load_id, building_id, weather_cell_id in [
+                ("offline_1", 101, 11051),
+                ("offline_2", 102, 11052),
+            ]:
+                heat_pump_names.append(
+                    edisgo_object.topology.add_load(
+                        bus=bus,
+                        p_set=0.01,
+                        type="heat_pump",
+                        sector="individual_heating",
+                        building_id=building_id,
+                        weather_cell_id=weather_cell_id,
+                        load_id=load_id,
+                    )
+                )
+            return heat_pump_names
+
+        def heat_demand_mock(edisgo_object, scenario, engine, timeindex):
+            return pd.DataFrame(
+                {
+                    heat_pump_names[0]: np.full(len(timeindex), 0.1),
+                    heat_pump_names[1]: np.full(len(timeindex), 0.2),
+                },
+                index=timeindex,
+            )
+
+        def cop_mock(edisgo_object, engine, weather_cell_ids, timeindex):
+            return pd.DataFrame(
+                {
+                    11051: np.full(len(timeindex), 3.0),
+                    11052: np.full(len(timeindex), 4.0),
+                },
+                index=timeindex,
+            )
+
+        import_mock = Mock(side_effect=import_heat_pumps_mock)
+        heat_demand_retrieval_mock = Mock(side_effect=heat_demand_mock)
+        cop_retrieval_mock = Mock(side_effect=cop_mock)
+        monkeypatch.setattr(
+            edisgo_module,
+            "import_heat_pumps_oedb",
+            import_mock,
+        )
+        monkeypatch.setattr(
+            timeseries_import,
+            "heat_demand_oedb",
+            heat_demand_retrieval_mock,
+        )
+        monkeypatch.setattr(
+            timeseries_import,
+            "cop_oedb",
+            cop_retrieval_mock,
         )
 
         # ################# test with wrong scenario name #############
         with pytest.raises(ValueError):
             edisgo_object.import_heat_pumps(
                 scenario="eGon",
-                engine=pytest.engine,
+                engine=engine_mock,
             )
 
         # ################# test with leap year #############
         edisgo_object.import_heat_pumps(
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=engine_mock,
             timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
             import_types=["individual_heat_pumps", "central_heat_pumps"],
         )
 
         loads_df = edisgo_object.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
-        assert len(hp_df) == 151
-        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 151)
+        assert len(hp_df) == 2
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 2)
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2035
-        assert edisgo_object.heat_pump.cop_df.shape == (8760, 151)
+        assert edisgo_object.heat_pump.cop_df.shape == (8760, 2)
         assert edisgo_object.heat_pump.cop_df.index[0].year == 2035
+
+        import_mock.assert_called_once_with(
+            edisgo_object=edisgo_object,
+            scenario="eGon2035",
+            engine=engine_mock,
+            import_types=["individual_heat_pumps", "central_heat_pumps"],
+        )
+        heat_demand_retrieval_mock.assert_called_once()
+        cop_retrieval_mock.assert_called_once()
 
     def test_apply_charging_strategy(self):
         self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
@@ -1999,9 +2317,41 @@ class TestEDisGo:
             },
             index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
         )
+        # DSM data is resampled as well
+        self.edisgo.dsm.p_max = pd.DataFrame(
+            data={
+                "load_1": [5.0, 6.0],
+                "load_2": [7.0, 8.0],
+            },
+            index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+        )
         self.edisgo.resample_timeseries(freq="30min")
         assert len(self.edisgo.timeseries.loads_active_power) == 8
         assert len(self.edisgo.heat_pump.cop_df) == 4
+        assert len(self.edisgo.dsm.p_max) == 4
+
+    def test_reduce_timeseries_data_to_given_timeindex(self):
+        """
+        EDisGo.reduce_timeseries_data_to_given_timeindex gives the same result
+        as edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex, which
+        it calls.
+        """
+        self.setup_worst_case_time_series()
+        target_timeindex = self.edisgo.timeseries.timeindex[:2]
+
+        edisgo_via_method = deepcopy(self.edisgo)
+        edisgo_via_method.reduce_timeseries_data_to_given_timeindex(target_timeindex)
+
+        edisgo_via_function = deepcopy(self.edisgo)
+        reduce_timeseries_data_to_given_timeindex(edisgo_via_function, target_timeindex)
+
+        assert_frame_equal(
+            edisgo_via_method.timeseries.loads_active_power,
+            edisgo_via_function.timeseries.loads_active_power,
+        )
+        pd.testing.assert_index_equal(
+            edisgo_via_method.timeseries.timeindex, target_timeindex
+        )
 
 
 class TestEDisGoFunc:
