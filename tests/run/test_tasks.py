@@ -565,6 +565,62 @@ class TestSetTimeindex:
         )
         assert len(result.timeseries.timeindex) == 2
 
+    def test_ranges_select_separate_weeks(self, edisgo_obj):
+        """Two ranges, one with periods and one with end, give one index with
+        the gap between them kept."""
+        edisgo_obj.set_timeindex(pd.DatetimeIndex([]))
+        ctx = RunContext()
+        task_set_timeindex(
+            edisgo_obj,
+            ctx,
+            ranges=[
+                {"start": "2011-07-03 00:00", "end": "2011-07-09 23:00"},
+                {"start": "2011-01-09 00:00", "periods": 168},
+            ],
+        )
+        expected = pd.date_range("2011-01-09", periods=168, freq="h").append(
+            pd.date_range("2011-07-03", periods=168, freq="h")
+        )
+        assert edisgo_obj.timeseries.timeindex.equals(expected)
+        assert ctx.flags["selected_timeindex"].equals(expected)
+
+    def test_overlapping_ranges_without_duplicates(self, edisgo_obj):
+        edisgo_obj.set_timeindex(pd.DatetimeIndex([]))
+        task_set_timeindex(
+            edisgo_obj,
+            RunContext(),
+            ranges=[
+                {"start": "2011-01-01 00:00", "periods": 3},
+                {"start": "2011-01-01 01:00", "periods": 3},
+            ],
+        )
+        assert edisgo_obj.timeseries.timeindex.equals(
+            pd.date_range("2011-01-01", periods=4, freq="h")
+        )
+
+    def test_ranges_shifted_to_timeseries_year(self, edisgo_obj):
+        """Ranges written in the scenario year reduce an existing time series
+        of another year, with the gap between them kept."""
+        edisgo_obj.set_timeindex(pd.date_range("2011-01-01", periods=48, freq="h"))
+        task_set_timeindex(
+            edisgo_obj,
+            RunContext(),
+            ranges=[
+                {"start": "2035-01-01 00:00", "periods": 2},
+                {"start": "2035-01-02 00:00", "periods": 2},
+            ],
+        )
+        assert list(edisgo_obj.timeseries.timeindex) == list(
+            pd.to_datetime(
+                [
+                    "2011-01-01 00:00",
+                    "2011-01-01 01:00",
+                    "2011-01-02 00:00",
+                    "2011-01-02 01:00",
+                ]
+            )
+        )
+
     def test_missing_args_raises(self, edisgo_obj):
         with pytest.raises(ValueError, match="timestamps.*start"):
             task_set_timeindex(edisgo_obj, RunContext())
