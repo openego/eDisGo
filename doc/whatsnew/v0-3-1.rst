@@ -420,3 +420,7 @@ Changes
   ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
   the component and the new MV line were connected to the existing bus. This could
   happen after components were removed or aggregated (openego/eDisGo#413)
+* Fixed the ``PerformanceWarning: DataFrame is highly fragmented`` raised in grids
+  with more than 100 LV grids while checking the voltage at the secondary side of
+  the MV/LV stations. The voltage limits of the stations are now built in one step
+  instead of adding one column per LV grid
