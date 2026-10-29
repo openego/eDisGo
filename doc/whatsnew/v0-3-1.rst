@@ -424,3 +424,24 @@ Changes
   with more than 100 LV grids while checking the voltage at the secondary side of
   the MV/LV stations. The voltage limits of the stations are now built in one step
   instead of adding one column per LV grid
+* The runner task ``set_timeindex`` takes the new parameter ``ranges``, a list of
+  ranges with a ``start`` plus ``periods`` or ``end`` each, to select several
+  separate ranges, e.g. two weeks::
+
+      timestep_selection:
+        task: set_timeindex
+        set_timeindex:
+          ranges:
+            - {start: "2035-01-09 00:00", periods: 168}
+            - {start: "2035-07-03 00:00", end: "2035-07-09 23:00"}
+
+  Like ``timestamps``, it cannot be combined with ``start``/``periods``/``end``
+* In a runner config that ``extends`` a preset, the ``set_timeindex`` parameters now
+  replace the preset's parameters they cannot be combined with. ``ranges`` or
+  ``timestamps`` on top of ``spatial_reduction_opf`` replace its ``start`` and
+  ``periods``, and ``end`` replaces its ``periods`` and keeps its ``start``. Before,
+  the unused preset parameters had to be set to null
+* ``set_timeindex`` now rejects, before the run, a range that selects no time steps
+  and a selection whose time steps lie in more than one year. The time series cover
+  one year, so on loaded time series such a selection gave empty time series with
+  only a warning
