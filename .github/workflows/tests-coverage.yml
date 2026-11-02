@@ -108,3 +108,10 @@ jobs:
           OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
+
+      # Fails when pip resolved to an older release than the one Dependabot bumped to.
+      # Runs after the tests because the test steps install pytest and its plugins,
+      # and runs even if they failed, so a fallback is reported either way.
+      - name: Check that the Dependabot version is installed
+        if: ${{ !cancelled() && startsWith(github.ref_name, 'dependabot/pip/') }}
+        run: python .github/scripts/check_dependabot_version.py
