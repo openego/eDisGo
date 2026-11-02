@@ -61,7 +61,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           python -m pip install --upgrade pip wheel setuptools
-          python -m pip install -e "."
+          python -m pip install -e ".[dev]"
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
@@ -75,25 +75,19 @@ jobs:
       - name: Run regular tests (Linux)
         if: runner.os == 'Linux' && matrix.name-suffix == 'basic'
         run: |
-          python -m pip install "pytest<9.2.0" "nbclient<0.12.0"
           python -m pytest --runslow --runonlinux -m "not oep" \
             --disable-warnings --color=yes -v
 
       - name: Run regular tests (Windows)
         if: runner.os == 'Windows'
         run: |
-          python -m pip install "pytest<9.2.0" "nbclient<0.12.0"
           # This step uses PowerShell, where "\" is not a line continuation.
           python -m pytest --runslow -m "not oep" --disable-warnings --color=yes -v
 
       - name: Run all tests with coverage and submit to Coveralls
         if: matrix.name-suffix == 'coverage'
         run: |
-          python -m pip install \
-            "pytest<9.2.0" \
-            "nbclient<0.12.0" \
-            "pytest-rerunfailures<17.0.0" \
-            coveralls
+          python -m pip install coveralls
           coverage run --source=edisgo -m pytest \
             --runslow \
             --runonlinux \
