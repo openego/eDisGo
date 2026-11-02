@@ -82,6 +82,7 @@ dev_requirements = [
     "pytest-rerunfailures < 17.0.0",
     "pytest-html < 5.0.0",
     "pytest-metadata < 4.0.0",
+    "coveralls < 4.2.0",
     "anyio < 5.0.0",
     "dash < 4.5.0",
     "pluggy < 2.0.0",

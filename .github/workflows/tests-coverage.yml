@@ -87,7 +87,6 @@ jobs:
       - name: Run all tests with coverage and submit to Coveralls
         if: matrix.name-suffix == 'coverage'
         run: |
-          python -m pip install coveralls
           coverage run --source=edisgo -m pytest \
             --runslow \
             --runonlinux \
