@@ -1,3 +1,7 @@
+import warnings
+
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -928,3 +932,42 @@ class TestCheckTechConstraints:
             voltage_dev.at[self.timesteps[0], "Bus_GeneratorFluctuating_3"],
             0.895 - 0.9,
         )
+
+
+def test__lv_allowed_voltage_limits_stations_many_grids():
+    """Station limits for more than 100 LV grids without a PerformanceWarning."""
+    n_grids = 150
+    timeindex = pd.date_range("2011-01-01", periods=2, freq="h")
+    lv_grids = [
+        SimpleNamespace(
+            transformers_df=pd.DataFrame({"bus0": [f"mv_{i}"], "bus1": [f"lv_{i}"]})
+        )
+        for i in range(n_grids)
+    ]
+    edisgo_obj = SimpleNamespace(
+        results=SimpleNamespace(
+            v_res=pd.DataFrame(
+                1.0, index=timeindex, columns=[f"mv_{i}" for i in range(n_grids)]
+            )
+        ),
+        config={
+            "grid_expansion_allowed_voltage_deviations": {
+                "mv_lv_station_max_v_rise": 0.015,
+                "mv_lv_station_max_v_drop": 0.02,
+            }
+        },
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pd.errors.PerformanceWarning)
+        (
+            v_limits_upper,
+            v_limits_lower,
+        ) = check_tech_constraints._lv_allowed_voltage_limits(
+            edisgo_obj, mode="stations", lv_grids=lv_grids
+        )
+
+    assert v_limits_upper.shape == (2, n_grids)
+    assert list(v_limits_upper.columns) == [f"lv_{i}" for i in range(n_grids)]
+    assert np.isclose(v_limits_upper, 1.015).all()
+    assert np.isclose(v_limits_lower, 0.98).all()
