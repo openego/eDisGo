@@ -184,9 +184,27 @@ def test_inline_params_with_timestep_selection_rejected(index):
 @pytest.mark.parametrize(
     "set_timeindex, match",
     [
-        ({"timestamps": ["2035-01-15 00:00"]}, "'timestamps' or 'start'"),
-        ({"end": "2035-01-16 00:00"}, "'periods' or 'end'"),
         ({"start": None}, "needs 'timestamps'"),
+        ({"ranges": [{"start": "2035-01-15"}]}, "takes exactly a 'start' plus"),
+        (
+            {"ranges": [{"start": "2035-01-15", "periods": 4, "freq": "15min"}]},
+            "'freq' is set once for all ranges",
+        ),
+        ({"ranges": []}, "non-empty list"),
+        (
+            {"ranges": [{"start": "2035-01-15", "end": "2035-01-14"}]},
+            "selects no time steps",
+        ),
+        ({"periods": 0}, "selects no time steps"),
+        (
+            {
+                "ranges": [
+                    {"start": "2035-12-31", "periods": 24},
+                    {"start": "2036-01-05", "periods": 24},
+                ]
+            },
+            r"years \[2035, 2036\]",
+        ),
     ],
 )
 def test_effective_set_timeindex_params_checked(set_timeindex, match):
@@ -200,6 +218,58 @@ def test_effective_set_timeindex_params_checked(set_timeindex, match):
     )
     with pytest.raises(ValueError, match=match):
         validate(cfg)
+
+
+@pytest.mark.parametrize(
+    "set_timeindex, expected",
+    [
+        (
+            {"ranges": [{"start": "2035-01-09", "periods": 168}]},
+            {"freq": "h", "ranges": [{"start": "2035-01-09", "periods": 168}]},
+        ),
+        (
+            {"timestamps": ["2035-01-15 00:00"]},
+            {"freq": "h", "timestamps": ["2035-01-15 00:00"]},
+        ),
+        (
+            {"end": "2035-01-16 00:00"},
+            {"start": "2035-01-15 00:00", "freq": "h", "end": "2035-01-16 00:00"},
+        ),
+        (
+            {"periods": 48},
+            {"start": "2035-01-15 00:00", "periods": 48, "freq": "h"},
+        ),
+    ],
+)
+def test_set_timeindex_params_replace_preset_params(set_timeindex, expected):
+    """A parameter in a config extending a preset replaces the preset's
+    parameters it cannot be combined with and keeps the others."""
+    cfg = load_config(
+        {
+            "extends": "spatial_reduction_opf",
+            "timestep_selection": {"set_timeindex": set_timeindex},
+        }
+    )
+    assert cfg["timestep_selection"]["set_timeindex"] == expected
+    validate(cfg)
+
+
+def test_conflicting_set_timeindex_params_in_one_config_rejected():
+    """Within one config, conflicting parameters are an error, not replaced."""
+    with pytest.raises(ValueError, match="'timestamps', 'ranges' or 'start'"):
+        validate(
+            {
+                **_wrap(_SELECTION_PIPELINE),
+                "timestep_selection": {
+                    "task": "set_timeindex",
+                    "set_timeindex": {
+                        "start": "2035-01-15",
+                        "periods": 24,
+                        "ranges": [{"start": "2035-01-09", "periods": 168}],
+                    },
+                },
+            }
+        )
 
 
 def test_inline_params_checked_without_timestep_selection():
