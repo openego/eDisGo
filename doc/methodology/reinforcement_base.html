@@ -1,0 +1,110 @@
+<style>
+/* Shared look and helpers of the interactive examples on the grid reinforcement page.
+   Included once, before the other reinforcement_*.html widgets. */
+.rw { --ink: #1d2731; --muted: #5d6a73; --rule: #d7dee3; --grid: #eef2f4; --bg: #f7f9fa;
+  --acc: #0f6f8c; --acc-soft: #dcedf3; --bad: #c2362b; --bad-soft: #f8e1de; --ok: #2b7a4b; --ok-soft: #dff0e5;
+  --warn: #a86a12; --warn-soft: #f6ecd8; --std: #0f6f8c; --thin: #c47a0e; --thick: #6a4fb3; --new: #2b7a4b;
+  --hc: #8c979e;
+  border: 1px solid var(--rule); padding: 14px 16px; margin: 0 0 24px; background: #fff; color: var(--ink);
+  font-size: 14px; line-height: 1.45; }
+.rw * { box-sizing: border-box; }
+.rw p { margin: 0 0 8px; }
+.rw .rw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
+.rw .rw-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.rw .rw-seg button { font: 600 13px/1.2 inherit; font-family: inherit; border: 0; background: #fff; color: var(--ink);
+  padding: 6px 11px; cursor: pointer; }
+.rw .rw-seg button + button { border-left: 1px solid var(--rule); }
+.rw .rw-seg button[aria-pressed="true"] { background: var(--acc); color: #fff; }
+.rw .rw-btn { font: 600 15px/1 monospace; min-width: 32px; height: 30px; border: 1px solid var(--rule); background: #fff;
+  color: var(--ink); border-radius: 4px; cursor: pointer; padding: 0 8px; }
+.rw .rw-btn:disabled { opacity: .35; cursor: default; }
+.rw button:focus-visible, .rw input:focus-visible, .rw select:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.rw label.rw-sl { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.rw label.rw-sl input[type=range] { width: 160px; accent-color: var(--acc); }
+.rw label.rw-sl b { color: var(--ink); font-variant-numeric: tabular-nums; min-width: 5.5em; }
+.rw select { font: inherit; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; color: var(--ink); }
+.rw svg { display: block; width: 100%; height: auto; }
+.rw svg text { font-family: inherit; }
+.rw svg text:not([fill]) { fill: var(--ink); }
+.rw .rw-sm { font-size: 11px; fill: var(--muted); }
+.rw .rw-box { border: 1px solid var(--rule); background: var(--bg); border-radius: 4px; padding: 6px; }
+.rw .rw-stats { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.rw .rw-stat { border: 1px solid var(--rule); border-radius: 4px; padding: 4px 10px; background: var(--bg); min-width: 120px; }
+.rw .rw-stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.rw .rw-stat .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rw .rw-stat.bad { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
+.rw .rw-stat.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.rw .rw-stat.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.rw .rw-log { font: 12px/1.5 SFMono-Regular, Menlo, Consolas, monospace; max-height: 220px; overflow: auto;
+  border: 1px solid var(--rule); border-radius: 4px; padding: 6px 10px; background: var(--bg); }
+.rw .rw-log .it { color: var(--muted); margin-top: 6px; } .rw .rw-log .it:first-child { margin-top: 0; }
+.rw .rw-log .m { padding-left: 10px; } .rw .rw-log .m.info { color: var(--muted); } .rw .rw-log .m.cur { background: var(--acc-soft); }
+.rw .rw-scroll { overflow-x: auto; }
+.rw table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 0; }
+.rw th, .rw td { border: 0; border-bottom: 1px solid var(--rule); padding: 4px 8px; text-align: left; background: none; vertical-align: top; }
+.rw th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.rw td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rw tr.pick td { background: var(--acc-soft); font-weight: 600; }
+.rw .rw-bar { height: 10px; border-radius: 2px; background: var(--grid); position: relative; min-width: 90px; }
+.rw .rw-bar span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; }
+.rw .rw-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 12px; margin: 4px 0; }
+.rw .rw-legend i { display: inline-block; width: 22px; border-top: 3px solid; vertical-align: middle; margin-right: 5px; }
+.rw .rw-note { color: var(--muted); font-size: 12px; }
+.rw .rw-pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-weight: 600; font-size: 12px; }
+.rw .rw-pill.bad { background: var(--bad-soft); color: var(--bad); } .rw .rw-pill.ok { background: var(--ok-soft); color: var(--ok); }
+.rw .rw-pill.acc { background: var(--acc-soft); color: var(--acc); }
+.rw .rw-detail { border-left: 3px solid var(--acc); padding: 6px 0 6px 12px; margin-top: 8px; }
+.rw .rw-detail h4 { margin: 0 0 4px; font-size: 14px; }
+.rw code { font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .rw * { transition: none !important; } }
+</style>
+<script>
+/* Shared helpers and equipment/cost data for the reinforcement examples. */
+window.RW = (function () {
+  var NS = "http://www.w3.org/2000/svg";
+  function el(tag, a, txt, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in a) if (a[k] != null) e.setAttribute(k, a[k]);
+    if (txt != null) e.textContent = txt;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function h(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+  function f(x, d) { return x.toFixed(d == null ? 2 : d); }
+  function seg(items, cur, onPick, label) {
+    var s = h("div", "rw-seg"); s.setAttribute("role", "group"); s.setAttribute("aria-label", label);
+    items.forEach(function (it) {
+      var b = h("button", null, it.label); b.type = "button"; b.setAttribute("aria-pressed", it.id === cur);
+      b.onclick = function () { [].forEach.call(s.children, function (c) { c.setAttribute("aria-pressed", c === b); }); onPick(it.id); };
+      s.appendChild(b);
+    });
+    return s;
+  }
+  function slider(id, label, min, max, step, val, fmt, onInput) {
+    var l = h("label", "rw-sl"); l.setAttribute("for", id);
+    l.innerHTML = "<span>" + label + "</span>";
+    var i = h("input"); i.type = "range"; i.id = id; i.min = min; i.max = max; i.step = step; i.value = val;
+    var b = h("b"); l.appendChild(i); l.appendChild(b);
+    function upd() { b.textContent = fmt(+i.value); }
+    i.oninput = function () { upd(); onInput(+i.value); };
+    upd();
+    return l;
+  }
+  function stats(container, cells) {
+    container.innerHTML = cells.map(function (c) {
+      return '<div class="rw-stat ' + (c[2] || "") + '"><div class="k">' + c[0] + '</div><div class="v">' + c[1] + "</div></div>";
+    }).join("");
+  }
+
+  // equipment data (edisgo/equipment/equipment-parameters_LV_cables.csv: R in Ohm/km,
+  // I_max_th in kA) and unit costs (config_grid_expansion_default.cfg, kEUR/km and kEUR)
+  var DATA = {
+    lvCables: { "NAYY 4x1x300": [0.1, 0.419], "NAYY 4x1x240": [0.125, 0.364], "NAYY 4x1x185": [0.164, 0.313],
+      "NAYY 4x1x150": [0.206, 0.275], "NAYY 4x1x120": [0.253, 0.245], "NAYY 4x1x95": [0.32, 0.215],
+      "NAYY 4x1x50": [0.449, 0.144], "NAYY 4x1x35": [0.868, 0.123] },
+    lvStd: "NAYY 4x1x150",
+    costs: { lv: { cable: 9, rural: 60, urban: 100, trafo: 10 }, mv: { cable: 20, rural: 80, urban: 140, trafo: 1000 } }
+  };
+  return { el: el, h: h, f: f, seg: seg, slider: slider, stats: stats, DATA: DATA };
+})();
+</script>

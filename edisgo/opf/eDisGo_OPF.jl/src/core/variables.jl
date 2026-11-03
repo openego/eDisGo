@@ -35,16 +35,12 @@ function variable_branch_power_real_radial(pm::AbstractPowerModel; nw::Int=nw_id
             f_idx = (l, branch["f_bus"], branch["t_bus"])
             JuMP.set_start_value(p[f_idx], branch["pf_start"])
         end
-        if haskey(branch, "pt_start")
-            t_idx = (l, branch["t_bus"], branch["f_bus"])
-            JuMP.set_start_value(p[t_idx], branch["pt_start"])
-        end
     end
 
     report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :pf, PowerModels.ref(pm, nw, :arcs_from), p)
 end
 
-"variable: `q[l,i,j]` for `(l,i,j)` in `arcs`"
+"variable: `q[l,i,j]` for `(l,i,j)` in `arcs_from`"
 function variable_branch_power_imaginary_radial(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     q = PowerModels.var(pm, nw)[:q] = JuMP.@variable(pm.model,
         [(l,i,j) in PowerModels.ref(pm, nw, :arcs_from)], base_name="$(nw)_q",
@@ -69,10 +65,6 @@ function variable_branch_power_imaginary_radial(pm::AbstractPowerModel; nw::Int=
         if haskey(branch, "qf_start")
             f_idx = (l, branch["f_bus"], branch["t_bus"])
             JuMP.set_start_value(q[f_idx], branch["qf_start"])
-        end
-        if haskey(branch, "qt_start")
-            t_idx = (l, branch["t_bus"], branch["f_bus"])
-            JuMP.set_start_value(q[t_idx], branch["qt_start"])
         end
     end
 
@@ -115,10 +107,10 @@ end
 
 "variable: `ll[l,i,j]` for `(l,i,j)` in `arcs_from`"
 function variable_line_loading_max(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
-    branches = [(l, i, j) for (l, i, j) in PowerModels.ref(pm, nw, :arcs_from) if !PowerModels.ref(pm, 1, :branch)[l]["storage"]]
+    branches = [(l, i, j) for (l, i, j) in PowerModels.ref(pm, nw, :arcs_from) if !PowerModels.ref(pm, nw, :branch)[l]["storage"]]
     ll = PowerModels.var(pm, nw)[:ll] = JuMP.@variable(pm.model,
         [(l,i,j) in branches], base_name="$(nw)_ll",
-        start = comp_start_value(PowerModels.ref(pm, nw, :branch, l), "ll_start"),
+        start = comp_start_value(PowerModels.ref(pm, nw, :branch, l), "ll_start", 1.0),
         lower_bound = 1
     )
 
@@ -553,7 +545,8 @@ Variable `pgs[i]` for `i` in `gen_slack`: the active power of each slack generat
 """
 function variable_slack_gen_real(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, report::Bool=true)
     pgs = PowerModels.var(pm, nw)[:pgs] = JuMP.@variable(pm.model,
-        [i in PowerModels.ids(pm, nw, :gen_slack)], base_name="$(nw)_pgs"
+        [i in PowerModels.ids(pm, nw, :gen_slack)], base_name="$(nw)_pgs",
+        start = comp_start_value(PowerModels.ref(pm, nw, :gen_slack, i), "pgs_start")
     )
     report && PowerModels.sol_component_value(pm, nw, :gen_slack, :pgs, PowerModels.ids(pm, nw, :gen_slack), pgs)
 end
@@ -564,7 +557,8 @@ generator (the substation / feed-in node), left unbounded.
 """
 function variable_slack_gen_imaginary(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, report::Bool=true)
     qgs = PowerModels.var(pm, nw)[:qgs] = JuMP.@variable(pm.model,
-        [i in PowerModels.ids(pm, nw, :gen_slack)], base_name="$(nw)_qgs"
+        [i in PowerModels.ids(pm, nw, :gen_slack)], base_name="$(nw)_qgs",
+        start = comp_start_value(PowerModels.ref(pm, nw, :gen_slack, i), "qgs_start")
     )
     report && PowerModels.sol_component_value(pm, nw, :gen_slack, :qgs, PowerModels.ids(pm, nw, :gen_slack), qgs)
 end

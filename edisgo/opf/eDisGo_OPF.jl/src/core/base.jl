@@ -69,6 +69,11 @@ If `:ne_branch` exists, then the following keys are also available with similar 
 * `:ne_branch`, `:ne_arcs_from`, `:ne_arcs_to`, `:ne_arcs`, `:ne_bus_arcs`, `:ne_buspairs`.
 
 
+The eDisGo components `:gen_nd`, `:gen_slack`, `:dsm`, `:electromobility`,
+`:heatpumps` and `:heat_storage` are filtered the same way: dropped when switched
+off (`gen_status` or `status`, a missing field counts as active) or when their bus
+is deactivated. A heat storage is also dropped with its heat pump.
+
 Added keys for eDisGo OPF include:
 
 * `:bus_arcs_to` -- the mapping `Dict(j => [(l,i,j) for (l,i,j) in ref[:arcs_from]])`,
@@ -100,6 +105,18 @@ function ref_add_core!(ref::Dict{Symbol,Any})
         nw_ref[:switch] = Dict(x for x in nw_ref[:switch] if (x.second["status"] != pm_component_status_inactive["switch"] && x.second["f_bus"] in keys(nw_ref[:bus]) && x.second["t_bus"] in keys(nw_ref[:bus])))
         nw_ref[:branch] = Dict(x for x in nw_ref[:branch] if (x.second["br_status"] != pm_component_status_inactive["branch"] && x.second["f_bus"] in keys(nw_ref[:bus]) && x.second["t_bus"] in keys(nw_ref[:bus])))
         nw_ref[:dcline] = Dict(x for x in nw_ref[:dcline] if (x.second["br_status"] != pm_component_status_inactive["dcline"] && x.second["f_bus"] in keys(nw_ref[:bus]) && x.second["t_bus"] in keys(nw_ref[:bus])))
+
+        # eDisGo components; a missing status field counts as active
+        nw_ref[:gen_nd] = Dict(x for x in nw_ref[:gen_nd] if (get(x.second, "gen_status", 1) != pm_component_status_inactive["gen"] && x.second["gen_bus"] in keys(nw_ref[:bus])))
+        nw_ref[:gen_slack] = Dict(x for x in nw_ref[:gen_slack] if (get(x.second, "gen_status", 1) != pm_component_status_inactive["gen"] && x.second["gen_bus"] in keys(nw_ref[:bus])))
+        nw_ref[:dsm] = Dict(x for x in nw_ref[:dsm] if (get(x.second, "status", 1) != pm_component_status_inactive["load"] && x.second["dsm_bus"] in keys(nw_ref[:bus])))
+        nw_ref[:electromobility] = Dict(x for x in nw_ref[:electromobility] if (get(x.second, "status", 1) != pm_component_status_inactive["load"] && x.second["cp_bus"] in keys(nw_ref[:bus])))
+        hp_ids = keys(nw_ref[:heatpumps])
+        nw_ref[:heatpumps] = Dict(x for x in nw_ref[:heatpumps] if (get(x.second, "status", 1) != pm_component_status_inactive["load"] && x.second["hp_bus"] in keys(nw_ref[:bus])))
+        # heat storage i belongs to heat pump i (see constraint_hp_operation), so it
+        # is dropped together with its heat pump
+        hp_dropped = setdiff(hp_ids, keys(nw_ref[:heatpumps]))
+        nw_ref[:heat_storage] = Dict(x for x in nw_ref[:heat_storage] if (get(x.second, "status", 1) != pm_component_status_inactive["storage"] && x.second["storage_bus"] in keys(nw_ref[:bus]) && !(x.first in hp_dropped)))
 
 
         ### setup arcs from edges ###

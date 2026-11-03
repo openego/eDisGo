@@ -7,9 +7,12 @@ established. The OEP path is covered by asserting on the returned engine's
 URL; the egon-data paths are covered with temporary configuration files and
 a monkeypatched ``ssh_tunnel``.
 """
+
 import textwrap
 
 import pytest
+
+from sqlalchemy.pool import NullPool
 
 from edisgo.io import db
 
@@ -54,6 +57,8 @@ class TestEngine:
     def test_explicit_oep(self):
         engine = db.engine(ssh=False)
         assert "oedialect" in str(engine.url)
+        # connections must not stay open on the OEP, which limits them per account
+        assert isinstance(engine.pool, NullPool)
 
     def test_auto_detect_falls_back_to_oep(self, tmp_path, monkeypatch):
         monkeypatch.setenv("EGON_DATA_CONFIG", str(tmp_path / "missing.yaml"))
@@ -74,9 +79,7 @@ class TestEngine:
         assert engine.url.port == 58888
         assert engine.url.username == "egon"
 
-    def test_config_with_tunnel_section_opens_tunnel(
-        self, tmp_path, monkeypatch
-    ):
+    def test_config_with_tunnel_section_opens_tunnel(self, tmp_path, monkeypatch):
         config = _write_config(
             tmp_path / "egon-data.configuration.yaml", ssh_tunnel_section=True
         )
@@ -127,3 +130,13 @@ class TestEngineFromSettings:
         monkeypatch.setenv("EGON_DATA_CONFIG", str(tmp_path / "missing.yaml"))
         engine = db.engine_from_settings(None)
         assert "oedialect" in str(engine.url)
+
+
+def test_psycopg2_adapts_numpy_int64():
+    # IDs taken from a DataFrame are numpy integers; psycopg2 (egon-data
+    # database) must be able to pass them as query parameters
+    import numpy as np
+
+    from psycopg2.extensions import adapt
+
+    assert adapt(np.int64(42)).getquoted() == b"42"

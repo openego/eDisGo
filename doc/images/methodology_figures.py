@@ -22,7 +22,9 @@ It only needs matplotlib and numpy.
 from __future__ import annotations
 
 import heapq
+import json
 import os
+import re
 
 import matplotlib
 
@@ -42,6 +44,7 @@ GREEN = "#2e7d32"
 GREY = "#9aa0a6"
 DARK = "#202124"
 PURPLE = "#6f42c1"
+RED = "#c2362b"
 
 plt.rcParams.update(
     {
@@ -606,6 +609,341 @@ def fig_dsm_bands():
     _save(fig, "dsm_flexibility_bands.png")
 
 
+# --------------------------------------------------------------------------- #
+# 11. Feeder split due to voltage issues (figure and data of the interactive
+#     step-through in doc/methodology/feeder_split.html)
+# --------------------------------------------------------------------------- #
+# LV cables from equipment-parameters_LV_cables.csv: R in Ohm/km, L in mH/km
+FS_CABLES = {
+    "NAYY 4x1x300": (0.100, 0.279),
+    "NAYY 4x1x150": (0.206, 0.256),
+    "NAYY 4x1x95": (0.320, 0.261),
+    "NAYY 4x1x50": (0.449, 0.270),
+}
+FS_STANDARD = "NAYY 4x1x150"
+FS_KM = [0.40, 0.20, 0.18, 0.12, 0.12, 0.10]
+FS_LIMIT = 0.065  # lv_max_v_drop
+FS_TAN_PHI = 0.33  # cos phi of about 0.95
+FS_SCENARIOS = {
+    "thin": {
+        "title": "Older, thinner cables",
+        "types": ["NAYY 4x1x95"] * 3 + ["NAYY 4x1x50"] * 3,
+        "n": [1] * 6,
+        "loads": [8] * 6,
+    },
+    "thick": {
+        "title": "Thick, parallel first section",
+        "types": ["NAYY 4x1x150"] + ["NAYY 4x1x300"] * 2 + ["NAYY 4x1x150"] * 3,
+        "n": [5, 2, 2, 1, 1, 1],
+        "loads": [10, 10, 40, 50, 60, 64],
+    },
+}
+
+
+def _fs_impedance(cable, km, n):
+    r_km, l_km = FS_CABLES[cable]
+    return r_km * km / n, 2 * np.pi * 50 * l_km * 1e-3 * km / n
+
+
+def _fs_power_flow(lines, p_kw):
+    """
+    Newton-Raphson power flow of a 0.4 kV grid with the slack at bus 0.
+
+    `lines` are tuples (bus0, bus1, r, x) in Ohm, `p_kw` the active power of the
+    loads at each bus in kW. Returns the complex bus voltages in p.u., or None if
+    the power flow does not converge within 100 iterations, as in PyPSA.
+    """
+    z_base = 0.4**2  # Ohm, for 1 MVA
+    nb = len(p_kw)
+    y_bus = np.zeros((nb, nb), complex)
+    for a, b, r, x in lines:
+        y = 1 / complex(r / z_base, x / z_base)
+        y_bus[a, a] += y
+        y_bus[b, b] += y
+        y_bus[a, b] -= y
+        y_bus[b, a] -= y
+    p = np.asarray(p_kw, float) / 1e3
+    s_set = -(p + 1j * p * FS_TAN_PHI)
+    v = np.ones(nb, complex)
+    pq = np.arange(1, nb)
+    for _ in range(100):
+        i = y_bus @ v
+        mis = v * i.conj() - s_set
+        f = np.r_[mis.real[pq], mis.imag[pq]]
+        if np.max(np.abs(f)) < 1e-8:
+            return v
+        vn = v / np.abs(v)
+        ds_dva = (
+            1j * np.diag(v) @ (np.diag(i.conj()) - y_bus.conj() @ np.diag(v.conj()))
+        )
+        ds_dvm = np.diag(v) @ (y_bus @ np.diag(vn)).conj() + np.diag(i.conj() * vn)
+        jac = np.block(
+            [
+                [ds_dva.real[np.ix_(pq, pq)], ds_dvm.real[np.ix_(pq, pq)]],
+                [ds_dva.imag[np.ix_(pq, pq)], ds_dvm.imag[np.ix_(pq, pq)]],
+            ]
+        )
+        try:
+            dx = np.linalg.solve(jac, -f)
+        except np.linalg.LinAlgError:
+            return None
+        va, vm = np.angle(v), np.abs(v)
+        va[pq] += dx[: len(pq)]
+        vm[pq] += dx[len(pq) :]
+        v = vm * np.exp(1j * va)
+        if not np.all(np.isfinite(v)) or vm.min() < 0.05:
+            return None
+    return None
+
+
+def _fs_lines(sc, split_n=None):
+    """Lines of a scenario before the split or after it with `split_n` systems."""
+    lines = []
+    for k, (cable, km, n) in enumerate(zip(sc["types"], FS_KM, sc["n"])):
+        if split_n and k == sc["split"] - 1:
+            # the line ending at the split node is connected to the station
+            km_new = sum(FS_KM[: sc["split"]])
+            lines.append((0, k + 1, *_fs_impedance(FS_STANDARD, km_new, split_n)))
+        else:
+            lines.append((k, k + 1, *_fs_impedance(cable, km, n)))
+    return lines
+
+
+def _fs_drop(v):
+    return None if v is None else [round(float(1 - abs(x)), 5) for x in v]
+
+
+def _fs_transfer_curve(sc, split_n):
+    """Voltage drop at the end of the feeder over the load behind the split node."""
+    lines = _fs_lines(sc, split_n)
+    p = np.r_[0.0, sc["loads"]]
+    behind = np.arange(len(p)) >= sc["split"]
+    p_behind = p[behind].sum()
+
+    curve, scale, step = [], 0.0, 0.02
+    while step > 1e-4:
+        v = _fs_power_flow(lines, np.where(behind, p * (scale + step), p))
+        if v is None:
+            step /= 2
+            continue
+        scale += step
+        curve.append([round(scale * p_behind, 1), round(float(1 - abs(v[-1])), 5)])
+    # thin out the points, which get dense where the step size was reduced
+    points = [curve[0]]
+    for point in curve[1:-1]:
+        if point[0] - points[-1][0] >= p_behind / 25:
+            points.append(point)
+    return {"points": points + curve[-1:], "p_max": round(scale * p_behind, 1)}
+
+
+def feeder_split_example():
+    """Compute the example feeders before and after the split."""
+    nodes_km = np.r_[0.0, np.cumsum(FS_KM)]
+    data = {"km": FS_KM, "limit": FS_LIMIT, "std": FS_STANDARD, "scenarios": {}}
+    for key, sc in FS_SCENARIOS.items():
+        sc = dict(sc)
+        p = np.r_[0.0, sc["loads"]]
+        before = _fs_drop(_fs_power_flow(_fs_lines(sc), p))
+        crit = [b for b in range(1, len(before)) if before[b] > FS_LIMIT]
+        far = max(crit, key=lambda b: nodes_km[b])
+        two_thirds = 2 / 3 * nodes_km[far]
+        sc["split"] = int(np.argmax(nodes_km >= two_thirds))
+        r_path = sum(line[2] for line in _fs_lines(sc)[: sc["split"]])
+        km_new = nodes_km[sc["split"]]
+        # number of parallel split lines needed for a power flow solution
+        after = {}
+        for n_new in range(1, 6):
+            after[n_new] = _fs_drop(_fs_power_flow(_fs_lines(sc, n_new), p))
+            if after[n_new] is not None:
+                break
+        data["scenarios"][key] = {
+            "title": sc["title"],
+            "types": sc["types"],
+            "n": sc["n"],
+            "loads": sc["loads"],
+            "critical": crit,
+            "far": far,
+            "two_thirds": round(two_thirds, 4),
+            "split": sc["split"],
+            "km_new": round(km_new, 4),
+            "r_path": round(r_path, 4),
+            "r_new": round(_fs_impedance(FS_STANDARD, km_new, 1)[0], 4),
+            "p_behind": float(sum(sc["loads"][sc["split"] - 1 :])),
+            "before": before,
+            "after": {str(n): d for n, d in after.items()},
+            "curves": {
+                "before": _fs_transfer_curve(sc, None),
+                **{str(n): _fs_transfer_curve(sc, n) for n in after},
+            },
+        }
+    return data
+
+
+def write_feeder_split_widget(data):
+    """Write the example data into the interactive step-through."""
+    path = os.path.join(HERE, "..", "methodology", "feeder_split.html")
+    with open(path) as f:
+        html = f.read()
+    html = re.sub(
+        r"var D = .*?;\n",
+        lambda _: "var D = " + json.dumps(data, separators=(",", ":")) + ";\n",
+        html,
+        count=1,
+    )
+    with open(path, "w") as f:
+        f.write(html)
+    print("wrote feeder_split.html")
+
+
+def fig_feeder_split(data):
+    sc = data["scenarios"]["thick"]
+    nodes_km = np.r_[0.0, np.cumsum(data["km"])]
+    split, n_new = sc["split"], max(int(n) for n in sc["after"])
+    colors = {
+        "NAYY 4x1x300": PURPLE,
+        "NAYY 4x1x150": BLUE,
+        "NAYY 4x1x95": ORANGE,
+        "NAYY 4x1x50": ORANGE,
+    }
+    fig, axes = plt.subplots(2, 2, figsize=(11, 7.4))
+    (ax_a, ax_b), (ax_c, ax_d) = axes
+
+    def feeder(ax, split_n, title):
+        ax.set_xlim(-0.12, nodes_km[-1] + 0.05)
+        ax.set_ylim(-0.75, 0.42)
+        ax.axis("off")
+        for k, (cable, n) in enumerate(zip(sc["types"], sc["n"])):
+            xa, xb = nodes_km[k] + 0.012, nodes_km[k + 1] - 0.012
+            if split_n and k == split - 1:
+                ys = [(j - (split_n - 1) / 2) * 0.035 - 0.45 for j in range(split_n)]
+                for y in ys:
+                    dx = y + 0.45
+                    ax.plot(
+                        [dx, dx, xb + 0.012 + dx, xb + 0.012 + dx],
+                        [-0.1, y, y, -0.04],
+                        color=BLUE,
+                        lw=1.6,
+                    )
+                ax.text(
+                    nodes_km[split] / 2,
+                    min(ys) - 0.1,
+                    f"new line: {split_n}× {FS_STANDARD}, {sc['km_new']:.2f} km",
+                    ha="center",
+                    fontsize=8.5,
+                    color=BLUE,
+                )
+                continue
+            for j in range(min(n, 6)):
+                y = (j - (min(n, 6) - 1) / 2) * 0.035
+                ax.plot([xa, xb], [y, y], color=colors[cable], lw=1.6)
+            ax.text(
+                (xa + xb) / 2,
+                0.2,
+                f"L{k + 1}" + (f" ×{n}" if n > 1 else ""),
+                ha="center",
+                fontsize=9,
+                fontweight="bold",
+            )
+            ax.text(
+                (xa + xb) / 2, 0.32, cable.split("x")[-1], ha="center", fontsize=7.5
+            )
+        ax.add_patch(plt.Rectangle((-0.05, -0.1), 0.04, 0.2, color=DARK))
+        for b in range(1, len(nodes_km)):
+            crit = b in sc["critical"] and not split_n
+            ax.plot(
+                nodes_km[b],
+                0,
+                "o",
+                ms=7,
+                mfc=RED if crit else "white",
+                mec=RED if crit else DARK,
+                mew=1.4,
+            )
+            ax.text(nodes_km[b], 0.07, f"B{b}", ha="center", fontsize=8.5)
+        ax.set_title(title, loc="left", fontsize=10)
+
+    feeder(ax_a, None, "(a) Feeder before the split, critical buses in red")
+    ax_a.axvline(sc["two_thirds"], ymin=0.25, ymax=0.62, color=GREY, ls="--", lw=1.2)
+    ax_a.text(
+        sc["two_thirds"],
+        -0.42,
+        "2/3 of the path\nto B6",
+        ha="center",
+        fontsize=8,
+        color=DARK,
+    )
+    feeder(
+        ax_b,
+        n_new,
+        f"(b) After the split: L{split} connects B{split} to the station",
+    )
+
+    for key, label, color, ls in [
+        ("before", "before the split", GREY, "--"),
+        ("1", f"split, 1× {FS_STANDARD}", ORANGE, "-"),
+        (str(n_new), f"split, {n_new}× {FS_STANDARD}", BLUE, "-"),
+    ]:
+        pts = np.array(sc["curves"][key]["points"])
+        ax_d.plot(pts[:, 0], pts[:, 1] * 100, color=color, ls=ls, lw=2, label=label)
+        ax_d.plot(pts[-1, 0], pts[-1, 1] * 100, "x", color=color, ms=8, mew=2)
+        ax_d.text(
+            pts[-1, 0] + 8,
+            pts[-1, 1] * 100 + 1.5,
+            f"max. {pts[-1, 0]:.0f} kW",
+            fontsize=8,
+            color=color,
+        )
+    ax_d.axvline(sc["p_behind"], color=DARK, lw=1)
+    ax_d.text(
+        sc["p_behind"] + 6,
+        16,
+        f"load behind\nthe split: {sc['p_behind']:.0f} kW",
+        fontsize=8.5,
+    )
+    ax_d.axhline(data["limit"] * 100, color=RED, lw=1.2, ls=(0, (6, 4)))
+    ax_d.set_xlabel("load behind the split node in kW")
+    ax_d.set_ylabel("voltage drop at B6 in %")
+    ax_d.set_ylim(0, 60)
+    ax_d.set_xlim(0, max(c["p_max"] for c in sc["curves"].values()) * 1.25)
+    ax_d.legend(fontsize=8.5, frameon=False, loc="lower right")
+    ax_d.set_title(
+        "(d) Power flow solutions end at ×: no solution for more load",
+        loc="left",
+        fontsize=10,
+    )
+
+    for key, label, color, ls in [
+        ("before", "before the split", GREY, "--"),
+        (str(n_new), f"split, {n_new}× {FS_STANDARD}", BLUE, "-"),
+    ]:
+        drop = np.array(sc["before"] if key == "before" else sc["after"][key]) * 100
+        if key == "before":
+            ax_c.plot(nodes_km, drop, color=color, ls=ls, lw=2, marker="o", ms=4)
+        else:
+            front = list(range(split))
+            rear = [0] + list(range(split, len(nodes_km)))
+            ax_c.plot(nodes_km[front], drop[front], color=color, lw=2, marker="o", ms=4)
+            ax_c.plot(nodes_km[rear], drop[rear], color=color, lw=2, marker="o", ms=4)
+        ax_c.plot([], [], color=color, ls=ls, lw=2, label=label)
+    ax_c.axhline(data["limit"] * 100, color=RED, lw=1.2, ls=(0, (6, 4)))
+    ax_c.text(0.01, data["limit"] * 100 + 0.6, "allowed 6.5 %", color=RED)
+    ax_c.set_xticks(nodes_km)
+    ax_c.set_xticklabels(["station"] + [f"B{b}" for b in range(1, len(nodes_km))])
+    ax_c.set_ylabel("voltage drop in %")
+    ax_c.legend(fontsize=8.5, frameon=False, loc="upper left")
+    ax_c.set_title(
+        f"(c) Voltage drop after the split with {n_new} lines (1 line: no solution)",
+        loc="left",
+        fontsize=10,
+    )
+    for ax in (ax_c, ax_d):
+        ax.grid(axis="y", color="#e3e8eb")
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+    fig.tight_layout()
+    _save(fig, "feeder_split.png")
+
+
 def main():
     fig_flexibility_bands_generic()
     fig_ev_flexibility_bands()
@@ -617,6 +955,9 @@ def main():
     fig_branch_flow()
     fig_spatial_reduction()
     fig_dsm_bands()
+    feeder_split = feeder_split_example()
+    fig_feeder_split(feeder_split)
+    write_feeder_split_widget(feeder_split)
 
 
 if __name__ == "__main__":

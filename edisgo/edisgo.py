@@ -69,8 +69,10 @@ from edisgo.tools.spatial_complexity_reduction import (
     spatial_complexity_reduction,
 )
 from edisgo.tools.tools import (
+    check_timeindex_coverage,
     determine_grid_integration_voltage_level,
     get_path_length_to_station,
+    reduce_timeseries_data_to_given_timeindex,
 )
 
 if "READTHEDOCS" not in os.environ:
@@ -325,8 +327,9 @@ class EDisGo:
         You can set the time index upon initialisation of the EDisGo object by
         providing the input parameter 'timeindex' or using the function
         :attr:`~.edisgo.EDisGo.set_timeindex`.
-        Also make sure that the time steps for which time series are provided include
-        the set time index.
+        If a time index is set, the provided time series have to cover it. A
+        `ValueError` is raised if a DataFrame with columns is missing data for a time
+        step in :attr:`~.network.timeseries.TimeSeries.timeindex`.
 
         """
         # check if time index is already set, otherwise raise warning
@@ -337,6 +340,16 @@ class EDisGo:
                 "upon initialisation of the EDisGo object by providing the input "
                 "parameter 'timeindex' or using the function EDisGo.set_timeindex()."
             )
+        else:
+            for name, df in (
+                ("generators_p", generators_p),
+                ("loads_p", loads_p),
+                ("storage_units_p", storage_units_p),
+                ("generators_q", generators_q),
+                ("loads_q", loads_q),
+                ("storage_units_q", storage_units_q),
+            ):
+                check_timeindex_coverage(self.timeseries.timeindex, f"'{name}'", df)
         self.timeseries.set_active_power_manual(
             self,
             ts_generators=generators_p,
@@ -1014,12 +1027,12 @@ class EDisGo:
             keyword arguments.
 
         """
-        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
         if self.legacy_grids is True:
             generators_import.oedb_legacy(
                 edisgo_object=self, generator_scenario=generator_scenario, **kwargs
             )
         else:
+            engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
             generators_import.oedb(
                 edisgo_object=self,
                 engine=engine,
@@ -1374,6 +1387,12 @@ class EDisGo:
             See parameter `weight_by_costs` in
             :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
             for more information. Default: False.
+        choose_cheaper_voltage_measure : bool
+            If True, a line is only disconnected due to a voltage issue if this is
+            cheaper than reinforcing the lines on the path between station and
+            critical node. If False, a line is always disconnected if possible.
+            See :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`
+            for more information. Default: False.
 
         Returns
         --------
@@ -1698,6 +1717,14 @@ class EDisGo:
 
         Other Parameters
         ------------------
+        max_distance_from_target_bus : float
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+        connect_to_load_bus : bool
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+        allowed_number_of_comp_per_bus : int
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
+            for LV grids with geolocations and
+            :attr:`~.network.topology.Topology.connect_to_lv` for LV grids without.
         kwargs :
             Attributes of added component.
             See :attr:`~.network.topology.Topology.add_generator`,
@@ -1736,6 +1763,11 @@ class EDisGo:
         if type(geolocation) is not Point:
             geolocation = Point(geolocation)
 
+        # options of the LV connection functions must not end up in the component data
+        max_distance_from_target_bus = kwargs.pop("max_distance_from_target_bus", 0.02)
+        connect_to_load_bus = kwargs.pop("connect_to_load_bus", False)
+        allowed_number_of_comp_per_bus = kwargs.pop("allowed_number_of_comp_per_bus", 2)
+
         # write voltage level and geolocation to kwargs
         kwargs["geom"] = geolocation
         kwargs["voltage_level"] = voltage_level
@@ -1759,14 +1791,18 @@ class EDisGo:
                     ]
                     nearest_substation, _ = find_nearest_bus(geolocation, substations)
                     kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
-                comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
+                comp_name = self.topology.connect_to_lv(
+                    self, kwargs, comp_type, allowed_number_of_comp_per_bus
+                )
 
             else:
-                max_distance_from_target_bus = kwargs.pop(
-                    "max_distance_from_target_bus", 0.02
-                )
                 comp_name = self.topology.connect_to_lv_based_on_geolocation(
-                    self, kwargs, comp_type, max_distance_from_target_bus
+                    self,
+                    kwargs,
+                    comp_type,
+                    max_distance_from_target_bus,
+                    connect_to_load_bus,
+                    allowed_number_of_comp_per_bus,
                 )
 
         if add_ts:
@@ -1956,6 +1992,7 @@ class EDisGo:
         potential_charging_points_dir: PurePath | str = None,
         import_electromobility_data_kwds=None,
         allocate_charging_demand_kwds=None,
+        integrate_charging_parks_kwds=None,
     ):
         """
         Imports electromobility data and integrates charging points into grid.
@@ -2062,6 +2099,20 @@ class EDisGo:
                 Weighting factor of the user-friendly weight in comparison to the
                 grid friendly weight. Default: 0.5.
 
+        integrate_charging_parks_kwds : dict
+            Options for the grid connection of the charging parks, passed on to
+            :func:`~.io.electromobility_import.integrate_charging_parks`.
+
+            connect_to_load_bus : bool
+                If True, home and work charging parks in voltage level 7 in LV grids
+                with geolocations are preferably connected to a bus with a matching
+                load, e.g. home charging parks to a bus with a residential load.
+                Default: False.
+
+            See :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
+            for this and the further options `max_distance_from_target_bus` and
+            `allowed_number_of_comp_per_bus`.
+
         """
         if import_electromobility_data_kwds is None:
             import_electromobility_data_kwds = {}
@@ -2091,7 +2142,10 @@ class EDisGo:
 
         distribute_charging_demand(self, **allocate_charging_demand_kwds)
 
-        integrate_charging_parks(self)
+        if integrate_charging_parks_kwds is None:
+            integrate_charging_parks_kwds = {}
+
+        integrate_charging_parks(self, **integrate_charging_parks_kwds)
 
     def apply_charging_strategy(
         self,
@@ -2164,6 +2218,9 @@ class EDisGo:
         :class:`~.network.timeseries.TimeSeries` is first automatically resampled to
         match the SimBEV data frequency and after determining the charging demand time
         series resampled back to the original frequency.
+
+        The written charging point time series cover exactly
+        :attr:`~.network.timeseries.TimeSeries.timeindex`, also if it has gaps.
 
         """
         charging_strategy(
@@ -2342,6 +2399,16 @@ class EDisGo:
             Defines for which heat pumps to apply operating strategy. If None, all heat
             pumps for which COP information in :attr:`~.edisgo.EDisGo.heat_pump` is
             given are used. Default: None.
+
+        Notes
+        -----
+        The written load time series are scoped to
+        :attr:`~.network.timeseries.TimeSeries.timeindex`, regardless of
+        whether :attr:`~.edisgo.EDisGo.heat_pump`'s COP/heat demand time
+        series currently span a wider or different range. Raises
+        ``KeyError`` if they are missing data for a time step in the active
+        timeindex - see :func:`~.flex_opt.heat_pump_operation.operating_strategy`
+        for details.
 
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
@@ -3753,8 +3820,8 @@ class EDisGo:
         """
         Resamples time series data in
         :class:`~.network.timeseries.TimeSeries`, :class:`~.network.heat.HeatPump`,
-        :class:`~.network.electromobility.Electromobility` and
-        :class:`~.network.overlying_grid.OverlyingGrid`.
+        :class:`~.network.electromobility.Electromobility`,
+        :class:`~.network.dsm.DSM` and :class:`~.network.overlying_grid.OverlyingGrid`.
 
         Both up- and down-sampling methods are possible.
 
@@ -3777,6 +3844,14 @@ class EDisGo:
         * :attr:`~.network.heat.HeatPump.cop_df`
 
         * :attr:`~.network.heat.HeatPump.heat_demand_df`
+
+        * :attr:`~.network.dsm.DSM.p_min`
+
+        * :attr:`~.network.dsm.DSM.p_max`
+
+        * :attr:`~.network.dsm.DSM.e_min`
+
+        * :attr:`~.network.dsm.DSM.e_max`
 
         * All data in :class:`~.network.overlying_grid.OverlyingGrid`
 
@@ -3810,7 +3885,71 @@ class EDisGo:
         self.timeseries.resample(method=method, freq=freq)
         self.electromobility.resample(freq=freq)
         self.heat_pump.resample_timeseries(method=method, freq=freq)
+        self.dsm.resample(method=method, freq=freq)
         self.overlying_grid.resample(method=method, freq=freq)
+
+    def reduce_timeseries_data_to_given_timeindex(
+        self,
+        timeindex,
+        freq="1H",
+        timeseries=True,
+        electromobility=True,
+        save_ev_soc_initial=True,
+        heat_pump=True,
+        dsm=True,
+        overlying_grid=True,
+    ):
+        """
+        Reduces timeseries data in this EDisGo object to given time index.
+
+        Calls :func:`edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex`.
+
+        Parameters
+        -----------
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+            Time index to set.
+        freq : str or :pandas:`pandas.Timedelta<Timedelta>`, optional
+            Frequency of time series data. This is only needed if it cannot be
+            inferred from the given `timeindex` and if electromobility data
+            and/or overlying grid data is reduced, as the initial SoC is
+            tried to be set using the time step before the first time step in
+            the given `timeindex`. Offset aliases can be found here:
+            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
+            Default: '1H'.
+        timeseries : bool
+            Indicates whether timeseries in
+            :class:`~.network.timeseries.TimeSeries` are reduced to given
+            time index. Default: True.
+        electromobility : bool
+            Indicates whether timeseries in
+            :class:`~.network.electromobility.Electromobility` are reduced to
+            given time index. Default: True.
+        save_ev_soc_initial : bool
+            Indicates whether to save initial EV SOC from timestep before
+            first timestep of given time index. Default: True.
+        heat_pump : bool
+            Indicates whether timeseries in :class:`~.network.heat.HeatPump`
+            are reduced to given time index. Default: True.
+        dsm : bool
+            Indicates whether timeseries in :class:`~.network.dsm.DSM` are
+            reduced to given time index. Default: True.
+        overlying_grid : bool
+            Indicates whether timeseries in
+            :class:`~.network.overlying_grid.OverlyingGrid` are reduced to
+            given time index. Default: True.
+
+        """
+        reduce_timeseries_data_to_given_timeindex(
+            self,
+            timeindex,
+            freq=freq,
+            timeseries=timeseries,
+            electromobility=electromobility,
+            save_ev_soc_initial=save_ev_soc_initial,
+            heat_pump=heat_pump,
+            dsm=dsm,
+            overlying_grid=overlying_grid,
+        )
 
 
 def import_edisgo_from_pickle(filename, path=""):

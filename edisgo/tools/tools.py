@@ -26,11 +26,8 @@ from sqlalchemy.engine.base import Engine
 
 from edisgo.flex_opt import exceptions, q_control
 from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
-from edisgo.tools import session_scope
+from edisgo.tools import legacy_oep_table, session_scope
 from edisgo.tools.config import Config
-
-if "READTHEDOCS" not in os.environ:
-    from egoio.db_tables import climate
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -85,6 +82,37 @@ def align_series_to_timeindex(ts, timeindex, extra_step=False):
         if freq is not None:
             target = timeindex.union([timeindex[-1] + freq])
     return ts.reindex(target)
+
+
+def check_timeindex_coverage(timeindex, name, df):
+    """
+    Raises ``ValueError`` if `df` has columns but is missing data for a time
+    step in `timeindex`.
+
+    Used to check that time series provided by the user cover the time index
+    before they are written. A DataFrame without columns is not checked, as
+    nothing is written.
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time index the data has to cover.
+    name : str
+        Name of the time series used in the error message.
+    df : :pandas:`pandas.DataFrame<DataFrame>` or None
+        DataFrame to check. Not checked if None or without columns.
+
+    """
+    if df is None or df.shape[1] == 0:
+        return
+    missing = timeindex.difference(df.index)
+    if len(missing) > 0:
+        raise ValueError(
+            f"The {name} time series miss {len(missing)} of {len(timeindex)} time "
+            f"steps of the time index (first {missing[0]}, last {missing[-1]}). "
+            f"Provide data for these time steps or adapt the time index with "
+            f"EDisGo.set_timeindex."
+        )
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -799,6 +827,7 @@ def get_weather_cells_intersecting_with_grid_district(
     edisgo_obj : :class:`~.EDisGo`
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine. Only needed when using new egon_data data.
+        Ignored for legacy grids, which use the legacy database connection.
 
     Returns
     -------
@@ -811,7 +840,7 @@ def get_weather_cells_intersecting_with_grid_district(
     srid = edisgo_obj.topology.grid_district["srid"]
 
     if edisgo_obj.legacy_grids is True:
-        table = climate.Cosmoclmgrid
+        table = legacy_oep_table("climate", "cosmoclmgrid")
         with session_scope() as session:
             query = session.query(
                 table.gid,
@@ -1066,20 +1095,45 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
             ]
             # in case there is more than 1 PtH unit, get name of heat pump, otherwise
             # get name of single PtH unit
-            if len(district_hps) > 1:
+            central_hps = district_hps[district_hps.sector == "district_heating"]
+            central_rhs = district_hps[
+                district_hps.sector == "district_heating_resistive_heater"
+            ]
+            if len(district_hps) > 1 and not central_hps.empty:
                 # district heat pump component
-                district_hp = district_hps[
-                    district_hps.sector == "district_heating"
-                ].index[0]
+                district_hp = central_hps.index[0]
             else:
+                # Either a single unit, or several units none of which is a heat
+                # pump -- central heat pumps and central resistive heaters are
+                # imported by independent queries, and a resistive heater that
+                # cannot be attached to a heat pump is integrated on its own
+                # (see io.heat_pump_import), so an area can hold resistive
+                # heaters only. Fall back to the first unit, which is what the
+                # single-unit case does as well.
                 district_hp = district_hps.index[0]
 
             # reduce demand by feedin from other sources (e.g. solarthermal, geothermal)
             if not feedin_district_heating.empty:
                 if str(int(district)) in feedin_district_heating.columns:
-                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                    remaining_demand = (
                         edisgo_obj.heat_pump.heat_demand_df[district_hp]
                         - feedin_district_heating[str(int(district))]
+                    )
+                    # The remaining demand is bounded below by zero: in a time step
+                    # where the other heat sources deliver more than the network
+                    # needs, the power-to-heat unit is simply switched off. Without
+                    # the bound the negative heat demand is divided by the COP in
+                    # apply_heat_pump_operating_strategy and the unit turns into a
+                    # generator feeding the grid.
+                    if (remaining_demand < 0).any():
+                        logger.warning(
+                            f"Feed-in from other heat supply sources exceeds the heat "
+                            f"demand of district heating grid {district} in "
+                            f"{int((remaining_demand < 0).sum())} time step(s). The "
+                            f"remaining heat demand is set to zero in those steps."
+                        )
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                        remaining_demand.clip(lower=0)
                     )
                 else:
                     logger.info(
@@ -1087,11 +1141,18 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                         f"grid {district}."
                     )
 
-            if len(district_hps) > 1:
+            if len(district_hps) > 1 and (central_hps.empty or central_rhs.empty):
+                logger.warning(
+                    f"District heating grid {district} holds "
+                    f"{len(district_hps)} power-to-heat units but not one of each "
+                    f"type (heat pump / resistive heater), so they cannot be "
+                    f"merged into a single component. Sectors present: "
+                    f"{sorted(district_hps.sector.unique())}."
+                )
+
+            if len(district_hps) > 1 and not (central_hps.empty or central_rhs.empty):
                 # get name of resistive heater component
-                district_rh = district_hps[
-                    district_hps.sector == "district_heating_resistive_heater"
-                ].index[0]
+                district_rh = central_rhs.index[0]
                 # calculate rated power of aggregated component
                 new_p_set = edisgo_obj.topology.loads_df.loc[
                     district_hps.index
@@ -1102,9 +1163,10 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                 ).clip(lower=0)
                 hp_p_set = edisgo_obj.topology.loads_df.at[district_hp, "p_set"]
                 if (el_demand > hp_p_set).any():
-                    # calculate COP by weighted COP of single components
-                    # (weighted by their contribution to cover heat demand)
-                    # determine percentage of contribution per component
+                    # Share of the heat demand each component covers. The heat pump
+                    # runs up to its rated power, the resistive heater covers the
+                    # rest; dividing both by el_demand gives shares of the heat,
+                    # because el_demand is heat demand over a single COP.
                     df = pd.concat(
                         [
                             (el_demand.clip(upper=hp_p_set) / el_demand)
@@ -1116,8 +1178,15 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                         ],
                         axis=1,
                     )
-                    new_cop = (
-                        edisgo_obj.heat_pump.cop_df[district_hps.index] * df
+                    # The aggregated COP has to reproduce the electricity demand of
+                    # the two components for the combined heat demand Q:
+                    #     Q / COP_agg = Q_hp / COP_hp + Q_rh / COP_rh
+                    # Dividing by Q makes 1 / COP_agg the heat-share-weighted mean of
+                    # the reciprocals, i.e. the harmonic mean -- not the arithmetic
+                    # mean of the COPs, which is always the larger of the two and
+                    # therefore always understates the electricity demand.
+                    new_cop = 1 / (
+                        df / edisgo_obj.heat_pump.cop_df[district_hps.index]
                     ).sum(axis=1)
                 else:
                     new_cop = edisgo_obj.heat_pump.cop_df[district_hp]
@@ -1333,6 +1402,47 @@ def reduce_timeseries_data_to_given_timeindex(
                     )
 
 
+def split_into_contiguous_runs(df, freq_orig):
+    """
+    Splits a DataFrame with a (possibly gapped) `DatetimeIndex` into its
+    maximal contiguous runs.
+
+    A run boundary is any gap between consecutive index entries larger than
+    `freq_orig`. :func:`resample` resamples each run on its own, as pandas'
+    `.resample()` would fill a gap in the time index (e.g. two separate weeks)
+    with resampled data.
+
+    Parameters
+    ----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+        Assumed non-empty and sorted.
+    freq_orig : :pandas:`pandas.Timedelta<Timedelta>`
+        Frequency of the original time series data. Any gap larger than this
+        is treated as a run boundary.
+
+    Returns
+    -------
+    list(:pandas:`pandas.DataFrame<DataFrame>`)
+        The contiguous runs, in order. A continuous `df` returns a
+        single-element list containing `df` itself unchanged.
+
+    """
+    if len(df.index) < 2:
+        return [df]
+    gaps = df.index.to_series().diff().iloc[1:]
+    run_boundaries = np.flatnonzero((gaps > freq_orig).to_numpy()) + 1
+    if len(run_boundaries) == 0:
+        return [df]
+    return [
+        df.iloc[start:end]
+        for start, end in zip(
+            [0, *run_boundaries.tolist()],
+            [*run_boundaries.tolist(), len(df.index)],
+        )
+    ]
+
+
 def resample(
     object,
     freq_orig,
@@ -1362,58 +1472,46 @@ def resample(
         List of attributes to resample. Per default, all attributes specified in
         respective object's `_attributes` are resampled.
 
+    Notes
+    -----
+    A time index with gaps (e.g. two separate weeks) is resampled per
+    contiguous run (see :func:`split_into_contiguous_runs`), so the gaps are
+    kept.
+
     """
     if attr_to_resample is None:
         attr_to_resample = object._attributes
+    freq_orig = pd.Timedelta(freq_orig)
+    freq = pd.Timedelta(freq) if not isinstance(freq, pd.Timedelta) else freq
+    up_sampling = freq < freq_orig
 
-    # add time step at the end of the time series in case of up-sampling so that
-    # last time interval in the original time series is still included
-    df_dict = {}
+    if up_sampling and method not in ("interpolate", "ffill", "bfill"):
+        raise NotImplementedError(f"Resampling method {method} is not implemented.")
+
     for attr in attr_to_resample:
-        if not getattr(object, attr).empty:
-            df_dict[attr] = getattr(object, attr)
-            if pd.Timedelta(freq) < freq_orig:  # up-sampling
-                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1] + freq_orig])
-            else:  # down-sampling
-                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
-            df_dict[attr] = (
-                df_dict[attr]
-                .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
-                .ffill()
-            )
+        df = getattr(object, attr)
+        if df.empty:
+            continue
 
-    # resample time series
-    if pd.Timedelta(freq) < freq_orig:  # up-sampling
-        if method == "interpolate":
-            for attr in df_dict.keys():
-                setattr(
-                    object,
-                    attr,
-                    df_dict[attr].resample(freq, closed="left").interpolate().iloc[:-1],
-                )
-        elif method == "ffill":
-            for attr in df_dict.keys():
-                setattr(
-                    object,
-                    attr,
-                    df_dict[attr].resample(freq, closed="left").ffill().iloc[:-1],
-                )
-        elif method == "bfill":
-            for attr in df_dict.keys():
-                setattr(
-                    object,
-                    attr,
-                    df_dict[attr].resample(freq, closed="left").bfill().iloc[:-1],
-                )
-        else:
-            raise NotImplementedError(f"Resampling method {method} is not implemented.")
-    else:  # down-sampling
-        for attr in df_dict.keys():
-            setattr(
-                object,
-                attr,
-                df_dict[attr].resample(freq).mean(),
-            )
+        resampled_runs = []
+        for run in split_into_contiguous_runs(df, freq_orig):
+            # add time step at the end of the run in case of up-sampling so
+            # that the last time interval in the run is still included
+            if up_sampling:
+                new_dates = pd.DatetimeIndex([run.index[-1] + freq_orig])
+            else:
+                new_dates = pd.DatetimeIndex([run.index[-1]])
+            run = run.reindex(run.index.union(new_dates).unique().sort_values()).ffill()
+
+            if up_sampling:
+                resampled = getattr(run.resample(freq, closed="left"), method)().iloc[
+                    :-1
+                ]
+            else:
+                resampled = run.resample(freq).mean()
+            resampled_runs.append(resampled)
+
+        setattr(object, attr, pd.concat(resampled_runs))
 
 
 def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.DataFrame:

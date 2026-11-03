@@ -1,0 +1,55 @@
+<div class="rw" id="rw-so">
+<div class="rw-row" id="rw-so-ctl"></div>
+<div class="rw-box"><svg id="rw-so-svg" role="img" aria-label="Transformers of an MV/LV station before and after reinforcement"></svg></div>
+<div class="rw-stats" id="rw-so-stats"></div>
+<p class="rw-detail" id="rw-so-why"></p>
+<p class="rw-note">MV/LV transformers from <code>equipment-parameters_LV_transformers.csv</code>, standard transformer 630 kVA (<code>mv_lv_transformer</code>), 10 kEUR per transformer (<code>costs_transformers.lv</code>), load factor 1.0. HV/MV stations work the same way with the 40 MVA standard transformer.</p>
+<script>
+(function () {
+  var RW = window.RW, svg = document.getElementById("rw-so-svg");
+  var SETS = { "1x400": [400], "2x250": [250, 250], "400+160": [400, 160], "1x630": [630] };
+  var st = { set: "1x400", peak: 520 };
+  var ctl = document.getElementById("rw-so-ctl");
+  ctl.appendChild(RW.seg(Object.keys(SETS).map(function (k) { return { id: k, label: SETS[k].map(function (s) { return s + " kVA"; }).join(" + ") }; }), st.set, function (id) { st.set = id; draw(); }, "Existing transformers"));
+  ctl.appendChild(RW.slider("rw-so-peak", "peak load", 200, 1800, 10, st.peak, function (v) { return v + " kVA"; }, function (v) { st.peak = v; draw(); }));
+  function decide(ex, peak) {
+    var sum = ex.reduce(function (a, b) { return a + b; }, 0), miss = peak - sum;
+    if (miss <= 0) return { after: ex.slice(), add: [], removed: [], miss: miss, why: "The station is not overloaded." };
+    var big = ex.filter(function (s) { return s >= miss; });
+    if (big.length) {
+      var s = Math.min.apply(null, big);
+      return { after: ex.concat([s]), add: [s], removed: [], miss: miss, why: "The largest existing transformer (" + Math.max.apply(null, ex) + " kVA) covers the missing " + Math.round(miss) + " kVA, so a copy of the smallest existing transformer that does (" + s + " kVA) is added." };
+    }
+    var n = Math.ceil((miss + sum) / 630 - 1e-9), nw = [];
+    for (var i = 0; i < n; i++) nw.push(630);
+    return { after: nw, add: nw, removed: ex.slice(), miss: miss, why: "No existing transformer covers the missing " + Math.round(miss) + " kVA. All transformers are replaced by ⌈(" + Math.round(miss) + " + " + sum + ") / 630⌉ = " + n + " standard transformers of 630 kVA." };
+  }
+  function drawSet(list, x0, y, cls, label) {
+    RW.el("text", { x: x0, y: y - 14, "font-size": 12, "font-weight": 600 }, label, svg);
+    list.forEach(function (s, i) {
+      var w = 28 + s / 1000 * 60, x = x0 + i * 100;
+      RW.el("rect", { x: x, y: y, width: w, height: w, rx: 4, fill: cls[i] === "new" ? "var(--ok-soft)" : cls[i] === "rem" ? "var(--bad-soft)" : "#fff", stroke: cls[i] === "new" ? "var(--new)" : cls[i] === "rem" ? "var(--bad)" : "var(--ink)", "stroke-width": 1.5, "stroke-dasharray": cls[i] === "rem" ? "4 3" : null }, null, svg);
+      RW.el("text", { x: x + w / 2, y: y + w / 2 + 4, "text-anchor": "middle", "font-size": 11 }, s + " kVA", svg);
+    });
+  }
+  function draw() {
+    var ex = SETS[st.set], d = decide(ex, st.peak);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.setAttribute("viewBox", "0 0 800 150");
+    drawSet(ex, 20, 40, ex.map(function () { return d.removed.length ? "rem" : ""; }), "before");
+    var cls = d.after.map(function (_, i) { return d.removed.length ? "new" : i >= ex.length ? "new" : ""; });
+    drawSet(d.after, 420, 40, cls, "after");
+    RW.el("text", { x: 390, y: 80, "text-anchor": "middle", "font-size": 22, fill: "var(--muted)" }, "→", svg);
+    var sumA = d.after.reduce(function (a, b) { return a + b; }, 0);
+    RW.stats(document.getElementById("rw-so-stats"), [
+      ["missing power", d.miss > 0 ? Math.round(d.miss) + " kVA" : "none", d.miss > 0 ? "bad" : "ok"],
+      ["rated power after", sumA + " kVA", sumA >= st.peak ? "ok" : "bad"],
+      ["transformers added", String(d.add.length), ""],
+      ["costs", RW.f(d.add.length * 10, 0) + " kEUR", ""]
+    ]);
+    document.getElementById("rw-so-why").innerHTML = d.why;
+  }
+  draw();
+})();
+</script>
+</div>

@@ -70,3 +70,29 @@ class TestHeatPumpOperation:
         msg = "Heat pump operating strategy dummy is not a valid option."
         with pytest.raises(ValueError, match=msg):
             operating_strategy(self.edisgo, strategy="dummy")
+
+    def test_operating_strategy_trims_to_short_timeindex(self):
+        """
+        If heat_demand_df and cop_df span more time steps than the time index
+        (e.g. because the time index changed after import_heat_pumps ran), the
+        written load time series cover exactly edisgo.timeseries.timeindex.
+        """
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        wide_timeindex = pd.date_range("1/1/2011", periods=24, freq="H")
+
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path, timeindex=timeindex)
+        edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={"hp1": [5.0] * 24, "hp2": [7.0] * 24}, index=wide_timeindex
+        )
+        edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            data={"hp1": [1.0] * 24, "hp2": [3.0] * 24}, index=wide_timeindex
+        )
+
+        operating_strategy(edisgo)
+
+        pd.testing.assert_index_equal(
+            edisgo.timeseries._loads_active_power.index, timeindex
+        )
+        pd.testing.assert_index_equal(
+            edisgo.timeseries._loads_reactive_power.index, timeindex
+        )

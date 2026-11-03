@@ -37,6 +37,9 @@ using JSON
 using Compat
 using Gurobi
 
+# Log through the PowerModels logger, so that warnings honour its log level.
+const _LOGGER = PowerModels._LOGGER
+
 const _pm_global_keys = Set(["time_series", "per_unit"])
 const pm_it_name = "pm"
 const pm_it_sym = Symbol(pm_it_name)

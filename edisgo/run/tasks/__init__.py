@@ -21,7 +21,8 @@ that the runner sees them at execution time. The submodules are:
 * :mod:`.flex` — ``import_flex`` and the per-carrier imports
   (``import_heat_pumps``, ``import_home_batteries``, ``import_dsm``,
   ``import_electromobility``, ``import_generators``),
-  ``build_flexibility_bands``, and operating strategies
+  ``build_flexibility_bands``, ``aggregate_district_heating``, and
+  operating strategies
   (``apply_charging_strategy``, ``apply_heat_pump_strategy``)
 * :mod:`.analysis` — ``check_integrity``, ``analyze``, ``reinforce``,
   ``base_reinforce``, ``optimize``

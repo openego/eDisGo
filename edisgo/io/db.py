@@ -21,21 +21,29 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 import yaml
 
 from geoalchemy2.types import Geometry
+from psycopg2.extensions import AsIs, register_adapter
 from sqlalchemy import create_engine, func
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.session import Session
+from sqlalchemy.pool import NullPool
 from sshtunnel import SSHTunnelForwarder
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
+
+# psycopg2 cannot pass numpy integers as query parameters, e.g. IDs taken from a
+# DataFrame, to the egon-data database. egoio registered this adapter on import
+# before eDisGo dropped it.
+register_adapter(np.int64, AsIs)
 
 
 def _close_ssh_tunnel(server):
@@ -44,6 +52,7 @@ def _close_ssh_tunnel(server):
         server.stop()
     except Exception:  # pragma: no cover - cleanup at interpreter shutdown
         pass
+
 
 #: Default location of the egon-data SSH tunnel configuration file. Used when
 #: no explicit config path is passed and the connection mode is not forced.
@@ -338,6 +347,12 @@ def engine(
         return create_engine(
             f"postgresql+oedialect://:{token}@{database_url}",
             echo=False,
+            # The OEP limits open connections per account (8 at the time of
+            # writing) and closes a connection only on request, not when the
+            # process ends. The default pool keeps released connections open for
+            # reuse, so a few processes with the same token, e.g. parallel CI
+            # jobs, reach the limit. NullPool closes each connection on release.
+            poolclass=NullPool,
         )
 
     cred = credentials(path=path)
