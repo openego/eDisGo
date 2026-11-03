@@ -559,8 +559,9 @@ class TestReinforceMeasures:
             edisgo_on, crit_lines_boundary, crosssection_escalation=True
         )
         assert changes_off == changes_on == {"Line_60000001": 2.0}
-        assert edisgo_off.topology.lines_df.loc["Line_60000001", "type_info"] == (
-            edisgo_on.topology.lines_df.loc["Line_60000001", "type_info"]
+        assert (
+            edisgo_off.topology.lines_df.loc["Line_60000001", "type_info"]
+            == (edisgo_on.topology.lines_df.loc["Line_60000001", "type_info"])
         )
         assert edisgo_on.topology.lines_df.loc["Line_60000001", "type_info"] == (
             "NAYY 4x1x150"
@@ -577,20 +578,16 @@ class TestReinforceMeasures:
         assert line.num_parallel == 2
         assert np.isclose(line.s_nom, 0.419 * 0.4 * np.sqrt(3) * 2)
         # never a cross-section below the standard type
-        standard_s_nom_per_cable = 0.275 * 0.4 * np.sqrt(3)
-        escalated_s_nom_per_cable = 0.419 * 0.4 * np.sqrt(3)
-        assert escalated_s_nom_per_cable >= standard_s_nom_per_cable
-        # equipment_changes logging still works from the returned dict alone
-        # (no separate logging path needed for the escalated type)
-        assert edisgo_escalated.topology.lines_df.loc[
-            "Line_60000001", "type_info"
-        ] == "NAYY 4x1x300"
+        lv_cables = edisgo_escalated.topology.equipment_data["lv_cables"]
+        assert (
+            lv_cables.at[line.type_info, "I_max_th"]
+            >= lv_cables.at["NAYY 4x1x150", "I_max_th"]
+        )
 
         # -- escalation fails: n_standard=5, no cross-section at n<=2 fits ->
         # fallback identical to crosssection_escalation=False, AND the gate's
         # n_standard must equal the actually installed n (regression guard
-        # for the gate formula matching change_line_type()'s s_nom formula,
-        # see PR description) --
+        # for the gate formula matching change_line_type()'s s_nom formula) --
         crit_lines_fallback = pd.DataFrame(
             {"max_rel_overload": [9.0], "voltage_level": ["lv"]},
             index=["Line_60000001"],
@@ -608,9 +605,7 @@ class TestReinforceMeasures:
 
         s_nom_original = 0.085216899732389  # Line_60000001, type "NAYY 4x1x35"
         standard_single_capacity = 0.275 * 0.4 * np.sqrt(3)  # NAYY 4x1x150, n=1
-        n_standard_gate = np.ceil(
-            s_nom_original * 9.0 / standard_single_capacity
-        )
+        n_standard_gate = np.ceil(s_nom_original * 9.0 / standard_single_capacity)
         n_installed = edisgo_fb_on.topology.lines_df.loc[
             "Line_60000001", "num_parallel"
         ]
@@ -618,23 +613,21 @@ class TestReinforceMeasures:
 
     def test_reinforce_lines_overloading_crosssection_escalation_existing(self):
         # Line_60000001 is synthetically forced to already be standard type
-        # ("NAYY 4x1x150") with num_parallel=4 -- this puts it in the
-        # "lines_standard" bucket (_add_parallel_standard_lines()), which
-        # crosssection_escalation ALONE never reaches (see PR description,
-        # Command D2d). Values confirmed by direct computation against this
-        # fixture before writing the test (not guessed):
-        #   rel=0.6 -> number_needed = ceil(0.6*4) = 3 > 2 (candidate);
-        #              apparent_power = 4*0.19051*0.6 = 0.4572 MVA ->
+        # ("NAYY 4x1x150") -- this puts it in the "lines_standard" bucket
+        # (_add_parallel_standard_lines()), which crosssection_escalation ALONE
+        # never reaches. One standard cable carries 0.19051 MVA.
+        #   1x150, rel=2.5 -> number_needed = ceil(2.5*1) = 3 > 2 (candidate),
+        #              stacking adds 2 cables; apparent_power = 0.4763 MVA ->
         #              select_cable(max_cables=2) finds NAYY 4x1x240 at n=2
-        #              (0.5045 MVA >= 0.4572, NAYY 4x1x185 at n=2 would only
-        #              give 0.4340 MVA, not enough)
-        #   rel=1.0 -> number_needed = ceil(1.0*4) = 4 > 2 (candidate), but
-        #              apparent_power = 0.7621 MVA exceeds even 2x
+        #              (0.5045 MVA, NAYY 4x1x185 at n=2 only gives 0.4340 MVA),
+        #              i.e. also 2 new cables -> escalated
+        #   3x150, rel=1.01 -> stacking adds 1 cable, escalation would need 2
+        #              (2x NAYY 4x1x300) -> more expensive, stacking is kept
+        #   1x150, rel=3.5 -> apparent_power = 0.6668 MVA exceeds even 2x
         #              NAYY 4x1x300 (0.5806 MVA) -> MaximumIterationError ->
-        #              falls back to _add_parallel_standard_lines() (n=4,
-        #              unchanged, since ceil(1.0*4)=4 equals num_parallel_pre)
+        #              falls back to _add_parallel_standard_lines() (4x150)
 
-        def make_already_standard(edisgo_obj, num_parallel=4):
+        def make_already_standard(edisgo_obj, num_parallel=1):
             e = copy.deepcopy(edisgo_obj)
             e.topology.lines_df.at["Line_60000001", "type_info"] = "NAYY 4x1x150"
             e.topology.lines_df.at["Line_60000001", "num_parallel"] = num_parallel
@@ -649,13 +642,13 @@ class TestReinforceMeasures:
         # -- both flags False: bit-identical to today's _add_parallel_standard_lines --
         edisgo_baseline = make_already_standard(self.edisgo)
         crit_lines_esc = pd.DataFrame(
-            {"max_rel_overload": [0.6], "voltage_level": ["lv"]},
+            {"max_rel_overload": [2.5], "voltage_level": ["lv"]},
             index=["Line_60000001"],
         )
         changes_baseline = reinforce_measures.reinforce_lines_overloading(
             edisgo_baseline, crit_lines_esc
         )
-        assert changes_baseline == {"Line_60000001": -1.0}
+        assert changes_baseline == {"Line_60000001": 2.0}
         line = edisgo_baseline.topology.lines_df.loc["Line_60000001"]
         assert line.type_info == "NAYY 4x1x150"
         assert line.num_parallel == 3
@@ -664,19 +657,26 @@ class TestReinforceMeasures:
         # =False (default): extension inert, identical to both-False --
         edisgo_ext_off = make_already_standard(self.edisgo)
         changes_ext_off = reinforce_measures.reinforce_lines_overloading(
-            edisgo_ext_off, crit_lines_esc, crosssection_escalation=True,
+            edisgo_ext_off,
+            crit_lines_esc,
+            crosssection_escalation=True,
         )
         assert changes_ext_off == changes_baseline
         assert edisgo_ext_off.topology.lines_df.loc["Line_60000001", "type_info"] == (
             "NAYY 4x1x150"
         )
-        assert edisgo_ext_off.topology.lines_df.loc["Line_60000001", "num_parallel"] == 3
+        assert (
+            edisgo_ext_off.topology.lines_df.loc["Line_60000001", "num_parallel"] == 3
+        )
 
-        # -- both flags True: escalation succeeds, n_needed=3>2 -> NAYY 4x1x240 at n=2 --
+        # -- both flags True: escalation succeeds with as many new cables as
+        # stacking, n_needed=3>2 -> NAYY 4x1x240 at n=2 --
         edisgo_escalated = make_already_standard(self.edisgo)
         changes_escalated = reinforce_measures.reinforce_lines_overloading(
-            edisgo_escalated, crit_lines_esc,
-            crosssection_escalation=True, crosssection_escalation_existing=True,
+            edisgo_escalated,
+            crit_lines_esc,
+            crosssection_escalation=True,
+            crosssection_escalation_existing=True,
         )
         line = edisgo_escalated.topology.lines_df.loc["Line_60000001"]
         assert changes_escalated == {"Line_60000001": 2}
@@ -684,24 +684,47 @@ class TestReinforceMeasures:
         assert line.num_parallel == 2
         assert np.isclose(line.s_nom, 0.364 * 0.4 * np.sqrt(3) * 2)
         # never a cross-section below the standard type
-        standard_s_nom_per_cable = 0.275 * 0.4 * np.sqrt(3)
-        escalated_s_nom_per_cable = 0.364 * 0.4 * np.sqrt(3)
-        assert escalated_s_nom_per_cable >= standard_s_nom_per_cable
+        lv_cables = edisgo_escalated.topology.equipment_data["lv_cables"]
+        assert (
+            lv_cables.at[line.type_info, "I_max_th"]
+            >= lv_cables.at["NAYY 4x1x150", "I_max_th"]
+        )
+
+        # -- escalation would need more new cables than stacking -> stacking --
+        crit_lines_exp = pd.DataFrame(
+            {"max_rel_overload": [1.01], "voltage_level": ["lv"]},
+            index=["Line_60000001"],
+        )
+        edisgo_exp = make_already_standard(self.edisgo, num_parallel=3)
+        changes_exp = reinforce_measures.reinforce_lines_overloading(
+            edisgo_exp,
+            crit_lines_exp,
+            crosssection_escalation=True,
+            crosssection_escalation_existing=True,
+        )
+        assert changes_exp == {"Line_60000001": 1.0}
+        line = edisgo_exp.topology.lines_df.loc["Line_60000001"]
+        assert line.type_info == "NAYY 4x1x150"
+        assert line.num_parallel == 4
 
         # -- fallback: candidate (n_needed=4>2), but no cross-section at n<=2
         # fits -> identical to crosssection_escalation_existing=False --
         crit_lines_fb = pd.DataFrame(
-            {"max_rel_overload": [1.0], "voltage_level": ["lv"]},
+            {"max_rel_overload": [3.5], "voltage_level": ["lv"]},
             index=["Line_60000001"],
         )
         edisgo_fb_off = make_already_standard(self.edisgo)
         edisgo_fb_on = make_already_standard(self.edisgo)
         changes_fb_off = reinforce_measures.reinforce_lines_overloading(
-            edisgo_fb_off, crit_lines_fb, crosssection_escalation=True,
+            edisgo_fb_off,
+            crit_lines_fb,
+            crosssection_escalation=True,
         )
         changes_fb_on = reinforce_measures.reinforce_lines_overloading(
-            edisgo_fb_on, crit_lines_fb,
-            crosssection_escalation=True, crosssection_escalation_existing=True,
+            edisgo_fb_on,
+            crit_lines_fb,
+            crosssection_escalation=True,
+            crosssection_escalation_existing=True,
         )
         assert changes_fb_off == changes_fb_on
         assert edisgo_fb_off.topology.lines_df.equals(edisgo_fb_on.topology.lines_df)
@@ -709,16 +732,141 @@ class TestReinforceMeasures:
             "NAYY 4x1x150"
         )
         assert edisgo_fb_on.topology.lines_df.loc["Line_60000001", "num_parallel"] == 4
+        assert changes_fb_on == {"Line_60000001": 3.0}
 
         # -- precondition check: crosssection_escalation_existing=True requires
-        # crosssection_escalation=True, enforced in reinforce_grid() --
+        # crosssection_escalation=True, enforced in reinforce_grid() and
+        # reinforce_lines_overloading() --
         edisgo_invalid = copy.deepcopy(self.edisgo_root)
-        edisgo_invalid.analyze()
         with pytest.raises(ValueError, match="requires crosssection_escalation=True"):
             reinforce_grid.reinforce_grid(
-                edisgo_invalid, crosssection_escalation_existing=True,
+                edisgo_invalid,
+                crosssection_escalation_existing=True,
                 crosssection_escalation=False,
             )
+        with pytest.raises(ValueError, match="requires crosssection_escalation=True"):
+            reinforce_measures.reinforce_lines_overloading(
+                edisgo_invalid,
+                crit_lines_esc,
+                crosssection_escalation_existing=True,
+            )
+        # nothing was changed before raising
+        assert edisgo_invalid.topology.lines_df.equals(
+            self.edisgo_root.topology.lines_df
+        )
+
+    def test_reinforce_lines_overloading_crosssection_escalation_resistance(self):
+        # 1x NAYY 4x1x95 (0.14896 MVA) with rel=2.75 needs 0.4096 MVA, i.e. three
+        # standard lines with 0.206 / 3 = 0.0687 Ohm/km. 2x NAYY 4x1x185 would
+        # carry it (0.4337 MVA) but has 0.164 / 2 = 0.082 Ohm/km, so the next
+        # larger 2x NAYY 4x1x240 with 0.125 / 2 = 0.0625 Ohm/km is chosen
+        edisgo = copy.deepcopy(self.edisgo_root)
+        edisgo.topology.change_line_type(["Line_60000001"], "NAYY 4x1x95")
+        crit_lines = pd.DataFrame(
+            {"max_rel_overload": [2.75], "voltage_level": ["lv"]},
+            index=["Line_60000001"],
+        )
+        changes = reinforce_measures.reinforce_lines_overloading(
+            edisgo, crit_lines, crosssection_escalation=True
+        )
+        assert changes == {"Line_60000001": 2.0}
+        line = edisgo.topology.lines_df.loc["Line_60000001"]
+        assert line.type_info == "NAYY 4x1x240"
+        assert line.num_parallel == 2
+        assert np.isclose(line.r, 0.125 / 2 * line.length)
+
+        # 2x NAYY 4x1x185 with rel=1.4 would get one more cable of its own type
+        # (0.164 / 3 = 0.0547 Ohm/km), but replacing it needs four standard
+        # lines (0.206 / 4 = 0.0515 Ohm/km), so it is replaced as without
+        # escalation
+        edisgo = copy.deepcopy(self.edisgo_root)
+        edisgo.topology.change_line_type(["Line_60000001"], "NAYY 4x1x185")
+        edisgo.topology.update_number_of_parallel_lines(pd.Series({"Line_60000001": 2}))
+        crit_lines.loc["Line_60000001", "max_rel_overload"] = 1.4
+        edisgo_off = copy.deepcopy(edisgo)
+        changes = reinforce_measures.reinforce_lines_overloading(
+            edisgo, crit_lines, crosssection_escalation=True
+        )
+        changes_off = reinforce_measures.reinforce_lines_overloading(
+            edisgo_off, crit_lines
+        )
+        assert changes == changes_off == {"Line_60000001": 4.0}
+        assert edisgo.topology.lines_df.equals(edisgo_off.topology.lines_df)
+        assert edisgo.topology.lines_df.at["Line_60000001", "type_info"] == (
+            "NAYY 4x1x150"
+        )
+
+    def test_reinforce_lines_overloading_crosssection_escalation_mv(self):
+        # MV lines are never escalated: with both flags, the result is identical
+        # to the default for an MV line that is already of standard type
+        # (Line_10007) and one that is replaced by standard lines (Line_10019,
+        # non-standard single cable with an overload of 2 or more)
+        crit_lines = pd.DataFrame(
+            {"max_rel_overload": [6.0, 6.0], "voltage_level": ["mv", "mv"]},
+            index=["Line_10007", "Line_10019"],
+        )
+        edisgo_off = copy.deepcopy(self.edisgo_root)
+        edisgo_on = copy.deepcopy(self.edisgo_root)
+        changes_off = reinforce_measures.reinforce_lines_overloading(
+            edisgo_off, crit_lines
+        )
+        changes_on = reinforce_measures.reinforce_lines_overloading(
+            edisgo_on,
+            crit_lines,
+            crosssection_escalation=True,
+            crosssection_escalation_existing=True,
+        )
+        assert changes_on == changes_off
+        assert edisgo_on.topology.lines_df.equals(edisgo_off.topology.lines_df)
+        # both lines were actually reinforced
+        assert set(changes_on) == {"Line_10007", "Line_10019"}
+
+    def test_reinforce_lines_overloading_crosssection_escalation_larger_type(self):
+        # an overloaded LV cable that is stronger than the standard type (e.g.
+        # 2x NAYY 4x1x300 from a previous escalation) gets parallel cables of
+        # its own type instead of being replaced by standard lines
+        def make_line(num_parallel, rel):
+            e = copy.deepcopy(self.edisgo_root)
+            e.topology.change_line_type(["Line_60000001"], "NAYY 4x1x300")
+            e.topology.update_number_of_parallel_lines(
+                pd.Series({"Line_60000001": num_parallel})
+            )
+            crit_lines = pd.DataFrame(
+                {"max_rel_overload": [rel], "voltage_level": ["lv"]},
+                index=["Line_60000001"],
+            )
+            return e, crit_lines
+
+        # without escalation: replaced by ceil(2 * 0.29026 * 1.05 / 0.19051) = 4
+        # standard lines
+        edisgo_off, crit_lines = make_line(2, 1.05)
+        changes = reinforce_measures.reinforce_lines_overloading(edisgo_off, crit_lines)
+        assert changes == {"Line_60000001": 4.0}
+        line = edisgo_off.topology.lines_df.loc["Line_60000001"]
+        assert line.type_info == "NAYY 4x1x150"
+        assert line.num_parallel == 4
+
+        # with escalation: one more NAYY 4x1x300
+        edisgo_on, crit_lines = make_line(2, 1.05)
+        changes = reinforce_measures.reinforce_lines_overloading(
+            edisgo_on, crit_lines, crosssection_escalation=True
+        )
+        assert changes == {"Line_60000001": 1.0}
+        line = edisgo_on.topology.lines_df.loc["Line_60000001"]
+        assert line.type_info == "NAYY 4x1x300"
+        assert line.num_parallel == 3
+        assert np.isclose(line.s_nom, 0.419 * 0.4 * np.sqrt(3) * 3)
+
+        # single cable with high overload: 3x NAYY 4x1x300 instead of 5 standard
+        # lines
+        edisgo_on, crit_lines = make_line(1, 3.0)
+        changes = reinforce_measures.reinforce_lines_overloading(
+            edisgo_on, crit_lines, crosssection_escalation=True
+        )
+        assert changes == {"Line_60000001": 2.0}
+        line = edisgo_on.topology.lines_df.loc["Line_60000001"]
+        assert line.type_info == "NAYY 4x1x300"
+        assert line.num_parallel == 3
 
     def test_separate_lv_grid_line_to_new_station(self):
         # if the line replaced at the separation point is stronger than one

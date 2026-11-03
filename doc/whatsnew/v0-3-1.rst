@@ -334,6 +334,19 @@ Changes
   feeder due to voltage issues if the new line is cheaper than reinforcing the lines
   on the path to the critical node, e.g. replacing a single short, thin cable. The
   default (False) keeps splitting the feeder whenever possible (openego/eDisGo#781)
+* Added the options ``crosssection_escalation`` and ``crosssection_escalation_existing``
+  to :meth:`~.EDisGo.reinforce` (both off by default). With
+  ``crosssection_escalation``, an overloaded LV line that would otherwise be replaced
+  by more than two parallel standard lines gets a larger cross-section with at most
+  two parallel cables instead, if one is sufficient and its resistance is not higher
+  than that of the standard lines. Overloaded LV cables that are at least as strong
+  as the standard type, e.g. lines escalated in a previous iteration, get parallel
+  cables of their own type instead of being replaced by standard lines.
+  ``crosssection_escalation_existing`` also escalates lines that are already of
+  standard type, but only if this does not need more new cables than adding parallel
+  standard lines. Per line, neither option ever needs more new cables or results in
+  a higher resistance than the default. MV lines are not affected
+  (openego/eDisGo#377, openego/eDisGo#730)
 * OEP connections are closed right after use instead of being kept open in a
   connection pool. The OEP limits open connections per account to 8, and each process
   kept at least one pooled connection open per engine, so a few processes with the

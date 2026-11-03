@@ -24,13 +24,11 @@ from networkx.algorithms.shortest_paths.weighted import (
     _dijkstra as dijkstra_shortest_path_length,
 )
 
-from edisgo.flex_opt import exceptions
 from edisgo.flex_opt.costs import line_expansion_costs
 from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.tools.tools import (
     calculate_apparent_power,
     get_downstream_buses,
-    select_cable,
 )
 
 if TYPE_CHECKING:
@@ -820,7 +818,9 @@ def _plan_lines_on_path(
 
 
 def reinforce_lines_overloading(
-    edisgo_obj, crit_lines, crosssection_escalation=False,
+    edisgo_obj,
+    crit_lines,
+    crosssection_escalation=False,
     crosssection_escalation_existing=False,
 ):
     """
@@ -840,10 +840,11 @@ def reinforce_lines_overloading(
         :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
         the voltage level the line is in (either 'mv' or 'lv').
     crosssection_escalation : bool
-        If True, only affects LV lines where more than two parallel standard lines
-        would otherwise be installed. See
-        :func:`~.flex_opt.reinforce_grid.reinforce_grid` for the full parameter
-        description and the cost-model caveat in `Notes` there.
+        If True, LV lines where more than two parallel standard lines would
+        otherwise be installed get a larger cross-section if possible, and LV
+        cables at least as strong as the standard type get parallel cables of
+        their own type. See :func:`~.flex_opt.reinforce_grid.reinforce_grid` for
+        the full parameter description and the cost-model caveat.
         Default: False.
     crosssection_escalation_existing : bool
         If True, also attempts escalation for LV lines that are already the
@@ -867,14 +868,25 @@ def reinforce_lines_overloading(
        cable is installed right away.)
     2. Remove old line and install as many parallel standard lines as
        needed.
+    3. Only with `crosssection_escalation` (LV): Remove old line and install a
+       larger cross-section with at most two parallel cables, if otherwise more
+       than two parallel standard lines would be needed, or add parallel cables
+       of the same type to cables at least as strong as the standard type.
 
     """
+    if crosssection_escalation_existing and not crosssection_escalation:
+        raise ValueError(
+            "crosssection_escalation_existing=True requires "
+            "crosssection_escalation=True."
+        )
 
     lines_changes = {}
     # reinforce mv lines
     lines_changes.update(
         _reinforce_lines_overloading_per_grid_level(
-            edisgo_obj, "mv", crit_lines,
+            edisgo_obj,
+            "mv",
+            crit_lines,
             crosssection_escalation=crosssection_escalation,
             crosssection_escalation_existing=crosssection_escalation_existing,
         )
@@ -882,7 +894,9 @@ def reinforce_lines_overloading(
     # reinforce lv lines
     lines_changes.update(
         _reinforce_lines_overloading_per_grid_level(
-            edisgo_obj, "lv", crit_lines,
+            edisgo_obj,
+            "lv",
+            crit_lines,
             crosssection_escalation=crosssection_escalation,
             crosssection_escalation_existing=crosssection_escalation_existing,
         )
@@ -898,7 +912,10 @@ def reinforce_lines_overloading(
 
 
 def _reinforce_lines_overloading_per_grid_level(
-    edisgo_obj, voltage_level, crit_lines, crosssection_escalation=False,
+    edisgo_obj,
+    voltage_level,
+    crit_lines,
+    crosssection_escalation=False,
     crosssection_escalation_existing=False,
 ):
     """
@@ -920,6 +937,12 @@ def _reinforce_lines_overloading_per_grid_level(
         time step the over-loading occured in as
         :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
         the voltage level the line is in (either 'mv' or 'lv').
+    crosssection_escalation : bool
+        See :func:`reinforce_lines_overloading`. Only used if `voltage_level` is
+        "lv". Default: False.
+    crosssection_escalation_existing : bool
+        See :func:`reinforce_lines_overloading`. Only used if `voltage_level` is
+        "lv". Default: False.
 
     Returns
     -------
@@ -995,11 +1018,11 @@ def _reinforce_lines_overloading_per_grid_level(
 
         # crosssection_escalation: only for lines that would otherwise need MORE
         # THAN TWO parallel standard lines -- determine this without touching the
-        # topology yet, then only attempt select_cable() for those. LV only, see
-        # reinforce_grid() docstring for the MV follow-up and the cost-model
-        # caveat (cable costs here do not depend on cross-section, only on
-        # length x quantity, see costs.py -- an escalated cross-section is
-        # therefore never more expensive in this cost model).
+        # topology yet, then only attempt escalation for those. LV only, see
+        # reinforce_grid() docstring for the cost-model caveat (cable costs here
+        # do not depend on cross-section, only on length x quantity, see
+        # costs.py -- an escalated cross-section is therefore never more
+        # expensive than the parallel standard lines it replaces).
         if crosssection_escalation and voltage_level == "lv":
             standard_type_data = edisgo_obj.topology.equipment_data["lv_cables"].loc[
                 standard_line_type
@@ -1016,33 +1039,18 @@ def _reinforce_lines_overloading_per_grid_level(
                 number_parallel_lines_standard > 2
             ].index
 
-            fallback_lines = []
-            for line in escalation_candidates:
-                apparent_power = (
-                    s_nom_old.at[line] * crit_lines.at[line, "max_rel_overload"]
+            # with at most two new cables, escalation always needs fewer new
+            # cables than the more than two standard lines
+            successfully_escalated = [
+                line
+                for line in escalation_candidates
+                if _escalate_crosssection(
+                    line,
+                    s_nom_old.at[line] * crit_lines.at[line, "max_rel_overload"],
+                    max_r_per_km=standard_type_data.R_per_km
+                    / number_parallel_lines_standard.at[line],
                 )
-                try:
-                    cable_type, n_new = select_cable(
-                        edisgo_obj, level="lv", apparent_power=apparent_power,
-                        max_cables=2,
-                    )
-                except exceptions.MaximumIterationError:
-                    fallback_lines.append(line)
-                    continue
-                if cable_type.I_max_th < standard_type_data.I_max_th:
-                    # defensive only -- see PR description; mathematically this
-                    # branch should be unreachable given escalation_candidates
-                    # already fail at n<=2 with the standard type. Never
-                    # downgrade below the standard type.
-                    fallback_lines.append(line)
-                    continue
-                edisgo_obj.topology.change_line_type([line], cable_type.name)
-                edisgo_obj.topology.update_number_of_parallel_lines(
-                    pd.Series({line: n_new})
-                )
-                lines_changes[line] = n_new
-
-            successfully_escalated = escalation_candidates.difference(fallback_lines)
+            ]
             lines = pd.Index(lines).difference(successfully_escalated)
             s_nom_old = s_nom_old.loc[lines]
             if lines.empty:
@@ -1060,6 +1068,63 @@ def _reinforce_lines_overloading_per_grid_level(
         edisgo_obj.topology.update_number_of_parallel_lines(number_parallel_lines)
 
         lines_changes.update(number_parallel_lines.to_dict())
+
+    def _escalate_crosssection(
+        line, apparent_power, max_r_per_km, max_new_cables=np.inf
+    ):
+        """
+        Replaces LV line by a larger cross-section with at most two parallel cables.
+
+        Chooses the smallest LV cable type, with as few parallel cables as
+        possible, that carries `apparent_power` and whose resistance per km of
+        all parallel cables does not exceed `max_r_per_km`. The resistance
+        criterion makes sure the escalated line does not cause larger voltage
+        drops than the standard lines it replaces, which could cause additional
+        reinforcement due to voltage issues. Never chooses a cable type weaker
+        than the standard type. Adds number of new cables to `lines_changes`
+        dictionary.
+
+        Parameters
+        ----------
+        line : str
+            Name of line to escalate.
+        apparent_power : float
+            Apparent power in MVA the line needs to carry.
+        max_r_per_km : float
+            Maximum resistance in Ohm/km of all parallel cables, i.e. the
+            resistance of the alternative without escalation.
+        max_new_cables : float
+            Line is not escalated if this would need more new cables. Default: inf.
+
+        Returns
+        -------
+        bool
+            True if line was escalated, False if no suitable cross-section was
+            found and the line is left unchanged.
+
+        """
+        lv_cables = edisgo_obj.topology.equipment_data["lv_cables"]
+        lv_cables = lv_cables[
+            lv_cables.I_max_th >= lv_cables.at[standard_line_type, "I_max_th"]
+        ]
+        for n_new in [1, 2]:
+            suitable_cables = lv_cables[
+                (
+                    calculate_apparent_power(lv_cables.U_n, lv_cables.I_max_th, n_new)
+                    > apparent_power
+                )
+                & (lv_cables.R_per_km / n_new <= max_r_per_km)
+            ]
+            if not suitable_cables.empty:
+                break
+        else:
+            return False
+        if n_new > max_new_cables:
+            return False
+        edisgo_obj.topology.change_line_type([line], suitable_cables.I_max_th.idxmin())
+        edisgo_obj.topology.update_number_of_parallel_lines(pd.Series({line: n_new}))
+        lines_changes[line] = float(n_new)
+        return True
 
     lines_changes = {}
 
@@ -1084,54 +1149,43 @@ def _reinforce_lines_overloading_per_grid_level(
         lines_standard = relevant_lines.loc[
             relevant_lines.type_info == standard_line_type
         ]
-        lines_standard_escalated: list = []
+        lines_standard_escalated = []
         if not lines_standard.empty:
             # crosssection_escalation_existing: consider already-standard-type
             # lines for escalation too, not only lines reaching
             # _replace_by_parallel_standard_lines() below. LV only (see
             # reinforce_grid() docstring); no separate voltage-path guard
-            # needed here -- this whole function tree is structurally
-            # unreachable from reinforce_lines_voltage_issues() (see PR
-            # description, Command D2d 1c/2d). Deliberately duplicates the
-            # small escalation-attempt loop from _replace_by_parallel_
-            # standard_lines() below rather than refactoring that
-            # already-tested path -- see PR description.
+            # needed here, as reinforce_lines_voltage_issues() never calls
+            # this function.
             if (
                 crosssection_escalation
                 and crosssection_escalation_existing
                 and voltage_level == "lv"
             ):
-                standard_type_data = edisgo_obj.topology.equipment_data[
-                    "lv_cables"
-                ].loc[standard_line_type]
                 number_needed = np.ceil(
                     crit_lines.max_rel_overload[lines_standard.index]
                     * lines_standard["num_parallel"]
                 )
                 escalation_candidates = number_needed[number_needed > 2].index
+                # stacking keeps the existing cables and only adds the missing
+                # ones, whereas escalation replaces all of them; as costs depend
+                # on the number of new cables only, escalation must not need more
+                number_added_stacking = number_needed - lines_standard["num_parallel"]
+                r_per_km_standard = edisgo_obj.topology.equipment_data["lv_cables"].at[
+                    standard_line_type, "R_per_km"
+                ]
 
-                for line in escalation_candidates:
-                    apparent_power = (
-                        edisgo_obj.topology.lines_df.at[line, "s_nom"]
-                        * crit_lines.at[line, "max_rel_overload"]
+                lines_standard_escalated = [
+                    line
+                    for line in escalation_candidates
+                    if _escalate_crosssection(
+                        line,
+                        lines_standard.at[line, "s_nom"]
+                        * crit_lines.at[line, "max_rel_overload"],
+                        max_r_per_km=r_per_km_standard / number_needed.at[line],
+                        max_new_cables=number_added_stacking.at[line],
                     )
-                    try:
-                        cable_type, n_new = select_cable(
-                            edisgo_obj, level="lv", apparent_power=apparent_power,
-                            max_cables=2,
-                        )
-                    except exceptions.MaximumIterationError:
-                        continue
-                    if cable_type.I_max_th < standard_type_data.I_max_th:
-                        # defensive only, unreachable by construction -- same
-                        # argument as _replace_by_parallel_standard_lines()
-                        continue
-                    edisgo_obj.topology.change_line_type([line], cable_type.name)
-                    edisgo_obj.topology.update_number_of_parallel_lines(
-                        pd.Series({line: n_new})
-                    )
-                    lines_changes[line] = n_new
-                    lines_standard_escalated.append(line)
+                ]
 
             lines_standard_remaining = lines_standard.loc[
                 ~lines_standard.index.isin(lines_standard_escalated)
@@ -1144,6 +1198,38 @@ def _reinforce_lines_overloading_per_grid_level(
         relevant_lines = relevant_lines.loc[
             ~relevant_lines.index.isin(lines_standard.index)
         ]
+
+        # crosssection_escalation: LV cables at least as strong as the standard
+        # type (e.g. lines escalated in a previous iteration) get parallel lines
+        # of their own type instead of being replaced by (more) standard lines.
+        # This never needs more new cables than the replacement, as each of
+        # these cables carries at least as much as a standard cable. Lines whose
+        # parallel cables would have a higher resistance than the replacement are
+        # replaced as without escalation, to not cause larger voltage drops.
+        if crosssection_escalation and voltage_level == "lv":
+            lv_cables = edisgo_obj.topology.equipment_data["lv_cables"]
+            standard_type_data = lv_cables.loc[standard_line_type]
+            overload = crit_lines.max_rel_overload[relevant_lines.index]
+            r_per_km_own_type = relevant_lines.type_info.map(
+                lv_cables.R_per_km
+            ) / np.ceil(overload * relevant_lines.num_parallel)
+            r_per_km_replacement = standard_type_data.R_per_km / np.ceil(
+                relevant_lines.s_nom
+                * overload
+                / calculate_apparent_power(
+                    standard_type_data.U_n, standard_type_data.I_max_th, 1
+                )
+            )
+            lines_larger = relevant_lines.loc[
+                (
+                    relevant_lines.type_info.map(lv_cables.I_max_th)
+                    >= standard_type_data.I_max_th
+                )
+                & (r_per_km_own_type <= r_per_km_replacement)
+            ]
+            if not lines_larger.empty:
+                _add_parallel_standard_lines(lines_larger.index)
+                relevant_lines = relevant_lines.drop(lines_larger.index)
         # handling of cables where adding one cable is sufficient
         lines_single = (
             relevant_lines.loc[relevant_lines.num_parallel == 1]

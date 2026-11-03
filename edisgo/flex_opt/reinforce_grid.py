@@ -92,16 +92,22 @@ def reinforce_grid(
         True will lead to an error being raised. Default: False.
     crosssection_escalation : bool
         If True, only affects LV lines where more than two parallel standard lines
-        would otherwise be installed due to overloading. For those lines, a larger
-        LV cross-section (up to two parallel cables) is tried first via
-        :func:`~.tools.tools.select_cable`, never a cross-section below the
-        standard type. Falls back to today's parallel-standard-line behaviour if
-        no cross-section up to two parallel cables can carry the required apparent
-        power. MV lines are not affected, regardless of this parameter's value.
+        would otherwise be installed due to overloading. For those lines, the
+        smallest LV cross-section with up to two parallel cables is chosen that
+        carries the required apparent power and whose resistance does not exceed
+        the resistance of the parallel standard lines, never a cross-section below
+        the standard type. Falls back to today's parallel-standard-line behaviour
+        if there is no such cross-section. Overloaded LV cables that are at least
+        as strong as the standard type (e.g. lines escalated in a previous
+        iteration) get parallel cables of their own type instead of being replaced
+        by standard lines, if this does not result in a higher resistance.
+        MV lines are not affected, regardless of this parameter's value.
         Note: cable costs in this package do not depend on cross-section (only on
-        length x quantity, see `costs.py`), so an escalated cross-section is never
-        more expensive in eDisGo's current cost model than the parallel lines it
-        replaces.
+        length x quantity, see `costs.py`), so an escalated line is never more
+        expensive than the parallel lines it replaces. The resistance criterion
+        avoids larger voltage drops and thus additional reinforcement due to
+        voltage issues, but total grid expansion costs can still differ in
+        either direction, as the changed impedances affect the power flow.
         Default: False.
     crosssection_escalation_existing : bool
         If True, ALSO considers LV lines that are already the standard cross-
@@ -110,8 +116,10 @@ def reinforce_grid(
         `crosssection_escalation=True`. Unlike `crosssection_escalation` alone,
         this can replace cross-sections that were part of the original input
         topology (e.g. native multi-cable ding0 lines), not only eDisGo's own
-        prior reinforcement decisions -- see PR description for why this is
-        called out separately.
+        prior reinforcement decisions, which is why it is a separate option.
+        A standard line is only escalated if this does not need more new cables
+        and does not result in a higher resistance than adding parallel standard
+        lines would.
         Default: False.
     log_reinforcement : bool
         If True, every reinforcement measure is appended as a row to
@@ -355,7 +363,8 @@ def reinforce_grid(
         if not crit_lines.empty:
             # reinforce lines
             lines_changes = reinforce_measures.reinforce_lines_overloading(
-                edisgo, crit_lines,
+                edisgo,
+                crit_lines,
                 crosssection_escalation=crosssection_escalation,
                 crosssection_escalation_existing=crosssection_escalation_existing,
             )
@@ -784,7 +793,8 @@ def reinforce_grid(
         if not crit_lines.empty:
             # reinforce lines
             lines_changes = reinforce_measures.reinforce_lines_overloading(
-                edisgo, crit_lines,
+                edisgo,
+                crit_lines,
                 crosssection_escalation=crosssection_escalation,
                 crosssection_escalation_existing=crosssection_escalation_existing,
             )
