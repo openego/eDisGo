@@ -1124,13 +1124,14 @@ def _lv_allowed_voltage_limits(
         config_string = "mv_lv_station"
 
         # get base voltage (voltage at primary side) for each station
-        voltage_base = pd.DataFrame()
+        voltage_base = {}
         for grid in lv_grids:
             transformers_df = grid.transformers_df
             primary_side = transformers_df.iloc[0].bus0
             secondary_side = transformers_df.iloc[0].bus1
             if primary_side in buses_in_pfa:
                 voltage_base[secondary_side] = voltages_pfa.loc[:, primary_side]
+        voltage_base = pd.DataFrame(voltage_base)
 
         upper_limits_df = (
             voltage_base
