@@ -277,8 +277,8 @@ class Config:
                 demandlib[key] = self._parse_time(demandlib[key])
 
     def _normalize_reference_year(self, config_dict: dict) -> None:
-        # config files created before the reference year was introduced do not
-        # contain it, in which case the weather year of the model data is used
+        # config files without section 'timeindex' use the weather year of the
+        # model data
         timeindex = config_dict.setdefault("timeindex", {})
         timeindex["reference_year"] = int(timeindex.get("reference_year", 2011))
 

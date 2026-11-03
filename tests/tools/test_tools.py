@@ -741,6 +741,40 @@ class TestTools:
                 pd.date_range("12/31/2011 22:00", "1/1/2012 01:00", freq="H"),
             )
 
+        # test index only containing 29 February
+        with pytest.raises(ValueError, match="only contains time steps on 29"):
+            tools.shift_timeindex_to_reference_year(
+                edisgo_obj, pd.date_range("2/29/2020", periods=24, freq="H")
+            )
+
+    def test_shift_to_reference_year(self, caplog):
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+
+        # test data reaching into the previous year is kept as it is
+        df = pd.DataFrame(
+            {"a": 1.0},
+            index=pd.date_range("12/31/2010 23:00", "1/2/2011 00:00", freq="H"),
+        )
+        assert tools.shift_to_reference_year(edisgo_obj, df, name="df") is df
+
+        # test full leap year plus one trailing step is relabelled as a whole
+        df = pd.DataFrame(
+            {"a": 1.0}, index=pd.date_range("1/1/2020", "1/1/2021", freq="H")
+        )
+        with caplog.at_level(logging.WARNING):
+            shifted = tools.shift_to_reference_year(edisgo_obj, df, name="df")
+        assert "The time index of df is set in year 2020" in caplog.text
+        assert "29 February" in caplog.text
+        assert_index_equal(
+            shifted.index, pd.date_range("1/1/2011", "1/1/2012", freq="H")
+        )
+
+        # test worst-case data is not changed
+        df = pd.DataFrame(
+            {"a": 1.0}, index=pd.date_range("1/1/1970", periods=4, freq="H")
+        )
+        assert tools.shift_to_reference_year(edisgo_obj, df) is df
+
     def test_get_reference_year_config_without_timeindex(self, tmp_path):
         # config files without section 'timeindex' fall back to 2011
         default_dir = os.path.join(os.path.dirname(tools.__file__), "..", "config")

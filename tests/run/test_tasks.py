@@ -627,10 +627,13 @@ class TestOedbTs:
         assert not result.timeseries.timeindex.empty
         assert result.timeseries.timeindex[0].year == 2011
 
-    def test_invalid_scenario_raises(self, edisgo_obj):
-        ctx = RunContext(scenario="invalid")
-        with pytest.raises(ValueError, match="invalid"):
-            task_oedb_ts(edisgo_obj, ctx, fluctuating=None, conventional_loads=None)
+    def test_without_scenario(self, edisgo_obj):
+        # no scenario is needed if no data is loaded from the oedb
+        edisgo_obj.set_timeindex(pd.DatetimeIndex([]))
+        result = task_oedb_ts(
+            edisgo_obj, RunContext(), fluctuating=None, conventional_loads=None
+        )
+        assert result.timeseries.timeindex[0].year == 2011
 
 
 class TestSelectCriticalTimesteps:

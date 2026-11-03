@@ -446,14 +446,6 @@ class TimeSeries:
             names of storage units to set time series for.
 
         """
-        ts_generators = shift_to_reference_year(
-            edisgo_object, ts_generators, name="ts_generators"
-        )
-        ts_loads = shift_to_reference_year(edisgo_object, ts_loads, name="ts_loads")
-        ts_storage_units = shift_to_reference_year(
-            edisgo_object, ts_storage_units, name="ts_storage_units"
-        )
-
         if ts_generators is not None:
             # check if all generators time series are provided for exist in the network
             # and only set time series for those that do

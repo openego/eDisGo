@@ -274,18 +274,12 @@ def _set_timeindex(
 
     timeindex = _timeindex_from_params(timestamps, start, periods, end, freq)
 
+    # both relabel the given timestamps to the reference year
     if edisgo.timeseries.timeindex.empty:
         edisgo.set_timeindex(timeindex)
     else:
-        # A time index is already set (manual selection reducing existing
-        # data): align the user-supplied timestamps to that index's year so
-        # date-based slicing matches even if the user wrote them in a
-        # different (e.g. scenario) year than the internally used reference
-        # year.
-        year_diff = edisgo.timeseries.timeindex[0].year - timeindex[0].year
-        if year_diff != 0:
-            timeindex = timeindex + pd.DateOffset(years=year_diff)
         reduce_timeseries_data_to_given_timeindex(edisgo, timeindex)
+    timeindex = edisgo.timeseries.timeindex
 
     ctx.flags["selected_timeindex"] = timeindex
     ctx.logger.info(f"set_timeindex: selected {len(timeindex)} time steps.")
@@ -575,9 +569,6 @@ def task_oedb_ts(
 
     """
     from edisgo.io.timeseries_import import _timeindex_helper_func
-    from edisgo.tools.tools import validate_scenario
-
-    validate_scenario(ctx.scenario)
 
     ti_df = None
     if timeindex is not None:

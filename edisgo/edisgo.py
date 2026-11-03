@@ -197,10 +197,8 @@ class EDisGo:
         self.dsm = DSM()
         self.overlying_grid = OverlyingGrid()
 
-        # set initial time index via set_timeindex (rather than passing it
-        # straight to TimeSeries()) so a leap year given here is shifted to
-        # the reference year immediately, before anything else is indexed by
-        # it - see set_timeindex
+        # set the initial time index via set_timeindex, which relabels it to the
+        # reference year
         self.set_timeindex(kwargs.get("timeindex", pd.DatetimeIndex([])))
 
         # import new generators
@@ -596,17 +594,17 @@ class EDisGo:
             'oedb'. It is used to specify time steps for which to set active power data.
             If no timeindex is provided, the timeindex set in
             :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used. If that is
-            not set either, the respective import function determines the time
-            index to use (see
-            :func:`edisgo.io.timeseries_import._timeindex_helper_func`), setting
-            :py:attr:`~.network.timeseries.TimeSeries.timeindex` to the configured
-            reference year (see :func:`~.tools.tools.get_reference_year`). A leap
-            year is currently not supported and is shifted to the reference year
-            instead.
+            not set either, :py:attr:`~.network.timeseries.TimeSeries.timeindex` is
+            set to the full reference year (see
+            :func:`~.tools.tools.get_reference_year`). A timeindex in another year
+            is relabelled to the reference year.
 
         """
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
-        if self.timeseries.timeindex.empty:
+        if self.timeseries.timeindex.empty and kwargs.get("timeindex", None) is None:
+            # sets TimeSeries.timeindex to the full reference year, with a warning
+            timeseries_import._timeindex_helper_func(self)
+        elif self.timeseries.timeindex.empty:
             logger.warning(
                 "When setting time series using predefined profiles it is better to "
                 "set a time index as all data in TimeSeries class is indexed by the"
@@ -2422,12 +2420,10 @@ class EDisGo:
         dsm_profiles = dsm_import.oedb(
             edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
         )
-        for attr in ["p_min", "p_max", "e_min", "e_max"]:
-            setattr(
-                self.dsm,
-                attr,
-                tools.shift_to_reference_year(self, dsm_profiles[attr], name=attr),
-            )
+        self.dsm.p_min = dsm_profiles["p_min"]
+        self.dsm.p_max = dsm_profiles["p_max"]
+        self.dsm.e_min = dsm_profiles["e_min"]
+        self.dsm.e_max = dsm_profiles["e_max"]
 
     def import_home_batteries(
         self,

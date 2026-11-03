@@ -81,6 +81,10 @@ def _timeindex_helper_func(edisgo_object, timeindex=None):
         edisgo_object.set_timeindex(timeindex_full)
         timeindex = timeindex_full
 
+    # the worst-case time index is not relabelled, so the full year is built in
+    # its year, too
+    if len(timeindex) > 0 and timeindex[0].year == 1970:
+        timeindex_full = tools.shift_timeindex_to_year(timeindex_full, 1970)
     return timeindex, timeindex_full
 
 
@@ -348,9 +352,9 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
 
     # time series are indexed without 29 February, see shift_timeindex_to_year, so
     # in a leap year it is dropped and the profiles are normalized again
-    feb_29 = (elec_demand.index.month == 2) & (elec_demand.index.day == 29)
-    if feb_29.any():
-        elec_demand = elec_demand.loc[~feb_29]
+    keep = tools._not_feb_29(elec_demand.index)
+    if not keep.all():
+        elec_demand = elec_demand.loc[keep]
         elec_demand = elec_demand / elec_demand.sum()
 
     elec_demand.rename(

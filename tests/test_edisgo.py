@@ -138,6 +138,10 @@ class TestEDisGo:
         self.edisgo.set_timeindex(timeindex)
         assert_index_equal(self.edisgo.timeseries.timeindex, timeindex)
 
+        # test time index in another year is relabelled to the reference year
+        self.edisgo.set_timeindex(pd.date_range("3/1/2035", periods=3, freq="H"))
+        assert_index_equal(self.edisgo.timeseries.timeindex, timeindex)
+
         # test full leap year is relabelled to the reference year without 29 Feb
         with caplog.at_level(logging.WARNING):
             self.edisgo.set_timeindex(
@@ -376,14 +380,13 @@ class TestEDisGo:
     def test_set_time_series_active_power_predefined(self, caplog):
         # options where database connection is needed are tested in separate function
 
-        # check warning
-        # (with no profile source given, none of the import functions that set
-        # TimeSeries.timeindex via _timeindex_helper_func are reached, so only the
-        # generic "better to set a time index" warning fires here)
+        # test that without timeindex the full reference year is set
         with caplog.at_level(logging.WARNING):
             self.edisgo.set_time_series_active_power_predefined()
-        assert (
-            "better to set a time index" in caplog.text
+        assert "No timeindex was set" in caplog.text
+        assert_index_equal(
+            self.edisgo.timeseries.timeindex,
+            pd.date_range("1/1/2011", periods=8760, freq="H"),
         )
 
         # check if right functions are called
@@ -1816,28 +1819,6 @@ class TestEDisGo:
         heat_demand_retrieval_mock.assert_called_once()
         cop_retrieval_mock.assert_called_once()
 
-    def test_import_dsm_relabels_to_reference_year(self, monkeypatch, caplog):
-        edisgo_object = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        timeindex = pd.date_range("1/1/2020", periods=3, freq="H")
-        dsm_profiles = {
-            attr: pd.DataFrame({"Load_1": [0.1, 0.2, 0.3]}, index=timeindex)
-            for attr in ["p_min", "p_max", "e_min", "e_max"]
-        }
-        monkeypatch.setattr(
-            edisgo_module.dsm_import, "oedb", Mock(return_value=dsm_profiles)
-        )
-
-        with caplog.at_level(logging.WARNING):
-            edisgo_object.import_dsm(scenario="eGon2035", engine=Mock())
-
-        assert "The time index of p_min is set in year 2020" in caplog.text
-        for attr in ["p_min", "p_max", "e_min", "e_max"]:
-            df = getattr(edisgo_object.dsm, attr)
-            assert_index_equal(
-                df.index, pd.date_range("1/1/2011", periods=3, freq="H")
-            )
-            assert df["Load_1"].tolist() == [0.1, 0.2, 0.3]
-
     @pytest.mark.slow
     @pytest.mark.oep
     def test_import_heat_pumps_reference_year_independent_of_scenario(
@@ -2524,28 +2505,27 @@ class TestEDisGo:
                 active_power[gen], expected, check_names=False
             )
 
-    def test_reduce_timeseries_data_to_given_timeindex_heat_pump_different_year(
-        self, caplog
-    ):
-        """
-        reduce_timeseries_data_to_given_timeindex aligns HeatPump data indexed
-        in a different calendar year onto the given target timeindex, with a
-        warning.
-        """
-        target_timeindex = pd.date_range("2011-01-01", periods=3, freq="h")
+    def test_reduce_timeseries_data_to_given_timeindex_other_year(self, caplog):
+        # a time index in another year is relabelled to the reference year
+        self.edisgo.set_timeindex(pd.date_range("2011-01-01", periods=5, freq="h"))
         self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
-            {"heat_pump_1": [1.0, 2.0, 3.0]},
-            index=pd.date_range("2019-01-01", periods=3, freq="h"),
+            {"heat_pump_1": [1.0, 2.0, 3.0, 4.0, 5.0]},
+            index=self.edisgo.timeseries.timeindex,
         )
 
         with caplog.at_level(logging.WARNING):
-            reduce_timeseries_data_to_given_timeindex(self.edisgo, target_timeindex)
+            reduce_timeseries_data_to_given_timeindex(
+                self.edisgo, pd.date_range("2035-01-01 01:00", periods=3, freq="h")
+            )
 
-        assert "HeatPump.heat_demand_df" in caplog.text
+        assert "is set in year 2035" in caplog.text
+        target_timeindex = pd.date_range("2011-01-01 01:00", periods=3, freq="h")
+        pd.testing.assert_index_equal(
+            self.edisgo.timeseries.timeindex, target_timeindex, check_names=False
+        )
         result = self.edisgo.heat_pump.heat_demand_df
-        pd.testing.assert_index_equal(result.index, target_timeindex)
-        assert not result.isna().any().any()
-        assert list(result["heat_pump_1"]) == [1.0, 2.0, 3.0]
+        pd.testing.assert_index_equal(result.index, target_timeindex, check_names=False)
+        assert list(result["heat_pump_1"]) == [2.0, 3.0, 4.0]
 
     def test_check_integrity_warns_on_timeseries_year_mismatch(self, caplog):
         """

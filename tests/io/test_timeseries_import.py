@@ -166,6 +166,14 @@ class TestTimeseriesImport:
         assert_index_equal(ind_full, timeindex_full)
         assert edisgo.timeseries.timeindex.empty
 
+        # test worst-case time index: the full year is built in 1970, too
+        edisgo.timeseries.timeindex = pd.date_range("1/1/1970", periods=4, freq="h")
+        ind, ind_full = timeseries_import._timeindex_helper_func(edisgo)
+        assert ind[0].year == 1970
+        assert ind_full[0] == pd.Timestamp("1/1/1970")
+        assert len(ind_full) == 8760
+        edisgo.timeseries.timeindex = pd.DatetimeIndex([])
+
         # test leap reference year: the full year keeps each date of the model
         # data, 29 February is left out
         monkeypatch.setitem(edisgo.config["timeindex"], "reference_year", 2020)

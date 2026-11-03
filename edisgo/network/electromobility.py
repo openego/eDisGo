@@ -399,19 +399,12 @@ class Electromobility:
 
         Notes
         -----
-        The bands are always built spanning SimBEV's own native calendar and
-        simulated date range (independent of ``edisgo_obj.timeseries.timeindex``
-        - a charging process straddling a later window's boundary must still
-        count toward the band inside that window). The returned/stored bands
-        are then always year-aligned onto ``edisgo_obj.timeseries.timeindex``
-        via :func:`~.tools.tools.align_to_edisgo_timeindex` (SimBEV's calendar
-        is commonly a fixed reference year, independent of the scenario year)
-        - this is done regardless of `resample`, since it is a correctness fix
-        (avoiding a ``KeyError`` when a consumer later indexes the bands by
-        ``edisgo_obj.timeseries.timeindex``), not an optional resampling
-        convenience. If ``edisgo_obj.timeseries.timeindex`` is still empty, it
-        is itself set up on the configured reference year first, so the bands
-        never stay in SimBEV's own calendar.
+        The bands are built in SimBEV's own calendar, so that a charging process
+        starting before the time index still counts toward the bands inside it.
+        In case ``edisgo_obj.timeseries.timeindex`` is set, the returned bands
+        are aligned to it, regardless of `resample`, see
+        :func:`~.tools.tools.align_to_edisgo_timeindex`. Without a time index
+        they are kept in SimBEV's calendar and resolution.
 
         Returns
         --------
@@ -494,7 +487,7 @@ class Electromobility:
         # time index (the window from its first to its last time step). The
         # SimBEV data can be for another year than the time index, so the time
         # index is shifted to the SimBEV year to find the window, as
-        # `align_series_to_timeindex` shifts the bands back below. The bands
+        # `align_to_edisgo_timeindex` shifts the bands back below. The bands
         # start at the earlier of the window start and the first of these
         # charging processes and reach one step past the later of the window
         # end and the end of the last of these processes, because processes

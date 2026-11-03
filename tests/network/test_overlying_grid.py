@@ -175,6 +175,17 @@ class TestOverlyingGrid:
         og2.from_etrago(edisgo_obj, {"not_an_attribute": pd.Series([1.0])})
         assert not hasattr(og2, "not_an_attribute")
 
+        # without timeindex the data is only relabelled and no timeindex is set
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        og3 = OverlyingGrid()
+        og3.from_etrago(edisgo_obj, overlying_grid_data)
+        assert edisgo_obj.timeseries.timeindex.empty
+        pd.testing.assert_index_equal(
+            og3.renewables_curtailment.index,
+            pd.date_range("1/1/2011", periods=2, freq="h"),
+            check_names=False,
+        )
+
     def test_resample(self, caplog):
         mean_value_curtailment_orig = self.overlying_grid.renewables_curtailment.mean()
         mean_value_feedin_dh_orig = self.overlying_grid.feedin_district_heating.mean()
