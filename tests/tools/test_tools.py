@@ -675,9 +675,7 @@ class TestTools:
         # test with a normal (non-leap) year source and a normal target year
         source = pd.date_range("1/1/2011", periods=8760, freq="H")
         shifted = tools.shift_timeindex_to_year(source, 2035)
-        assert_index_equal(
-            shifted, pd.date_range("1/1/2035", periods=8760, freq="H")
-        )
+        assert_index_equal(shifted, pd.date_range("1/1/2035", periods=8760, freq="H"))
         assert not shifted.has_duplicates
 
         # test with a leap year source containing 29 February and a non-leap
@@ -691,9 +689,7 @@ class TestTools:
         assert ((shifted.month == 2) & (shifted.day == 29)).sum() == 0
         assert len(shifted) == 8760
         assert not shifted.has_duplicates
-        assert_index_equal(
-            shifted, pd.date_range("1/1/2035", periods=8760, freq="H")
-        )
+        assert_index_equal(shifted, pd.date_range("1/1/2035", periods=8760, freq="H"))
 
         # test that shifting onto a leap year target also drops 29 February and
         # keeps each date

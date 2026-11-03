@@ -144,9 +144,7 @@ class TestEDisGo:
 
         # test full leap year is relabelled to the reference year without 29 Feb
         with caplog.at_level(logging.WARNING):
-            self.edisgo.set_timeindex(
-                pd.date_range("1/1/2020", periods=8784, freq="H")
-            )
+            self.edisgo.set_timeindex(pd.date_range("1/1/2020", periods=8784, freq="H"))
         assert "is set in year 2020" in caplog.text
         assert_index_equal(
             self.edisgo.timeseries.timeindex,
@@ -1821,9 +1819,7 @@ class TestEDisGo:
 
     @pytest.mark.slow
     @pytest.mark.oep
-    def test_import_heat_pumps_reference_year_independent_of_scenario(
-        self, oep_engine
-    ):
+    def test_import_heat_pumps_reference_year_independent_of_scenario(self, oep_engine):
         # without timeindex, heat demand and COP are indexed in the reference year
         # (ding0_test_network_3 only has heat pumps in scenario eGon2035)
         edisgo_object = EDisGo(
@@ -1875,9 +1871,7 @@ class TestEDisGo:
         )
         assert edisgo_heat_pumps_first.timeseries.timeindex.empty
         edisgo_heat_pumps_first.import_heat_pumps(**heat_pump_kwargs)
-        edisgo_heat_pumps_first.set_time_series_active_power_predefined(
-            **feedin_kwargs
-        )
+        edisgo_heat_pumps_first.set_time_series_active_power_predefined(**feedin_kwargs)
 
         assert not edisgo_feedin_first.timeseries.timeindex.empty
         assert not edisgo_heat_pumps_first.timeseries.timeindex.empty

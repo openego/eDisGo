@@ -44,6 +44,15 @@ always has 365 days. A time index across the year boundary, e.g. from 31 Decembe
 1 January, raises a ``ValueError``. The worst-case time index starting
 1970-01-01 (see :ref:`worst-case-ts`) is not changed.
 
+The relabelling is done by the import and ``set_*`` methods, e.g.
+:meth:`~edisgo.edisgo.EDisGo.set_time_series_manual`,
+:meth:`~edisgo.network.heat.HeatPump.set_cop` or
+:meth:`~edisgo.network.overlying_grid.OverlyingGrid.from_etrago`. Data assigned
+directly to an attribute, e.g. ``edisgo.dsm.p_min``, ``edisgo.heat_pump.cop_df`` or an
+attribute of ``edisgo.overlying_grid``, or passed to
+:meth:`~edisgo.network.timeseries.TimeSeries.set_active_power_manual`, is stored as
+given and must already be indexed in the reference year.
+
 Active power
 ------------
 

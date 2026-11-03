@@ -165,10 +165,9 @@ class TestOverlyingGrid:
         )
         # SoC attribute carries one extra trailing step beyond timeindex
         assert len(og.storage_units_soc) == len(edisgo_obj.timeseries.timeindex) + 1
-        assert (
-            og.storage_units_soc.index[-1]
-            == edisgo_obj.timeseries.timeindex[-1] + pd.Timedelta("1h")
-        )
+        assert og.storage_units_soc.index[-1] == edisgo_obj.timeseries.timeindex[
+            -1
+        ] + pd.Timedelta("1h")
 
         # keys not in _attributes are ignored
         og2 = OverlyingGrid()
