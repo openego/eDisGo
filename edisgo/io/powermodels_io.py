@@ -1273,7 +1273,13 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         Updated array containing all charging points that allow for flexible charging.
 
     """
-    flex_bands_df = edisgo_obj.electromobility.flexibility_bands
+    # Select the flexibility bands by time stamp, as they can cover more or
+    # other time steps than the time index.
+    timeindex = edisgo_obj.timeseries.timeindex
+    flex_bands_df = {
+        key: df.loc[timeindex]
+        for key, df in edisgo_obj.electromobility.flexibility_bands.items()
+    }
     if (flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]).any().any():
         logger.warning(
             "Upper energy level is smaller than lower energy level for "
@@ -2010,21 +2016,24 @@ def _build_component_timeseries(
             }
     elif kind == "electromobility":
         if len(flexible_cps) > 0:
+            # Select the flexibility bands by time stamp, so that their length
+            # matches pm["time_series"]["num_steps"].
+            timeindex = edisgo_obj.timeseries.timeindex
             p_set = (
-                edisgo_obj.electromobility.flexibility_bands["upper_power"][
-                    flexible_cps
+                edisgo_obj.electromobility.flexibility_bands["upper_power"].loc[
+                    timeindex, flexible_cps
                 ]
                 / s_base
             ).round(20)
             e_min = (
-                edisgo_obj.electromobility.flexibility_bands["lower_energy"][
-                    flexible_cps
+                edisgo_obj.electromobility.flexibility_bands["lower_energy"].loc[
+                    timeindex, flexible_cps
                 ]
                 / s_base
             ).round(20)
             e_max = (
-                edisgo_obj.electromobility.flexibility_bands["upper_energy"][
-                    flexible_cps
+                edisgo_obj.electromobility.flexibility_bands["upper_energy"].loc[
+                    timeindex, flexible_cps
                 ]
                 / s_base
             ).round(20)

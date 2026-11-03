@@ -938,10 +938,21 @@ def _voltage_issues_helper(edisgo_obj, buses, split_voltage_band):
         edisgo_obj, buses=buses, split_voltage_band=split_voltage_band
     )
     # drop buses without voltage issues
-    voltage_dev = voltage_dev[voltage_dev != 0].dropna(how="all", axis=1).abs()
+    voltage_dev = voltage_dev[voltage_dev != 0].dropna(how="all", axis=1)
+    voltage_dev_abs = voltage_dev.abs()
     # determine absolute maximum voltage deviation and time step it occurs
-    crit_buses["abs_max_voltage_dev"] = voltage_dev.max()
-    crit_buses["time_index"] = voltage_dev.idxmax()
+    crit_buses["abs_max_voltage_dev"] = voltage_dev_abs.max()
+    crit_buses["time_index"] = voltage_dev_abs.idxmax()
+    # signed voltage deviation at the same (bus, time_index) as abs_max_voltage_dev
+    if crit_buses.empty:
+        # DataFrame.apply(axis=1) on an empty frame can return an empty
+        # DataFrame instead of an empty Series (depends on the dtype of the
+        # dropped columns' index), which breaks the column assignment below
+        crit_buses["max_voltage_dev"] = pd.Series(dtype=float)
+    else:
+        crit_buses["max_voltage_dev"] = crit_buses.apply(
+            lambda row: voltage_dev.at[row["time_index"], row.name], axis=1
+        )
     # sort descending by maximum voltage deviation
     if not crit_buses.empty:
         crit_buses.sort_values(
@@ -1113,13 +1124,14 @@ def _lv_allowed_voltage_limits(
         config_string = "mv_lv_station"
 
         # get base voltage (voltage at primary side) for each station
-        voltage_base = pd.DataFrame()
+        voltage_base = {}
         for grid in lv_grids:
             transformers_df = grid.transformers_df
             primary_side = transformers_df.iloc[0].bus0
             secondary_side = transformers_df.iloc[0].bus1
             if primary_side in buses_in_pfa:
                 voltage_base[secondary_side] = voltages_pfa.loc[:, primary_side]
+        voltage_base = pd.DataFrame(voltage_base)
 
         upper_limits_df = (
             voltage_base

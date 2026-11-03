@@ -35,7 +35,7 @@ def read(fname):
 
 requirements = [
     "contextily >= 1.7.1, < 1.8.0",
-    "dash < 4.5.0",
+    "dash < 4.6.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
     # pinned: oedialect 0.1.1 requires geoalchemy2<0.7.0, and newer geoalchemy2
@@ -76,20 +76,21 @@ dev_requirements = [
     "ruff < 0.18.0",
     "pre-commit < 4.7.0",
     "pylint < 4.2.0",
-    "pytest < 9.2.0",
+    "pytest < 9.3.0",
     "nbclient < 0.12.0",
     "pytest-xdist < 4.0.0",
     "pytest-rerunfailures < 17.0.0",
     "pytest-html < 5.0.0",
     "pytest-metadata < 4.0.0",
+    "coveralls < 4.2.0",
     "anyio < 5.0.0",
-    "dash < 4.5.0",
+    "dash < 4.6.0",
     "pluggy < 2.0.0",
     "pyupgrade < 3.22.0",
     "sphinx < 9.2.0",
     "sphinx_rtd_theme >= 0.5.2, < 3.2.0",
     "sphinx-autodoc-typehints < 3.13.0",
-    "sphinx-autoapi < 3.9.0",
+    "sphinx-autoapi < 3.10.0",
     "astroid == 4.3.4",
 ]
 
