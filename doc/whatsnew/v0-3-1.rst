@@ -449,4 +449,8 @@ Changes
   changed the mode of the reinforcement to the mode of the power flow analysis after
   the first non-converging reinforcement. With ``mode="lv"`` the grid was then
   reinforced in all voltage levels, including the MV grid and the HV/MV station with
-  the LV worst cases
+  the LV worst cases. This happened in the LV step of
+  :meth:`~.edisgo.EDisGo.reinforce` with ``catch_convergence_problems=True`` on
+  worst-case time series and in
+  :func:`~.flex_opt.reinforce_grid.enhanced_reinforce_grid`, so their results can
+  contain less MV and HV/MV reinforcement now

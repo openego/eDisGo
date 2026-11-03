@@ -722,8 +722,8 @@ class TestEDisGo:
         )
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
-        # the LV reinforcement does not touch the HV/MV station, so there is one
-        # transformer less than without worst cases
+        # the LV worst cases only reinforce the LV grids and the MV/LV stations, also
+        # after the first reinforcement did not converge
         assert len(results.grid_expansion_costs) == 133
         # house connections are not reinforced due to voltage issues, so there are
         # no equipment changes for them here
@@ -748,10 +748,12 @@ class TestEDisGo:
 
         results = edisgo_obj.results
 
-        assert len(results.grid_expansion_costs) == 453
+        # the LV worst cases only reinforce the LV grids and the MV/LV stations, also
+        # after the first reinforcement did not converge
+        assert len(results.grid_expansion_costs) == 451
         # counts the parallel standard lines to new stations after LV grid separation;
         # house connections are not reinforced due to voltage issues
-        assert len(results.equipment_changes) == 827
+        assert len(results.equipment_changes) == 816
         assert results.v_res.shape == (4, 148)
 
         edisgo_obj = copy.deepcopy(self.edisgo)
@@ -763,7 +765,10 @@ class TestEDisGo:
             num_steps_loading=1,
             num_steps_voltage=1,
         )
-        assert edisgo_obj.results.v_res.shape == (2, 162)
+        # the last reinforcement does not converge at first and is run separately
+        # for the converging and the non-converging time steps; v_res only holds the
+        # power flow results of the last of these runs
+        assert edisgo_obj.results.v_res.shape == (1, 162)
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()

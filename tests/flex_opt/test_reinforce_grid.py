@@ -283,10 +283,17 @@ class TestReinforceGrid:
 
         return analyze
 
-    def test_catch_convergence_reinforce_grid_keeps_mode(self, monkeypatch):
+    @pytest.mark.parametrize(
+        "lv_grid_kwargs, expected_analyze_mode",
+        [({}, None), ({"lv_grid_id": 1}, "lv")],
+    )
+    def test_catch_convergence_reinforce_grid_keeps_mode(
+        self, monkeypatch, lv_grid_kwargs, expected_analyze_mode
+    ):
         # the first reinforcement does not converge, the time steps that converge
         # and those that do not are then reinforced separately; all three runs
-        # must keep mode "lv", although the grid is analyzed in mode None
+        # must keep mode "lv", although without an LV grid ID the whole grid is
+        # analyzed
         edisgo = copy.deepcopy(self.edisgo)
         timesteps = edisgo.timeseries.timeindex
         modes = []
@@ -306,9 +313,9 @@ class TestReinforceGrid:
             "edisgo.flex_opt.reinforce_grid.reinforce_grid", fake_reinforce_grid
         )
         monkeypatch.setattr(edisgo, "analyze", fake_analyze)
-        catch_convergence_reinforce_grid(edisgo, mode="lv")
+        catch_convergence_reinforce_grid(edisgo, mode="lv", **lv_grid_kwargs)
         assert modes == ["lv", "lv", "lv"]
-        assert analyze_modes == [None]
+        assert analyze_modes == [expected_analyze_mode]
 
     def test_analyze_after_voltage_reinforcement_without_split(self, monkeypatch):
         edisgo = copy.deepcopy(self.edisgo)
