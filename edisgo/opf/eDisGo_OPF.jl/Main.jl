@@ -57,7 +57,7 @@ SOC solutions are written to `results_path`.
 """
 function optimize_edisgo()
   # read in data and create multinetwork
-  gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "FeasibilityTol"=>1e-4, "BarQCPConvTol"=>1e-4, "BarConvTol"=>1e-4, "BarHomogeneous"=>1)
+  gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "FeasibilityTol"=>1e-4, "BarQCPConvTol"=>1e-4, "BarConvTol"=>1e-4, "BarHomogeneous"=>1, "threads"=>4)
   data_edisgo = eDisGo_OPF.parse_json(json_str)
   data_edisgo_mn = PowerModels.make_multinetwork(data_edisgo)
 
