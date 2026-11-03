@@ -158,7 +158,8 @@ def _line_max_relative_overload(
         the voltage level the line is in (either 'mv' or 'lv').
 
     """
-    if edisgo_obj.results.i_res.empty:
+    # the results of an LV grid without lines have time steps but no columns
+    if edisgo_obj.results.i_res.index.empty:
         raise Exception(
             "No power flow results to check over-load for. Please perform "
             "power flow analysis first."

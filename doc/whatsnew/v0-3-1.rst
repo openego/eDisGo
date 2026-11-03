@@ -454,3 +454,9 @@ Changes
   worst-case time series and in
   :func:`~.flex_opt.reinforce_grid.enhanced_reinforce_grid`, so their results can
   contain less MV and HV/MV reinforcement now
+* The grid reinforcement treats the LV grid with ID ``0`` like every other LV grid.
+  Before, ``lv_grid_id=0`` counted as no LV grid ID, so reinforcing this LV grid
+  analyzed the whole grid and checked the load of all MV/LV stations
+* :func:`~.flex_opt.check_tech_constraints.lv_line_max_relative_overload` works for
+  an LV grid without lines. It raised an error that no power flow results exist,
+  because the results of such a grid have time steps but no lines

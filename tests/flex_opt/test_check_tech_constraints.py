@@ -71,6 +71,15 @@ class TestCheckTechConstraints:
         )
         assert df.at["Line_50000002", "time_index"] == self.timesteps[0]
 
+        # test for single LV grid without lines, whose power flow results have time
+        # steps but no lines
+        self.edisgo.analyze(mode="lv", lv_grid_id=0)
+        assert self.edisgo.topology.get_lv_grid(0).lines_df.empty
+        df = check_tech_constraints.lv_line_max_relative_overload(
+            self.edisgo, lv_grid_id=0
+        )
+        assert df.empty
+
     def test_lines_allowed_load(self):
         # check with default value (all lines)
         df = check_tech_constraints.lines_allowed_load(self.edisgo)
