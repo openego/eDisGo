@@ -1,13 +1,17 @@
 """
-Seed warm-start values on a (single-network) data dict: copy each flexibility's
-optimised power/energy results into the corresponding `*_start` fields, so a
+Seed warm-start values on a (single-network) data dict: copy the optimised
+results of each flexibility and of the grid (voltages `w`, branch flows `pf`/`qf`,
+currents `ccm`, line loading `ll`) into the corresponding `*_start` fields, so a
 subsequent non-convex (Ipopt) solve can be warm-started from a previous solution.
-Used in the SOC → NC `warm_start` workflow.
+Used in the SOC → NC `warm_start` workflow. Some results only exist in part of
+the model: the curtailment `pgc` only for `opf_version` 2, 3 and 4, `ll` only for
+1 and 3 and in network 1, and `w` not at storage buses. Components without them
+get no start field.
 """
 function set_ac_bf_start_values!(network::Dict{String,<:Any})
 
     for (i,gen) in network["gen_nd"]
-        gen["pgc_start"] = gen["pgc"]
+        haskey(gen, "pgc") && (gen["pgc_start"] = gen["pgc"])
     end
 
     for (i,gen) in network["gen_slack"]
@@ -27,6 +31,7 @@ function set_ac_bf_start_values!(network::Dict{String,<:Any})
 
     for (i,cp) in network["electromobility"]
         cp["pcp_start"] = cp["pcp"]
+        cp["cpe_start"] = cp["cpe"]
     end
 
     for (i,hp) in network["heatpumps"]
@@ -36,6 +41,17 @@ function set_ac_bf_start_values!(network::Dict{String,<:Any})
     for (i,hs) in network["heat_storage"]
         hs["phs_start"] = hs["phs"]
         hs["hse_start"] = hs["hse"]
+    end
+
+    for (i,bus) in network["bus"]
+        haskey(bus, "w") && (bus["w_start"] = bus["w"])
+    end
+
+    for (i,branch) in network["branch"]
+        branch["pf_start"] = branch["pf"]
+        branch["qf_start"] = branch["qf"]
+        branch["ccm_start"] = branch["ccm"]
+        haskey(branch, "ll") && (branch["ll_start"] = branch["ll"])
     end
 
 end
@@ -113,7 +129,7 @@ function _correct_bus_types!(pm_data::Dict{String,<:Any})
     end
 
     if !slack_found
-        gen = _biggest_generator(pm_data["gen"])
+        gen = PowerModels._biggest_generator(pm_data["gen"])
         if length(gen) > 0
             gen_bus = gen["gen_bus"]
             ref_bus = pm_data["bus"]["$(gen_bus)"]

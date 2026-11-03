@@ -51,7 +51,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
         + factor_slacks  * sum(sum(pds[n][i] for i in keys(PowerModels.ref(pm,1 , :load))) for n in nws) # minimize load shedding
         + factor_slacks  * sum(sum(pcps[n][i] for i in keys(PowerModels.ref(pm,1 , :electromobility))) for n in nws) # minimize cp load sheddin
         + factor_slacks * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm,1 , :heatpumps))) for n in nws) # minimize hp load shedding
-        + 1e4 * sum(sum(phss[n][i] + phps2[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws)
+        + 1e4 * sum(sum(phss[n][i] for i in keys(PowerModels.ref(pm, 1 , :heat_storage))) + sum(phps2[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws)
     )
 end
 
@@ -111,7 +111,7 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
         + factor_slacks * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws) # minimize hp load shedding
         + factor_hv_slacks * sum(sum(phvs[n][i]^2 * flex["count"] for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]!= "dsm") for n in nws)  #
         + factor_hv_slacks * 1e-1 * sum(sum(phvs[n][i]^2 * flex["count"] for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]== "dsm") for n in nws) #
-        + 1e4 * sum(sum(phss[n][i] + phps2[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws)
+        + 1e4 * sum(sum(phss[n][i] for i in keys(PowerModels.ref(pm, 1 , :heat_storage))) + sum(phps2[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws)
     )
 end
 
@@ -135,9 +135,7 @@ function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
     parameters2 = [l[1][i]*c[1][i] for i in keys(c[1])]
     parameters2 = parameters2[parameters2 .>0]
     factor_ll = 0.01
-    println(factor_ll)
     factor_hv_slacks = 7.5 *  exp10(floor(log10(maximum(0.01*parameters2)))+1)
-    println(factor_hv_slacks)
     return JuMP.@objective(pm.model, Min,
         (1 - factor_ll) * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
         + factor_ll * sum((ll[(b,i,j)]-1) * c[1][b] * l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading

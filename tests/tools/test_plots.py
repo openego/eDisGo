@@ -1,8 +1,13 @@
 import copy
 
+import numpy as np
+import pandas as pd
 import pytest
 
+from matplotlib import pyplot as plt
+
 from edisgo import EDisGo
+from edisgo.tools import plots
 from edisgo.tools.plots import chosen_graph, plot_dash_app, plot_plotly
 
 
@@ -100,6 +105,37 @@ class TestPlots:
                 node_selection=node_selection,
             )
 
+    def test_plot_plotly_custom_colors(self):
+        def line_colors(fig):
+            return {t.line.color for t in fig.data if t.mode == "lines"}
+
+        def node_colors(fig):
+            # the node trace has one color per node, other marker traces only one
+            return [
+                c
+                for t in fig.data
+                if t.mode == "markers" and isinstance(t.marker.color, tuple)
+                for c in t.marker.color
+            ]
+
+        # lines and nodes that are not in the Series or dict are grey
+        fig = plot_plotly(
+            edisgo_obj=self.edisgo_root,
+            line_color=pd.Series({"Line_10003": "red", "Line_10004": "blue"}),
+            node_color=pd.Series({"Bus_MVStation_1": "orange"}),
+        )
+        assert line_colors(fig) == {"red", "blue", "grey"}
+        assert "orange" in node_colors(fig)
+        assert set(node_colors(fig)) == {"orange", "grey"}
+
+        fig = plot_plotly(
+            edisgo_obj=self.edisgo_root,
+            line_color={"Line_10003": "green"},
+            node_color={"Bus_MVStation_1": "cyan"},
+        )
+        assert line_colors(fig) == {"green", "grey"}
+        assert set(node_colors(fig)) == {"cyan", "grey"}
+
     def test_chosen_graph(self):
         chosen_graph(edisgo_obj=self.edisgo_root, selected_grid="Grid")
         grid = str(self.edisgo_root.topology.mv_grid)
@@ -121,3 +157,32 @@ class TestPlots:
                 "edisgo_2": self.edisgo_reinforced,
             }
         )
+
+    def test_add_basemap_timeout(self, monkeypatch):
+        # add_basemap passes the timeout to contextily and passes a failed
+        # download on to the caller
+        calls = {}
+
+        def bounds2img(*args, timeout=None, **kwargs):
+            calls["timeout"] = timeout
+            raise TimeoutError("tile download timed out")
+
+        monkeypatch.setattr(plots.ctx, "bounds2img", bounds2img)
+        fig, ax = plt.subplots()
+        with pytest.raises(TimeoutError):
+            plots.add_basemap(ax)
+        plt.close(fig)
+        assert calls["timeout"] == 10
+
+    def test_add_basemap_source_note(self, monkeypatch):
+        # the TopPlusOpen licence requires the BKG source note on the map
+        def bounds2img(*args, **kwargs):
+            return np.zeros((256, 256, 4)), (0, 1, 0, 1)
+
+        monkeypatch.setattr(plots.ctx, "bounds2img", bounds2img)
+        fig, ax = plt.subplots()
+        plots.add_basemap(ax)
+        texts = [text.get_text() for text in ax.texts]
+        plt.close(fig)
+        assert any(text.startswith("© BKG (") for text in texts)
+        assert any("dl-de/by-2-0" in text for text in texts)

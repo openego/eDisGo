@@ -19,6 +19,9 @@ handles two concerns in a fixed order:
    extensions are tried as JSON first, then YAML).
 2. **extends** — resolve an ``extends:`` key recursively into the
    parent config and deep-merge; the child overrides parent keys. The
+   ``set_timeindex`` parameters of the child also replace the parent's
+   parameters they cannot be combined with (see
+   :mod:`edisgo.run.tasks.timeseries`). The
    ``extends:`` value may be a path (relative to the including file)
    or a bare preset name (resolved against
    :mod:`edisgo.run.presets`).
@@ -156,6 +159,8 @@ def _resolve_extends(cfg: dict, base_dir: Path) -> dict:
         If the referenced parent config file does not exist.
 
     """
+    from edisgo.run.tasks.timeseries import drop_replaced_timeindex_params
+
     ext = cfg.pop("extends", None)
     if ext is None:
         return cfg
@@ -174,7 +179,7 @@ def _resolve_extends(cfg: dict, base_dir: Path) -> dict:
         raise FileNotFoundError(f"extends: file not found: {ext_path}")
     parent = _read_file(ext_path)
     parent = _resolve_extends(parent, ext_path.parent)
-    return deep_merge(parent, cfg)
+    return deep_merge(drop_replaced_timeindex_params(parent, cfg), cfg)
 
 
 def _preset_path(name: str) -> Path | None:

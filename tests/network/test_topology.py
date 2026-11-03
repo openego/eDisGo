@@ -1935,3 +1935,149 @@ class TestTopologyWithEdisgoObject:
         assert len(meshes) == 2
         assert "Bus_BranchTee_LVGrid_2_3" in meshes[1]
         assert "Grid contains mesh(es)." in caplog.text
+
+
+class TestConnectToLVBasedOnGeolocation:
+    """
+    Tests the connection to a bus with a matching load in
+    :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`.
+
+    """
+
+    # bus with a CTS load only and the closest bus with a residential load only,
+    # 10.9 m apart
+    cts_bus = "BranchTee_mvgd_33535_lvgd_1164120005_building_441701"
+    residential_bus = "BranchTee_mvgd_33535_lvgd_1164120005_building_441655"
+    # two buses with a residential load only, 5.2 m apart
+    residential_bus_1 = "BranchTee_mvgd_33535_lvgd_1150630000_building_431068"
+    residential_bus_2 = "BranchTee_mvgd_33535_lvgd_1150630000_building_431069"
+
+    @pytest.fixture(autouse=True)
+    def setup_class(self):
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+    def connect_charging_point(self, bus, sector, **kwargs):
+        topology = self.edisgo.topology
+        comp_data = {
+            "p_set": 0.011,
+            "geom": Point(
+                topology.buses_df.at[bus, "x"], topology.buses_df.at[bus, "y"]
+            ),
+            "sector": sector,
+            "voltage_level": 7,
+        }
+        comp_name = topology.connect_to_lv_based_on_geolocation(
+            self.edisgo, comp_data, "charging_point", **kwargs
+        )
+        return topology.charging_points_df.at[comp_name, "bus"]
+
+    def test_matching_load(self):
+        num_buses = len(self.edisgo.topology.buses_df)
+        # without the option the closest bus is used, regardless of its loads
+        assert self.connect_charging_point(self.cts_bus, "home") == self.cts_bus
+        # with the option, home charging points are connected to residential loads
+        # and work charging points to CTS loads
+        assert (
+            self.connect_charging_point(self.cts_bus, "home", connect_to_load_bus=True)
+            == self.residential_bus
+        )
+        assert (
+            self.connect_charging_point(
+                self.residential_bus, "work", connect_to_load_bus=True
+            )
+            == self.cts_bus
+        )
+        # no new buses are created
+        assert len(self.edisgo.topology.buses_df) == num_buses
+
+    def test_matching_load_too_far_away(self):
+        # the residential bus is farther away than max_distance_from_target_bus,
+        # wherefore the closest bus is used
+        assert (
+            self.connect_charging_point(
+                self.cts_bus,
+                "home",
+                connect_to_load_bus=True,
+                max_distance_from_target_bus=0.005,
+            )
+            == self.cts_bus
+        )
+
+    def test_allowed_number_of_comp_per_bus(self):
+        buses = [
+            self.connect_charging_point(
+                self.residential_bus_1,
+                "home",
+                connect_to_load_bus=True,
+                allowed_number_of_comp_per_bus=1,
+            )
+            for _ in range(3)
+        ]
+        # a bus qualifies as long as no more than one charging point is connected to
+        # it, so the first two charging points are connected to the closest bus and
+        # the third one to the next bus with a residential load
+        assert buses == [
+            self.residential_bus_1,
+            self.residential_bus_1,
+            self.residential_bus_2,
+        ]
+
+    def test_public_charging_point_not_affected(self):
+        # in this grid no bus is marked as inside a building, so public charging
+        # points must not be moved away from the closest bus
+        buses = [
+            self.connect_charging_point(
+                self.cts_bus,
+                "public",
+                connect_to_load_bus=True,
+                allowed_number_of_comp_per_bus=0,
+            )
+            for _ in range(2)
+        ]
+        assert buses == [self.cts_bus, self.cts_bus]
+
+    def test_integrate_component_based_on_geolocation(self):
+        topology = self.edisgo.topology
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="charging_point",
+            geolocation=(
+                topology.buses_df.at[self.cts_bus, "x"],
+                topology.buses_df.at[self.cts_bus, "y"],
+            ),
+            voltage_level=7,
+            add_ts=False,
+            sector="home",
+            p_set=0.011,
+            connect_to_load_bus=True,
+            allowed_number_of_comp_per_bus=2,
+        )
+        assert topology.charging_points_df.at[comp_name, "bus"] == self.residential_bus
+        assert "connect_to_load_bus" not in topology.loads_df.columns
+        assert "allowed_number_of_comp_per_bus" not in topology.loads_df.columns
+
+    def test_connect_to_mv_existing_bus_name(self):
+        # the name connect_to_mv gives the new MV bus already exists in the LV grid,
+        # so the new bus gets another name
+        topology = self.edisgo.topology
+        topology.add_bus(
+            bus_name="Bus_ChargingPoint_0",
+            v_nom=0.4,
+            x=10.0,
+            y=47.5,
+            lv_grid_id=topology.buses_df.lv_grid_id.dropna().iloc[0],
+        )
+        comp_name = topology.connect_to_mv(
+            self.edisgo,
+            {
+                "p_set": 0.3,
+                "geom": Point(10.092002, 47.494141),
+                "sector": "public",
+                "voltage_level": 5,
+            },
+            "charging_point",
+        )
+        bus = topology.charging_points_df.at[comp_name, "bus"]
+        assert bus != "Bus_ChargingPoint_0"
+        assert bus in topology.mv_grid.buses_df.index

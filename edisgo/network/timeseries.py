@@ -23,7 +23,12 @@ import pandas as pd
 
 from edisgo.flex_opt import q_control
 from edisgo.io import timeseries_import
-from edisgo.tools.tools import assign_voltage_level_to_component, resample
+from edisgo.tools.tools import (
+    assign_voltage_level_to_component,
+    check_timeindex_coverage,
+    resample,
+    split_into_contiguous_runs,
+)
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -1264,6 +1269,14 @@ class TimeSeries:
             `ts_generators` is 'oedb' and new ding0 grids with geo-referenced LV grids
             are used.
 
+        Notes
+        -----
+        When `ts_generators` is a self-provided DataFrame and a timeindex is
+        already set on `edisgo_object`, its index must cover that timeindex -
+        a `ValueError` is raised naming any missing time steps, rather than
+        silently writing a partially-covering series. Not checked for the
+        `'oedb'` option, which is already scoped to the timeindex.
+
         """
         # in case time series from oedb are used, retrieve oedb time series
         if isinstance(ts_generators, str) and ts_generators == "oedb":
@@ -1280,6 +1293,15 @@ class TimeSeries:
             raise ValueError(
                 "'ts_generators' must either be a pandas DataFrame or 'oedb'."
             )
+        else:
+            # self-provided DataFrame - the oedb path above is already scoped
+            # to edisgo_object's timeindex by feedin_oedb/feedin_oedb_legacy
+            if not edisgo_object.timeseries.timeindex.empty:
+                check_timeindex_coverage(
+                    edisgo_object.timeseries.timeindex,
+                    "fluctuating generators",
+                    ts_generators,
+                )
 
         # set generator_names if None
         if generator_names is None:
@@ -1362,9 +1384,22 @@ class TimeSeries:
             'other', all dispatchable generators in the network (i.e. all but solar and
             wind generators) are used.
 
+        Notes
+        -----
+        If a timeindex is already set on `edisgo_object`, `ts_generators`'
+        index must cover it - a `ValueError` is raised naming any missing
+        time steps, rather than silently writing a partially-covering
+        series.
+
         """
         if not isinstance(ts_generators, pd.DataFrame):
             raise ValueError("'ts_generators' must be a pandas DataFrame.")
+        if not edisgo_object.timeseries.timeindex.empty:
+            check_timeindex_coverage(
+                edisgo_object.timeseries.timeindex,
+                "dispatchable generators",
+                ts_generators,
+            )
 
         # write to TimeSeriesRaw
         for col in ts_generators:
@@ -1445,6 +1480,14 @@ class TimeSeries:
             in :func:`edisgo.io.timeseries_import.load_time_series_demandlib` for
             more information.
 
+        Notes
+        -----
+        When `ts_loads` is a self-provided DataFrame and a timeindex is
+        already set on `edisgo_object`, its index must cover that timeindex -
+        a `ValueError` is raised naming any missing time steps, rather than
+        silently writing a partially-covering series. Not checked for the
+        `'demandlib'` option, which is already scoped to the timeindex.
+
         """
         # in case time series from demandlib are used, retrieve demandlib time series
         if isinstance(ts_loads, str) and ts_loads == "demandlib":
@@ -1458,6 +1501,12 @@ class TimeSeries:
         elif ts_loads.empty:
             logger.warning("The profile you entered is empty. Method is skipped.")
             return
+        elif not edisgo_object.timeseries.timeindex.empty:
+            # self-provided DataFrame - the demandlib path above is already
+            # scoped to edisgo_object's timeindex by load_time_series_demandlib
+            check_timeindex_coverage(
+                edisgo_object.timeseries.timeindex, "conventional loads", ts_loads
+            )
 
         # write to TimeSeriesRaw
         for col in ts_loads:
@@ -1521,12 +1570,23 @@ class TimeSeries:
             If None, all charging points of use cases for which use-case-specific time
             series are provided are used.
 
+        Notes
+        -----
+        If a timeindex is already set on `edisgo_object`, `ts_loads`' index
+        must cover that timeindex - a `ValueError` is raised naming any
+        missing time steps, rather than silently writing a
+        partially-covering series.
+
         """
         if not isinstance(ts_loads, pd.DataFrame):
             raise ValueError("'ts_loads' must be a pandas DataFrame.")
         elif ts_loads.empty:
             logger.warning("The profile you entered is empty. Method is skipped.")
             return
+        elif not edisgo_object.timeseries.timeindex.empty:
+            check_timeindex_coverage(
+                edisgo_object.timeseries.timeindex, "charging points", ts_loads
+            )
 
         # write to TimeSeriesRaw
         for col in ts_loads:
@@ -2267,24 +2327,34 @@ class TimeSeries:
             )
             return
 
-        freq_orig = self.timeindex[1] - self.timeindex[0]
+        freq_orig = (self.timeindex[1:] - self.timeindex[:-1]).min()
 
         resample(self, freq_orig, method, freq)
 
-        # create new index
-        if pd.Timedelta(freq) < freq_orig:  # up-sampling
-            index = pd.date_range(
-                self.timeindex[0],
-                self.timeindex[-1] + freq_orig,
-                freq=freq,
-                inclusive="left",
-            )
-        else:  # down-sampling
-            index = pd.date_range(
-                self.timeindex[0],
-                self.timeindex[-1],
-                freq=freq,
-            )
+        # Build the new index per contiguous run of the time index, like the
+        # data above, so gaps in the time index (e.g. two separate weeks) are
+        # kept.
+        freq_td = pd.Timedelta(freq)
+        new_indices = []
+        for run in split_into_contiguous_runs(
+            pd.DataFrame(index=self.timeindex), freq_orig
+        ):
+            if freq_td < freq_orig:  # up-sampling
+                new_indices.append(
+                    pd.date_range(
+                        run.index[0],
+                        run.index[-1] + freq_orig,
+                        freq=freq,
+                        inclusive="left",
+                    )
+                )
+            else:  # down-sampling
+                new_indices.append(
+                    pd.date_range(run.index[0], run.index[-1], freq=freq)
+                )
+        index = new_indices[0]
+        for other in new_indices[1:]:
+            index = index.union(other)
 
         # set new timeindex
         self._timeindex = index

@@ -46,10 +46,29 @@ the steps of both tasks take no inline params (parameters written on the
 pipeline step itself, e.g. ``- set_timeindex: {periods: 24}``). Without the
 block (or with ``timestep_selection: null``) both tasks run with their
 inline params.
+
+``set_timeindex`` selects either a list of ``timestamps``, one range
+(``start`` plus ``periods`` or ``end``) or several separate ``ranges``,
+e.g. two weeks::
+
+    timestep_selection:
+      task: set_timeindex
+      set_timeindex:
+        ranges:
+          - {start: "2035-01-09 00:00", periods: 168}
+          - {start: "2035-07-03 00:00", end: "2035-07-09 23:00"}
+
+In a config that ``extends`` a preset, these parameters replace the
+preset's parameters they cannot be combined with. The example above, on
+top of ``spatial_reduction_opf``, selects the two weeks instead of the
+preset's ``start`` and ``periods``; setting only ``end`` replaces the
+preset's ``periods`` and keeps its ``start``.
 """
 
 from __future__ import annotations
 
+import copy
+import functools
 import inspect
 
 import pandas as pd
@@ -106,6 +125,50 @@ def task_worst_case_ts(
 
 
 SELECTION_TASKS = ("set_timeindex", "select_critical_timesteps")
+
+# Parameters of set_timeindex that each parameter cannot be combined with
+_EXCLUDED_TIMEINDEX_PARAMS = {
+    "timestamps": {"ranges", "start", "periods", "end"},
+    "ranges": {"timestamps", "start", "periods", "end"},
+    "start": {"timestamps", "ranges"},
+    "periods": {"timestamps", "ranges", "end"},
+    "end": {"timestamps", "ranges", "periods"},
+}
+
+
+def drop_replaced_timeindex_params(parent, child):
+    """
+    Drop the ``set_timeindex`` parameters of ``parent`` that ``child`` replaces.
+
+    Called before ``child`` is merged into the config ``parent`` it
+    extends: a parameter in ``child``'s ``timestep_selection.set_timeindex``
+    removes the parameters of ``parent`` it cannot be combined with, e.g.
+    ``ranges`` removes ``start`` and ``periods``.
+
+    Returns
+    -------
+    dict
+        ``parent``, or a copy of it without the replaced parameters.
+
+    """
+    try:
+        parent_params = parent["timestep_selection"]["set_timeindex"]
+        child_params = child["timestep_selection"]["set_timeindex"]
+        replaced = set().union(
+            *(
+                _EXCLUDED_TIMEINDEX_PARAMS.get(key, set())
+                for key, value in child_params.items()
+                if value is not None
+            )
+        ) & set(parent_params)
+    except (KeyError, TypeError, AttributeError):
+        return parent
+    if not replaced:
+        return parent
+    parent = copy.deepcopy(parent)
+    for key in replaced:
+        del parent["timestep_selection"]["set_timeindex"][key]
+    return parent
 
 
 def check_timestep_selection(selection):
@@ -229,8 +292,15 @@ def task_set_timeindex(edisgo, ctx, **params):
         Stashes the selected index in ``ctx.flags['selected_timeindex']``
         so subsequent data imports can restrict their downloads to it.
     timestamps : list of str or pandas.Timestamp, optional
-        Explicit time steps to select; mutually exclusive with the
-        ``start``/``periods``/``end`` range.
+        Explicit time steps to select; mutually exclusive with ``ranges``
+        and the ``start``/``periods``/``end`` range.
+    ranges : list of dict, optional
+        Several ranges to select, e.g. two separate weeks. Each range is a
+        mapping with exactly a ``start`` plus either ``periods`` or
+        ``end``; ``freq`` is set once for all ranges. The ranges are
+        joined into one sorted time index without duplicates; the gaps
+        between them are kept. Mutually exclusive with ``timestamps`` and
+        the ``start``/``periods``/``end`` range.
     start : str or pandas.Timestamp, optional
         First timestamp of the range.
     periods : int, optional
@@ -248,9 +318,12 @@ def task_set_timeindex(edisgo, ctx, **params):
     Raises
     ------
     ValueError
-        If neither ``timestamps`` nor a ``start`` plus
-        ``periods``/``end`` range is provided, or if ``timestamps`` is
-        combined with a range, or ``periods`` with ``end``.
+        If neither ``timestamps``, ``ranges`` nor a ``start`` plus
+        ``periods``/``end`` range is provided, if more than one of them is
+        given, if ``periods`` is combined with ``end``, if ``ranges`` is not
+        a non-empty list or a range has other keys than a ``start`` plus
+        either ``periods`` or ``end``, if a range selects no time steps, or
+        if the selected time steps lie in more than one year.
 
     """
     params = _selection_params(ctx, "set_timeindex", params)
@@ -264,6 +337,7 @@ def _set_timeindex(
     ctx,
     *,
     timestamps=None,
+    ranges=None,
     start=None,
     periods=None,
     end=None,
@@ -272,7 +346,7 @@ def _set_timeindex(
     """Implementation of :func:`task_set_timeindex`."""
     from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
 
-    timeindex = _timeindex_from_params(timestamps, start, periods, end, freq)
+    timeindex = _timeindex_from_params(timestamps, ranges, start, periods, end, freq)
 
     if edisgo.timeseries.timeindex.empty:
         edisgo.set_timeindex(timeindex)
@@ -293,37 +367,74 @@ def _set_timeindex(
 
 
 def _timeindex_from_params(
-    timestamps=None, start=None, periods=None, end=None, freq="h"
+    timestamps=None, ranges=None, start=None, periods=None, end=None, freq="h"
 ):
     """Build the time index of :func:`task_set_timeindex` from its params."""
     given = [
         name
         for name, value in (
             ("timestamps", timestamps),
+            ("ranges", ranges),
             ("start", start),
             ("periods", periods),
             ("end", end),
         )
         if value is not None
     ]
-    if ("timestamps" in given and len(given) > 1) or {"periods", "end"} <= set(given):
+    exclusive = {"timestamps", "ranges"} & set(given)
+    if (exclusive and len(given) > 1) or {"periods", "end"} <= set(given):
         raise ValueError(
-            f"set_timeindex takes either 'timestamps' or 'start' plus 'periods' "
-            f"or 'end', got {given}. When a config extends a preset, its "
-            f"parameters are merged with the preset's, so set the ones you "
-            f"don't use to null (e.g. 'periods: null' when setting 'end')."
+            f"set_timeindex takes either 'timestamps', 'ranges' or 'start' plus "
+            f"'periods' or 'end', got {given}."
         )
     if timestamps is not None:
         timeindex = pd.DatetimeIndex(pd.to_datetime(list(timestamps)))
-    elif start is not None and end is not None:
-        timeindex = pd.date_range(start=start, end=end, freq=freq)
-    elif start is not None and periods is not None:
-        timeindex = pd.date_range(start=start, periods=periods, freq=freq)
+        timeindex = timeindex.sort_values().unique()
     else:
-        raise ValueError(
-            "set_timeindex needs 'timestamps' or a 'start' plus 'periods' or 'end'."
+        if ranges is None:
+            if start is None or (periods is None and end is None):
+                raise ValueError(
+                    "set_timeindex needs 'timestamps', 'ranges' or a 'start' "
+                    "plus 'periods' or 'end'."
+                )
+            ranges = [{"start": start, "periods": periods, "end": end}]
+        elif not isinstance(ranges, (list, tuple)) or not ranges:
+            raise ValueError(
+                f"set_timeindex 'ranges' must be a non-empty list of ranges, "
+                f"got {ranges!r}."
+            )
+        timeindex = functools.reduce(
+            pd.Index.union, [_date_range(time_range, freq) for time_range in ranges]
         )
-    return timeindex.sort_values().unique()
+    years = sorted(timeindex.year.unique().tolist())
+    if len(years) > 1:
+        raise ValueError(
+            f"The time steps selected by set_timeindex lie in the years {years}. "
+            f"They must lie in one year, as the time series are taken from one "
+            f"year."
+        )
+    return timeindex
+
+
+def _date_range(time_range, freq):
+    """Build the time steps of one range of :func:`task_set_timeindex`."""
+    keys = (
+        {key for key, value in time_range.items() if value is not None}
+        if isinstance(time_range, dict)
+        else None
+    )
+    if keys not in ({"start", "periods"}, {"start", "end"}):
+        raise ValueError(
+            f"Each range of set_timeindex takes exactly a 'start' plus either "
+            f"'periods' or 'end' ('freq' is set once for all ranges), got "
+            f"{time_range!r}."
+        )
+    timeindex = pd.date_range(**time_range, freq=freq)
+    if timeindex.empty:
+        raise ValueError(
+            f"The set_timeindex range {time_range!r} selects no time steps."
+        )
+    return timeindex
 
 
 @register_task(

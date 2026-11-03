@@ -176,6 +176,77 @@ class TestElectromobilityImport:
             total_charging_demand, 0
         )
 
+    def test_distribute_private_charging_demand_books_home_capacity(self, monkeypatch):
+        """
+        The capacity of a home car is booked to the charging park drawn for it,
+        so that the capacity weights of later draws see it (#679).
+
+        """
+        edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+
+        booked = []
+        combine_weights = electromobility_import.combine_weights
+
+        def combine_weights_spy(indices, capacity_df, weights_df):
+            booked.append(capacity_df)
+            return combine_weights(indices, capacity_df, weights_df)
+
+        monkeypatch.setattr(
+            electromobility_import, "combine_weights", combine_weights_spy
+        )
+        electromobility_import.distribute_private_charging_demand(edisgo_obj)
+
+        processes = edisgo_obj.electromobility.charging_processes_df
+        home = processes.loc[
+            (processes.use_case == "home") & (processes.chargingdemand_kWh > 0)
+        ]
+        assert not home.empty
+        expected = (
+            home.groupby("car_id")
+            .agg(
+                park=("charging_park_id", "first"),
+                capacity=("nominal_charging_capacity_kW", "first"),
+            )
+            .groupby("park")
+            .capacity.sum()
+        )
+        # all draws update the same DataFrame
+        capacity = booked[-1].designated_charging_point_capacity
+        pd.testing.assert_series_equal(
+            capacity.loc[expected.index],
+            expected,
+            check_names=False,
+            check_index_type=False,
+        )
+
+    def test_determine_grid_connection_capacity(self):
+        func = electromobility_import.determine_grid_connection_capacity
+
+        # no reduction up to lower_limit
+        assert func(0.2) == pytest.approx(0.2)
+        assert func(0.3) == pytest.approx(0.3)
+        # linear interpolation of the capacity in between
+        assert func(0.65) == pytest.approx(0.375)
+        # minimum_factor at and above upper_limit
+        assert func(1.0) == pytest.approx(0.45)
+        assert func(2.0) == pytest.approx(0.9)
+
+        # monotonically non-decreasing (issue #650)
+        capacities = [func(p) for p in np.linspace(0.0, 2.0, 201)]
+        assert np.all(np.diff(capacities) >= 0)
+
+        # custom parameters
+        assert func(
+            0.5, lower_limit=0.2, upper_limit=0.8, minimum_factor=0.5
+        ) == pytest.approx(0.3)
+
+        # parameters that would make the capacity decrease are rejected
+        with pytest.raises(ValueError, match="not monotonic"):
+            func(0.5, lower_limit=0.3, upper_limit=1.0, minimum_factor=0.2)
+
     def test_integrate_charging_parks(self):
         electromobility_import.integrate_charging_parks(self.edisgo_obj)
 
@@ -207,6 +278,23 @@ class TestElectromobilityImport:
         edisgo_ids_topology = sorted(topology.charging_points_df.index.tolist())
 
         assert edisgo_ids_cp == edisgo_ids_topology
+
+    def test_integrate_charging_parks_passes_on_options(self):
+        # options of the grid connection must reach the integration of each park
+        edisgo_obj = Mock()
+        charging_park = Mock(
+            id=0,
+            designated_charging_point_capacity=0.011,
+            within_grid=True,
+            use_case="home",
+            grid_connection_capacity=0.011,
+        )
+        edisgo_obj.electromobility.potential_charging_parks = [charging_park]
+        electromobility_import.integrate_charging_parks(
+            edisgo_obj, connect_to_load_bus=True
+        )
+        call_kwargs = edisgo_obj.integrate_component_based_on_geolocation.call_args
+        assert call_kwargs.kwargs["connect_to_load_bus"] is True
 
     def test_charging_point_allocation_independent_of_input_order(
         self, monkeypatch, tmp_path

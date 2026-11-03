@@ -67,7 +67,9 @@ end
 Initial-time-step state constraint for charging park `i`: sets the charged energy
 after the first time step from the midpoint of the flexibility band
 `(e_min+e_max)/2` and the charging power, scaled by the charging efficiency `eta`
-— Eq. (3.25) of the eDisGo OPF formulation.
+— Eq. (3.25) of the eDisGo OPF formulation. If `n` is also the last time step (a
+single-step OPF), the energy is pinned back to the midpoint here, since
+`constraint_cp_state` is not called.
 """
 function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, eta)
     if haskey(PowerModels.ref(pm, n), :time_elapsed)
@@ -82,6 +84,9 @@ function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, 
     pcp_1 = PowerModels.var(pm, n, :pcp, i)
     JuMP.@constraint(pm.model, cpe == 0.5*(cp["e_min"]+cp["e_max"]) + time_elapsed * eta * pcp_1)  # Eq. (3.25)
 
+    if n == length(collect(PowerModels.nw_ids(pm)))
+        JuMP.@constraint(pm.model, cpe == 0.5*(cp["e_min"]+cp["e_max"]))  # Eq. (3.25) für t=tau
+    end
 end
 
 """
@@ -115,13 +120,20 @@ end
 Heat-pump energy balance for heat pump `i` in network `nw`: the electrical power
 drawn (`php`, plus the operation slack `phps2`) times the coefficient of
 performance `cop` must cover the heat demand `pd` plus the net heat-storage
-(dis)charge (`phss - phs`) — Eq. (3.19) of the eDisGo OPF formulation.
+(dis)charge (`phss - phs`) — Eq. (3.19) of the eDisGo OPF formulation. Heat
+pump `i` is paired with heat storage `i`; if that heat storage is not in the
+model (switched off), the heat pump runs without storage.
 """
 function constraint_hp_operation(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
     hp = PowerModels.ref(pm, nw, :heatpumps, i)
     php = PowerModels.var(pm, nw, :php, i)
-    phs = PowerModels.var(pm, nw, :phs, i)
-    phss = PowerModels.var(pm, nw, :phss, i)
+    if i in PowerModels.ids(pm, nw, :heat_storage)
+        phs = PowerModels.var(pm, nw, :phs, i)
+        phss = PowerModels.var(pm, nw, :phss, i)
+    else
+        phs = 0.0
+        phss = 0.0
+    end
     phps2 = PowerModels.var(pm, nw, :phps2, i)
 
 

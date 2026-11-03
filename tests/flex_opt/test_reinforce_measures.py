@@ -362,6 +362,70 @@ class TestReinforceMeasures:
         assert np.isclose(line.x, 0.010857344210806 / 2)
         assert np.isclose(line.s_nom, 0.190525588832576 * 2)
 
+    def test_reinforce_lines_voltage_issues_choose_cheaper_measure(self):
+        # voltage issue at Bus_BranchTee_MVGrid_1_2, node_2_3 is
+        # BusBar_MVGrid_1_LVGrid_1_MV, so by default Line_10007 is disconnected
+        # and connected to the station with a new line of 0.81 km
+        # (Line_10003 + Line_10007)
+        time_step = self.timesteps[1] + pd.Timedelta("2h")
+        v_res = self.edisgo_root.results.v_res
+        v_diff_path = abs(
+            v_res.at[time_step, "Bus_BranchTee_MVGrid_1_2"]
+            - v_res.at[time_step, "Bus_MVStation_1"]
+        )
+        # small voltage issue: replacing the short overhead lines Line_10003
+        # (84 m) and Line_10008 (133 m) on the path is cheaper than the new line
+        crit_nodes = pd.DataFrame(
+            {"abs_max_voltage_dev": [0.2 * v_diff_path], "time_index": [time_step]},
+            index=["Bus_BranchTee_MVGrid_1_2"],
+        )
+
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
+            self.edisgo, self.edisgo.topology.mv_grid, crit_nodes
+        )
+        assert list(lines_changes) == ["Line_10007"]
+        assert (
+            "Bus_MVStation_1"
+            in self.edisgo.topology.lines_df.loc["Line_10007", ["bus0", "bus1"]].values
+        )
+
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
+            self.edisgo,
+            self.edisgo.topology.mv_grid,
+            crit_nodes,
+            choose_cheaper_measure=True,
+        )
+        assert "Line_10007" not in lines_changes
+        assert set(lines_changes) <= {"Line_10003", "Line_10008"}
+        lines_df = self.edisgo.topology.lines_df
+        assert lines_df.loc["Line_10007", ["bus0", "bus1"]].tolist() == (
+            self.edisgo_root.topology.lines_df.loc[
+                "Line_10007", ["bus0", "bus1"]
+            ].tolist()
+        )
+        std_line = self.edisgo.config["grid_expansion_standard_equipment"][
+            "mv_line_20kv"
+        ]
+        assert (lines_df.loc[list(lines_changes), "type_info"] == std_line).all()
+
+        # large voltage issue: the voltage difference along the path cannot be
+        # removed by reinforcing lines on it, so the line is disconnected
+        crit_nodes["abs_max_voltage_dev"] = v_diff_path
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
+            self.edisgo,
+            self.edisgo.topology.mv_grid,
+            crit_nodes,
+            choose_cheaper_measure=True,
+        )
+        assert list(lines_changes) == ["Line_10007"]
+        assert (
+            "Bus_MVStation_1"
+            in self.edisgo.topology.lines_df.loc["Line_10007", ["bus0", "bus1"]].values
+        )
+
     def test_reinforce_lines_overloading(self):
         # * check for needed parallel standard lines (MV and LV) => problems at
         #   Line_10007 and Line_70000006
