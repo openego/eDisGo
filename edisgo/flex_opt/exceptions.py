@@ -49,14 +49,47 @@ class ImpossibleVoltageReduction(Error):
 
 class InfeasibleModelError(Error):
     """
-    Exception raised when OPF can not be solved.
+    Exception raised when the solver of the OPF finds no solution.
+
+    The Julia process ran and the solver ended with a status, for example
+    ``INFEASIBLE``, ``NUMERICAL_ERROR`` or ``TIME_LIMIT``. A failure of the Julia
+    process itself raises :class:`OPFProcessError` instead.
 
     Attributes
     -----------
     message : str
         Explanation of the error
+    status : str or None
+        Termination status reported by the solver, or None if it is unknown.
 
     """
 
-    def __init__(self, message):
+    def __init__(self, message, status=None):
+        super().__init__(message)
         self.message = message
+        self.status = status
+
+
+class OPFProcessError(Error):
+    """
+    Exception raised when the Julia process of the OPF fails before the solver
+    reports a status.
+
+    Examples are an error while building the model, a crash, or the process being
+    killed, e.g. by the out-of-memory killer.
+
+    Attributes
+    -----------
+    message : str
+        Explanation of the error
+    returncode : int or None
+        Return code of the Julia process as given by
+        :attr:`subprocess.Popen.returncode`. A negative value ``-N`` means that the
+        process was killed by signal ``N``.
+
+    """
+
+    def __init__(self, message, returncode=None):
+        super().__init__(message)
+        self.message = message
+        self.returncode = returncode

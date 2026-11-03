@@ -181,8 +181,12 @@ class OPFResults:
         several disconnected time intervals (see the ``optimize`` pipeline task,
         which splits a non-contiguous time index — e.g. from automatic timestep
         selection — into independent optimizations). Each entry has keys
-        ``start``, ``end``, ``status``, ``solver`` and ``solution_time``. Empty
-        for a single contiguous optimization.
+        ``start``, ``end``, ``status``, ``solver``, ``solution_time`` and
+        ``error``. ``status`` is the termination status of the solver, also if it
+        found no solution (e.g. ``INFEASIBLE`` or ``NUMERICAL_ERROR``), or
+        ``process_failed`` if the Julia process failed. ``error`` is None for a
+        solved interval and the error message otherwise. Empty for a single
+        contiguous optimization.
 
     """
 

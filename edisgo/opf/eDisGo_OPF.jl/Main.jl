@@ -133,6 +133,11 @@ function optimize_edisgo()
         data_edisgo_mn["status"] = result_nc_ws["termination_status"]
         data_edisgo_mn["solver"] = "Ipopt"
       end
+    else
+      # No solution: report the solver status but no solve time. The Python
+      # side then raises an InfeasibleModelError with this status.
+      data_edisgo_mn["status"] = term_status
+      data_edisgo_mn["solver"] = "Gurobi"
     end
   elseif method == "nc" # Non-Convex
     # Solve NC model

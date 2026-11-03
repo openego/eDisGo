@@ -13,6 +13,7 @@ import copy
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
 
@@ -203,9 +204,12 @@ def pm_optimize(
     * the detailed ``edisgo.opf_results`` frames are merged by time index;
     * a per-interval solve report is stored in
       ``edisgo.opf_results.interval_results``;
-    * if any interval was infeasible, an
-      :class:`~.flex_opt.exceptions.InfeasibleModelError` is raised after the
-      feasible intervals' results have been stored.
+    * if the OPF failed for any interval, an exception is raised after the
+      results of the solved intervals have been stored:
+      :class:`~.flex_opt.exceptions.OPFProcessError` if the Julia process failed
+      for at least one interval, otherwise
+      :class:`~.flex_opt.exceptions.InfeasibleModelError`. The status of each
+      interval is in ``interval_results``.
 
     The overlying-grid SOC attributes and reactive-power time series (which
     ``to_powermodels`` / ``from_powermodels`` mutate or replace on the current
@@ -321,6 +325,7 @@ def pm_optimize(
                 "status": None,
                 "solver": None,
                 "solution_time": None,
+                "error": None,
             }
             try:
                 _pm_optimize_single(edisgo_obj, **opf_kwargs)
@@ -328,11 +333,19 @@ def pm_optimize(
                 entry["solver"] = edisgo_obj.opf_results.solver
                 entry["solution_time"] = edisgo_obj.opf_results.solution_time
                 snapshots.append(_snapshot_opf_time_frames(edisgo_obj.opf_results))
-            except exceptions.InfeasibleModelError:
-                entry["status"] = "infeasible"
+            except exceptions.InfeasibleModelError as e:
+                entry["status"] = e.status or "infeasible"
+                entry["error"] = e.message
                 logger.warning(
-                    f"pm_optimize: OPF infeasible for interval "
-                    f"{interval[0]}..{interval[-1]}."
+                    f"pm_optimize: OPF found no solution for interval "
+                    f"{interval[0]}..{interval[-1]}: {e.message}"
+                )
+            except exceptions.OPFProcessError as e:
+                entry["status"] = "process_failed"
+                entry["error"] = e.message
+                logger.warning(
+                    f"pm_optimize: OPF process failed for interval "
+                    f"{interval[0]}..{interval[-1]}: {e.message}"
                 )
             report.append(entry)
     finally:
@@ -349,17 +362,49 @@ def pm_optimize(
     edisgo_obj.opf_results.solution_time = (
         sum(solution_times) if solution_times else None
     )
-    statuses = [e["status"] for e in report]
-    infeasible = [e for e in report if e["status"] == "infeasible"]
-    edisgo_obj.opf_results.status = (
-        "infeasible" if infeasible else (statuses[0] if statuses else None)
-    )
-    if infeasible:
-        raise exceptions.InfeasibleModelError(
-            f"OPF infeasible for {len(infeasible)} of {len(intervals)} time "
-            f"intervals; see edisgo.opf_results.interval_results. Results for "
-            f"feasible intervals have been stored."
+    failed = [e for e in report if e["error"] is not None]
+    edisgo_obj.opf_results.status = (failed or report)[0]["status"]
+    if failed:
+        reasons = "; ".join(f"{e['start']}..{e['end']}: {e['status']}" for e in failed)
+        msg = (
+            f"OPF failed for {len(failed)} of {len(intervals)} time intervals "
+            f"({reasons}); see edisgo.opf_results.interval_results. Results for "
+            f"the solved intervals have been stored."
         )
+        if any(e["status"] == "process_failed" for e in failed):
+            raise exceptions.OPFProcessError(msg)
+        raise exceptions.InfeasibleModelError(msg)
+
+
+def _julia_exit_message(returncode: int) -> str:
+    """
+    Describe a non-zero return code of the Julia process.
+
+    Parameters
+    ----------
+    returncode : int
+        Return code as given by :attr:`subprocess.Popen.returncode`. A negative
+        value ``-N`` means that the process was killed by signal ``N``.
+
+    Returns
+    -------
+    str
+        Message for :class:`~.flex_opt.exceptions.OPFProcessError`.
+
+    """
+    if returncode >= 0:
+        return (
+            f"Julia process failed with return code {returncode}. The Julia "
+            f"error is printed above."
+        )
+    try:
+        name = signal.Signals(-returncode).name
+    except ValueError:
+        name = f"signal {-returncode}"
+    msg = f"Julia process was killed by {name} (return code {returncode})."
+    if -returncode == getattr(signal, "SIGKILL", None):
+        msg += " This usually means that it ran out of memory."
+    return msg
 
 
 def _pm_optimize_single(
@@ -456,6 +501,15 @@ def _pm_optimize_single(
         :func:`edisgo.io.powermodels_io.from_powermodels`.
         Default: True.
 
+    Raises
+    ------
+    :class:`~.flex_opt.exceptions.InfeasibleModelError`
+        If the solver found no solution. Its ``status`` attribute holds the
+        termination status of the solver.
+    :class:`~.flex_opt.exceptions.OPFProcessError`
+        If the Julia process failed, was killed or returned no results. Its
+        ``returncode`` attribute holds the return code of the process.
+
     """
     Topology.find_meshes(edisgo_obj)
     opf_dir = os.path.dirname(os.path.abspath(__file__))
@@ -495,15 +549,24 @@ def _pm_optimize_single(
     )
     julia_process.stdin.write(json_str)
     julia_process.stdin.close()
+    result_received = False
     while True:
         out = julia_process.stdout.readline()
         if out == "" and julia_process.poll() is not None:
-            if julia_process.poll() == 0:
-                logger.info("Julia process was successful.")
-            else:
-                raise exceptions.InfeasibleModelError("Julia process failed!")
+            returncode = julia_process.returncode
+            if returncode != 0:
+                raise exceptions.OPFProcessError(
+                    _julia_exit_message(returncode), returncode=returncode
+                )
+            if not result_received:
+                raise exceptions.OPFProcessError(
+                    "Julia process exited without returning OPF results.",
+                    returncode=returncode,
+                )
+            logger.info("Julia process was successful.")
             break
         if out.rstrip().startswith('{"name"'):
+            result_received = True
             pm_opf = json.loads(out)
             # write results to edisgo object
             from_powermodels(
