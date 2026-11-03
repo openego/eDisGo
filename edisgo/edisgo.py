@@ -1490,7 +1490,7 @@ class EDisGo:
         if run_analyze_at_the_end:
             lv_grid_id = kwargs.get("lv_grid_id", None)
 
-            if mode == "lv" and lv_grid_id:
+            if mode == "lv" and lv_grid_id is not None:
                 analyze_mode = "lv"
             elif mode == "lv":
                 analyze_mode = None

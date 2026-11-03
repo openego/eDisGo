@@ -74,6 +74,17 @@ class TestReinforceGrid:
         )
         assert len(res_reduced.i_res) == 2
 
+    def test_reinforce_grid_lv_grid_id_zero(self):
+        # LV grid ID 0 is a valid ID, so only this LV grid is analyzed; in the test
+        # grid it consists of the station bus only
+        results = reinforce_grid(
+            edisgo=copy.deepcopy(self.edisgo), mode="lv", lv_grid_id=0
+        )
+        assert list(results.v_res.columns) == list(
+            self.edisgo.topology.get_lv_grid(0).buses_df.index
+        )
+        assert results.equipment_changes.empty
+
     def test_reinforce_log_costs_match_grid_expansion_costs(self):
         # verify Step 5: reinforce_log's per-measure costs add up to the same
         # total as grid_expansion_costs, which is the established, separately
@@ -285,7 +296,7 @@ class TestReinforceGrid:
 
     @pytest.mark.parametrize(
         "lv_grid_kwargs, expected_analyze_mode",
-        [({}, None), ({"lv_grid_id": 1}, "lv")],
+        [({}, None), ({"lv_grid_id": 0}, "lv"), ({"lv_grid_id": 1}, "lv")],
     )
     def test_catch_convergence_reinforce_grid_keeps_mode(
         self, monkeypatch, lv_grid_kwargs, expected_analyze_mode

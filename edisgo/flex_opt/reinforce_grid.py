@@ -200,7 +200,7 @@ def reinforce_grid(
     lv_grid_id = kwargs.get("lv_grid_id", None)
     scale_timeseries = kwargs.get("scale_timeseries", None)
     choose_cheaper_voltage_measure = kwargs.get("choose_cheaper_voltage_measure", False)
-    if mode == "lv" and lv_grid_id:
+    if mode == "lv" and lv_grid_id is not None:
         analyze_mode = "lv"
     elif mode == "lv":
         analyze_mode = None
@@ -239,7 +239,7 @@ def reinforce_grid(
         if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
         else checks.hv_mv_station_max_overload(edisgo)
     )
-    if lv_grid_id or (mode == "mv"):
+    if lv_grid_id is not None or mode == "mv":
         overloaded_lv_stations = pd.DataFrame(dtype=float)
     else:
         overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
@@ -369,7 +369,7 @@ def reinforce_grid(
             if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
             else checks.hv_mv_station_max_overload(edisgo)
         )
-        if mode != "mv" and (not lv_grid_id):
+        if mode != "mv" and lv_grid_id is None:
             overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
 
         logger.debug("==> Recheck line load.")
@@ -499,7 +499,7 @@ def reinforce_grid(
     if mode != "mv":
         logger.debug("==> Check voltage at secondary side of LV stations.")
 
-        if lv_grid_id:
+        if lv_grid_id is not None:
             crit_stations = pd.DataFrame()
         else:
             crit_stations = checks.voltage_issues(
@@ -666,7 +666,7 @@ def reinforce_grid(
         if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
         else checks.hv_mv_station_max_overload(edisgo)
     )
-    if (lv_grid_id) or (mode == "mv"):
+    if lv_grid_id is not None or mode == "mv":
         overloaded_lv_stations = pd.DataFrame(dtype=float)
     else:
         overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
@@ -796,7 +796,7 @@ def reinforce_grid(
             if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
             else checks.hv_mv_station_max_overload(edisgo)
         )
-        if mode != "mv" and (not lv_grid_id):
+        if mode != "mv" and lv_grid_id is None:
             overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
 
         logger.debug("==> Recheck line load.")
@@ -933,7 +933,7 @@ def catch_convergence_reinforce_grid(
         return edisgo.results
 
     # Find non-converging time steps
-    if kwargs.get("mode", None) == "lv" and kwargs.get("lv_grid_id", None):
+    if kwargs.get("mode") == "lv" and kwargs.get("lv_grid_id") is not None:
         analyze_mode = "lv"
     elif kwargs.get("mode", None) == "lv":
         analyze_mode = None
