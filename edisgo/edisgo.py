@@ -1392,6 +1392,20 @@ class EDisGo:
             critical node. If False, a line is always disconnected if possible.
             See :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`
             for more information. Default: False.
+        crosssection_escalation : bool
+            If True, an overloaded LV line that would otherwise be replaced by more
+            than two parallel standard lines gets a larger cross-section with at most
+            two parallel cables instead, if one is sufficient without a higher
+            resistance, and overloaded LV cables at least as strong as the standard
+            type get parallel cables of their own type. MV lines are not affected.
+            See parameter
+            `crosssection_escalation` in
+            :func:`~.flex_opt.reinforce_grid.reinforce_grid` for more information.
+            Default: False.
+        crosssection_escalation_existing : bool
+            If True, LV lines that are already of standard type are escalated as well,
+            if this does not need more new cables than adding parallel standard lines.
+            Requires `crosssection_escalation` to be True. Default: False.
 
         Returns
         --------
