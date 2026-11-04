@@ -471,3 +471,15 @@ Changes
   worst-case time series and in
   :func:`~.flex_opt.reinforce_grid.enhanced_reinforce_grid`, so their results can
   contain less MV and HV/MV reinforcement now
+* Fixed the curtailment in ``opf_version`` 3. The OPF met the overlying grid's
+  curtailment requirement (``overlying_grid.renewables_curtailment``) with a
+  curtailment that did not reduce the feed-in in the power balance, so the solver
+  spread it over the generators without regard to the grid. The flexibilities were
+  optimised for the full feed-in, while
+  :func:`~.io.powermodels_io.from_powermodels` wrote the curtailed feed-in back to
+  the generator time series. The curtailment now reduces the feed-in in the power
+  balance as in ``opf_version`` 4, so the OPF places it where it relieves the grid
+  and computes the flexibilities for the same operating point that is written back.
+  Results of ``opf_version`` 3 with a curtailment requirement change, including
+  the presets ``overlying_grid_opf`` and ``overlying_grid_opf_spatial``
+  (openego/eDisGo#801)

@@ -84,9 +84,10 @@ function pm_network(; overlying_grid::Bool=false, opf_version::Union{Nothing,Int
     data = eDisGo_OPF.parse_json(_raw_fixture(name); validate=validate)
     if opf_version !== nothing
         data["opf_version"] = opf_version
-        # Versions 2 and 4 curtail non-dispatchable generation, 1 and 3 do not.
+        # Versions 2, 3 and 4 curtail non-dispatchable generation, 1 does not
+        # (as `to_powermodels` on the Python side).
         flex = data["flexibilities"]
-        if opf_version in (2, 4)
+        if opf_version in (2, 3, 4)
             "curt" in flex || pushfirst!(flex, "curt")
         else
             filter!(!isequal("curt"), flex)
@@ -120,7 +121,7 @@ function small_network(; opf_version::Int=2, num_steps::Int=2,
     rep(x) = fill(x, steps)
 
     flexibilities = ["cp", "hp", "dsm", "storage"]
-    opf_version in (2, 4) && pushfirst!(flexibilities, "curt")
+    opf_version in (2, 3, 4) && pushfirst!(flexibilities, "curt")
 
     data = Dict{String,Any}(
         "name" => "small_test_network",

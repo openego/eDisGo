@@ -100,21 +100,13 @@ section 6); the tests record the actual behaviour and mark the intended one with
     (`opf_version` 1). Before, the script died with `UndefVarError` after the
     Gurobi solve of a tight SOC relaxation (exit code 1, no result JSON), and
     with the prefix alone `opf_version` 1 failed with `KeyError("pgc")`. (#800)
-11. **In `opf_version` 3, the curtailment `pgc` is decoupled from the power
-    balance.** `build_mn_opf_bf_flex` creates `pgc` for version 3
-    (`prob/opf_bf.jl:36-38`), `constraint_HV_requirements` counts it towards the
-    requirement `"curt"` (`core/constraint.jl:145`), but
-    `constraint_power_balance` only includes `pgc` in the nodal balance for
-    versions 2/4 (`form/bf.jl:211`). The HV requirement is thus met by a
-    curtailment that has no effect in the grid; `from_powermodels` still
-    subtracts exactly this `pgc` from the feed-in for versions 3/4
-    (`edisgo/io/powermodels_io.py`), so the OPF power flows don't match the
-    results written back. Side note: `TestUtils.pm_network(opf_version=3)`
-    removes `"curt"` from `flexibilities`, while Python sets it for 2, 3 and 4
-    (`powermodels_io.py:149`). This affects production: the runner presets
-    `overlying_grid_opf.yaml` and `overlying_grid_opf_spatial.yaml` run
-    `opf_version: 3`. The two `@test_broken` assume the fix "add `pgc` to the
-    balance"; another domain decision means rewriting them. (#801)
+11. ~~**In `opf_version` 3, the curtailment `pgc` is decoupled from the power
+    balance.**~~ — **fixed**: `constraint_power_balance` includes `pgc` (P and,
+    via `bus_gen_nd_pf`, Q) for version 3 as for 2 and 4. Before, the "curt"
+    HV requirement was met by a curtailment without effect in the grid, while
+    `from_powermodels` subtracted exactly this `pgc` from the feed-in. The
+    fixtures now keep `"curt"` in `flexibilities` for version 3, as Python does.
+    `pgc` still has no cost in the version-3 objective. (#801)
 12. ~~**`variable_slack_gen_real`/`_imaginary` ignore the start values**~~ —
     **fixed**: both read `pgs_start`/`qgs_start`, `set_ac_bf_start_values!`
     also writes `cpe_start` and the grid start values (`w_start`, `pf_start`,
