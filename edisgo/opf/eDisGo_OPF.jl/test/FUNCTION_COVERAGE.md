@@ -106,7 +106,9 @@ section 6); the tests record the actual behaviour and mark the intended one with
     HV requirement was met by a curtailment without effect in the grid, while
     `from_powermodels` subtracted exactly this `pgc` from the feed-in. The
     fixtures now keep `"curt"` in `flexibilities` for version 3, as Python does.
-    `pgc` still has no cost in the version-3 objective. (#801)
+    `pgc` still has no cost in the version-3 objective; instead the slack of
+    the "curt" requirement has the lower bound `min(0, P)` (versions 3 and 4),
+    so the OPF does not curtail beyond the request. (#801)
 12. ~~**`variable_slack_gen_real`/`_imaginary` ignore the start values**~~ —
     **fixed**: both read `pgs_start`/`qgs_start`, `set_ac_bf_start_values!`
     also writes `cpe_start` and the grid start values (`w_start`, `pf_start`,

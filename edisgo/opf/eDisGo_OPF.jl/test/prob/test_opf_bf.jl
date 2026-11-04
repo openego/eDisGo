@@ -382,7 +382,7 @@ end
         # Version 3 curtails only for the "curt" HV requirement. The curtailment
         # enters the P/Q balance as in 2 and 4, so `from_powermodels` writes back the
         # feed-in the OPF computed with. It has no cost in the objective; the
-        # requirement fixes its sum up to the HV slack.
+        # requirement and the lower bound of its slack cap the sum at the request.
         pm = opf_small_model(opf_version=3)
         for n in 1:2
             pgc = PowerModels.var(pm, n, :pgc)[1]

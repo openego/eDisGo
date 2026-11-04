@@ -480,6 +480,9 @@ Changes
   the generator time series. The curtailment now reduces the feed-in in the power
   balance as in ``opf_version`` 4, so the OPF places it where it relieves the grid
   and computes the flexibilities for the same operating point that is written back.
-  Results of ``opf_version`` 3 with a curtailment requirement change, including
-  the presets ``overlying_grid_opf`` and ``overlying_grid_opf_spatial``
-  (openego/eDisGo#801)
+  In ``opf_version`` 3 and 4 the OPF also no longer curtails more than the overlying
+  grid requests: the penalty on missing a requirement is quadratic, so before, the
+  OPF curtailed beyond the request, and also without any request, wherever that
+  relieved the grid. It may still curtail less than requested. Results of
+  ``opf_version`` 3 and 4 with curtailment change, including the presets
+  ``overlying_grid_opf`` and ``overlying_grid_opf_spatial`` (openego/eDisGo#801)
