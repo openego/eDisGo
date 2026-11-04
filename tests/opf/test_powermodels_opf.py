@@ -1,3 +1,7 @@
+import io
+import json
+import signal
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -520,16 +524,42 @@ class TestPmOptimizeIntervalSplit:
                 e.opf_results.status = "OPTIMAL"
                 e.opf_results.solution_time = 1.0
             else:
-                raise InfeasibleModelError("stub")
+                raise InfeasibleModelError("stub", status="NUMERICAL_ERROR")
 
         monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
-        with pytest.raises(InfeasibleModelError):
+        with pytest.raises(InfeasibleModelError, match="NUMERICAL_ERROR"):
             pmo.pm_optimize(edisgo_obj)
         report = edisgo_obj.opf_results.interval_results
         assert len(report) == 2
         assert report[0]["status"] == "OPTIMAL"
-        assert report[1]["status"] == "infeasible"
+        assert report[0]["error"] is None
+        assert report[1]["status"] == "NUMERICAL_ERROR"
+        assert report[1]["error"] == "stub"
+        assert edisgo_obj.opf_results.status == "NUMERICAL_ERROR"
         assert edisgo_obj.timeseries.timeindex.equals(full)
+
+    def test_process_failure_is_not_reported_as_infeasible(
+        self, edisgo_obj, monkeypatch
+    ):
+        import edisgo.opf.powermodels_opf as pmo
+
+        from edisgo.flex_opt.exceptions import InfeasibleModelError, OPFProcessError
+
+        a = pd.date_range("2035-01-01", periods=24, freq="h")
+        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        edisgo_obj.set_timeindex(a.union(b))
+
+        def fake_single(e, **kw):
+            if e.timeseries.timeindex[0] == a[0]:
+                raise InfeasibleModelError("stub", status="INFEASIBLE")
+            raise OPFProcessError("killed", returncode=-9)
+
+        monkeypatch.setattr(pmo, "_pm_optimize_single", fake_single)
+        with pytest.raises(OPFProcessError, match="INFEASIBLE.*process_failed"):
+            pmo.pm_optimize(edisgo_obj)
+        report = edisgo_obj.opf_results.interval_results
+        assert [e["status"] for e in report] == ["INFEASIBLE", "process_failed"]
+        assert report[1]["error"] == "killed"
 
     def test_flex_inputs_narrowed_per_interval(self, edisgo_obj, monkeypatch):
         """Each interval's OPF must see its OWN overlying-grid requirements.
@@ -613,6 +643,91 @@ class TestPmOptimizeIntervalSplit:
         # restored to the full reduced index
         assert edisgo_obj.dsm.p_max.index.equals(full)
         assert edisgo_obj.heat_pump.cop_df.index.equals(full)
+
+
+class _FakeJuliaProcess:
+    """Stands in for the Julia subprocess: yields the given output lines, then
+    ends with the given return code."""
+
+    def __init__(self, lines, returncode):
+        self.stdin = io.StringIO()
+        self.stdout = io.StringIO("".join(line + "\n" for line in lines))
+        self._returncode = returncode
+        self.returncode = None
+
+    def poll(self):
+        self.returncode = self._returncode
+        return self.returncode
+
+
+class TestJuliaProcessFailure:
+    """_pm_optimize_single tells solver results apart from a failed Julia
+    process. Julia, to_powermodels and the mesh check are stubbed."""
+
+    @pytest.fixture
+    def run_single(self, monkeypatch):
+        import edisgo.opf.powermodels_opf as pmo
+
+        monkeypatch.setattr(pmo.Topology, "find_meshes", lambda edisgo_obj: None)
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        monkeypatch.setattr(
+            edisgo_obj, "to_powermodels", lambda **kw: ({"name": "test"}, {})
+        )
+
+        def run(lines, returncode):
+            monkeypatch.setattr(
+                pmo.subprocess,
+                "Popen",
+                lambda *args, **kw: _FakeJuliaProcess(lines, returncode),
+            )
+            pmo._pm_optimize_single(edisgo_obj)
+
+        return run
+
+    def test_killed_process(self, run_single):
+        from edisgo.flex_opt.exceptions import OPFProcessError
+
+        with pytest.raises(OPFProcessError, match="SIGKILL.*memory") as e:
+            run_single([], -signal.SIGKILL)
+        assert e.value.returncode == -signal.SIGKILL
+
+    def test_julia_error(self, run_single):
+        from edisgo.flex_opt.exceptions import OPFProcessError
+
+        with pytest.raises(OPFProcessError, match="return code 1") as e:
+            run_single(["ERROR: LoadError: ..."], 1)
+        assert e.value.returncode == 1
+
+    def test_no_result_returned(self, run_single):
+        from edisgo.flex_opt.exceptions import OPFProcessError
+
+        with pytest.raises(OPFProcessError, match="without returning"):
+            run_single(["Starting convex SOC AC-OPF with Gurobi."], 0)
+
+    def test_solver_found_no_solution(self, run_single):
+        from edisgo.flex_opt.exceptions import InfeasibleModelError
+
+        result = json.dumps(
+            {"name": "test", "status": "NUMERICAL_ERROR", "solver": "Gurobi"}
+        )
+        with pytest.raises(InfeasibleModelError, match="NUMERICAL_ERROR") as e:
+            run_single([result], 0)
+        assert e.value.status == "NUMERICAL_ERROR"
+
+    @pytest.mark.parametrize(
+        "returncode, expected",
+        [
+            (-signal.SIGTERM, "killed by SIGTERM"),
+            (-200, "killed by signal 200"),
+            (2, "return code 2"),
+        ],
+    )
+    def test_exit_message(self, returncode, expected):
+        from edisgo.opf.powermodels_opf import _julia_exit_message
+
+        msg = _julia_exit_message(returncode)
+        assert expected in msg
+        assert "memory" not in msg
 
 
 class TestHeatStorageStandingLoss:

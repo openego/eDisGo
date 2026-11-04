@@ -348,10 +348,14 @@ def from_powermodels(
         raise ValueError(
             "Parameter 'pm_results' must be either dictionary or path to json file."
         )
-    try:
-        edisgo_object.opf_results.solution_time = pm["solve_time"]
-    except KeyError:
-        raise exceptions.InfeasibleModelError("Julia process failed!")
+    # Main.jl leaves out the solve time if the solver found no solution.
+    if "solve_time" not in pm:
+        status = pm.get("status")
+        raise exceptions.InfeasibleModelError(
+            f"OPF solver found no solution (status: {status or 'unknown'}).",
+            status=status,
+        )
+    edisgo_object.opf_results.solution_time = pm["solve_time"]
     edisgo_object.opf_results.status = pm["status"]
     edisgo_object.opf_results.solver = pm["solver"]
     flex_dicts = {
