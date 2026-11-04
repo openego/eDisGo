@@ -6,6 +6,23 @@ Release date: not yet released
 Changes
 -------
 
+* All time series are now indexed in one calendar year, the reference year. It is
+  set with the new key ``reference_year`` in section ``timeindex`` of
+  ``config_timeseries.cfg`` and defaults to 2011, the weather year of the model data.
+  Config files without this section fall back to 2011. See
+  :ref:`reference-year` for details
+* Every time index and all time series given by the user or imported from the
+  database are relabelled to the reference year with a warning, keeping each date.
+  29 February is always left out, also if the reference year is a leap year. A time
+  index across the year boundary raises a ``ValueError``
+* The scenario passed to the database imports only selects which data is loaded and
+  no longer sets the year of the time index. Runs without a time index are therefore
+  indexed in 2011 instead of 2035 (``'eGon2035'``) or 2045 (``'eGon100RE'``). As the
+  demandlib load profiles depend on weekdays and holidays, this can change results
+* :func:`~.tools.tools.get_year_based_on_scenario` and
+  :func:`~.tools.tools.get_year_based_on_timeindex` are deprecated and will be
+  removed in a future release. Use :func:`~.tools.tools.get_reference_year` to get
+  the year time series are indexed in
 * Time series that eDisGo writes or reads now follow the time index
   (:attr:`~.network.timeseries.TimeSeries.timeindex`), also if the input data span a
   longer period or the time index has gaps (openego/eDisGo#703):

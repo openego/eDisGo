@@ -83,7 +83,7 @@ class TestDSMImport:
         for profile in ["e_max", "e_min", "p_max", "p_min"]:
             assert dsm_profiles[profile].shape == (8760, 2)
             assert set(dsm_profiles[profile].columns) == set(cts_loads)
-            assert dsm_profiles[profile].index[0].year == 2035
+            assert dsm_profiles[profile].index[0].year == 2011
 
         assert (dsm_profiles["p_min"] == -0.2).all().all()
         assert (dsm_profiles["e_min"] == -0.4).all().all()
@@ -109,6 +109,29 @@ class TestDSMImport:
 
         assert mocks["cts"].call_count == 2
         assert mocks["industrial"].call_count == 2
+
+    @pytest.mark.parametrize("reference_year", [2011, 2013])
+    def test_oedb_reference_year_independent_of_scenario(
+        self, mock_dsm_oedb_retrieval, monkeypatch, reference_year
+    ):
+        # without timeindex, the data is indexed in the reference year for every
+        # scenario
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        monkeypatch.setitem(
+            edisgo_object.config["timeindex"], "reference_year", reference_year
+        )
+        for scenario in ["eGon2035", "eGon100RE"]:
+            edisgo_object.timeseries.timeindex = pd.DatetimeIndex([])
+            dsm_profiles = dsm_import.oedb(
+                edisgo_object, scenario=scenario, engine=None
+            )
+            for profile in ["e_max", "e_min", "p_max", "p_min"]:
+                assert dsm_profiles[profile].index[0] == pd.Timestamp(
+                    f"1/1/{reference_year}"
+                )
+                assert len(dsm_profiles[profile]) == 8760
 
     def test_pivot_helper(self):
         """Test transformation of nested database arrays into time series."""
