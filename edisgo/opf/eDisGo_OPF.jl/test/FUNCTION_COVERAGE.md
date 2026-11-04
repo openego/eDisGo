@@ -12,12 +12,12 @@ and `constraint_store_state`).
 Legend: `[ ]` open · `[x]` tested · `[~]` partly tested (give the reason after
 the entry)
 
-## Status (as of 2026-10-23)
+## Status (as of 2026-11-04)
 
-**84 of 84 entries done**, suite green: 3620 passing assertions, 6
+**84 of 84 entries done**, suite green: 3653 passing assertions, 3
 `@test_broken`, 0 failures, about 6 to 7 min with a Gurobi licence (about 4 min of
 that are the `Main.jl` subprocesses; without Gurobi, as in CI, the two SOC runs
-are skipped). Line coverage of `src/`: 902 of 902 lines (100 %).
+are skipped). Line coverage of `src/`: 910 of 910 lines (100 %).
 
 | Source file | Status |
 | --- | --- |
@@ -106,9 +106,10 @@ section 6); the tests record the actual behaviour and mark the intended one with
     HV requirement was met by a curtailment without effect in the grid, while
     `from_powermodels` subtracted exactly this `pgc` from the feed-in. The
     fixtures now keep `"curt"` in `flexibilities` for version 3, as Python does.
-    `pgc` still has no cost in the version-3 objective; instead the slack of
-    the "curt" requirement has the lower bound `min(0, P)` (versions 3 and 4),
-    so the OPF does not curtail beyond the request. (#801)
+    `pgc` has no cost in the version-3 objective; instead the slack of the
+    "curt" requirement has the lower bound `min(0, P)` in version 3, so the OPF
+    does not curtail beyond the request. Version 4 has no such bound, because
+    its `pgc` is also the slack that keeps the grid within its limits. (#801)
 12. ~~**`variable_slack_gen_real`/`_imaginary` ignore the start values**~~ —
     **fixed**: both read `pgs_start`/`qgs_start`, `set_ac_bf_start_values!`
     also writes `cpe_start` and the grid start values (`w_start`, `pf_start`,
@@ -272,10 +273,9 @@ measurably above the NC optimum.
   defect 5: the virtual storage branch is skipped)
 - [x] `constraint_max_line_loading` — AbstractSOCBFModelEdisgo
 - [x] `constraint_max_line_loading` — AbstractNCBFModelEdisgo
-- [x] `constraint_power_balance` — AbstractBFModelEdisgo (bug: for
-  `opf_version` 3 the curtailment `pgc` is missing from the balance, see defect
-  11 — documented as `@test_broken`; note: `bus_storage_pf` is passed on but
-  never used — pinned by a test)
+- [x] `constraint_power_balance` — AbstractBFModelEdisgo (for `opf_version` 3
+  the balance includes the curtailment `pgc`, see defect 11; note:
+  `bus_storage_pf` is passed on but never used — pinned by a test)
 
 ### `src/io/json.jl` → `test/io/test_json.jl`
 
@@ -288,8 +288,7 @@ measurably above the NC optimum.
 ### `src/prob/opf_bf.jl` → `test/prob/test_opf_bf.jl`
 
 - [x] `solve_mn_opf_bf_flex`
-- [x] `build_mn_opf_bf_flex` — AbstractBFModelEdisgo (bug: in version 3 `pgc`
-  has no effect on the power balance, see defect 11 — documented as
-  `@test_broken`)
+- [x] `build_mn_opf_bf_flex` — AbstractBFModelEdisgo (version 3 creates `pgc`
+  for the "curt" requirement only, see defect 11)
 
 <!-- Total number of entries: 84 -->

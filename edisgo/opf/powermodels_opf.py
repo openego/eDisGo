@@ -413,7 +413,8 @@ def _pm_optimize_single(
         * 2
             * Objective: minimize line losses and grid related slacks
         * 3
-            * Additional constraints: high voltage requirements
+            * Additional constraints: high voltage requirements, including
+              curtailment of fluctuating generators up to the requested amount
             * Lifted constraints: grid restrictions
             * Objective: minimize line losses, maximal line loading and HV slacks
         * 4

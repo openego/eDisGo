@@ -292,6 +292,54 @@ end
         end
     end
 
+    @testset "curtailment request" begin
+        # Index of the "curt" requirement and the feed-in of the one
+        # non-dispatchable generator of `small_network`.
+        curt_id(d) = only(i for (i, r) in d["HV_requirements"] if r["name"] == "curt")
+        total_pgc(sol, n) = sum(g["pgc"] for g in values(sol["nw"][n]["gen_nd"]))
+
+        # Version 3 curtails up to the request and not beyond it.
+        d = TestUtils.small_network(opf_version=3, overlying_grid=true)
+        d["time_series"]["HV_requirements"][curt_id(d)]["P"] = [0.1, 0.4]
+        data = TestUtils.multinetwork(d)
+        result, _ = eDisGo_OPF.solve_mn_opf_bf_flex(
+            data, eDisGo_OPF.NCBFPowerModelEdisgo, OPF_IPOPT)
+        @test result["termination_status"] == MOI.LOCALLY_SOLVED
+        for (n, p) in (("1", 0.1), ("2", 0.4))
+            @test data["nw"][n]["HV_requirements"][curt_id(d)]["P"] ≈ p
+            @test total_pgc(result["solution"], n) <= p + 1e-6
+            @test total_pgc(result["solution"], n) ≈ p atol = 0.01
+        end
+
+        # … and not without a request, even where curtailment would relieve an
+        # overloaded feeder.
+        d = TestUtils.small_network(opf_version=3, overlying_grid=true)
+        d["time_series"]["gen_nd"]["1"]["pg"] = [10.0, 10.0]
+        d["time_series"]["gen_nd"]["1"]["qg"] = [-4.8, -4.8]
+        data = TestUtils.multinetwork(d)
+        result, _ = eDisGo_OPF.solve_mn_opf_bf_flex(
+            data, eDisGo_OPF.NCBFPowerModelEdisgo, OPF_IPOPT)
+        @test result["termination_status"] == MOI.LOCALLY_SOLVED
+        for n in ("1", "2")
+            @test data["nw"][n]["HV_requirements"][curt_id(d)]["P"] == 0.0
+            @test total_pgc(result["solution"], n) <= 1e-6
+        end
+
+        # Version 4 stays solvable when the grid limits need more curtailment
+        # than requested: the feed-in overloads the feeder, the request is zero.
+        d = TestUtils.small_network(opf_version=4, overlying_grid=true)
+        d["time_series"]["gen_nd"]["1"]["pg"] = [10.0, 10.0]
+        d["time_series"]["gen_nd"]["1"]["qg"] = [-4.8, -4.8]
+        data = TestUtils.multinetwork(d)
+        result, _ = eDisGo_OPF.solve_mn_opf_bf_flex(
+            data, eDisGo_OPF.NCBFPowerModelEdisgo, OPF_IPOPT)
+        @test result["termination_status"] == MOI.LOCALLY_SOLVED
+        for n in ("1", "2")
+            @test data["nw"][n]["HV_requirements"][curt_id(d)]["P"] == 0.0
+            @test total_pgc(result["solution"], n) > 1.0
+        end
+    end
+
     @testset "keyword arguments" begin
         # Everything else is passed on to `solve_model`; requesting duals makes the
         # power balance report its multipliers.

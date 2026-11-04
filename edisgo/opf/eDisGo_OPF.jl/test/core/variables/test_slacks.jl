@@ -689,13 +689,9 @@ function vsl_check_hv_slack(f, field::Symbol)
                   sort(collect(PowerModels.ids(pm, 1, :HV_requirements)))
             @test JuMP.num_variables(pm.model) == 5
             for i in 1:5
-                # Free in both directions, except the active-power slack of the
-                # curtailment requirement (1, P = 0) with `bounded`.
-                if field === :phvs && bounded && i == 1
-                    @test vsl_lb(v[i]) == 0.0
-                else
-                    @test vsl_lb(v[i]) === nothing
-                end
+                # Free in both directions in the fixture's `opf_version` 2; the
+                # bound on the curtailment slack in version 3 is tested below.
+                @test vsl_lb(v[i]) === nothing
                 @test vsl_ub(v[i]) === nothing
                 @test JuMP.start_value(v[i]) === nothing
                 @test JuMP.name(v[i]) == "1_$(field)[$i]"
@@ -736,17 +732,39 @@ end
 @testset "variable_slack_HV_requirements_real" begin
     vsl_check_hv_slack(eDisGo_OPF.variable_slack_HV_requirements_real, :phvs)
 
-    @testset "curtailment slack bounded by the request" begin
-        # Lower bound `min(0, P)`: no curtailment beyond the request (#801), and a
-        # negative request stays feasible with `pgc = 0`.
-        for (p, lb) in ((0.4, 0.0), (0.0, 0.0), (-0.2, -0.2))
-            pm = vsl_model(vsl_network(; overlying_grid=true))
+    @testset "curtailment slack bounded in opf_version 3" begin
+        # Requirement 1 of the fixture is "curt". In version 3 its slack has the
+        # lower bound `min(0, P)`, so the curtailment cannot exceed the request
+        # and a negative request stays feasible with `pgc = 0`. The other slacks
+        # stay free.
+        function curt_model(v; p=0.0)
+            data = vsl_network(; overlying_grid=true)
+            data["opf_version"] = v
+            pm = vsl_model(data)
             hv = PowerModels.ref(pm, 1, :HV_requirements, 1)
             @test hv["name"] == "curt"
             hv["P"] = p
-            eDisGo_OPF.variable_slack_HV_requirements_real(pm; nw=1)
-            @test vsl_lb(PowerModels.var(pm, 1, :phvs)[1]) == lb
+            return pm
         end
+        for (p, lb) in ((0.4, 0.0), (0.0, 0.0), (-0.2, -0.2))
+            pm = curt_model(3; p=p)
+            eDisGo_OPF.variable_slack_HV_requirements_real(pm; nw=1)
+            phvs = PowerModels.var(pm, 1, :phvs)
+            @test vsl_lb(phvs[1]) == lb
+            @test all(vsl_lb(phvs[i]) === nothing for i in 2:5)
+            @test all(vsl_ub(phvs[i]) === nothing for i in 1:5)
+        end
+
+        # Without `bounded` the slack stays free.
+        pm = curt_model(3)
+        eDisGo_OPF.variable_slack_HV_requirements_real(pm; nw=1, bounded=false)
+        @test vsl_lb(PowerModels.var(pm, 1, :phvs)[1]) === nothing
+
+        # Version 4 is not bounded: there `pgc` also has to keep the grid within
+        # its limits, which can take more curtailment than requested.
+        pm = curt_model(4)
+        eDisGo_OPF.variable_slack_HV_requirements_real(pm; nw=1)
+        @test vsl_lb(PowerModels.var(pm, 1, :phvs)[1]) === nothing
     end
 end
 

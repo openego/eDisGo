@@ -251,17 +251,13 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum((php[hp] - phps[hp]) * bus_hps_pf[hp] for hp in bus_hps)
             + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for cp in bus_cps)
         )
-    else  # Eq. (3.3ii), (3.4ii)
+    else  # Eq. (3.3ii), (3.4ii); version 3 adds the curtailment `pgc`
         # Version 3 curtails non-dispatchable generation to meet the overlying
-        # grid's "curt" requirement. The curtailment reduces the feed-in the grid
-        # carries, as in versions 2 and 4; version 1 has no curtailment.
-        if PowerModels.ref(pm, 1, :opf_version) == 3
-            pgc  = get(PowerModels.var(pm, n),  :pgc, Dict()); PowerModels._check_var_keys(pgc, bus_gens_nd, "active power", "curtailment")
-            bus_gens_curt = bus_gens_nd
-        else
-            pgc = Dict()
-            bus_gens_curt = empty(bus_gens_nd)
-        end
+        # grid's "curt" requirement; version 1 has no `pgc`. The curtailment
+        # reduces the feed-in the grid carries, as in versions 2 and 4.
+        pgc = get(PowerModels.var(pm, n), :pgc, Dict())
+        bus_gens_curt = haskey(PowerModels.var(pm, n), :pgc) ? bus_gens_nd : empty(bus_gens_nd)
+        PowerModels._check_var_keys(pgc, bus_gens_curt, "active power", "curtailment")
 
         cstr_p = JuMP.@constraint(pm.model,
             sum(pt[a] for a in bus_arcs_to)

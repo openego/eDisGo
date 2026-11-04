@@ -145,7 +145,9 @@ end
 Overlying-grid requirement constraint `i` in network `nw` (`opf_version` 3 and 4):
 forces the total dispatch of the addressed flexibility (DSM, curtailment, storage,
 heat pumps or charging points) to meet the active power `P` requested by the higher
-voltage level, up to the slack `phvs`.
+voltage level, up to the slack `phvs`. In `opf_version` 3 the slack of `"curt"` is
+bounded below, so the curtailment does not exceed the request (see
+`variable_slack_HV_requirements_real`).
 """
 function constraint_HV_requirements(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
     hv_req = PowerModels.ref(pm, nw, :HV_requirements, i)

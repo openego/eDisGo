@@ -141,7 +141,8 @@ All versions minimise line losses; they differ in how grid limits and the overly
      - Standard grid restrictions
      - minimise line losses **and** grid-related slacks
    * - 3
-     - HV requirements added; grid restrictions lifted
+     - HV requirements added (including curtailment of fluctuating generators up to
+       the requested amount); grid restrictions lifted
      - minimise line losses, maximum line loading **and** HV slacks
    * - 4
      - HV requirements added; standard grid restrictions

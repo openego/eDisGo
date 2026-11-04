@@ -471,18 +471,12 @@ Changes
   worst-case time series and in
   :func:`~.flex_opt.reinforce_grid.enhanced_reinforce_grid`, so their results can
   contain less MV and HV/MV reinforcement now
-* Fixed the curtailment in ``opf_version`` 3. The OPF met the overlying grid's
-  curtailment requirement (``overlying_grid.renewables_curtailment``) with a
-  curtailment that did not reduce the feed-in in the power balance, so the solver
-  spread it over the generators without regard to the grid. The flexibilities were
-  optimised for the full feed-in, while
-  :func:`~.io.powermodels_io.from_powermodels` wrote the curtailed feed-in back to
-  the generator time series. The curtailment now reduces the feed-in in the power
-  balance as in ``opf_version`` 4, so the OPF places it where it relieves the grid
-  and computes the flexibilities for the same operating point that is written back.
-  In ``opf_version`` 3 and 4 the OPF also no longer curtails more than the overlying
-  grid requests: the penalty on missing a requirement is quadratic, so before, the
-  OPF curtailed beyond the request, and also without any request, wherever that
-  relieved the grid. It may still curtail less than requested. Results of
-  ``opf_version`` 3 and 4 with curtailment change, including the presets
-  ``overlying_grid_opf`` and ``overlying_grid_opf_spatial`` (openego/eDisGo#801)
+* Fixed the curtailment in ``opf_version`` 3. The OPF met the curtailment requested
+  by the overlying grid (``overlying_grid.renewables_curtailment``) without reducing
+  the feed-in in the grid, so it placed the curtailment arbitrarily and planned the
+  flexibilities for the full feed-in, while the curtailed feed-in was written back to
+  the generator time series. The OPF now curtails where this relieves the grid, up to
+  the requested amount and not beyond it, and plans the flexibilities for the
+  curtailed feed-in. Results of ``opf_version`` 3 with a curtailment request change,
+  including the presets ``overlying_grid_opf`` and ``overlying_grid_opf_spatial``;
+  rerun such calculations (openego/eDisGo#801)
