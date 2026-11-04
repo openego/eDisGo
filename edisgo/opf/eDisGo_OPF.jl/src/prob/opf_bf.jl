@@ -33,7 +33,9 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
 
             if PowerModels.ref(pm, 1, :opf_version) in(3, 4) # Nicht Teil der MA
                 eDisGo_OPF.variable_slack_HV_requirements(pm, nw=n)
-                if PowerModels.ref(pm, 1, :opf_version) in(3)
+                # Version 3 curtails only to meet a "curt" requirement of the overlying grid
+                if PowerModels.ref(pm, 1, :opf_version) == 3 &&
+                        any(r["name"] == "curt" for r in values(PowerModels.ref(pm, n, :HV_requirements)))
                     eDisGo_OPF.variable_gen_power_curt(pm, nw=n)
                 end
                 for i in PowerModels.ids(pm, :HV_requirements, nw=n)

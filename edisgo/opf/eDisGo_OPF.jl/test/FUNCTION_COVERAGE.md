@@ -14,7 +14,7 @@ the entry)
 
 ## Status (as of 2026-11-04)
 
-**84 of 84 entries done**, suite green: 3653 passing assertions, 3
+**84 of 84 entries done**, suite green: 3654 passing assertions, 3
 `@test_broken`, 0 failures, about 6 to 7 min with a Gurobi licence (about 4 min of
 that are the `Main.jl` subprocesses; without Gurobi, as in CI, the two SOC runs
 are skipped). Line coverage of `src/`: 910 of 910 lines (100 %).
@@ -101,15 +101,12 @@ section 6); the tests record the actual behaviour and mark the intended one with
     Gurobi solve of a tight SOC relaxation (exit code 1, no result JSON), and
     with the prefix alone `opf_version` 1 failed with `KeyError("pgc")`. (#800)
 11. ~~**In `opf_version` 3, the curtailment `pgc` is decoupled from the power
-    balance.**~~ — **fixed**: `constraint_power_balance` includes `pgc` (P and,
-    via `bus_gen_nd_pf`, Q) for version 3 as for 2 and 4. Before, the "curt"
-    HV requirement was met by a curtailment without effect in the grid, while
-    `from_powermodels` subtracted exactly this `pgc` from the feed-in. The
-    fixtures now keep `"curt"` in `flexibilities` for version 3, as Python does.
-    `pgc` has no cost in the version-3 objective; instead the slack of the
-    "curt" requirement has the lower bound `min(0, P)` in version 3, so the OPF
-    does not curtail beyond the request. Version 4 has no such bound, because
-    its `pgc` is also the slack that keeps the grid within its limits. (#801)
+    balance.**~~ — **fixed**: version 3 creates `pgc` only for a "curt"
+    requirement and includes it in the P/Q balance as 2 and 4 do. The slack of
+    "curt" has the lower bound `min(0, P)` in version 3, so the OPF does not
+    curtail beyond the request; version 4 has no such bound, as its `pgc` also
+    keeps the grid within its limits. The fixtures keep `"curt"` in
+    `flexibilities` for version 3, as Python does. (#801)
 12. ~~**`variable_slack_gen_real`/`_imaginary` ignore the start values**~~ —
     **fixed**: both read `pgs_start`/`qgs_start`, `set_ac_bf_start_values!`
     also writes `cpe_start` and the grid start values (`w_start`, `pf_start`,
