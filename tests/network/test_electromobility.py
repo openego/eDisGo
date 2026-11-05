@@ -374,6 +374,15 @@ class TestElectromobility:
         # is linear - assert the true value directly, not this coincidence)
         assert expected_kWh == pytest.approx(proportional_share_kWh)
 
+    def test_inflexible_use_cases(self):
+        electromobility = Electromobility()
+        assert "public" in electromobility.inflexible_use_cases
+        assert "street" in electromobility.inflexible_use_cases
+        electromobility.inflexible_use_cases = "depot"
+        assert electromobility.inflexible_use_cases == ["depot"]
+        electromobility.inflexible_use_cases = ("hpc", "street")
+        assert electromobility.inflexible_use_cases == ["hpc", "street"]
+
     @pytest.mark.parametrize(
         "use_case, inflexible_use_cases, fixed",
         [

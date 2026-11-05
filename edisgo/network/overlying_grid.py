@@ -375,10 +375,18 @@ def distribute_overlying_grid_requirements(edisgo_obj):
     :attr:`~.network.electromobility.Electromobility.inflexible_use_cases`
     keep their fixed charging time series, which is their upper power
     flexibility band (see
-    :attr:`~.network.electromobility.Electromobility.get_flexibility_bands`).
+    :meth:`~.network.electromobility.Electromobility.get_flexibility_bands`).
     It is subtracted from the overlying grid's charging time series first, and
     only the rest is distributed to the other charging points, in proportion
-    to their upper power flexibility band.
+    to their upper power flexibility band. Whether a charging point is
+    inflexible is decided by its sector in
+    :attr:`~.network.topology.Topology.loads_df`.
+
+    In time steps where the overlying grid's charging time series is lower than
+    the fixed series of the inflexible charging points, the rest is set to zero,
+    so that the charging points then charge more than the overlying grid.
+    In time steps where no flexible charging point can charge, the rest is not
+    distributed. A warning is raised in both cases.
 
     Parameters
     -----------
@@ -424,12 +432,19 @@ def distribute_overlying_grid_requirements(edisgo_obj):
             )
         residual_power = residual_power.clip(lower=0.0)
 
-        scaling_df = flexible_upper_power.div(
-            flexible_upper_power.sum(axis=1), axis="index"
-        ).fillna(0.0)
+        flexible_total = flexible_upper_power.sum(axis=1)
+        undistributed = residual_power.where(flexible_total <= 0.0, 0.0)
+        if (undistributed > 1e-6).any():
+            logger.warning(
+                "No flexible charging point can take the rest of the "
+                "electromobility charging time series of the overlying grid in "
+                f"{(undistributed > 1e-6).sum()} time steps. Up to "
+                f"{undistributed.max():.4f} MW are not distributed."
+            )
+        share = residual_power.div(flexible_total).where(flexible_total > 0.0, 0.0)
         edisgo_copy.timeseries._loads_active_power.loc[
             :, flexible_upper_power.columns
-        ] = scaling_df.mul(residual_power, axis="index")
+        ] = flexible_upper_power.mul(share, axis="index")
         edisgo_copy.timeseries._loads_active_power.loc[:, inflexible_power.columns] = (
             inflexible_power
         )

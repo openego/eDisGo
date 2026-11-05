@@ -37,11 +37,11 @@ RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
         "reduced_charging_time",
         "reduced_charging_capacity_mva",
     ],
-    "residual_dumb": [
+    "residual_fixed": [
         "charging_park_id",
         "park_start_timesteps",
-        "ramp_charging_time",
-        "ramp_charging_capacity_mva",
+        "fixed_charging_time",
+        "fixed_charging_capacity_mva",
     ],
     "residual": [
         "park_start_timesteps",
@@ -143,7 +143,6 @@ def charging_strategy(
     )
 
     eta_cp = edisgo_obj.electromobility.eta_charging_points
-    inflexible_use_cases = edisgo_obj.electromobility.inflexible_use_cases
 
     len_ts = int(
         edisgo_obj.electromobility.simulated_days
@@ -247,7 +246,6 @@ def charging_strategy(
                 strategy=strategy,
                 minimum_charging_capacity_factor=minimum_charging_capacity_factor,
                 eta_cp=eta_cp,
-                inflexible_use_cases=inflexible_use_cases,
             )
 
             for (
@@ -300,22 +298,21 @@ def charging_strategy(
             timestamp_share_threshold,
             strategy=strategy,
             eta_cp=eta_cp,
-            inflexible_use_cases=inflexible_use_cases,
         )
 
         len_residual_load = int(charging_processes_df.park_end_timesteps.max())
 
         # The time index can extend past the last charging event, so the steps
-        # have to cover the whole time index; otherwise reducing the result to
-        # the time index at the end gives NaN instead of zero, and resampling
-        # it back to the original frequency carries the last value forward.
-        if not resample:
-            target_span_steps = int(
-                (timeindex_orig[-1] - timeindex_orig[0])
-                / pd.Timedelta(f"{edisgo_obj.electromobility.stepsize}min")
-            )
-        else:
-            target_span_steps = len(edisgo_obj.timeseries.timeindex) - 1
+        # have to cover the whole span of the time index, including its gaps;
+        # otherwise reducing the result to the time index at the end gives NaN
+        # instead of zero, and resampling it back to the original frequency
+        # carries the last value forward.
+        timeindex_span = (
+            edisgo_obj.timeseries.timeindex[-1] - edisgo_obj.timeseries.timeindex[0]
+        )
+        target_span_steps = int(
+            timeindex_span / pd.Timedelta(f"{edisgo_obj.electromobility.stepsize}min")
+        )
         len_residual_load = max(len_residual_load, target_span_steps)
 
         # Mark each step of the charging processes (0 .. len_residual_load, the
@@ -398,20 +395,26 @@ def charging_strategy(
         )
 
         # determine which charging processes can be flexibilized
-        dumb_charging_processes_df = charging_processes_df.loc[
-            charging_processes_df.inflexible | (charging_processes_df.flex_time == 0)
-        ]
-
-        flex_charging_processes_df = charging_processes_df.loc[
-            ~charging_processes_df.index.isin(dumb_charging_processes_df.index)
-        ]
+        is_fixed = charging_processes_df.inflexible | (
+            charging_processes_df.flex_time == 0
+        )
+        # processes of inflexible use cases charge along a linear ramp over the
+        # whole parking time, processes without flexibility at nominal power
+        # from arrival
+        fixed_charging_processes_df = charging_processes_df.loc[is_fixed].assign(
+            fixed_charging_time=lambda df: df.ramp_charging_time.where(
+                df.inflexible, df.minimum_charging_time
+            ),
+            fixed_charging_capacity_mva=lambda df: df.ramp_charging_capacity_mva.where(
+                df.inflexible, df.nominal_charging_capacity_mva
+            ),
+        )
+        flex_charging_processes_df = charging_processes_df.loc[~is_fixed]
 
         # perform the charging processes that cannot be shifted and respect them
-        # in the residual load; they charge along a linear ramp over the whole
-        # parking time (for processes without flexibility this is the same as
-        # charging at nominal power from arrival)
-        for _, cp_id, start, stop, cap in dumb_charging_processes_df[
-            RELEVANT_CHARGING_STRATEGIES_COLUMNS["residual_dumb"]
+        # in the residual load
+        for _, cp_id, start, stop, cap in fixed_charging_processes_df[
+            RELEVANT_CHARGING_STRATEGIES_COLUMNS["residual_fixed"]
         ].itertuples():
             try:
                 # Write only to in-window positions of the deterministic
@@ -529,7 +532,6 @@ def harmonize_charging_processes_df(
     strategy=None,
     minimum_charging_capacity_factor=0.1,
     eta_cp=1.0,
-    inflexible_use_cases=(),
 ):
     """
     Harmonizes the charging processes to prevent differences in the energy
@@ -550,18 +552,20 @@ def harmonize_charging_processes_df(
         Default: 0.1.
     eta_cp : float
         Charging point efficiency. Default: 1.0.
-    inflexible_use_cases : list(str)
-        Use cases whose charging processes cannot be shifted in time, see
-        :attr:`~.network.electromobility.Electromobility.inflexible_use_cases`.
-        Their processes are marked in column 'inflexible'. Default: ().
 
     Notes
     -----
-    Besides the harmonized charging demand, the returned DataFrame gives the
-    linear ramp over the whole parking time that inflexible charging processes
-    follow: 'ramp_charging_time' is the parking time in time steps and
-    'ramp_charging_capacity_mva' the constant charging power that delivers the
-    harmonized charging demand within it.
+    Charging processes of the use cases in
+    :attr:`~.network.electromobility.Electromobility.inflexible_use_cases` are
+    marked in column 'inflexible'. Besides the harmonized charging demand, the
+    returned DataFrame gives the linear ramp over the whole parking time that
+    inflexible charging processes follow: 'ramp_charging_time' is the parking
+    time in time steps and 'ramp_charging_capacity_mva' the constant charging
+    power that delivers the harmonized charging demand within it. As the
+    harmonized charging demand is rounded to whole time steps, this ramp can
+    deliver a slightly different energy than the flexibility bands in
+    :meth:`~.network.electromobility.Electromobility.get_flexibility_bands`,
+    which use the charging demand as it is.
 
     """
     # FIXME: This should become obsolete in the future when SimBEV is bugfixed
@@ -601,7 +605,7 @@ def harmonize_charging_processes_df(
     # linear ramp over the whole parking time for inflexible charging processes
     parking_steps = df.park_end_timesteps - df.park_start_timesteps + 1
     df = df.assign(
-        inflexible=df.use_case.isin(inflexible_use_cases),
+        inflexible=df.use_case.isin(edisgo_obj.electromobility.inflexible_use_cases),
         ramp_charging_time=parking_steps.astype(np.uint16),
         ramp_charging_capacity_mva=df.nominal_charging_capacity_mva
         * df.minimum_charging_time

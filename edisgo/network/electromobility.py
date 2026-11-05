@@ -81,11 +81,8 @@ COLUMNS = {
     "integrated_charging_parks_df": ["edisgo_id"],
 }
 
-# Use cases whose charging processes cannot be shifted in time. They cover the
-# legacy SimBEV/TracBEV use cases ("public", "hpc") and the use cases of the
-# egon-data M1/N1 data ("street", "retail", "urban_fast", "highway_fast"). The
-# same split is used by egon-data for the eTraGo model, see
-# :attr:`Electromobility.inflexible_use_cases`.
+# Use cases whose charging processes cannot be shifted in time, see
+# Electromobility.inflexible_use_cases.
 INFLEXIBLE_USE_CASES = (
     "public",
     "hpc",
@@ -337,24 +334,35 @@ class Electromobility:
 
         A charging process of one of these use cases cannot be shifted. It
         charges along a linear ramp over its whole parking time, i.e. at
-        constant power from the start to the end of parking, as in the eTraGo
-        model built by egon-data. This is used in
-        :attr:`get_flexibility_bands`, in the charging strategies 'reduced'
-        and 'residual' and in
+        constant power from the start to the end of parking. This is how
+        egon-data models inflexible charging in eTraGo, with one difference:
+        egon-data starts the ramp one time step after arrival, eDisGo at
+        arrival, so that the ramp power never exceeds the nominal charging
+        power. The use cases are used in :meth:`get_flexibility_bands`, in the
+        charging strategies 'reduced' and 'residual' and in
         :func:`~.network.overlying_grid.distribute_overlying_grid_requirements`.
+
+        Set them before calling these functions; changing them afterwards does
+        not change charging time series or flexibility bands that were already
+        determined. They are not saved by :meth:`to_csv`.
 
         Parameters
         ----------
-        use_cases : list(str)
+        use_cases : str or list(str)
             Use cases whose charging processes are fixed in time.
 
         Returns
         -------
         list(str)
             Use cases whose charging processes are fixed in time. Defaults to
-            :data:`INFLEXIBLE_USE_CASES`, which covers the legacy use cases
-            ("public", "hpc") and the use cases of the egon-data M1/N1 data
-            ("street", "retail", "urban_fast", "highway_fast").
+            the SimBEV use cases "public" and "hpc" and to the use cases
+            "street", "retail", "urban_fast" and "highway_fast" of the
+            electromobility data of egon-data for the scenarios status2024,
+            reGon2037 and reGon2045. The latter are only relevant for charging
+            processes that are already assigned to charging parks, as
+            :func:`~.io.electromobility_import.distribute_charging_demand`
+            only assigns the SimBEV use cases "home", "work", "public" and
+            "hpc".
 
         """
         try:
@@ -364,6 +372,8 @@ class Electromobility:
 
     @inflexible_use_cases.setter
     def inflexible_use_cases(self, use_cases):
+        if isinstance(use_cases, str):
+            use_cases = [use_cases]
         self._inflexible_use_cases = list(use_cases)
 
     @property
@@ -476,7 +486,12 @@ class Electromobility:
         ``start`` to ``end``. Both energy bands follow this ramp, and the upper
         power band is its constant charging power divided by the charging
         efficiency. This is the shape egon-data gives inflexible charging in
-        the eTraGo model.
+        the eTraGo model, except that egon-data starts the ramp one time step
+        later. In the optimisation, these charging processes do not charge in
+        the first time step of the optimised period: the optimisation sets the
+        energy before the first time step to the middle of the energy bands in
+        the first time step, which for fixed bands already contains the energy
+        of the first time step.
 
         Each charging process (a car parking at a charging point from time step
         ``start`` to ``end`` and charging at a given power) contributes a constant

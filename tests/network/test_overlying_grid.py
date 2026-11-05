@@ -520,3 +520,15 @@ class TestOverlyingGridFunc:
         assert "is lower than the charging time series of the inflexible" in (
             caplog.text
         )
+
+        # if there is no flexible charging point, the rest of the overlying
+        # grid's charging time series cannot be distributed
+        bands["upper_power"][inflexible_cp] = 0.1
+        loads_df.at[flexible_cp, "sector"] = "public"
+        bands["upper_power"][flexible_cp] = 0.2
+        caplog.clear()
+        edisgo_copy = distribute_overlying_grid_requirements(self.edisgo)
+        loads_active_power = edisgo_copy.timeseries.loads_active_power
+        assert np.allclose(loads_active_power[inflexible_cp], 0.1)
+        assert np.allclose(loads_active_power[flexible_cp], 0.2)
+        assert "No flexible charging point can take the rest" in caplog.text
