@@ -457,11 +457,15 @@ class TestSpatialComplexityReduction:
             ),
         ],
     )
+    @pytest.mark.runonlinux
     def test_make_busmap_matches_reference(self, test_edisgo_obj, case, kwargs):
         """
         The busmap of test grid 1 is compared with a stored reference: which new
         bus every bus is mapped to, and the coordinates of the new buses. This
         catches changes of the clustering that keep the number of new buses.
+
+        The references were written on Linux. On Windows, k-means ends in other
+        clusters for some LV feeders, so the test only runs on Linux.
         """
         reference = pd.read_csv(
             os.path.join(
