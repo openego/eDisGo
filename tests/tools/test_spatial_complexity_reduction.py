@@ -521,23 +521,8 @@ class TestApplyReducedResultsToFullGrid:
         )
         return full_grid, reduced_grid
 
-    def _first_representative_with(self, reduced_grid, n_members):
-        loads_df = reduced_grid.topology.loads_df
-        candidates = loads_df[
-            loads_df["old_name"].apply(
-                lambda v: isinstance(v, list) and len(v) == n_members
-            )
-        ]
-        assert not candidates.empty, (
-            f"fixture grid has no aggregated load representative with "
-            f"exactly {n_members} old_name member(s); adjust the fixture "
-            f"or reduction_factor."
-        )
-        return candidates.index[0]
-
-    def test_by_name_write_back_aggregation_mode_false(self, test_edisgo_obj):
-        # aggregation_mode=False: no merging, so restore is a plain by-name
-        # write-back for every flexibility type.
+    @pytest.fixture
+    def full_and_reduced_unaggregated(self, test_edisgo_obj):
         full_grid = copy.deepcopy(test_edisgo_obj)
         reduced_grid, _, _ = full_grid.spatial_complexity_reduction(
             copy_edisgo=True,
@@ -546,6 +531,30 @@ class TestApplyReducedResultsToFullGrid:
             reduction_factor=0.1,
             aggregation_mode=False,
         )
+        return full_grid, reduced_grid
+
+    def _first_representative_with(
+        self, reduced_grid, n_members, component="loads", types=None
+    ):
+        df = getattr(reduced_grid.topology, f"{component}_df")
+        if types is not None:
+            df = df[df.type.isin(types)]
+        candidates = df[
+            df["old_name"].apply(lambda v: isinstance(v, list) and len(v) == n_members)
+        ]
+        assert not candidates.empty, (
+            f"fixture grid has no aggregated {component} representative with "
+            f"exactly {n_members} old_name member(s); adjust the fixture "
+            f"or reduction_factor."
+        )
+        return candidates.index[0]
+
+    def test_by_name_write_back_aggregation_mode_false(
+        self, full_and_reduced_unaggregated
+    ):
+        # aggregation_mode=False: no merging, so restore is a plain by-name
+        # write-back for every flexibility type.
+        full_grid, reduced_grid = full_and_reduced_unaggregated
         ti = full_grid.timeseries.timeindex
         load_name = reduced_grid.topology.loads_df.index[0]
         storage_name = reduced_grid.topology.storage_units_df.index[0]
@@ -581,21 +590,16 @@ class TestApplyReducedResultsToFullGrid:
             ti, storage_name
         ].tolist() == [5.0, 6.0, 7.0, 8.0]
 
-    def test_accepts_numpy_array_flexible_component_lists(self, test_edisgo_obj):
+    def test_accepts_numpy_array_flexible_component_lists(
+        self, full_and_reduced_unaggregated
+    ):
         # Regression test: task_optimize derives flexible_loads as
         # edisgo.dsm.p_min.columns.values (a numpy array), unlike the other
         # three flexible_* lists which are built with .tolist(). "x or []"
         # raises ValueError ("truth value of an array... is ambiguous") for
         # any such array with more than one element - a real crash hit on
         # the first end-to-end pipeline run using aggregation_mode=False.
-        full_grid = copy.deepcopy(test_edisgo_obj)
-        reduced_grid, _, _ = full_grid.spatial_complexity_reduction(
-            copy_edisgo=True,
-            mode="kmeansdijkstra",
-            cluster_area="feeder",
-            reduction_factor=0.1,
-            aggregation_mode=False,
-        )
+        full_grid, reduced_grid = full_and_reduced_unaggregated
         ti = full_grid.timeseries.timeindex
         load_name = reduced_grid.topology.loads_df.index[0]
         full_grid.dsm.p_max = pd.DataFrame(1.0, index=ti, columns=[load_name])
@@ -714,6 +718,63 @@ class TestApplyReducedResultsToFullGrid:
         assert result.timeseries.storage_units_active_power.loc[
             ti, storage_name
         ].tolist() == [1.0, 1.0, 1.0, 1.0]
+
+    def test_generators_by_name_aggregation_mode_false(
+        self, full_and_reduced_unaggregated
+    ):
+        # With opf_version 3 and 4 the OPF writes the curtailed feed-in onto
+        # the reduced grid's solar and wind generators. Restore must carry it
+        # onto the full grid, otherwise reinforcement runs on the uncurtailed
+        # feed-in; every other generator keeps its series.
+        full_grid, reduced_grid = full_and_reduced_unaggregated
+        ti = full_grid.timeseries.timeindex
+        gens_df = reduced_grid.topology.generators_df
+        curtailed = gens_df.index[gens_df.type.isin(["solar", "wind"])][0]
+        before = full_grid.timeseries.generators_active_power.copy()
+        assert (before[curtailed] > 0).any(), "fixture: no feed-in to curtail"
+
+        reduced_grid.timeseries._generators_active_power.loc[ti, curtailed] = (
+            0.5 * before[curtailed].values
+        )
+
+        result = spatial_complexity_reduction.apply_reduced_results_to_full_grid(
+            full_grid=full_grid, reduced_grid=reduced_grid
+        )
+
+        gens_p = result.timeseries.generators_active_power
+        assert np.allclose(gens_p[curtailed], 0.5 * before[curtailed])
+        others = before.columns.drop(curtailed)
+        pd.testing.assert_frame_equal(gens_p[others], before[others])
+
+    def test_generators_disaggregated_by_feed_in(self, full_and_reduced):
+        full_grid, reduced_grid = full_and_reduced
+        ti = full_grid.timeseries.timeindex
+        rep = self._first_representative_with(
+            reduced_grid, n_members=2, component="generators", types=["solar"]
+        )
+        members = reduced_grid.topology.generators_df.at[rep, "old_name"]
+        # a member without feed-in must not receive any of the dispatch
+        full_grid.timeseries._generators_active_power.loc[ti, members[0]] = 0.0
+        before = full_grid.timeseries.generators_active_power.copy()
+        assert (before[members[1]] > 0).any(), "fixture: no feed-in to curtail"
+
+        # the OPF curtails the representative to 40 % of its members' feed-in
+        reduced_grid.timeseries._generators_active_power.loc[ti, rep] = (
+            0.4 * before[members].sum(axis=1).values
+        )
+
+        result = spatial_complexity_reduction.apply_reduced_results_to_full_grid(
+            full_grid=full_grid, reduced_grid=reduced_grid
+        )
+
+        gens_p = result.timeseries.generators_active_power
+        # every member is curtailed by the same fraction of its own feed-in
+        assert np.allclose(gens_p[members], 0.4 * before[members])
+        assert (gens_p[members[0]] == 0).all()
+        # the other generators get their unchanged series back
+        others = before.columns.difference(members)
+        assert np.allclose(gens_p[others], before[others])
+        assert rep not in gens_p.columns
 
     def test_reactive_power_recomputed_after_restore(self, full_and_reduced):
         full_grid, reduced_grid = full_and_reduced

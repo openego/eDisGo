@@ -3614,17 +3614,17 @@ class EDisGo:
         flexible_storage_units: list | None = None,
     ) -> EDisGo:
         """
-        Writes optimized flexible-component dispatch from a spatially-reduced
-        grid back onto this (full) grid.
+        Writes the OPF's active-power results from a spatially-reduced grid
+        back onto this (full) grid.
 
         Counterpart to :meth:`spatial_complexity_reduction`: where that
         method shrinks this grid for a faster OPF, this method maps the OPF's
         active-power results from ``reduced_grid`` back onto ``self`` so
-        reinforcement can run on the full topology. Only components the OPF
-        actually rewrites are touched — flexible charging points, heat pumps,
-        DSM loads, and storage units. Inflexible loads/generators are
-        untouched, since the OPF never changed their series and ``self``
-        already holds the correct values for them.
+        reinforcement can run on the full topology. It writes back the given
+        flexible charging points, heat pumps, DSM loads and storage units, and
+        always all generators, so that the curtailment of ``opf_version`` 3
+        and 4 reaches the full grid. ``self`` must therefore still hold the
+        uncurtailed generator feed-in. Inflexible loads are untouched.
 
         See
         :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
@@ -3652,7 +3652,7 @@ class EDisGo:
         -------
         :class:`~.EDisGo`
             ``self``, with active power written for the given flexible
-            components and reactive power recomputed.
+            components and all generators, and reactive power recomputed.
 
         """
         return apply_reduced_results_to_full_grid(

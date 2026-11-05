@@ -491,3 +491,14 @@ Changes
   curtailed feed-in. Results of ``opf_version`` 3 with a curtailment request change,
   including the presets ``overlying_grid_opf`` and ``overlying_grid_opf_spatial``;
   rerun such calculations (openego/eDisGo#801)
+* Fixed the curtailment of ``opf_version`` 3 and 4 with spatial complexity reduction.
+  :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
+  (used by :meth:`~.edisgo.EDisGo.map_reduced_results_to_full_grid` and the
+  ``spatial_restore`` task) wrote the optimised flexibilities back onto the full grid
+  but not the curtailed solar and wind feed-in, so the full grid was reinforced for
+  the uncurtailed feed-in. It now always writes back all generators as well; where
+  the reduction merged generators, the curtailment is split in proportion to each
+  generator's uncurtailed feed-in. Grid expansion costs of runs with spatial
+  complexity reduction, ``opf_version`` 3 or 4 and a curtailment request, including
+  the preset ``overlying_grid_opf_spatial``, can decrease; rerun such calculations
+  (openego/eDisGo#850)

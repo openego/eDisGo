@@ -333,7 +333,8 @@ def task_optimize(
     flexible_storage_units : list of str, optional
         Explicit list of flexible storage-unit names.
     opf_version : int, optional
-        Powermodels OPF formulation version (1 or 2, default 2).
+        Powermodels OPF formulation version, 1 to 4 (default 2), see
+        :func:`~.opf.powermodels_opf.pm_optimize`.
     method : str, optional
         OPF relaxation method, e.g. ``"soc"`` (second-order cone).
     warm_start : bool, optional

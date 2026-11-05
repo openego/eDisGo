@@ -10,6 +10,7 @@ import glob
 import logging
 import os
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -908,6 +909,50 @@ class TestSpatialRestoreCarriesOPFResults:
 
         assert result is edisgo_obj
         assert result.opf_results.status == "OPTIMAL"
+
+
+@pytest.mark.parametrize("aggregation_mode", [False, True])
+def test_curtailment_reaches_the_full_grid(aggregation_mode):
+    """
+    spatial_reduce -> optimize -> spatial_restore with the real reduction and
+    write-back; only pm_optimize is replaced by what from_powermodels does
+    with opf_version 3 and 4: it halves the solar and wind feed-in of the
+    reduced grid. The full grid must carry the halved feed-in, every other
+    generator its unchanged series.
+    """
+    edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+    edisgo.set_time_series_worst_case_analysis()
+    before = edisgo.timeseries.generators_active_power.copy()
+    gens_df = edisgo.topology.generators_df
+    renewable = gens_df.index[gens_df.type.isin(["solar", "wind"])]
+    others = gens_df.index.difference(renewable)
+
+    ctx = RunContext(
+        raw_config={
+            "spatial_reduction": {
+                "enabled": True,
+                "mode": "kmeansdijkstra",
+                "cluster_area": "feeder",
+                "reduction_factor": 0.1,
+                "aggregation_mode": aggregation_mode,
+            }
+        }
+    )
+    reduced = task_spatial_reduce(edisgo, ctx)
+
+    def fake_pm_optimize(**kw):
+        red_gens = reduced.topology.generators_df
+        red_renewable = red_gens.index[red_gens.type.isin(["solar", "wind"])]
+        reduced.timeseries._generators_active_power.loc[:, red_renewable] *= 0.5
+
+    reduced.pm_optimize = fake_pm_optimize
+    task_optimize(reduced, ctx, flexible=[], opf_version=3)
+    full = task_spatial_restore(reduced, ctx)
+
+    p = full.timeseries.generators_active_power
+    assert set(p.columns) == set(gens_df.index)
+    assert np.allclose(p[renewable], 0.5 * before[renewable])
+    assert np.allclose(p[others], before[others])
 
 
 def test_all_bundled_presets_validate():
