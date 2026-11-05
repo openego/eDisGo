@@ -448,6 +448,36 @@ Changes
   :meth:`~.edisgo.EDisGo.spatial_complexity_reduction` and of the runner
   ``spatial_reduction`` block; ``threads=0`` uses all cores as before
   (openego/eDisGo#844)
+* The spatial complexity reduction runs 2.5 to 9 times faster on the tested grids.
+  Apart from the fixes below, the busmap and the reduced grid are the same as
+  before. :func:`~.tools.spatial_complexity_reduction.make_busmap`,
+  :func:`~.tools.spatial_complexity_reduction.apply_busmap` and
+  :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates` work on whole columns
+  instead of looping over buses and lines row by row. With ``mode='kmeansdijkstra'``
+  and ``cluster_area='feeder'``, the shortest paths from each bus to the buses that
+  represent the clusters are only searched within its feeder
+* Fixed :func:`~.tools.spatial_complexity_reduction.make_busmap` changing the
+  coordinates of the EDisGo object to EPSG:3035 for the cluster areas ``'feeder'``
+  and ``'main_feeder'``. The coordinates are now transformed in a copy.
+  :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction` was not
+  affected, as :func:`~.tools.spatial_complexity_reduction.apply_busmap` overwrites
+  them afterwards
+* Fixed :func:`~.tools.spatial_complexity_reduction.apply_busmap` setting the shunt
+  susceptance ``b`` of every aggregated line to 0. ``b`` of an aggregated line is now
+  its length times the sum of ``b`` per km of the lines it stands for, so that
+  parallel lines add up
+* Fixed :func:`~.tools.spatial_complexity_reduction.apply_busmap` dropping every line
+  with a missing value in any column, e.g. ``kind``, from the reduced grid without
+  notice. Such lines are now aggregated like all others. A line between two new
+  buses without ``type_info`` raises a ``ValueError``, as r and x of the aggregated
+  line are computed from the line type
+* :func:`~.tools.spatial_complexity_reduction.make_busmap` with
+  ``mode='kmeansdijkstra'`` raises a ``ValueError`` naming the bus if a bus is not
+  connected to any cluster, instead of failing with a ``KeyError``
+* Fixed the spatial complexity reduction removing the prefix ``virtual_`` from bus
+  names with ``str.lstrip``, which strips all leading characters contained in
+  ``"virtual_"``, so that e.g. ``virtual_lv_bus`` became ``bus``. ding0 bus names
+  were not affected
 * Fixed the ``PerformanceWarning: DataFrame is highly fragmented`` raised in grids
   with more than 100 LV grids while checking the voltage at the secondary side of
   the MV/LV stations. The voltage limits of the stations are now built in one step
