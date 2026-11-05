@@ -499,3 +499,66 @@ def assert_radial(graph, name=""):
     """Assert that ``graph`` is a connected tree (radial grid without loops)."""
     assert nx.is_connected(graph), f"{name} is not connected"
     assert nx.is_tree(graph), f"{name} is not radial"
+
+
+# --------------------------------------------------------------------------------------
+# helpers: line parameters and topology references
+# --------------------------------------------------------------------------------------
+
+
+def expected_line_parameters(equipment, length, num_parallel, v_nom, f=50.0):
+    """
+    Electrical line parameters derived from per-km equipment data.
+
+    ``r = R'·l/n``, ``x = 2πf·L'·l/n``, ``b = 2πf·C'·l·n`` and
+    ``s_nom = √3·U·I_th·n`` with the grid's nominal voltage ``U`` (not the
+    rated voltage of the line type). Units as in the equipment files: R' in
+    Ohm/km, L' in mH/km, C' in µF/km, I_th in kA, U in kV, length in km.
+
+    Returns
+    -------
+    dict
+        Keys ``r`` (Ohm), ``x`` (Ohm), ``b`` (S) and ``s_nom`` (MVA).
+
+    """
+    omega = 2 * np.pi * f
+    return {
+        "r": equipment["R_per_km"] * length / num_parallel,
+        "x": omega * equipment["L_per_km"] * 1e-3 * length / num_parallel,
+        "b": omega * equipment["C_per_km"] * 1e-6 * length * num_parallel,
+        "s_nom": np.sqrt(3) * v_nom * equipment["I_max_th"] * num_parallel,
+    }
+
+
+def undefined_references(topology):
+    """
+    Return all references of components to buses or lines that do not exist.
+
+    Covers loads, generators and storage units (``bus``), lines and MV/LV
+    transformers (``bus0``/``bus1``), HV/MV transformers (``bus1``) and
+    switches (``bus_open``, ``bus_closed``, ``branch``). An empty list means
+    the topology is referentially consistent.
+
+    """
+    buses = topology.buses_df.index
+    missing = []
+    for comp in ("loads", "generators", "storage_units"):
+        df = getattr(topology, f"{comp}_df")
+        missing += [(comp, n, "bus") for n in df.index[~df.bus.isin(buses)]]
+    # the HV side of the HV/MV transformers (bus0) is not modelled as a bus
+    for comp, cols in (
+        ("lines", ("bus0", "bus1")),
+        ("transformers", ("bus0", "bus1")),
+        ("transformers_hvmv", ("bus1",)),
+    ):
+        df = getattr(topology, f"{comp}_df")
+        for col in cols:
+            missing += [(comp, n, col) for n in df.index[~df[col].isin(buses)]]
+    sw = topology.switches_df
+    for col in ("bus_open", "bus_closed"):
+        missing += [("switches", n, col) for n in sw.index[~sw[col].isin(buses)]]
+    missing += [
+        ("switches", n, "branch")
+        for n in sw.index[~sw.branch.isin(topology.lines_df.index)]
+    ]
+    return missing
