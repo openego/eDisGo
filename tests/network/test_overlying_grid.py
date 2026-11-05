@@ -474,3 +474,49 @@ class TestOverlyingGridFunc:
             - self.edisgo.overlying_grid.renewables_curtailment,
             atol=1e-5,
         ).all()
+
+    def test_distribute_overlying_grid_timeseries_inflexible_charging_points(
+        self, caplog
+    ):
+        """
+        Inflexible charging points keep their fixed charging time series, the
+        upper power band, and only the rest of the overlying grid's charging
+        time series is distributed to the flexible charging points.
+        """
+        # own grid, as setup_flexibility_data changes the grid of the class
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        self.edisgo.set_time_series_worst_case_analysis()
+        self.timesteps = self.edisgo.timeseries.timeindex
+        self.setup_flexibility_data()
+        flexible_cp = "Charging_Point_LVGrid_6_1"
+        timeindex = self.edisgo.timeseries.timeindex
+        # copy the flexible charging point to an inflexible one (setup has
+        # replaced the time index, so add_component cannot be used here)
+        inflexible_cp = "Charging_Point_public"
+        loads_df = self.edisgo.topology.loads_df
+        loads_df.loc[inflexible_cp] = loads_df.loc[flexible_cp]
+        loads_df.at[inflexible_cp, "sector"] = "public"
+        self.edisgo.timeseries._loads_active_power[inflexible_cp] = 0.5
+        bands = self.edisgo.electromobility.flexibility_bands
+        bands["upper_power"][inflexible_cp] = 0.1
+        bands["upper_energy"][inflexible_cp] = 0.1 * np.arange(1, len(timeindex) + 1)
+        bands["lower_energy"][inflexible_cp] = bands["upper_energy"][inflexible_cp]
+
+        edisgo_copy = distribute_overlying_grid_requirements(self.edisgo)
+        loads_active_power = edisgo_copy.timeseries.loads_active_power
+        ev_power = self.edisgo.overlying_grid.electromobility_active_power.values
+
+        assert np.allclose(loads_active_power[inflexible_cp], 0.1)
+        assert np.allclose(loads_active_power[flexible_cp], ev_power - 0.1)
+
+        # if the overlying grid's charging time series is lower than that of
+        # the inflexible charging points, no charging is left for the
+        # flexible charging points
+        bands["upper_power"][inflexible_cp] = 1.0
+        edisgo_copy = distribute_overlying_grid_requirements(self.edisgo)
+        loads_active_power = edisgo_copy.timeseries.loads_active_power
+        assert np.allclose(loads_active_power[inflexible_cp], 1.0)
+        assert np.allclose(loads_active_power[flexible_cp], 0.0)
+        assert "is lower than the charging time series of the inflexible" in (
+            caplog.text
+        )

@@ -81,6 +81,20 @@ COLUMNS = {
     "integrated_charging_parks_df": ["edisgo_id"],
 }
 
+# Use cases whose charging processes cannot be shifted in time. They cover the
+# legacy SimBEV/TracBEV use cases ("public", "hpc") and the use cases of the
+# egon-data M1/N1 data ("street", "retail", "urban_fast", "highway_fast"). The
+# same split is used by egon-data for the eTraGo model, see
+# :attr:`Electromobility.inflexible_use_cases`.
+INFLEXIBLE_USE_CASES = (
+    "public",
+    "hpc",
+    "street",
+    "retail",
+    "urban_fast",
+    "highway_fast",
+)
+
 
 class Electromobility:
     """
@@ -317,6 +331,42 @@ class Electromobility:
             return None
 
     @property
+    def inflexible_use_cases(self):
+        """
+        Use cases whose charging processes are fixed in time.
+
+        A charging process of one of these use cases cannot be shifted. It
+        charges along a linear ramp over its whole parking time, i.e. at
+        constant power from the start to the end of parking, as in the eTraGo
+        model built by egon-data. This is used in
+        :attr:`get_flexibility_bands`, in the charging strategies 'reduced'
+        and 'residual' and in
+        :func:`~.network.overlying_grid.distribute_overlying_grid_requirements`.
+
+        Parameters
+        ----------
+        use_cases : list(str)
+            Use cases whose charging processes are fixed in time.
+
+        Returns
+        -------
+        list(str)
+            Use cases whose charging processes are fixed in time. Defaults to
+            :data:`INFLEXIBLE_USE_CASES`, which covers the legacy use cases
+            ("public", "hpc") and the use cases of the egon-data M1/N1 data
+            ("street", "retail", "urban_fast", "highway_fast").
+
+        """
+        try:
+            return self._inflexible_use_cases
+        except AttributeError:
+            return list(INFLEXIBLE_USE_CASES)
+
+    @inflexible_use_cases.setter
+    def inflexible_use_cases(self, use_cases):
+        self._inflexible_use_cases = list(use_cases)
+
+    @property
     def eta_charging_points(self):
         """
         Charging point efficiency.
@@ -368,7 +418,7 @@ class Electromobility:
     def get_flexibility_bands(
         self,
         edisgo_obj: EDisGo,
-        use_case: str | list[str],
+        use_case: str | list[str] | None = None,
         resample: bool = True,
         tol: float = 1e-6,
     ) -> dict[str, pd.DataFrame]:
@@ -382,8 +432,10 @@ class Electromobility:
         Parameters
         -----------
         edisgo_obj : :class:`~.EDisGo`
-        use_case : str or list(str)
-            Charging point use case(s) to determine flexibility bands for.
+        use_case : str or list(str) or None
+            Charging point use case(s) to determine flexibility bands for. If
+            None, bands are determined for all charging points.
+            Default: None.
         resample : bool (optional)
             If True, flexibility bands are resampled to the same frequency as time
             series data in :class:`~.network.timeseries.TimeSeries` object. If False,
@@ -417,6 +469,15 @@ class Electromobility:
 
         Notes
         -----
+        Charging processes of the use cases in :attr:`inflexible_use_cases`
+        cannot be shifted. Their bands are fixed to a linear ramp over the
+        parking time: the process charges the same energy,
+        ``chargingdemand_kWh / (end - start + 1)``, in every time step from
+        ``start`` to ``end``. Both energy bands follow this ramp, and the upper
+        power band is its constant charging power divided by the charging
+        efficiency. This is the shape egon-data gives inflexible charging in
+        the eTraGo model.
+
         Each charging process (a car parking at a charging point from time step
         ``start`` to ``end`` and charging at a given power) contributes a constant
         value to a *contiguous range* of time steps of its charging point's band.
@@ -453,14 +514,16 @@ class Electromobility:
 
         """
 
-        if isinstance(use_case, str):
-            use_case = [use_case]
-
         # get all relevant charging points
         cp_df = edisgo_obj.topology.loads_df[
             edisgo_obj.topology.loads_df.type == "charging_point"
         ]
-        cps = cp_df[cp_df.sector.isin(use_case)]
+        if use_case is None:
+            cps = cp_df
+        else:
+            if isinstance(use_case, str):
+                use_case = [use_case]
+            cps = cp_df[cp_df.sector.isin(use_case)]
 
         # set up time index
         start_date = self.simbev_config_df.start_date.values[0]
@@ -583,6 +646,14 @@ class Electromobility:
                 f"Charging demand cannot be fulfilled for charging process {bad_idx}. "
                 "Please check."
             )
+        # inflexible processes charge along a linear ramp over the whole parking
+        # time, i.e. at constant power from start to end, so that both energy
+        # bands coincide and the upper power band equals the charging power
+        inflexible = sub["use_case"].isin(self.inflexible_use_cases).to_numpy()
+        parking_steps = (end - start + 1).astype(float)
+        power = np.where(inflexible, power * charging_time / parking_steps, power)
+        charging_time = np.where(inflexible, parking_steps, charging_time)
+
         full_charging_steps = charging_time.astype(int)
         part_time_step = charging_time - full_charging_steps
 

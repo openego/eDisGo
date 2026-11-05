@@ -75,9 +75,13 @@ Charging strategies (heuristic)
 Rule-based strategies are applied with
 :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy`
 (:py:func:`~edisgo.flex_opt.charging_strategies.charging_strategy`). Every strategy
-must fully cover each charging requirement. Only the **private** use cases — ``home``
-and ``work`` — are shifted; ``public`` and high-power (``hpc``) charging is always
-charged "dumb", as it prioritises immediate service:
+must fully cover each charging requirement. Charging processes of the use cases in
+:attr:`~edisgo.network.electromobility.Electromobility.inflexible_use_cases` are never
+shifted. By default these are ``public`` and high-power (``hpc``) charging and, for the
+use cases of the egon-data M1/N1 data, ``street``, ``retail``, ``urban_fast`` and
+``highway_fast``. The set can be changed by assigning a list of use cases to
+``edisgo.electromobility.inflexible_use_cases``. All other use cases, e.g. ``home``
+and ``work``, are flexible:
 
 * ``"dumb"`` — charge at maximum power immediately on arrival. No flexibility; the
   worst case for the grid.
@@ -89,8 +93,10 @@ charged "dumb", as it prioritises immediate service:
   generation, low consumption); processes with little flexibility get priority.
 
 So the ``"dumb"`` strategy charges *every* use case immediately, while ``"reduced"`` and
-``"residual"`` shift only ``home`` and ``work`` and leave ``public``/``hpc`` dumb. Either
-way, after :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy` *every* charging point
+``"residual"`` shift only the flexible use cases. They charge the inflexible ones along a
+linear ramp over the parking time, i.e. at constant power from arrival to departure.
+This is how egon-data models inflexible charging in eTraGo, so that both models give
+the inflexible charging the same time shape. Either way, after :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy` *every* charging point
 has an active-power series — none are left unset — which is what a subsequent power flow
 or the :ref:`optimisation <flexibility-opf>` needs (the optimisation reschedules only the
 charging points passed as flexible and keeps the rest as fixed load).
@@ -128,6 +134,15 @@ computed with
   the car is not plugged in).
 * ``lower_energy`` / ``upper_energy`` — the minimum and maximum *cumulative* energy
   that may have been charged by each time step.
+
+Charging processes of the inflexible use cases (see :ref:`charging-strategies`) are
+fixed: both energy bands follow the linear ramp over the parking time, and the power
+band is the constant ramp power. The OPF can therefore not shift them, even if their
+charging points are passed as flexible. When the charging time series of eTraGo is
+distributed to the charging points with
+:func:`~edisgo.network.overlying_grid.distribute_overlying_grid_requirements`, the
+charging points of the inflexible use cases keep this fixed series, and only the rest is
+distributed to the other charging points.
 
 .. figure:: ../../images/ev_flexibility_bands.png
    :width: 90%
