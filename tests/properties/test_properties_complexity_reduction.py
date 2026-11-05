@@ -285,24 +285,8 @@ class TestSpatialComplexityReduction:
         "mode, cluster_area",
         [
             ("kmeans", "grid"),
-            pytest.param(
-                "kmeansdijkstra",
-                "feeder",
-                marks=pytest.mark.xfail(
-                    strict=True,
-                    reason="Bug: make_busmap_feeders replaces topology.buses_df by a "
-                    "copy with coordinates in EPSG:3035 and never transforms back",
-                ),
-            ),
-            pytest.param(
-                "kmeansdijkstra",
-                "main_feeder",
-                marks=pytest.mark.xfail(
-                    strict=True,
-                    reason="Bug: make_busmap_main_feeders replaces topology.buses_df "
-                    "by a copy with coordinates in EPSG:3035 and never transforms back",
-                ),
-            ),
+            ("kmeansdijkstra", "feeder"),
+            ("kmeansdijkstra", "main_feeder"),
             ("aggregate_to_main_feeder", "main_feeder"),
         ],
     )
