@@ -3494,6 +3494,7 @@ class EDisGo:
         reduction_factor: float = 0.25,
         reduction_factor_not_focused: bool | float = False,
         apply_pseudo_coordinates: bool = True,
+        threads: int = 1,
         **kwargs,
     ) -> tuple[EDisGo, pd.DataFrame, pd.DataFrame]:
         """
@@ -3566,6 +3567,11 @@ class EDisGo:
         apply_pseudo_coordinates : bool
             If True pseudo coordinates are applied. The spatial complexity reduction
             method is only tested with pseudo coordinates. Default: True.
+        threads : int
+            Maximum number of threads the numerical libraries (BLAS and OpenMP, e.g.
+            used by the k-means clustering of scikit-learn) may use. 0 lets them use
+            all cores. More threads hardly speed up the reduction, as most of its run
+            time is spent in single-threaded code. Default: 1.
 
         Other Parameters
         -----------------
@@ -3624,6 +3630,7 @@ class EDisGo:
             reduction_factor=reduction_factor,
             reduction_factor_not_focused=reduction_factor_not_focused,
             apply_pseudo_coordinates=apply_pseudo_coordinates,
+            threads=threads,
             **kwargs,
         )
         return edisgo_obj, busmap_df, linemap_df
