@@ -916,13 +916,20 @@ def test_curtailment_reaches_the_full_grid(aggregation_mode):
     """
     spatial_reduce -> optimize -> spatial_restore with the real reduction and
     write-back; only pm_optimize is replaced by what from_powermodels does
-    with opf_version 3 and 4: it halves the solar and wind feed-in of the
-    reduced grid. The full grid must carry the halved feed-in, every other
-    generator its unchanged series.
+    with opf_version 3 and 4: it curtails the solar and wind feed-in of the
+    reduced grid, here by a different fraction per generator and time step.
+
+    The full grid must then satisfy what the OPF result means physically:
+    every reduced generator's dispatch equals the sum of its full-grid
+    members, so the feed-in towards the overlying grid is the one the OPF
+    found; no generator feeds in less than 0 or more than its potential;
+    reactive power follows the curtailed active power at an unchanged Q/P
+    ratio; and generators the OPF did not curtail keep their series.
     """
     edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
     edisgo.set_time_series_worst_case_analysis()
-    before = edisgo.timeseries.generators_active_power.copy()
+    p_before = edisgo.timeseries.generators_active_power.copy()
+    q_before = edisgo.timeseries.generators_reactive_power.copy()
     gens_df = edisgo.topology.generators_df
     renewable = gens_df.index[gens_df.type.isin(["solar", "wind"])]
     others = gens_df.index.difference(renewable)
@@ -939,20 +946,108 @@ def test_curtailment_reaches_the_full_grid(aggregation_mode):
         }
     )
     reduced = task_spatial_reduce(edisgo, ctx)
+    red_gens = reduced.topology.generators_df
+    red_renewable = red_gens.index[red_gens.type.isin(["solar", "wind"])]
+    fraction = pd.DataFrame(
+        np.random.default_rng(0).uniform(
+            0.0, 1.0, (len(reduced.timeseries.timeindex), len(red_renewable))
+        ),
+        index=reduced.timeseries.timeindex,
+        columns=red_renewable,
+    )
 
     def fake_pm_optimize(**kw):
-        red_gens = reduced.topology.generators_df
-        red_renewable = red_gens.index[red_gens.type.isin(["solar", "wind"])]
-        reduced.timeseries._generators_active_power.loc[:, red_renewable] *= 0.5
+        reduced.timeseries._generators_active_power.loc[:, red_renewable] *= fraction
 
     reduced.pm_optimize = fake_pm_optimize
     task_optimize(reduced, ctx, flexible=[], opf_version=3)
+    dispatch = reduced.timeseries.generators_active_power.copy()
+    members = {
+        name: old if isinstance(old, list) else [name]
+        for name, old in red_gens.get(
+            "old_name", pd.Series(None, index=red_gens.index, dtype=object)
+        ).items()
+    }
     full = task_spatial_restore(reduced, ctx)
 
     p = full.timeseries.generators_active_power
+    q = full.timeseries.generators_reactive_power
     assert set(p.columns) == set(gens_df.index)
-    assert np.allclose(p[renewable], 0.5 * before[renewable])
-    assert np.allclose(p[others], before[others])
+    # the dispatch of every reduced generator reaches the full grid in total
+    for name, group in members.items():
+        assert np.allclose(p[group].sum(axis=1), dispatch[name]), name
+    assert np.allclose(p[renewable].sum(axis=1), dispatch[red_renewable].sum(axis=1))
+    # each generator stays between 0 and its uncurtailed feed-in
+    assert (p >= -1e-9).all().all()
+    assert (p <= p_before + 1e-9).all().all()
+    # reactive power is scaled with the curtailed active power
+    feeds_in = p_before.abs() > 1e-9
+    ratio_before = (q_before / p_before)[feeds_in]
+    ratio_after = (q / p.where(p.abs() > 1e-9))[feeds_in]
+    curtailed_to_zero = p.abs() <= 1e-9
+    assert np.allclose(
+        ratio_after[~curtailed_to_zero].stack(),
+        ratio_before[~curtailed_to_zero].stack(),
+    )
+    assert np.allclose(q[curtailed_to_zero].stack(), 0.0)
+    # generators the OPF does not curtail keep their series
+    assert np.allclose(p[others], p_before[others])
+    assert np.allclose(q[others], q_before[others])
+
+
+@pytest.mark.runonlinux
+def test_opf_without_curtailment_request_keeps_the_feed_in():
+    """
+    spatial_reduce -> optimize -> spatial_restore with the real OPF
+    (``opf_version`` 3) on the test grid, reduced to a tenth of its buses
+    with merged generators. The overlying grid requests no curtailment, and
+    the OPF may curtail less than requested but never more, so the full grid
+    must come out of the write-back with the feed-in it went in with.
+
+    The barrier solver stops about 1e-4 MW short of that (with or without
+    spatial reduction), hence the absolute tolerance of 1 kW per generator.
+    """
+    edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+    edisgo.set_time_series_worst_case_analysis()
+    ti = edisgo.timeseries.timeindex
+    for attr in [
+        "renewables_curtailment",
+        "storage_units_active_power",
+        "electromobility_active_power",
+        "heat_pump_decentral_active_power",
+        "heat_pump_central_active_power",
+        "dsm_active_power",
+    ]:
+        setattr(edisgo.overlying_grid, attr, pd.Series(0.0, index=ti))
+    p_before = edisgo.timeseries.generators_active_power.copy()
+    q_before = edisgo.timeseries.generators_reactive_power.copy()
+
+    ctx = RunContext(
+        raw_config={
+            "spatial_reduction": {
+                "enabled": True,
+                "mode": "kmeansdijkstra",
+                "cluster_area": "feeder",
+                "reduction_factor": 0.1,
+                "aggregation_mode": True,
+            }
+        }
+    )
+    reduced = task_spatial_reduce(edisgo, ctx)
+    reduced = task_optimize(reduced, ctx, flexible=[], opf_version=3)
+    full = task_spatial_restore(reduced, ctx)
+
+    # opf_version 3 ran, with the curtailment requirement
+    assert "curt" in full.opf_results.hv_requirement_slacks_t.columns
+    p = full.timeseries.generators_active_power
+    q = full.timeseries.generators_reactive_power
+    assert set(p.columns) == set(p_before.columns)
+    pd.testing.assert_frame_equal(
+        p[p_before.columns], p_before, check_exact=False, atol=1e-3
+    )
+    pd.testing.assert_frame_equal(
+        q[q_before.columns], q_before, check_exact=False, atol=1e-3
+    )
 
 
 def test_all_bundled_presets_validate():
