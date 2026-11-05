@@ -14,10 +14,10 @@ the entry)
 
 ## Status (as of 2026-11-05)
 
-**85 of 85 entries done**, suite green: 3683 passing assertions, 3
+**85 of 85 entries done**, suite green: 3682 passing assertions, 3
 `@test_broken`, 0 failures, about 6 to 7 min with a Gurobi licence (about 4 min of
 that are the `Main.jl` subprocesses; without Gurobi, as in CI, the two SOC runs
-are skipped). Line coverage of `src/`: 911 of 911 lines (100 %).
+are skipped). Line coverage of `src/`: 910 of 910 lines (100 %).
 
 | Source file | Status |
 | --- | --- |
@@ -141,7 +141,10 @@ section 6); the tests record the actual behaviour and mark the intended one with
     them, so the solver switched the heat pumps off and covered the heat demand
     with `phps2`, electrical power that appears in no power balance. All four
     objectives now add `heat_slack_penalty` (`HEAT_SLACK_PENALTY = 1e4`), and
-    `from_powermodels` warns when a slack is used. (#695)
+    `from_powermodels` warns when a slack is used. Remaining limit: in versions 3
+    and 4 the quadratic `phvs` penalty grows with the branch costs and can exceed
+    the fixed penalty for a large deviation from the heat pump requirement; the
+    warning then names that requirement as a possible cause. (#695)
 
 Minor findings without `@test_broken`: for an unknown `method`, `Main.jl` prints
 the unsolved network without `status`/`solver`/`solve_time` and exit code 0;

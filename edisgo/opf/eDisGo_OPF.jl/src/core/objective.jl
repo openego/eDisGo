@@ -1,25 +1,33 @@
 """
-Big-M weight of the heat balance slacks `phss` and `phps2` in every objective.
+Penalty weight per unit of the heat balance slacks `phss` and `phps2`, in every
+objective.
 
-The slacks are a data-consistency valve of the heat pump balance (heat demand that
-heat pump and heat storage cannot cover), not a grid-restriction slack. They must
-cost far more than any other term in every `opf_version`; otherwise the solver
-switches the heat pump off and covers the heat demand with costless `phps2`.
+The heat pump balance is `cop·(php + phps2) == pd + phss − phs`. `phps2` covers heat
+demand that heat pump and heat storage cannot supply, `phss` takes up surplus heat
+that neither the heat demand nor the heat storage can. Both are meant for
+inconsistent heat pump data, not as a grid-restriction slack: without a price the
+solver lowers `php` and covers the heat demand with `phps2`, which appears in no
+power balance.
+
+The value is fixed. In `opf_version` 1 and 2 it is far above the other terms for
+realistic grids. In versions 3 and 4 the quadratic penalty on the overlying-grid
+requirement slacks `phvs` can exceed it for a large deviation from the heat pump
+requirement; the solver then uses the heat balance slacks instead.
 """
 const HEAT_SLACK_PENALTY = 1e4
 
 """
-Penalty term `HEAT_SLACK_PENALTY · Σₙ (Σ phss + Σ phps2)` over all time steps, shared
-by the objectives of all `opf_version`s. `phss` is summed over the heat storage
-ids and `phps2` over the heat pump ids of network 1.
+Penalty term `HEAT_SLACK_PENALTY · Σₙ (Σᵢ phss[n][i] + Σᵢ phps2[n][i])`, shared by
+the objectives of all `opf_version`s. `phss` is summed over the heat storage ids
+and `phps2` over the heat pump ids of network 1.
 """
 function heat_slack_penalty(pm::AbstractBFModelEdisgo)
-    nws = PowerModels.nw_ids(pm)
-    phss = Dict(n => PowerModels.var(pm, n, :phss) for n in nws)
-    phps2 = Dict(n => PowerModels.var(pm, n, :phps2) for n in nws)
-    return JuMP.@expression(pm.model,
-        HEAT_SLACK_PENALTY * sum(sum(phss[n][i] for i in keys(PowerModels.ref(pm, 1, :heat_storage))) + sum(phps2[n][i] for i in keys(PowerModels.ref(pm, 1, :heatpumps))) for n in nws)
-    )
+    hs = keys(PowerModels.ref(pm, 1, :heat_storage))
+    hp = keys(PowerModels.ref(pm, 1, :heatpumps))
+    return JuMP.@expression(pm.model, HEAT_SLACK_PENALTY * sum(
+        sum(PowerModels.var(pm, n, :phss, i) for i in hs)
+        + sum(PowerModels.var(pm, n, :phps2, i) for i in hp)
+        for n in PowerModels.nw_ids(pm)))
 end
 
 """
@@ -53,8 +61,8 @@ minimise a weighted sum of line losses and the grid-restriction slacks. Combines
 ohmic losses (`Σ ccm·r`) with penalties on non-dispatchable curtailment (`pgc`),
 dispatchable-generation curtailment (`pgens`), load shedding (`pds`),
 charging-point shedding (`pcps`) and heat-pump shedding (`phps`), weighted by
-`factor_slacks`, plus the big-M penalty `heat_slack_penalty` on the heat
-balance slacks (`phss`, `phps2`).
+`factor_slacks`, plus the penalty `heat_slack_penalty` on the heat balance
+slacks (`phss`, `phps2`).
 """
 function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
@@ -73,7 +81,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
         + factor_slacks  * sum(sum(pds[n][i] for i in keys(PowerModels.ref(pm,1 , :load))) for n in nws) # minimize load shedding
         + factor_slacks  * sum(sum(pcps[n][i] for i in keys(PowerModels.ref(pm,1 , :electromobility))) for n in nws) # minimize cp load sheddin
         + factor_slacks * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm,1 , :heatpumps))) for n in nws) # minimize hp load shedding
-        + heat_slack_penalty(pm) # data-consistency valve of the heat pump balance
+        + heat_slack_penalty(pm) # heat balance slacks
     )
 end
 
@@ -81,8 +89,8 @@ end
 Objective for `opf_version` 1 — Eq. (3.2 ii) of the eDisGo OPF formulation:
 minimise a weighted sum of line losses (`Σ ccm·r`) and the maximum line loading
 `ll` (weighted by `factor_ll`, scaled by branch cost × length) over the
-non-storage branches, plus the big-M penalty `heat_slack_penalty` on the heat
-balance slacks (`phss`, `phps2`).
+non-storage branches, plus the penalty `heat_slack_penalty` on the heat balance
+slacks (`phss`, `phps2`).
 """
 function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
@@ -96,7 +104,7 @@ function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     return JuMP.@objective(pm.model, Min,
         (1-factor_ll) * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
         + factor_ll * sum((ll[(b,i,j)]-1) * c[1][b] * l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
-        + heat_slack_penalty(pm) # data-consistency valve of the heat pump balance
+        + heat_slack_penalty(pm) # heat balance slacks
     )
 end
 
@@ -133,7 +141,7 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
         + factor_slacks * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws) # minimize hp load shedding
         + factor_hv_slacks * sum(sum(phvs[n][i]^2 * flex["count"] for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]!= "dsm") for n in nws)  #
         + factor_hv_slacks * 1e-1 * sum(sum(phvs[n][i]^2 * flex["count"] for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]== "dsm") for n in nws) #
-        + heat_slack_penalty(pm) # data-consistency valve of the heat pump balance
+        + heat_slack_penalty(pm) # heat balance slacks
     )
 end
 
@@ -143,7 +151,7 @@ Objective for `opf_version` 3 (with overlying grid): like
 penalises the overlying-grid (HV) requirement slacks `phvs` (reduced weight for
 DSM). The curtailment `pgc` has no cost of its own; the "curt" requirement and the
 lower bound of its slack (`variable_slack_HV_requirements_real`) limit it. The
-heat balance slacks carry the big-M penalty `heat_slack_penalty`.
+heat balance slacks carry the penalty `heat_slack_penalty`.
 """
 function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
@@ -165,6 +173,6 @@ function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
         + factor_ll * sum((ll[(b,i,j)]-1) * c[1][b] * l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
         + factor_hv_slacks * sum(sum(phvs[n][i]^2 for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]!= "dsm") for n in nws)  #
         + factor_hv_slacks * 1e-1 * sum(sum(phvs[n][i]^2 for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]== "dsm") for n in nws) #
-        + heat_slack_penalty(pm) # data-consistency valve of the heat pump balance
+        + heat_slack_penalty(pm) # heat balance slacks
     )
 end

@@ -110,19 +110,17 @@ objective_hv_ids(pm, nw::Int=1) =
 # ---------------------------------------------------------------------------
 
 @testset "heat_slack_penalty" begin
-    # The penalty term on the heat balance slacks, shared by all four objectives
-    # (#695).
+    # The penalty term on the heat balance slacks, shared by all four objectives.
     pm = TestUtils.build_small_model(opf_version=1, num_steps=2)
     expr = eDisGo_OPF.heat_slack_penalty(pm)
 
-    @test eDisGo_OPF.HEAT_SLACK_PENALTY == 1e4
     @test expr isa JuMP.AffExpr
     @test JuMP.constant(expr) == 0.0
     # `phss` and `phps2` of the one heat storage and heat pump, per network.
     @test length(expr.terms) == 2 * 2
     for n in 1:2
-        @test JuMP.coefficient(expr, PowerModels.var(pm, n, :phss)[1]) == 1e4
-        @test JuMP.coefficient(expr, PowerModels.var(pm, n, :phps2)[1]) == 1e4
+        @test JuMP.coefficient(expr, PowerModels.var(pm, n, :phss)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
+        @test JuMP.coefficient(expr, PowerModels.var(pm, n, :phps2)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
     end
 
     @testset "without heat pumps and heat storage" begin
@@ -261,9 +259,9 @@ end
             @test objective_coeff(pm.model, PowerModels.var(pm, n, :pds)[1]) == factor_slacks
             @test objective_coeff(pm.model, PowerModels.var(pm, n, :pcps)[1]) == factor_slacks
             @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps)[1]) == factor_slacks
-            # The heat-pump / heat-storage operation slacks get the big penalty.
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 1e4
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 1e4
+            # The heat balance slacks get the penalty of every version.
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
         end
         # 3 branches + 7 slacks, per time step.
         @test objective_num_linear(pm.model) == 2 * (3 + 7)
@@ -297,7 +295,7 @@ end
             for n in 1:steps
                 @test objective_coeff(pm_s.model, PowerModels.var(pm_s, n, :pds)[1]) ==
                       factor_slacks
-                @test objective_coeff(pm_s.model, PowerModels.var(pm_s, n, :phss)[1]) == 1e4
+                @test objective_coeff(pm_s.model, PowerModels.var(pm_s, n, :phss)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
             end
         end
     end
@@ -389,12 +387,11 @@ end
     end
 
     @testset "heat balance slacks" begin
-        # The heat balance slacks are a data-consistency valve, not a
-        # grid-restriction slack: version 1 prices them like versions 2 and 4,
-        # otherwise `phps2` covers the heat demand for free (#695).
+        # Priced in every version; otherwise `phps2` covers the heat demand for
+        # free and the heat pump draws less power from the grid.
         for n in 1:2
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 1e4
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 1e4
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
         end
     end
 
@@ -441,8 +438,8 @@ end
                 @test objective_coeff(pm.model, PowerModels.var(pm, n, key)[1]) ==
                       factor_slacks
             end
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 1e4
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 1e4
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
         end
     end
 
@@ -642,10 +639,10 @@ end
     end
 
     @testset "heat balance slacks" begin
-        # Priced like in versions 2 and 4 (#695).
+        # Priced in every version, see the version 1 testset.
         for n in 1:2
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 1e4
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 1e4
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == eDisGo_OPF.HEAT_SLACK_PENALTY
         end
     end
 

@@ -324,6 +324,10 @@ def from_powermodels(
     Convert results from optimization in PowerModels network data format to eDisGo data
     format and updates timeseries values of flexibilities on eDisGo object.
 
+    Logs a warning with the affected heat pumps if the OPF used one of the heat
+    balance slacks (``opf_results.grid_slacks_t.hp_operation_slack``,
+    ``opf_results.heat_storage_t.p_slack``) above 1e-4 MW.
+
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
@@ -574,7 +578,9 @@ def from_powermodels(
     )
     edisgo_object.opf_results.grid_slacks_t.hp_operation_slack = df
     _warn_heat_balance_slacks(
-        edisgo_object.opf_results, pm["nw"]["1"].get("time_elapsed", 1.0)
+        edisgo_object.opf_results,
+        pm["nw"]["1"]["time_elapsed"],
+        pm["nw"]["1"]["opf_version"],
     )
 
     if pm["nw"]["1"]["opf_version"] in [2, 4]:
@@ -2357,62 +2363,75 @@ HEAT_SLACK_TOLERANCE = 1e-4
 _MAX_LISTED_COMPONENTS = 10
 
 
-def _warn_heat_balance_slacks(opf_results, time_elapsed):
+def _warn_heat_balance_slacks(opf_results, time_elapsed, opf_version):
     """
     Warn if the OPF used one of the heat balance slacks.
 
     The heat pump balance of the OPF is
-    ``cop * (php + phps2) = heat demand + phss - phs``. The slacks ``phps2`` (heat
-    pump operation slack, electrical power) and ``phss`` (heat storage slack,
-    surplus heat) close it when heat pump and heat storage cannot meet the heat
-    demand, e.g. because the input data are inconsistent. The OPF penalises them
-    heavily in every ``opf_version``, so a value above
-    :data:`HEAT_SLACK_TOLERANCE` points to such data. ``phps2`` is electrical power
-    the heat pump does not draw from the grid, so the optimised heat pump time
-    series lack it.
+    ``cop * (php + phps2) = heat demand + phss - phs``. ``phps2`` (heat pump
+    operation slack) is electrical power that covers heat demand heat pump and heat
+    storage cannot supply; it is not drawn from the grid, so the optimised heat pump
+    time series lack it. ``phss`` (heat storage slack) is surplus heat that neither
+    the heat demand nor the heat storage takes up. The OPF penalises both heavily,
+    so values above ``HEAT_SLACK_TOLERANCE`` usually point to inconsistent heat pump
+    data. In ``opf_version`` 3 and 4, a large deviation from the heat pump
+    requirement of the overlying grid can cause them as well.
 
     Parameters
     ----------
     opf_results : :class:`~.opf.results.opf_result_class.OPFResults`
         OPF results with the slacks in ``heat_storage_t.p_slack`` and
-        ``grid_slacks_t.hp_operation_slack``, in MW.
+        ``grid_slacks_t.hp_operation_slack``, in MW. The columns are the heat pump
+        names.
     time_elapsed : float
         Length of a time step in hours.
+    opf_version : int
+        Version of the OPF.
 
     """
     slacks = [
         (
             opf_results.grid_slacks_t.hp_operation_slack,
-            "heat pump operation slack 'phps2'. This electrical power covers heat "
-            "demand without being drawn from the grid, so the heat pump time series "
-            "lack it",
+            "heat pump operation slack 'phps2': part of the heat demand is covered by "
+            "electrical power that is not drawn from the grid, so the optimised heat "
+            "pump time series are too low",
             "MWh_el",
         ),
         (
             opf_results.heat_storage_t.p_slack,
-            "heat storage slack 'phss'. This surplus heat is produced beyond the heat "
-            "demand and the heat storage charging",
+            "heat storage slack 'phss': the heat pumps produce more heat than the heat "
+            "demand and the heat storage take up",
             "MWh_th",
         ),
     ]
+    cause = (
+        "Check for these heat pumps that the heat demand (heat_pump.heat_demand_df) "
+        "can be covered by the COP (heat_pump.cop_df) times the nominal power "
+        "(topology.loads_df.p_set) together with the heat storage "
+        "(heat_pump.thermal_storage_units_df)."
+    )
+    if opf_version in [3, 4]:
+        cause += (
+            " A large deviation from the heat pump requirement of the overlying grid "
+            "(overlying_grid.heat_pump_*_active_power) can cause this as well."
+        )
     for df, description, unit in slacks:
-        used = df.where(df > HEAT_SLACK_TOLERANCE)
-        used = used.loc[:, used.notna().any()]
-        if used.empty:
+        mask = df > HEAT_SLACK_TOLERANCE
+        affected = mask.any()
+        if not affected.any():
             continue
+        used = df.loc[:, affected].where(mask.loc[:, affected])
         lines = [
             f"  {name}: {col.count()} time step(s), "
             f"{col.sum() * time_elapsed:.4g} {unit} in total, "
             f"maximum {col.max():.4g} MW at {col.idxmax()}"
-            for name, col in used.items()
+            for name, col in used.iloc[:, :_MAX_LISTED_COMPONENTS].items()
         ]
-        if len(lines) > _MAX_LISTED_COMPONENTS:
-            lines = lines[:_MAX_LISTED_COMPONENTS] + [
-                f"  ... and {len(lines) - _MAX_LISTED_COMPONENTS} more"
-            ]
+        if used.shape[1] > _MAX_LISTED_COMPONENTS:
+            lines.append(f"  ... and {used.shape[1] - _MAX_LISTED_COMPONENTS} more")
         logger.warning(
-            f"The OPF used the {description}. The heat pump and heat storage data "
-            "are probably inconsistent. Affected components:\n" + "\n".join(lines)
+            f"The OPF used the {description}. {cause} Affected heat pumps:\n"
+            + "\n".join(lines)
         )
 
 

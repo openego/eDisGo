@@ -646,7 +646,7 @@ def test_get_time_elapsed_in_hours_raises(snapshots, error_message):
 
 
 class TestWarnHeatBalanceSlacks:
-    """Warning about the heat balance slacks `phps2` and `phss` (#695)."""
+    """Warning about the heat balance slacks `phps2` and `phss`."""
 
     @staticmethod
     def _opf_results(hp_slack, hs_slack):
@@ -662,19 +662,18 @@ class TestWarnHeatBalanceSlacks:
         index = pd.date_range("2035-01-01", periods=len(values), freq="h")
         return pd.DataFrame({name: values}, index=index)
 
-    def test_no_warning_within_tolerance(self, caplog):
+    @pytest.mark.parametrize("case", ["within_tolerance", "without_heat_pumps"])
+    def test_no_warning(self, case, caplog):
         tol = powermodels_io.HEAT_SLACK_TOLERANCE
-        results = self._opf_results(
-            self._slack([0.0, tol, -tol]), self._slack([tol, 0.0, 0.0])
-        )
+        if case == "within_tolerance":
+            results = self._opf_results(
+                self._slack([0.0, tol, -tol, np.nan]),
+                self._slack([tol, 0.0, 0.0, 0.0]),
+            )
+        else:
+            results = self._opf_results(pd.DataFrame(), pd.DataFrame())
         with caplog.at_level("WARNING"):
-            powermodels_io._warn_heat_balance_slacks(results, 1.0)
-        assert caplog.records == []
-
-    def test_no_warning_without_heat_pumps(self, caplog):
-        results = self._opf_results(pd.DataFrame(), pd.DataFrame())
-        with caplog.at_level("WARNING"):
-            powermodels_io._warn_heat_balance_slacks(results, 1.0)
+            powermodels_io._warn_heat_balance_slacks(results, 1.0, 1)
         assert caplog.records == []
 
     def test_warns_about_hp_operation_slack(self, caplog):
@@ -684,26 +683,31 @@ class TestWarnHeatBalanceSlacks:
         )
         results = self._opf_results(hp_slack, self._slack([0.0] * 3))
         with caplog.at_level("WARNING"):
-            powermodels_io._warn_heat_balance_slacks(results, 0.25)
+            powermodels_io._warn_heat_balance_slacks(results, 0.25, 1)
         assert len(caplog.records) == 1
         msg = caplog.records[0].getMessage()
         assert "'phps2'" in msg
+        assert "heat_pump.heat_demand_df" in msg
+        assert "overlying grid" not in msg
         # Heat pump, number of time steps, energy with 15 min time steps and the
         # time step of the maximum.
         assert "hp_1: 2 time step(s), 0.5 MWh_el in total" in msg
         assert "maximum 1.5 MW at 2035-01-01 02:00:00" in msg
         assert "hp_2" not in msg
 
-    def test_warns_about_heat_storage_slack(self, caplog):
+    @pytest.mark.parametrize("opf_version", [3, 4])
+    def test_warns_about_heat_storage_slack(self, opf_version, caplog):
         results = self._opf_results(
-            self._slack([0.0] * 2), self._slack([2.0, 0.0], name="hs_1")
+            self._slack([0.0] * 2), self._slack([2.0, 0.0], name="hp_1")
         )
         with caplog.at_level("WARNING"):
-            powermodels_io._warn_heat_balance_slacks(results, 1.0)
+            powermodels_io._warn_heat_balance_slacks(results, 1.0, opf_version)
         assert len(caplog.records) == 1
         msg = caplog.records[0].getMessage()
         assert "'phss'" in msg
-        assert "hs_1: 1 time step(s), 2 MWh_th in total" in msg
+        assert "hp_1: 1 time step(s), 2 MWh_th in total" in msg
+        # With an overlying grid, its heat pump requirement is a possible cause.
+        assert "heat pump requirement of the overlying grid" in msg
 
     def test_lists_at_most_ten_components(self, caplog):
         index = pd.date_range("2035-01-01", periods=1, freq="h")
@@ -712,7 +716,7 @@ class TestWarnHeatBalanceSlacks:
         )
         results = self._opf_results(hp_slack, pd.DataFrame())
         with caplog.at_level("WARNING"):
-            powermodels_io._warn_heat_balance_slacks(results, 1.0)
+            powermodels_io._warn_heat_balance_slacks(results, 1.0, 1)
         msg = caplog.records[0].getMessage()
         assert "hp_9:" in msg
         assert "hp_10:" not in msg
