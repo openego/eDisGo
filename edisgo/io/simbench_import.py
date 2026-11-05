@@ -113,6 +113,49 @@ def _close_switches_to_islands(nodes, switches, lines, trafos):
     return switches
 
 
+def _ding0_names(
+    buses_df, transformers_hvmv_df, transformers_df, switches_df, mv_grid_id
+):
+    """
+    New names for station buses, transformers and open switch buses.
+
+    Parts of eDisGo, e.g. the grid reinforcement and the spatial complexity
+    reduction, derive information from the names ding0 gives these components.
+    They are therefore named as in ding0; all other buses keep their SimBench
+    names.
+
+    Returns
+    -------
+    tuple(dict, dict)
+        New bus names and new transformer names, each by old name.
+
+    """
+    bus_names = {
+        bus: f"Bus_MVStation_{mv_grid_id}" for bus in transformers_hvmv_df.bus1
+    }
+    trafo_names = {
+        trafo: f"MVStation_{mv_grid_id}_transformer_{i}"
+        for i, trafo in enumerate(transformers_hvmv_df.index, start=1)
+    }
+    lv_grid_ids = buses_df.loc[transformers_df.bus1, "lv_grid_id"].astype(int)
+    for lv_grid_id, trafos in transformers_df.groupby(lv_grid_ids.values):
+        station = f"BusBar_MVGrid_{mv_grid_id}_LVGrid_{lv_grid_id}"
+        bus_names.setdefault(trafos.bus0.iloc[0], f"{station}_MV")
+        bus_names[trafos.bus1.iloc[0]] = f"{station}_LV"
+        trafo_names.update(
+            {
+                trafo: f"LVStation_{lv_grid_id}_transformer_{i}"
+                for i, trafo in enumerate(trafos.index, start=1)
+            }
+        )
+    # ding0 names the open side of a switch after its closed side; if several
+    # switches share the closed side, the others keep their SimBench names
+    for switch in switches_df.drop_duplicates("bus_closed").itertuples():
+        bus_closed = bus_names.get(switch.bus_closed, switch.bus_closed)
+        bus_names[switch.bus_open] = f"virtual_{bus_closed}"
+    return bus_names, trafo_names
+
+
 def _load_type_and_sector(profile):
     """eDisGo load type and sector from the name of a SimBench load profile."""
     if profile.startswith(("Air_", "Soil_")):
@@ -158,6 +201,10 @@ def import_simbench_grid(path, edisgo_obj):
       :attr:`~.network.topology.Topology.transformers_hvmv_df`.
     * Each SimBench LV grid gets an LV grid ID built from its subnet name,
       e.g. 'LV1.108' becomes 1108. The MV grid ID is built the same way.
+    * Station buses, transformers and the open side of switches are named as in
+      ding0 (e.g. 'BusBar_MVGrid_1101_LVGrid_1108_LV',
+      'LVStation_1108_transformer_1'), as parts of eDisGo rely on these names.
+      All other buses and all lines keep their SimBench names.
     * Heat pump loads (profiles 'Air_*' and 'Soil_*') get type 'heat_pump',
       home charging loads (profiles 'HLS_*') get type 'charging_point'. All other
       loads, including LV grids that SimBench represents as one load at an MV
@@ -316,15 +363,25 @@ def import_simbench_grid(path, edisgo_obj):
         index=pd.Index(storage.id.values, name="name"),
     )
 
+    bus_names, trafo_names = _ding0_names(
+        buses_df, transformers_hvmv_df, transformers_df, switches_df, mv_grid_id
+    )
+
+    def rename(df, bus_columns):
+        df = df.rename(index=trafo_names)
+        for col in bus_columns:
+            df[col] = df[col].map(bus_names).fillna(df[col])
+        return df
+
     topology = edisgo_obj.topology
-    topology.buses_df = buses_df
-    topology.lines_df = lines_df
-    topology.transformers_df = transformers_df
-    topology.transformers_hvmv_df = transformers_hvmv_df
-    topology.switches_df = switches_df
-    topology.loads_df = loads_df
-    topology.generators_df = generators_df
-    topology.storage_units_df = storage_units_df
+    topology.buses_df = buses_df.rename(index=bus_names)
+    topology.lines_df = rename(lines_df, ["bus0", "bus1"])
+    topology.transformers_df = rename(transformers_df, ["bus0", "bus1"])
+    topology.transformers_hvmv_df = rename(transformers_hvmv_df, ["bus1"])
+    topology.switches_df = rename(switches_df, ["bus_open", "bus_closed"])
+    topology.loads_df = rename(loads_df, ["bus"])
+    topology.generators_df = rename(generators_df, ["bus"])
+    topology.storage_units_df = rename(storage_units_df, ["bus"])
     topology.grid_district = {
         "population": np.nan,
         "geom": MultiPoint(buses_df[["x", "y"]].values).convex_hull,

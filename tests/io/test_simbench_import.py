@@ -48,6 +48,21 @@ class TestImportSimbenchGrid:
         assert len(nx.cycle_basis(edisgo.topology.to_graph())) == 1
         switches[0].open()
 
+    def test_ding0_names(self, edisgo):
+        topology = edisgo.topology
+        assert topology.mv_grid.station.index.tolist() == ["Bus_MVStation_1101"]
+        assert topology.get_lv_grid(1108).station.index.tolist() == [
+            "BusBar_MVGrid_1101_LVGrid_1108_LV"
+        ]
+        assert topology.transformers_df.index.tolist() == [
+            "LVStation_1108_transformer_1"
+        ]
+        assert topology.buses_df.index.is_unique
+        switches = topology.switches_df
+        virtual = switches.bus_open == "virtual_" + switches.bus_closed
+        # one open switch per closed side is named after it
+        assert virtual.sum() == switches.bus_closed.nunique()
+
     def test_load_types(self, edisgo):
         loads = edisgo.topology.loads_df
         profiles = pd.read_csv(
@@ -94,6 +109,23 @@ class TestImportSimbenchGrid:
     def test_power_flow(self, edisgo):
         edisgo.analyze()
         assert edisgo.results.v_res.notna().all().all()
+
+    def test_reinforce(self):
+        edisgo = EDisGo()
+        timeindex = pd.date_range("2011-01-01 18:00", periods=2, freq="15min")
+        edisgo.import_simbench_grid(
+            pytest.simbench_test_network_path, timeindex=timeindex
+        )
+        # overload the MV/LV station
+        lv_loads = edisgo.topology.get_lv_grid(1108).loads_df.index
+        loads_p = edisgo.timeseries.loads_active_power
+        loads_p[lv_loads] *= 10
+        edisgo.timeseries.loads_active_power = loads_p
+        edisgo.reinforce()
+        transformers = edisgo.topology.transformers_df.index
+        assert len(transformers) > 1
+        assert transformers.is_unique
+        assert transformers.str.startswith("LVStation_1108_transformer").all()
 
     def test_timeindex(self):
         edisgo = EDisGo()
