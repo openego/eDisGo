@@ -18,6 +18,7 @@ import copy
 import logging
 import os
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 import pytest
@@ -133,6 +134,12 @@ def wc_grid_factory(_wc_grid_original):
 def analyzed_grid(_analyzed_grid_original):
     """Test network 1 with worst-case time series after ``analyze()``."""
     return copy.deepcopy(_analyzed_grid_original)
+
+
+@pytest.fixture
+def analyzed_grid_factory(_analyzed_grid_original):
+    """Callable returning a fresh copy of :func:`analyzed_grid` on every call."""
+    return lambda: copy.deepcopy(_analyzed_grid_original)
 
 
 @pytest.fixture
@@ -462,3 +469,33 @@ def max_abs_diff(a, b):
     """Maximum absolute elementwise difference of two aligned frames."""
     a, b = a.align(b, join="outer")
     return float(np.nanmax(np.abs((a - b).to_numpy(dtype=float))))
+
+
+# --------------------------------------------------------------------------------------
+# helpers: injected power flow results and topology checks
+# --------------------------------------------------------------------------------------
+
+
+def inject_power_flow_results(edisgo, v_res=None, s_res=None, pfa_slack=None):
+    """
+    Overwrite power flow results without running a power flow.
+
+    ``s_res`` is stored as active power (``pfa_p = s_res``, ``pfa_q = 0``), so
+    :attr:`~.network.results.Results.s_res` returns it unchanged. Frames that are
+    ``None`` are left as they are.
+
+    """
+    results = edisgo.results
+    if v_res is not None:
+        results.v_res = v_res
+    if s_res is not None:
+        results.pfa_p = s_res
+        results.pfa_q = pd.DataFrame(0.0, index=s_res.index, columns=s_res.columns)
+    if pfa_slack is not None:
+        results.pfa_slack = pfa_slack
+
+
+def assert_radial(graph, name=""):
+    """Assert that ``graph`` is a connected tree (radial grid without loops)."""
+    assert nx.is_connected(graph), f"{name} is not connected"
+    assert nx.is_tree(graph), f"{name} is not radial"
