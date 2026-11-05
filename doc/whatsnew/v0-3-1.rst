@@ -448,6 +448,26 @@ Changes
   :meth:`~.edisgo.EDisGo.spatial_complexity_reduction` and of the runner
   ``spatial_reduction`` block; ``threads=0`` uses all cores as before
   (openego/eDisGo#844)
+* The spatial complexity reduction runs 2.5 to 9 times faster with unchanged results.
+  :func:`~.tools.spatial_complexity_reduction.make_busmap`,
+  :func:`~.tools.spatial_complexity_reduction.apply_busmap` and
+  :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates` no longer loop over
+  buses and lines row by row with pandas, and the shortest paths to the cluster
+  medoids are searched within the feeder only
+* Fixed :func:`~.tools.spatial_complexity_reduction.make_busmap` changing the
+  coordinates of the EDisGo object to EPSG:3035 for the cluster areas ``'feeder'``
+  and ``'main_feeder'``. The coordinates are now transformed in a copy.
+  :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction` was not
+  affected, as :func:`~.tools.spatial_complexity_reduction.apply_busmap` overwrites
+  them afterwards
+* Fixed :func:`~.tools.spatial_complexity_reduction.apply_busmap` setting the shunt
+  susceptance ``b`` of every aggregated line to 0. An aggregated line now gets the
+  susceptance per km of the lines it stands for, summed over lines between the same
+  pair of buses
+* Fixed the spatial complexity reduction removing the prefix ``virtual_`` from bus
+  names with ``str.lstrip``, which strips all leading characters contained in
+  ``"virtual_"``, so that e.g. ``virtual_lv_bus`` became ``bus``. ding0 bus names
+  were not affected
 * Fixed the ``PerformanceWarning: DataFrame is highly fragmented`` raised in grids
   with more than 100 LV grids while checking the voltage at the secondary side of
   the MV/LV stations. The voltage limits of the stations are now built in one step

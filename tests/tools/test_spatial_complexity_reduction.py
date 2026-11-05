@@ -347,6 +347,72 @@ class TestSpatialComplexityReduction:
                 single.loc[line, "x"], rel=1e-6
             ), f"reactance does not scale with num_parallel for {line}"
 
+    @pytest.mark.parametrize(
+        "cluster_area, mode",
+        [
+            ("grid", "kmeans"),
+            ("feeder", "kmeansdijkstra"),
+            ("main_feeder", "kmeansdijkstra"),
+            ("main_feeder", "equidistant_nodes"),
+        ],
+    )
+    def test_make_busmap_keeps_coordinates(self, test_edisgo_obj, cluster_area, mode):
+        """
+        make_busmap clusters in EPSG:3035 but must not change the coordinates of
+        the EDisGo object. For the cluster areas 'feeder' and 'main_feeder' it
+        used to transform the coordinates of the topology in place and never back.
+        """
+        buses_before = test_edisgo_obj.topology.buses_df.copy()
+        spatial_complexity_reduction.make_busmap(
+            test_edisgo_obj,
+            mode=mode,
+            cluster_area=cluster_area,
+            reduction_factor=0.25,
+        )
+        pd.testing.assert_frame_equal(test_edisgo_obj.topology.buses_df, buses_before)
+
+    def test_apply_busmap_aggregates_line_susceptance(self, test_edisgo_obj):
+        """
+        An aggregated line keeps the susceptance per km of the lines it stands
+        for; the susceptances of lines between the same pair of new buses add up.
+        It used to be set to 0 for every aggregated line.
+        """
+        b_per_km = 2e-4
+        lines_df = test_edisgo_obj.topology.lines_df
+        assert (lines_df.length > 0).all()
+        lines_df["b"] = b_per_km * lines_df.length
+        busmap_df = self.setup_busmap_df(test_edisgo_obj)
+
+        linemap_df = spatial_complexity_reduction.apply_busmap(
+            test_edisgo_obj, busmap_df
+        )
+
+        new_lines_df = test_edisgo_obj.topology.lines_df
+        lines_per_new_line = linemap_df.groupby("new_line_name").size()
+        expected = (
+            new_lines_df.length * b_per_km * lines_per_new_line.loc[new_lines_df.index]
+        )
+        assert (new_lines_df.b > 0).all()
+        np.testing.assert_allclose(new_lines_df.b, expected, rtol=1e-12)
+
+    def test_rename_virtual_buses_strips_only_the_prefix(self):
+        """
+        The name of the real bus is the name of the virtual bus without the
+        prefix "virtual_". str.lstrip("virtual_") used to strip all leading
+        characters of "virtual_", which turned "virtual_lv_bus" into "bus".
+        """
+        partial_busmap_df = pd.DataFrame(
+            {"new_bus": ["Bus_A", "Bus_B", "Trafo"]},
+            index=["lv_bus", "virtual_lv_bus", "Trafo"],
+        )
+
+        result = spatial_complexity_reduction.rename_virtual_buses(
+            partial_busmap_df, "Trafo"
+        )
+
+        assert result.loc["virtual_lv_bus", "new_bus"] == "virtual_Bus_A"
+        assert result.loc["lv_bus", "new_bus"] == "Bus_A"
+
     def test_spatial_complexity_reduction(self, test_edisgo_obj):
         (
             busmap_df,
