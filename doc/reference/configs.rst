@@ -47,10 +47,12 @@ These drive :ref:`grid-reinforcement` and :ref:`grid-expansion-costs`.
 config_timeseries
 -----------------
 
-``config_timeseries.cfg`` defines the two worst-case situations (heavy load /
-reverse feed-in) via simultaneity scale factors, the power factors and modes
-(inductive/capacitive) used to generate reactive power (:ref:`reactive-power-flex`),
-and the demandlib settings used when generating load profiles.
+``config_timeseries.cfg`` defines the reference year all time series are indexed in
+(section ``timeindex``, see :ref:`reference-year`), the two worst-case situations
+(heavy load / reverse feed-in) via simultaneity scale factors, the power factors and
+modes (inductive/capacitive) used to generate reactive power
+(:ref:`reactive-power-flex`), and the demandlib settings used when generating load
+profiles.
 
 .. include:: ../../edisgo/config/config_timeseries_default.cfg
    :literal:
