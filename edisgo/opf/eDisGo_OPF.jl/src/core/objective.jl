@@ -119,7 +119,8 @@ end
 Objective for `opf_version` 3 (with overlying grid): like
 `objective_min_line_loading_max` (losses + maximum line loading), but additionally
 penalises the overlying-grid (HV) requirement slacks `phvs` (reduced weight for
-DSM).
+DSM). The curtailment `pgc` has no cost of its own; the "curt" requirement and the
+lower bound of its slack (`variable_slack_HV_requirements_real`) limit it.
 """
 function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)

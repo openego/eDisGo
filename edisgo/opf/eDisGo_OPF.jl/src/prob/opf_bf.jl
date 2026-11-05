@@ -33,7 +33,9 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
 
             if PowerModels.ref(pm, 1, :opf_version) in(3, 4) # Nicht Teil der MA
                 eDisGo_OPF.variable_slack_HV_requirements(pm, nw=n)
-                if PowerModels.ref(pm, 1, :opf_version) in(3)
+                # Version 3 curtails only to meet a "curt" requirement of the overlying grid
+                if PowerModels.ref(pm, 1, :opf_version) == 3 &&
+                        any(r["name"] == "curt" for r in values(PowerModels.ref(pm, n, :HV_requirements)))
                     eDisGo_OPF.variable_gen_power_curt(pm, nw=n)
                 end
                 for i in PowerModels.ids(pm, :HV_requirements, nw=n)
@@ -46,7 +48,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
 
         # CONSTRAINTS
         for i in PowerModels.ids(pm, :bus, nw=n)
-            eDisGo_OPF.constraint_power_balance_bf(pm, i, nw=n) # Eq. (3.3ii), (3.4ii) für Version 1 und 3 bzw. (3.3iii), (3.4iii) für Version 2 und 4
+            eDisGo_OPF.constraint_power_balance_bf(pm, i, nw=n) # Eq. (3.3ii), (3.4ii) für Version 1 und 3 (Version 3 zusätzlich mit Abregelung pgc) bzw. (3.3iii), (3.4iii) für Version 2 und 4
         end
         for i in PowerModels.ids(pm, :branch, nw=n)
             eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, i, nw=n) # Eq. (3.5)
