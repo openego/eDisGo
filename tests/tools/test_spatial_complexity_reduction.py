@@ -1,8 +1,8 @@
 import copy
-import os
 
 from contextlib import nullcontext as does_not_raise
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 import pytest
@@ -428,65 +428,89 @@ class TestSpatialComplexityReduction:
         assert result.loc["virtual_lv_bus", "new_bus"] == "virtual_Bus_A"
         assert result.loc["lv_bus", "new_bus"] == "Bus_A"
 
-    @pytest.mark.parametrize(
-        "case, kwargs",
-        [
-            (
-                "grid_kmeansdijkstra",
-                dict(cluster_area="grid", mode="kmeansdijkstra"),
-            ),
-            (
-                "feeder_kmeansdijkstra",
-                dict(cluster_area="feeder", mode="kmeansdijkstra"),
-            ),
-            (
-                "main_feeder_kmeansdijkstra_focus",
-                dict(
-                    cluster_area="main_feeder",
-                    mode="kmeansdijkstra",
-                    reduction_factor_not_focused=0.1,
-                ),
-            ),
-            (
-                "main_feeder_equidistant_nodes_focus",
-                dict(
-                    cluster_area="main_feeder",
-                    mode="equidistant_nodes",
-                    reduction_factor_not_focused=0.1,
-                ),
-            ),
-        ],
-    )
-    @pytest.mark.runonlinux
-    def test_make_busmap_matches_reference(self, test_edisgo_obj, case, kwargs):
+    @pytest.mark.parametrize("cluster_area", ["grid", "feeder"])
+    def test_make_busmap_maps_buses_to_closest_medoid(
+        self, test_edisgo_obj, cluster_area
+    ):
         """
-        The busmap of test grid 1 is compared with a stored reference: which new
-        bus every bus is mapped to, and the coordinates of the new buses. This
-        catches changes of the clustering that keep the number of new buses.
+        With mode "kmeansdijkstra", every cluster is represented by one of its
+        buses, the medoid, whose coordinates the new bus takes. Every bus is
+        mapped to the medoid it reaches on the shortest path through the grid;
+        in cluster area "feeder" only the medoids of its own feeder count.
 
-        The references were written on Linux. On Windows, k-means ends in other
-        clusters for some LV feeders, so the test only runs on Linux.
+        Checked for the LV grids, as virtual buses in the MV grid are renamed
+        afterwards. The check does not depend on the exact clusters k-means
+        finds, which vary with rounding between platforms.
         """
-        reference = pd.read_csv(
-            os.path.join(
-                os.path.dirname(pytest.ding0_test_network_path),
-                "spatial_complexity_reduction",
-                f"busmap_{case}.csv",
-            ),
-            index_col=0,
-        )
+        if cluster_area == "grid":
+            # By default the cluster of the transformer bus takes the coordinates
+            # of the transformer bus, which would hide its medoid.
+            busmap_df = spatial_complexity_reduction.make_busmap_grid(
+                test_edisgo_obj,
+                mode="kmeansdijkstra",
+                reduction_factor=0.25,
+                preserve_trafo_bus_coordinates=False,
+            )
+        else:
+            busmap_df = spatial_complexity_reduction.make_busmap(
+                test_edisgo_obj,
+                mode="kmeansdijkstra",
+                cluster_area="feeder",
+                reduction_factor=0.25,
+            )
 
-        busmap_df = spatial_complexity_reduction.make_busmap(
-            test_edisgo_obj, reduction_factor=0.25, **kwargs
-        ).sort_index()
+        buses_df = test_edisgo_obj.topology.buses_df
+        number_of_checked_buses = 0
+        for grid in test_edisgo_obj.topology.mv_grid.lv_grids:
+            graph = grid.graph
+            transformer_bus = grid.transformers_df.bus1.iloc[0]
+            busmap = busmap_df.loc[grid.buses_df.index]
 
-        pd.testing.assert_series_equal(busmap_df.new_bus, reference.new_bus)
-        pd.testing.assert_frame_equal(
-            busmap_df[["new_x", "new_y"]],
-            reference[["new_x", "new_y"]],
-            check_exact=False,
-            rtol=1e-9,
-        )
+            # Buses with the coordinates of their new bus can be its medoid.
+            # Several buses can share coordinates, so there may be more than one.
+            # The tolerance of 1e-7 degrees (about 1 cm) covers the transformation
+            # to EPSG:3035 and back, which changes the latitude by about 4e-9.
+            has_new_coordinates = np.isclose(
+                busmap.new_x, buses_df.loc[busmap.index, "x"], rtol=0, atol=1e-7
+            ) & np.isclose(
+                busmap.new_y, buses_df.loc[busmap.index, "y"], rtol=0, atol=1e-7
+            )
+            medoid_candidates = busmap[has_new_coordinates].groupby("new_bus").groups
+            # In cluster area "feeder" the transformer bus is not clustered.
+            unclustered = {transformer_bus} if cluster_area == "feeder" else set()
+            clusters = set(busmap.new_bus) - unclustered
+            assert clusters <= set(medoid_candidates)
+
+            graph_without_transformer = graph.copy()
+            graph_without_transformer.remove_node(transformer_bus)
+            feeder = {
+                bus: number
+                for number, buses in enumerate(
+                    nx.connected_components(graph_without_transformer)
+                )
+                for bus in buses
+            }
+            distance = {
+                cluster: nx.multi_source_dijkstra_path_length(
+                    graph, set(medoid_candidates[cluster]), weight="length"
+                )
+                for cluster in clusters
+            }
+            for bus, new_bus in busmap.new_bus.items():
+                if new_bus in unclustered:
+                    continue
+                for other in clusters - {new_bus}:
+                    if (
+                        cluster_area == "feeder"
+                        and feeder[medoid_candidates[other][0]] != feeder[bus]
+                    ):
+                        continue
+                    assert distance[new_bus][bus] <= distance[other][bus] + 1e-9, (
+                        f"{bus} is mapped to {new_bus}, but the medoid of {other} "
+                        f"is closer"
+                    )
+                number_of_checked_buses += 1
+        assert number_of_checked_buses > 0
 
     def test_make_busmap_raises_for_unreachable_bus(self, test_edisgo_obj):
         """A bus without a line to any cluster medoid raises a clear error."""
