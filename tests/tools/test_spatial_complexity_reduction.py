@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from threadpoolctl import threadpool_info
+
 from edisgo import EDisGo
 from edisgo.tools import spatial_complexity_reduction
 from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
@@ -363,6 +365,45 @@ class TestSpatialComplexityReduction:
         # Check that edisgo_object can run power flow and reinforce
         test_edisgo_obj.analyze()
         test_edisgo_obj.reinforce()
+
+    @pytest.mark.parametrize("kwargs, expected", [({}, 1), ({"threads": 0}, None)])
+    def test_spatial_complexity_reduction_limits_threads(
+        self, test_edisgo_obj, monkeypatch, kwargs, expected
+    ):
+        """
+        By default the clustering runs with one thread in the BLAS and OpenMP
+        thread pools; threads=0 leaves them unchanged (all cores). The pools are
+        restored afterwards.
+        """
+
+        def pool_sizes():
+            return {p["filepath"]: p["num_threads"] for p in threadpool_info()}
+
+        before = pool_sizes()
+        during = {}
+        make_busmap = spatial_complexity_reduction.make_busmap
+
+        def recording_make_busmap(*args, **kwargs):
+            during.update(pool_sizes())
+            return make_busmap(*args, **kwargs)
+
+        monkeypatch.setattr(
+            spatial_complexity_reduction, "make_busmap", recording_make_busmap
+        )
+        spatial_complexity_reduction.spatial_complexity_reduction(
+            test_edisgo_obj,
+            mode="kmeans",
+            cluster_area="grid",
+            reduction_factor=0.2,
+            **kwargs,
+        )
+
+        assert during
+        if expected:
+            assert set(during.values()) == {expected}
+        else:
+            assert during == before
+        assert pool_sizes() == before
 
     def test_compare_voltage(self, test_edisgo_obj):
         edisgo_reduced = copy.deepcopy(test_edisgo_obj)

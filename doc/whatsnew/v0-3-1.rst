@@ -437,6 +437,17 @@ Changes
   ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
   the component and the new MV line were connected to the existing bus. This could
   happen after components were removed or aggregated (openego/eDisGo#413)
+* The OPF limits Gurobi to 8 threads by default instead of all cores of the machine,
+  so that other processes and parallel runs of several grids keep running. The number
+  is set with the new parameter ``threads`` of :meth:`~.edisgo.EDisGo.pm_optimize`
+  and of the runner step ``optimize``; ``threads=0`` uses all cores as before
+* The spatial complexity reduction limits the thread pools of scikit-learn (OpenMP)
+  and numpy/scipy (BLAS) to 1 thread by default instead of all cores of the machine.
+  More threads hardly speed up the reduction, as most of its run time is spent in
+  single-threaded code. The number is set with the new parameter ``threads`` of
+  :meth:`~.edisgo.EDisGo.spatial_complexity_reduction` and of the runner
+  ``spatial_reduction`` block; ``threads=0`` uses all cores as before
+  (openego/eDisGo#844)
 * Fixed the ``PerformanceWarning: DataFrame is highly fragmented`` raised in grids
   with more than 100 LV grids while checking the voltage at the secondary side of
   the MV/LV stations. The voltage limits of the stations are now built in one step

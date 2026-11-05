@@ -59,7 +59,8 @@ def task_spatial_reduce(edisgo, ctx, **overrides):
         ``mode``, ``cluster_area``, ``reduction_factor``,
         ``reduction_factor_not_focused``, ``aggregation_mode``, and the
         aggregation sub-modes ``load_aggregation_mode`` /
-        ``generator_aggregation_mode`` — forwarded to
+        ``generator_aggregation_mode``, and ``threads`` (default 1, 0 for
+        all cores) — forwarded to
         :meth:`~.EDisGo.spatial_complexity_reduction`.
 
     Returns
@@ -89,6 +90,7 @@ def task_spatial_reduce(edisgo, ctx, **overrides):
             "generator_aggregation_mode",
             "line_naming_convention",
             "mv_pseudo_coordinates",
+            "threads",
         )
     }
     edisgo.spatial_complexity_reduction(copy_edisgo=False, **kwargs)

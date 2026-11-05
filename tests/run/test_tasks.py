@@ -820,6 +820,7 @@ class TestOptimizeTaskDelegation:
         # shortcut expanded to explicit name lists (empty ok if grid lacks type)
         assert "flexible_hps" in captured and "flexible_storage_units" in captured
         assert isinstance(captured["flexible_hps"], list)
+        assert captured["threads"] == 8
 
     def test_flexible_defaults_to_config_flexibilities(self, edisgo_obj):
         """
@@ -927,3 +928,17 @@ def test_spatial_reduce_with_null_block_is_a_noop():
     sentinel = object()
     ctx = RunContext(raw_config={"spatial_reduction": None})
     assert task_spatial_reduce(sentinel, ctx) is sentinel
+
+
+def test_spatial_reduce_forwards_threads(edisgo_obj):
+    """``threads`` of the spatial_reduction block reaches
+    EDisGo.spatial_complexity_reduction."""
+    captured = {}
+
+    def fake_reduction(**kw):
+        captured.update(kw)
+
+    edisgo_obj.spatial_complexity_reduction = fake_reduction
+    ctx = RunContext(raw_config={"spatial_reduction": {"enabled": True, "threads": 4}})
+    task_spatial_reduce(edisgo_obj, ctx)
+    assert captured["threads"] == 4

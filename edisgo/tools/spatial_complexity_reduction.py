@@ -25,6 +25,7 @@ from pandas import DataFrame
 from pyproj import Transformer
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
+from threadpoolctl import threadpool_limits
 
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.network import timeseries
@@ -1839,6 +1840,7 @@ def spatial_complexity_reduction(
     reduction_factor: float = 0.25,
     reduction_factor_not_focused: bool | float = False,
     apply_pseudo_coordinates: bool = True,
+    threads: int = 1,
     **kwargs,
 ) -> tuple[DataFrame, DataFrame]:
     """
@@ -1868,6 +1870,11 @@ def spatial_complexity_reduction(
     apply_pseudo_coordinates : bool
         If True pseudo coordinates are applied. The spatial complexity reduction method
         is only tested with pseudo coordinates. Default: True.
+    threads : int
+        Maximum number of threads the numerical libraries (BLAS and OpenMP, e.g. used
+        by the k-means clustering of scikit-learn) may use. 0 lets them use all
+        cores. More threads hardly speed up the reduction, as most of its run time
+        is spent in single-threaded code. Default: 1.
 
     Other Parameters
     -----------------
@@ -1904,19 +1911,22 @@ def spatial_complexity_reduction(
 
     """
 
-    if apply_pseudo_coordinates:
-        make_pseudo_coordinates(
-            edisgo_obj, mv_coordinates=kwargs.pop("mv_pseudo_coordinates", False)
-        )
+    # Without a limit, scikit-learn (OpenMP) and numpy/scipy (BLAS) use all cores
+    # of the machine. threadpool_limits(None) leaves the thread pools unchanged.
+    with threadpool_limits(limits=threads or None):
+        if apply_pseudo_coordinates:
+            make_pseudo_coordinates(
+                edisgo_obj, mv_coordinates=kwargs.pop("mv_pseudo_coordinates", False)
+            )
 
-    busmap_df = make_busmap(
-        edisgo_obj,
-        mode=mode,
-        cluster_area=cluster_area,
-        reduction_factor=reduction_factor,
-        reduction_factor_not_focused=reduction_factor_not_focused,
-    )
-    linemap_df = apply_busmap(edisgo_obj, busmap_df, **kwargs)
+        busmap_df = make_busmap(
+            edisgo_obj,
+            mode=mode,
+            cluster_area=cluster_area,
+            reduction_factor=reduction_factor,
+            reduction_factor_not_focused=reduction_factor_not_focused,
+        )
+        linemap_df = apply_busmap(edisgo_obj, busmap_df, **kwargs)
 
     return busmap_df, linemap_df
 
