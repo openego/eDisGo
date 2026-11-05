@@ -188,7 +188,9 @@ storage, DSM, heat pumps and charging points, plus the ohmic branch losses
 (`ccm·r` for active, `ccm·x` for reactive power). For `opf_version` 2 and 4 the
 balance additionally includes the load-shedding / curtailment slack variables
 (generation curtailment `pgc`, dispatchable-generation slack `pgens`, load slack
-`pds`, charging-point slack `pcps`, heat-pump slack `phps`). Reactive injections
+`pds`, charging-point slack `pcps`, heat-pump slack `phps`). For `opf_version` 3
+it includes the generation curtailment `pgc` that meets the overlying grid's
+`"curt"` requirement. Reactive injections
 of the flexibilities are derived from their active power via the power factor
 (`tan(acos(pf))`).
 
@@ -249,7 +251,11 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum((php[hp] - phps[hp]) * bus_hps_pf[hp] for hp in bus_hps)
             + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for cp in bus_cps)
         )
-    else  # Eq. (3.3ii), (3.4ii)
+    else  # Eq. (3.3ii), (3.4ii); `pgc` exists only in version 3 with a "curt" requirement
+        pgc = get(PowerModels.var(pm, n), :pgc, Dict())
+        bus_gens_curt = haskey(PowerModels.var(pm, n), :pgc) ? bus_gens_nd : empty(bus_gens_nd)
+        PowerModels._check_var_keys(pgc, bus_gens_curt, "active power", "curtailment")
+
         cstr_p = JuMP.@constraint(pm.model,
             sum(pt[a] for a in bus_arcs_to)
             ==
@@ -260,6 +266,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             - sum(pg for pg in values(bus_pg_nd))
             - sum(ps[s] for s in bus_storage)
             + sum(pd for pd in values(bus_pd))
+            + sum(pgc[g] for g in bus_gens_curt)
             + sum(pdsm[dsm] for dsm in bus_dsm)
             + sum(php[hp] for hp in bus_hps)
             + sum(pcp[cp] for cp in bus_cps)
@@ -274,6 +281,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             - sum(qg for qg in values(bus_qg))
             - sum(qg for qg in values(bus_qg_nd))
             + sum(qd for qd in values(bus_qd))
+            + sum(pgc[g] * bus_gen_nd_pf[g] for g in bus_gens_curt)
             + sum(pdsm[dsm] * bus_dsm_pf[dsm] for dsm in bus_dsm)
             + sum(php[hp] * bus_hps_pf[hp] for hp in bus_hps)
             + sum(pcp[cp] * bus_cps_pf[cp] for cp in bus_cps)

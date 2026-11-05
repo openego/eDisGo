@@ -7,7 +7,7 @@
 # way Python uses it:
 #
 #   * spawn `julia Main.jl <ding0_grid> <results_path> <method> <silence_moi>
-#     <warm_start>` (with the flags of the running Julia, `Base.julia_cmd()`, so
+#     <warm_start> <threads>` (with the flags of the running Julia, `Base.julia_cmd()`, so
 #     the subprocess reuses the precompiled package images),
 #   * write the network as one JSON line to its stdin and close it,
 #   * pick the result out of stdout as Python does — the line starting with
@@ -39,7 +39,8 @@ main_json_line(fixture::AbstractString="pm_test_network.json") =
     JSON.json(JSON.parse(read(TestUtils.fixture_path(fixture), String)))
 
 """
-    main_run(json_line, method; ding0_grid, silence_moi="True", warm_start="False")
+    main_run(json_line, method; ding0_grid, silence_moi="True", warm_start="False",
+             threads="8")
 
 Run `Main.jl` as a subprocess the way `powermodels_opf.py` does and return a
 named tuple with `exitcode`, `stdout`, `stderr`, the `results_path` handed to the
@@ -53,7 +54,8 @@ project.
 function main_run(json_line::AbstractString, method::AbstractString;
                   ding0_grid::AbstractString="ding0_1_t_4",
                   silence_moi::AbstractString="True",
-                  warm_start::AbstractString="False")
+                  warm_start::AbstractString="False",
+                  threads::AbstractString="8")
     dir = mktempdir()
     results_path = mkdir(joinpath(dir, "results"))
     stdin_file = joinpath(dir, "stdin.json")
@@ -65,7 +67,7 @@ function main_run(json_line::AbstractString, method::AbstractString;
     env = copy(ENV)
     delete!(env, "JULIA_LOAD_PATH")
     delete!(env, "JULIA_PROJECT")
-    cmd = `$(Base.julia_cmd()) $MAIN_SCRIPT $ding0_grid $results_path $method $silence_moi $warm_start`
+    cmd = `$(Base.julia_cmd()) $MAIN_SCRIPT $ding0_grid $results_path $method $silence_moi $warm_start $threads`
     cmd = setenv(ignorestatus(cmd), env)
 
     elapsed = @elapsed proc = run(pipeline(cmd; stdin=stdin_file, stdout=stdout_file,

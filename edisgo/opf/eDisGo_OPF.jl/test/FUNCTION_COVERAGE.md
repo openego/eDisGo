@@ -12,12 +12,12 @@ and `constraint_store_state`).
 Legend: `[ ]` open · `[x]` tested · `[~]` partly tested (give the reason after
 the entry)
 
-## Status (as of 2026-10-23)
+## Status (as of 2026-11-04)
 
-**84 of 84 entries done**, suite green: 3620 passing assertions, 6
+**84 of 84 entries done**, suite green: 3654 passing assertions, 3
 `@test_broken`, 0 failures, about 6 to 7 min with a Gurobi licence (about 4 min of
 that are the `Main.jl` subprocesses; without Gurobi, as in CI, the two SOC runs
-are skipped). Line coverage of `src/`: 902 of 902 lines (100 %).
+are skipped). Line coverage of `src/`: 910 of 910 lines (100 %).
 
 | Source file | Status |
 | --- | --- |
@@ -100,21 +100,13 @@ section 6); the tests record the actual behaviour and mark the intended one with
     (`opf_version` 1). Before, the script died with `UndefVarError` after the
     Gurobi solve of a tight SOC relaxation (exit code 1, no result JSON), and
     with the prefix alone `opf_version` 1 failed with `KeyError("pgc")`. (#800)
-11. **In `opf_version` 3, the curtailment `pgc` is decoupled from the power
-    balance.** `build_mn_opf_bf_flex` creates `pgc` for version 3
-    (`prob/opf_bf.jl:36-38`), `constraint_HV_requirements` counts it towards the
-    requirement `"curt"` (`core/constraint.jl:145`), but
-    `constraint_power_balance` only includes `pgc` in the nodal balance for
-    versions 2/4 (`form/bf.jl:211`). The HV requirement is thus met by a
-    curtailment that has no effect in the grid; `from_powermodels` still
-    subtracts exactly this `pgc` from the feed-in for versions 3/4
-    (`edisgo/io/powermodels_io.py`), so the OPF power flows don't match the
-    results written back. Side note: `TestUtils.pm_network(opf_version=3)`
-    removes `"curt"` from `flexibilities`, while Python sets it for 2, 3 and 4
-    (`powermodels_io.py:149`). This affects production: the runner presets
-    `overlying_grid_opf.yaml` and `overlying_grid_opf_spatial.yaml` run
-    `opf_version: 3`. The two `@test_broken` assume the fix "add `pgc` to the
-    balance"; another domain decision means rewriting them. (#801)
+11. ~~**In `opf_version` 3, the curtailment `pgc` is decoupled from the power
+    balance.**~~ — **fixed**: version 3 creates `pgc` only for a "curt"
+    requirement and includes it in the P/Q balance as 2 and 4 do. The slack of
+    "curt" has the lower bound `min(0, P)` in version 3, so the OPF does not
+    curtail beyond the request; version 4 has no such bound, as its `pgc` also
+    keeps the grid within its limits. The fixtures keep `"curt"` in
+    `flexibilities` for version 3, as Python does. (#801)
 12. ~~**`variable_slack_gen_real`/`_imaginary` ignore the start values**~~ —
     **fixed**: both read `pgs_start`/`qgs_start`, `set_ac_bf_start_values!`
     also writes `cpe_start` and the grid start values (`w_start`, `pf_start`,
@@ -278,10 +270,9 @@ measurably above the NC optimum.
   defect 5: the virtual storage branch is skipped)
 - [x] `constraint_max_line_loading` — AbstractSOCBFModelEdisgo
 - [x] `constraint_max_line_loading` — AbstractNCBFModelEdisgo
-- [x] `constraint_power_balance` — AbstractBFModelEdisgo (bug: for
-  `opf_version` 3 the curtailment `pgc` is missing from the balance, see defect
-  11 — documented as `@test_broken`; note: `bus_storage_pf` is passed on but
-  never used — pinned by a test)
+- [x] `constraint_power_balance` — AbstractBFModelEdisgo (for `opf_version` 3
+  the balance includes the curtailment `pgc`, see defect 11; note:
+  `bus_storage_pf` is passed on but never used — pinned by a test)
 
 ### `src/io/json.jl` → `test/io/test_json.jl`
 
@@ -294,8 +285,7 @@ measurably above the NC optimum.
 ### `src/prob/opf_bf.jl` → `test/prob/test_opf_bf.jl`
 
 - [x] `solve_mn_opf_bf_flex`
-- [x] `build_mn_opf_bf_flex` — AbstractBFModelEdisgo (bug: in version 3 `pgc`
-  has no effect on the power balance, see defect 11 — documented as
-  `@test_broken`)
+- [x] `build_mn_opf_bf_flex` — AbstractBFModelEdisgo (version 3 creates `pgc`
+  for the "curt" requirement only, see defect 11)
 
 <!-- Total number of entries: 84 -->

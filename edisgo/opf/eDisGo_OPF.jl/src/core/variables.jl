@@ -574,13 +574,24 @@ end
 Variable `phvs[i]` for `i` in `HV_requirements`: the active-power slack on each
 overlying-grid (HV) flexibility requirement, allowing the dispatch requested by the
 higher voltage level to be missed at a penalty (`opf_version` 3 and 4).
+
+With `bounded` and `opf_version` 3, the slack of `"curt"` has the lower bound
+`min(0, P)`, so `sum(pgc) + phvs == P` caps the total curtailment at `max(0, P)`:
+the OPF may curtail less than requested, but not more. Version 4 has no such bound,
+as there `pgc` also keeps the grid within its limits. All other slacks are free.
 """
 function variable_slack_HV_requirements_real(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     phvs = PowerModels.var(pm, nw)[:phvs] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :HV_requirements)], base_name="$(nw)_phvs",
-        #lower_bound = -100,
-        #upper_bound = 100
     )
+
+    if bounded && PowerModels.ref(pm, nw, :opf_version) == 3
+        for (i, hv_req) in PowerModels.ref(pm, nw, :HV_requirements)
+            if hv_req["name"] == "curt"
+                JuMP.set_lower_bound(phvs[i], min(0.0, hv_req["P"]))
+            end
+        end
+    end
 
     report && PowerModels.sol_component_value(pm, nw, :HV_requirements, :phvs, PowerModels.ids(pm, nw, :HV_requirements), phvs)
 

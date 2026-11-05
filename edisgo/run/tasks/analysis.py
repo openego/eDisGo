@@ -284,6 +284,7 @@ def task_optimize(
     method="soc",
     warm_start=False,
     s_base=1,
+    threads=8,
 ):
     """
     Run a powermodels optimal-power-flow (OPF) over flexibilities.
@@ -339,6 +340,8 @@ def task_optimize(
         Reuse a previous solution as the starting point.
     s_base : float, optional
         Per-unit base power for normalization.
+    threads : int, optional
+        Number of threads Gurobi may use (default 8, 0 for all cores).
 
     Returns
     -------
@@ -392,5 +395,6 @@ def task_optimize(
         method=method,
         warm_start=warm_start,
         s_base=s_base,
+        threads=threads,
     )
     return edisgo
