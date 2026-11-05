@@ -109,6 +109,32 @@ objective_hv_ids(pm, nw::Int=1) =
 # tests
 # ---------------------------------------------------------------------------
 
+@testset "heat_slack_penalty" begin
+    # The penalty term on the heat balance slacks, shared by all four objectives
+    # (#695).
+    pm = TestUtils.build_small_model(opf_version=1, num_steps=2)
+    expr = eDisGo_OPF.heat_slack_penalty(pm)
+
+    @test eDisGo_OPF.HEAT_SLACK_PENALTY == 1e4
+    @test expr isa JuMP.AffExpr
+    @test JuMP.constant(expr) == 0.0
+    # `phss` and `phps2` of the one heat storage and heat pump, per network.
+    @test length(expr.terms) == 2 * 2
+    for n in 1:2
+        @test JuMP.coefficient(expr, PowerModels.var(pm, n, :phss)[1]) == 1e4
+        @test JuMP.coefficient(expr, PowerModels.var(pm, n, :phps2)[1]) == 1e4
+    end
+
+    @testset "without heat pumps and heat storage" begin
+        # A switched-off heat pump is dropped together with its heat storage.
+        d = TestUtils.small_network(opf_version=1, num_steps=2)
+        d["heatpumps"]["1"]["status"] = false
+        pm_e = objective_flex_model(d)
+        # The empty sum is a plain zero.
+        @test iszero(eDisGo_OPF.heat_slack_penalty(pm_e))
+    end
+end
+
 @testset "objective_min_losses" begin
     data = TestUtils.small_network(num_steps=2)
     # Distinct resistances so a coefficient can only be right if it was taken
@@ -328,8 +354,9 @@ end
         @test Set(ll.axes[1]) == Set([(1, 1, 2), (2, 2, 3)])
         @test !haskey(PowerModels.var(pm, 2), :ll)
 
-        # 3 branches × 2 networks plus the two `ll` terms.
-        @test objective_num_linear(pm.model) == 2 * 3 + 2
+        # 3 branches × 2 networks, the two `ll` terms and the two heat balance
+        # slacks per network.
+        @test objective_num_linear(pm.model) == 2 * 3 + 2 + 2 * 2
     end
 
     @testset "cost and length per branch" begin
@@ -350,8 +377,9 @@ end
     @testset "sum over all time steps" begin
         for steps in (1, 3)
             pm_s = TestUtils.build_small_model(opf_version=1, num_steps=steps)
-            # Losses accumulate over the time steps, the two `ll` terms do not.
-            @test objective_num_linear(pm_s.model) == 3 * steps + 2
+            # Losses and heat balance slacks accumulate over the time steps, the
+            # two `ll` terms do not.
+            @test objective_num_linear(pm_s.model) == (3 + 2) * steps + 2
             @test objective_constant(pm_s.model) ≈ -2.0 atol = 1e-12
             for n in 1:steps
                 @test objective_coeff(pm_s.model, PowerModels.var(pm_s, n, :ccm)[1]) ≈
@@ -360,14 +388,21 @@ end
         end
     end
 
+    @testset "heat balance slacks" begin
+        # The heat balance slacks are a data-consistency valve, not a
+        # grid-restriction slack: version 1 prices them like versions 2 and 4,
+        # otherwise `phps2` covers the heat demand for free (#695).
+        for n in 1:2
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 1e4
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 1e4
+        end
+    end
+
     @testset "variables outside the objective" begin
-        # Version 1 knows no grid-restriction slacks; the heat-pump storage
-        # slacks do exist but are not priced by this objective.
+        # Version 1 knows no grid-restriction slacks.
         @test !haskey(PowerModels.var(pm, 1), :pgc)
         @test !haskey(PowerModels.var(pm, 1), :pds)
         for n in 1:2
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 0.0
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 0.0
             @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgs)[1]) == 0.0
         end
     end
@@ -539,7 +574,8 @@ end
         @test objective_constant(pm.model) ≈ -factor_ll * 2 * 10.0 atol = 1e-12
         @test Set(ll.axes[1]) == Set([(1, 1, 2), (2, 2, 3)])
         @test !haskey(PowerModels.var(pm, 2), :ll)
-        @test objective_num_linear(pm.model) == 2 * 3 + 2
+        # Plus the two heat balance slacks per network.
+        @test objective_num_linear(pm.model) == 2 * 3 + 2 + 2 * 2
     end
 
     @testset "HV slack terms" begin
@@ -598,9 +634,18 @@ end
             pm_s = TestUtils.build_small_model(opf_version=3, num_steps=steps,
                                                overlying_grid=true)
             @test objective_num_quadratic(pm_s.model) == 5 * steps
-            # Losses per time step plus the two time-step independent `ll` terms.
-            @test objective_num_linear(pm_s.model) == 3 * steps + 2
+            # Losses and heat balance slacks per time step plus the two
+            # time-step independent `ll` terms.
+            @test objective_num_linear(pm_s.model) == (3 + 2) * steps + 2
             @test objective_constant(pm_s.model) ≈ -0.2 atol = 1e-12
+        end
+    end
+
+    @testset "heat balance slacks" begin
+        # Priced like in versions 2 and 4 (#695).
+        for n in 1:2
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 1e4
+            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 1e4
         end
     end
 
@@ -610,8 +655,6 @@ end
         @test haskey(PowerModels.var(pm, 1), :pgc)
         for n in 1:2
             @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgc)[1]) == 0.0
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phss)[1]) == 0.0
-            @test objective_coeff(pm.model, PowerModels.var(pm, n, :phps2)[1]) == 0.0
             @test objective_coeff(pm.model, PowerModels.var(pm, n, :pgs)[1]) == 0.0
         end
         # No grid-restriction slacks in version 3.

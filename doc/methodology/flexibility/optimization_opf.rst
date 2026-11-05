@@ -201,6 +201,11 @@ with the **maximum line loading** (versions 1 and 3) and/or weighted penalties o
 **slack variables** (versions 2 and 4) and the **overlying-grid requirement slacks**
 (versions 3 and 4). The exact combination is the one listed under
 `Optimisation versions`_ above, implemented by the ``objective_*`` functions.
+In every version, the two slacks of the heat pump balance (heat-pump operation
+slack and heat-storage slack) carry a very large penalty: they only close the balance
+when heat pump and heat storage cannot meet the heat demand, e.g. because of
+inconsistent input data, and :func:`edisgo.io.powermodels_io.from_powermodels` logs a
+warning whenever they are used.
 
 Network constraints (per time step)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

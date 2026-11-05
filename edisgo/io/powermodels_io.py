@@ -563,6 +563,19 @@ def from_powermodels(
         s_base,
     )
     edisgo_object.opf_results.heat_storage_t.p_slack = df
+    # the heat pump operation slack exists in every opf_version
+    df = _result_df(
+        pm,
+        "heatpumps",
+        "phps2",
+        timesteps,
+        edisgo_object.timeseries.timeindex,
+        s_base,
+    )
+    edisgo_object.opf_results.grid_slacks_t.hp_operation_slack = df
+    _warn_heat_balance_slacks(
+        edisgo_object.opf_results, pm["nw"]["1"].get("time_elapsed", 1.0)
+    )
 
     if pm["nw"]["1"]["opf_version"] in [2, 4]:
         slacks = [
@@ -571,7 +584,6 @@ def from_powermodels(
             ("load", "pds"),
             ("electromobility", "pcps"),
             ("heatpumps", "phps"),
-            ("heatpumps", "phps2"),
         ]
         for comp, var in slacks:
             # save slacks to edisgo object
@@ -587,10 +599,7 @@ def from_powermodels(
             elif comp == "electromobility":
                 edisgo_object.opf_results.grid_slacks_t.cp_load_shedding = df
             elif comp == "heatpumps":
-                if var == "phps":
-                    edisgo_object.opf_results.grid_slacks_t.hp_load_shedding = df
-                elif var == "phps2":
-                    edisgo_object.opf_results.grid_slacks_t.hp_operation_slack = df
+                edisgo_object.opf_results.grid_slacks_t.hp_load_shedding = df
 
     # save line flows and currents to edisgo object
     for variable in ["pf", "qf", "ccm"]:
@@ -2339,6 +2348,72 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
         else:
             sign = -1
     return pf, sign
+
+
+# Values of the heat balance slacks up to this value in MW are numerical noise of
+# the solver.
+HEAT_SLACK_TOLERANCE = 1e-4
+# Number of components listed in a warning about the heat balance slacks.
+_MAX_LISTED_COMPONENTS = 10
+
+
+def _warn_heat_balance_slacks(opf_results, time_elapsed):
+    """
+    Warn if the OPF used one of the heat balance slacks.
+
+    The heat pump balance of the OPF is
+    ``cop * (php + phps2) = heat demand + phss - phs``. The slacks ``phps2`` (heat
+    pump operation slack, electrical power) and ``phss`` (heat storage slack,
+    surplus heat) close it when heat pump and heat storage cannot meet the heat
+    demand, e.g. because the input data are inconsistent. The OPF penalises them
+    heavily in every ``opf_version``, so a value above
+    :data:`HEAT_SLACK_TOLERANCE` points to such data. ``phps2`` is electrical power
+    the heat pump does not draw from the grid, so the optimised heat pump time
+    series lack it.
+
+    Parameters
+    ----------
+    opf_results : :class:`~.opf.results.opf_result_class.OPFResults`
+        OPF results with the slacks in ``heat_storage_t.p_slack`` and
+        ``grid_slacks_t.hp_operation_slack``, in MW.
+    time_elapsed : float
+        Length of a time step in hours.
+
+    """
+    slacks = [
+        (
+            opf_results.grid_slacks_t.hp_operation_slack,
+            "heat pump operation slack 'phps2'. This electrical power covers heat "
+            "demand without being drawn from the grid, so the heat pump time series "
+            "lack it",
+            "MWh_el",
+        ),
+        (
+            opf_results.heat_storage_t.p_slack,
+            "heat storage slack 'phss'. This surplus heat is produced beyond the heat "
+            "demand and the heat storage charging",
+            "MWh_th",
+        ),
+    ]
+    for df, description, unit in slacks:
+        used = df.where(df > HEAT_SLACK_TOLERANCE)
+        used = used.loc[:, used.notna().any()]
+        if used.empty:
+            continue
+        lines = [
+            f"  {name}: {col.count()} time step(s), "
+            f"{col.sum() * time_elapsed:.4g} {unit} in total, "
+            f"maximum {col.max():.4g} MW at {col.idxmax()}"
+            for name, col in used.items()
+        ]
+        if len(lines) > _MAX_LISTED_COMPONENTS:
+            lines = lines[:_MAX_LISTED_COMPONENTS] + [
+                f"  ... and {len(lines) - _MAX_LISTED_COMPONENTS} more"
+            ]
+        logger.warning(
+            f"The OPF used the {description}. The heat pump and heat storage data "
+            "are probably inconsistent. Affected components:\n" + "\n".join(lines)
+        )
 
 
 def _result_df(pm, component, variable, timesteps, index, s_base):

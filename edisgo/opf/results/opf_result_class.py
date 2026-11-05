@@ -61,7 +61,10 @@ class HeatStorage:
     e : :pandas:`pandas.DataFrame<DataFrame>`
         State of energy of the thermal storage in MWh.
     p_slack : :pandas:`pandas.DataFrame<DataFrame>`
-        Slack power used when the heat demand cannot be met, in MW.
+        Heat balance slack ``phss`` in MW: surplus heat the heat pump produces
+        beyond the heat demand and the storage charging. Heavily penalised, so it
+        is only used if the heat pump and heat storage data are inconsistent; a
+        warning is logged then.
 
     """
 
@@ -120,7 +123,10 @@ class GridSlacks:
     hp_load_shedding : :pandas:`pandas.DataFrame<DataFrame>`
         Shed heat-pump demand in MW.
     hp_operation_slack : :pandas:`pandas.DataFrame<DataFrame>`
-        Slack on the heat-pump operation constraints in MW.
+        Heat balance slack ``phps2`` in MW: electrical power that covers heat demand
+        without being drawn from the grid. Set in every ``opf_version``. Heavily
+        penalised, so it is only used if the heat pump and heat storage data are
+        inconsistent; a warning is logged then.
 
     """
 
