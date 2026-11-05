@@ -6,6 +6,12 @@ Release date: not yet released
 Changes
 -------
 
+* SimBench grids can be imported with the new method
+  :meth:`~.edisgo.EDisGo.import_simbench_grid`. It reads the csv folder of a SimBench
+  grid that contains an MV grid, including heat pumps, home charging points and home
+  batteries of the future scenarios, and sets time series from the SimBench
+  profiles. The new tutorial :doc:`/tutorials/simbench_example` shows an example
+  analysis
 * All time series are now indexed in one calendar year, the reference year. It is
   set with the new key ``reference_year`` in section ``timeindex`` of
   ``config_timeseries.cfg`` and defaults to 2011, the weather year of the model data.
