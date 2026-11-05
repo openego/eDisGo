@@ -1,4 +1,5 @@
 import copy
+import os
 
 from contextlib import nullcontext as does_not_raise
 
@@ -358,9 +359,8 @@ class TestSpatialComplexityReduction:
     )
     def test_make_busmap_keeps_coordinates(self, test_edisgo_obj, cluster_area, mode):
         """
-        make_busmap clusters in EPSG:3035 but must not change the coordinates of
-        the EDisGo object. For the cluster areas 'feeder' and 'main_feeder' it
-        used to transform the coordinates of the topology in place and never back.
+        make_busmap clusters in EPSG:3035 (metres), but the coordinates of the
+        EDisGo object must stay unchanged for every cluster area.
         """
         buses_before = test_edisgo_obj.topology.buses_df.copy()
         spatial_complexity_reduction.make_busmap(
@@ -373,33 +373,48 @@ class TestSpatialComplexityReduction:
 
     def test_apply_busmap_aggregates_line_susceptance(self, test_edisgo_obj):
         """
-        An aggregated line keeps the susceptance per km of the lines it stands
-        for; the susceptances of lines between the same pair of new buses add up.
-        It used to be set to 0 for every aggregated line.
+        An aggregated line gets its new length times the sum of b per km of the
+        lines it stands for, so that the susceptances of parallel lines add up.
+        A line with b = NaN does not contribute.
         """
-        b_per_km = 2e-4
+        busmap_df = self.setup_busmap_df(test_edisgo_obj)
         lines_df = test_edisgo_obj.topology.lines_df
         assert (lines_df.length > 0).all()
+        # A second line parallel to a line between two new buses, so that one
+        # aggregated line stands for two lines with different b per km.
+        new_bus = busmap_df.new_bus
+        between_new_buses = lines_df.index[
+            new_bus.loc[lines_df.bus0].to_numpy()
+            != new_bus.loc[lines_df.bus1].to_numpy()
+        ]
+        lines_df = pd.concat(
+            [lines_df, lines_df.loc[[between_new_buses[0]]].rename(lambda _: "par")]
+        )
+        rng = np.random.default_rng(42)
+        b_per_km = pd.Series(rng.uniform(1e-4, 5e-4, len(lines_df)), lines_df.index)
         lines_df["b"] = b_per_km * lines_df.length
-        busmap_df = self.setup_busmap_df(test_edisgo_obj)
+        lines_df.loc[between_new_buses[1], "b"] = np.nan
+        b_per_km.loc[between_new_buses[1]] = 0.0
+        test_edisgo_obj.topology.lines_df = lines_df
 
         linemap_df = spatial_complexity_reduction.apply_busmap(
             test_edisgo_obj, busmap_df
         )
 
         new_lines_df = test_edisgo_obj.topology.lines_df
-        lines_per_new_line = linemap_df.groupby("new_line_name").size()
-        expected = (
-            new_lines_df.length * b_per_km * lines_per_new_line.loc[new_lines_df.index]
+        assert (
+            linemap_df.loc["par", "new_line_name"]
+            == linemap_df.loc[between_new_buses[0], "new_line_name"]
         )
-        assert (new_lines_df.b > 0).all()
+        b_per_km_sum = b_per_km.groupby(linemap_df.new_line_name).sum()
+        expected = new_lines_df.length * b_per_km_sum.loc[new_lines_df.index]
         np.testing.assert_allclose(new_lines_df.b, expected, rtol=1e-12)
 
     def test_rename_virtual_buses_strips_only_the_prefix(self):
         """
         The name of the real bus is the name of the virtual bus without the
-        prefix "virtual_". str.lstrip("virtual_") used to strip all leading
-        characters of "virtual_", which turned "virtual_lv_bus" into "bus".
+        prefix "virtual_", even if the real name starts with characters that
+        occur in "virtual_" (here "lv_bus").
         """
         partial_busmap_df = pd.DataFrame(
             {"new_bus": ["Bus_A", "Bus_B", "Trafo"]},
@@ -412,6 +427,115 @@ class TestSpatialComplexityReduction:
 
         assert result.loc["virtual_lv_bus", "new_bus"] == "virtual_Bus_A"
         assert result.loc["lv_bus", "new_bus"] == "Bus_A"
+
+    @pytest.mark.parametrize(
+        "case, kwargs",
+        [
+            (
+                "grid_kmeansdijkstra",
+                dict(cluster_area="grid", mode="kmeansdijkstra"),
+            ),
+            (
+                "feeder_kmeansdijkstra",
+                dict(cluster_area="feeder", mode="kmeansdijkstra"),
+            ),
+            (
+                "main_feeder_kmeansdijkstra_focus",
+                dict(
+                    cluster_area="main_feeder",
+                    mode="kmeansdijkstra",
+                    reduction_factor_not_focused=0.1,
+                ),
+            ),
+            (
+                "main_feeder_equidistant_nodes_focus",
+                dict(
+                    cluster_area="main_feeder",
+                    mode="equidistant_nodes",
+                    reduction_factor_not_focused=0.1,
+                ),
+            ),
+        ],
+    )
+    def test_make_busmap_matches_reference(self, test_edisgo_obj, case, kwargs):
+        """
+        The busmap of test grid 1 is compared with a stored reference: which new
+        bus every bus is mapped to, and the coordinates of the new buses. This
+        catches changes of the clustering that keep the number of new buses.
+        """
+        reference = pd.read_csv(
+            os.path.join(
+                os.path.dirname(pytest.ding0_test_network_path),
+                "spatial_complexity_reduction",
+                f"busmap_{case}.csv",
+            ),
+            index_col=0,
+        )
+
+        busmap_df = spatial_complexity_reduction.make_busmap(
+            test_edisgo_obj, reduction_factor=0.25, **kwargs
+        ).sort_index()
+
+        pd.testing.assert_series_equal(busmap_df.new_bus, reference.new_bus)
+        pd.testing.assert_frame_equal(
+            busmap_df[["new_x", "new_y"]],
+            reference[["new_x", "new_y"]],
+            check_exact=False,
+            rtol=1e-9,
+        )
+
+    def test_make_busmap_raises_for_unreachable_bus(self, test_edisgo_obj):
+        """A bus without a line to any cluster medoid raises a clear error."""
+        topology = test_edisgo_obj.topology
+        mv_grid = topology.mv_grid
+        topology.buses_df.loc["isolated_bus"] = topology.buses_df.loc[
+            mv_grid.buses_df.index[5]
+        ]
+
+        with pytest.raises(ValueError, match="isolated_bus"):
+            spatial_complexity_reduction.make_busmap(
+                test_edisgo_obj,
+                mode="kmeansdijkstra",
+                cluster_area="grid",
+                reduction_factor=0.3,
+                grid=mv_grid,
+            )
+
+    def test_apply_busmap_keeps_lines_with_missing_values(self, test_edisgo_obj):
+        """
+        A line between two new buses is aggregated even if one of its columns,
+        here "kind", is NaN.
+        """
+        busmap_df = self.setup_busmap_df(test_edisgo_obj)
+        lines_df = test_edisgo_obj.topology.lines_df
+        new_bus = busmap_df.new_bus
+        between_new_buses = lines_df.index[
+            new_bus.loc[lines_df.bus0].to_numpy()
+            != new_bus.loc[lines_df.bus1].to_numpy()
+        ]
+        line = between_new_buses[0]
+        lines_df.loc[line, "kind"] = np.nan
+
+        linemap_df = spatial_complexity_reduction.apply_busmap(
+            test_edisgo_obj, busmap_df
+        )
+
+        assert line in linemap_df.index
+
+    def test_apply_busmap_raises_for_line_without_type(self, test_edisgo_obj):
+        """r and x of an aggregated line need the line type."""
+        busmap_df = self.setup_busmap_df(test_edisgo_obj)
+        lines_df = test_edisgo_obj.topology.lines_df
+        new_bus = busmap_df.new_bus
+        between_new_buses = lines_df.index[
+            new_bus.loc[lines_df.bus0].to_numpy()
+            != new_bus.loc[lines_df.bus1].to_numpy()
+        ]
+        line = between_new_buses[0]
+        lines_df.loc[line, "type_info"] = np.nan
+
+        with pytest.raises(ValueError, match=line):
+            spatial_complexity_reduction.apply_busmap(test_edisgo_obj, busmap_df)
 
     def test_spatial_complexity_reduction(self, test_edisgo_obj):
         (

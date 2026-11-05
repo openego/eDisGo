@@ -128,7 +128,8 @@ def _assign_to_medoids(
     Parameters
     ----------
     graph : :networkx:`networkx.Graph<>`
-        Graph of the grid.
+        Graph containing all buses in `buses_df`, with the line length as edge
+        attribute "length".
     buses_df : :pandas:`pandas.DataFrame<DataFrame>`
         Buses to assign, with the coordinates the clustering was fitted on in
         columns "x" and "y".
@@ -142,6 +143,11 @@ def _assign_to_medoids(
     tuple(:numpy:`numpy.ndarray<ndarray>`, list(str))
         Number of the assigned medoid for each bus in `buses_df` and the bus names
         of the medoids, ordered by cluster number.
+
+    Raises
+    ------
+    ValueError
+        If a bus in `buses_df` cannot be reached from any medoid in `graph`.
 
     """
     buses = buses_df.index
@@ -161,6 +167,13 @@ def _assign_to_medoids(
             i = position.get(bus)
             if i is not None:
                 distances[i, n] = length
+    unreachable = np.isinf(distances).all(axis=1)
+    if unreachable.any():
+        raise ValueError(
+            f"Bus(es) {buses[unreachable].tolist()} cannot be reached from any "
+            f"cluster medoid in the grid graph. Check that they are connected by "
+            f"lines."
+        )
     return distances.argmin(axis=1), medoids
 
 
@@ -802,9 +815,12 @@ def make_busmap_feeders(
                     cluster = kmeans.labels_
                     new_coordinates = kmeans.cluster_centers_[cluster]
                 elif mode == "kmeansdijkstra":
-                    # A path between two buses of the feeder that leaves the
-                    # feeder passes the transformer twice and is never shorter,
-                    # so the feeder and the transformer bus are enough.
+                    # A feeder is a connected component of the grid without the
+                    # transformer bus. A shortest path between two of its buses
+                    # never enters another feeder, as it would have to pass the
+                    # transformer bus twice. It may pass the transformer bus once,
+                    # e.g. in a ring closed at the station, so the subgraph of the
+                    # feeder and the transformer bus is enough.
                     cluster, medoids = _assign_to_medoids(
                         graph_root.subgraph(feeder_nodes + [transformer_node]).copy(),
                         feeder_buses_df,
@@ -1000,8 +1016,7 @@ def make_busmap_main_feeders(
         ]
         partial_busmap_df = pd.DataFrame(index=grid_buses_df.index)
         partial_busmap_df.index.name = "old_bus"
-        # Vectorised initialisation: new_bus is the bus itself, new_x/new_y are
-        # its coordinates (equivalent to the former per-bus loop).
+        # Initially every bus is mapped to itself with its own coordinates.
         partial_busmap_df["new_bus"] = partial_busmap_df.index
         partial_busmap_df[["new_x", "new_y"]] = grid_buses_df.loc[
             partial_busmap_df.index, ["x", "y"]
@@ -1333,8 +1348,10 @@ def apply_busmap(
         If "standard_lines" is selected, the values of the standard line of the
         respective voltage level are used to set "type_info" and "kind".
         If "combined_name" is selected, "type_info" and "kind" contain the
-        concatenated values of the merged lines. x and r of the lines are not influenced
-        by this as they are always determined from the x and r values of the aggregated
+        concatenated values of the merged lines. The electrical parameters do not
+        depend on this setting: r and x are computed from the per-km values of the
+        line types of the aggregated lines, treated as parallel systems, and the
+        susceptance b is the new length times the sum of b per km of the aggregated
         lines.
         Default: "standard_lines".
     aggregation_mode : bool
@@ -1379,10 +1396,19 @@ def apply_busmap(
         Aggregate all lines between the same pair of buses to one line.
 
         The length is the distance between the new buses times the branch detour
-        factor. x and r follow from the per-km values of the aggregated line types,
-        which are treated as parallel systems, and b from the per-km susceptance of
-        the aggregated lines.
+        factor, at least 1 m. x and r follow from the per-km values of the aggregated
+        line types, which are treated as parallel systems. b is the length times the
+        sum of b per km of the aggregated lines, so that the susceptances of parallel
+        lines add up; lines without length or b do not contribute. s_nom and
+        num_parallel are summed.
         """
+        missing_type = lines_df.type_info.isna()
+        if missing_type.any():
+            raise ValueError(
+                f"Line(s) {lines_df.index[missing_type].tolist()} have no "
+                f"type_info. The spatial complexity reduction needs the line type "
+                f"to compute r and x of the aggregated lines."
+            )
         detour_factor = edisgo_obj.config["grid_connection"]["branch_detour_factor"]
         bus_x, bus_y = coor_transform.transform(
             buses_df.x.to_numpy(), buses_df.y.to_numpy()
@@ -1495,8 +1521,8 @@ def apply_busmap(
                     "r": r,
                     # The susceptances of parallel lines add up.
                     "b": length * b_per_km[idx].sum(),
-                    # Added one after the other, as numpy's sum may add in a
-                    # different order and change the last digit.
+                    # Summed one after the other in a fixed order, so that s_nom
+                    # does not depend on how numpy groups the additions.
                     "s_nom": sum(v for v in s_nom[idx].tolist() if not math.isnan(v)),
                     "num_parallel": int(np.nansum(num_parallel[idx])),
                     "type_info": type_info,
@@ -1626,7 +1652,10 @@ def apply_busmap(
             | (is_virtual_1 & (bus1 == slack_bus))
             | (bus0 == bus1)
         )
-        logger.debug(f"Drop {drop.sum()} lines inside clusters.")
+        logger.debug(
+            f"Drop {drop.sum()} lines that connect buses of the same new bus, the "
+            f"virtual slack bus or both sides of a circuit breaker."
+        )
         lines_df = lines_df.loc[~drop]
         lines_df = get_ordered_lines_df(lines_df)
         lines_df = aggregate_lines(lines_df)
