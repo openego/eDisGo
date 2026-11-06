@@ -30,6 +30,7 @@ from hypothesis import strategies as st
 from pyproj import Transformer
 from shapely.geometry import Point
 
+from edisgo import EDisGo
 from edisgo.flex_opt import exceptions, q_control
 from edisgo.tools import geo, tools
 from edisgo.tools import voltage_over_distance as vod
@@ -93,6 +94,12 @@ parallel = st.integers(1, 10)
 def grid_ro(_wc_grid_original):
     """Copy of test network 1 shared by the tests of this module (read only)."""
     return copy.deepcopy(_wc_grid_original)
+
+
+@pytest.fixture(scope="module")
+def georeferenced_grid():
+    """Test network 3, in which every bus has coordinates (read only)."""
+    return EDisGo(ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False)
 
 
 # ======================================================================================
@@ -694,7 +701,6 @@ class TestGridHelpers:
         graph = translate_df_to_graph(topo.buses_df, topo.lines_df)
         assert set(graph.nodes) == set(topo.buses_df.index)
         for bus, row in topo.buses_df.iterrows():
-            # some buses have no coordinates (NaN), assert_equal treats NaN == NaN
             np.testing.assert_equal(graph.nodes[bus]["pos"], (row.x, row.y))
         pairs = {
             frozenset((b0, b1))
@@ -894,12 +900,17 @@ class TestGeo:
         if hit:
             assert dist == pytest.approx(0, abs=1e-9)
 
-    def test_geopandas_geometries_match_bus_coordinates(self, grid_ro):
+    def test_geopandas_geometries_match_bus_coordinates(self, georeferenced_grid):
         """
         Bus points are the bus coordinates, every line runs from bus0 to bus1 and
         every component lies at its bus (transformers at bus1); no row is lost.
+
+        Uses a grid in which every bus has coordinates: how shapely builds a point
+        from NaN coordinates depends on its version (shapely 2.1 keeps NaN, older
+        versions on Windows give an empty point and LineString fails).
         """
-        topo = grid_ro.topology
+        topo = georeferenced_grid.topology
+        assert not topo.buses_df[["x", "y"]].isna().any().any()
         srid = topo.grid_district["srid"]
         gdfs = to_geopandas(topo, srid)
         buses = topo.buses_df
@@ -910,7 +921,6 @@ class TestGeo:
         assert set(lines.index) == set(topo.lines_df.index)
         for name, geom in lines.geometry.items():
             b0, b1 = topo.lines_df.loc[name, ["bus0", "bus1"]]
-            # some buses have no coordinates (NaN), assert_equal treats NaN == NaN
             np.testing.assert_equal(
                 list(geom.coords),
                 [tuple(buses.loc[b0, ["x", "y"]]), tuple(buses.loc[b1, ["x", "y"]])],
