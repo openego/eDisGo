@@ -2431,6 +2431,52 @@ class TestTimeSeries:
 
         shutil.rmtree(save_dir)
 
+    def test_integrity_check_raise_duplicate_columns(self):
+        """Test that duplicated columns raise ValueError."""
+        ts = self.edisgo.timeseries
+        index = pd.date_range("2018-01-01", periods=3, freq="h")
+        ts.timeindex = index
+        ts.loads_active_power = pd.DataFrame(
+            [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+            index=index,
+            columns=["test_load", "test_load"],
+        )
+
+        with pytest.raises(ValueError, match="has duplicated columns"):
+            ts.check_integrity(errors="raise")
+
+    def test_integrity_check_raise_duplicate_indices(self):
+        """Test that duplicated time indices raise ValueError."""
+        ts = self.edisgo.timeseries
+        index = pd.to_datetime(
+            ["2018-01-01 00:00", "2018-01-01 00:00", "2018-01-01 01:00"]
+        )
+        ts.timeindex = index
+        ts.loads_active_power = pd.DataFrame(
+            {"test_load": [1.0, 2.0, 3.0]},
+            index=index,
+        )
+
+        with pytest.raises(ValueError, match="has duplicated indices"):
+            ts.check_integrity(errors="raise")
+
+    def test_integrity_check_raise_null_values(self):
+        """Test that null values raise ValueError."""
+        ts = self.edisgo.timeseries
+        ts.timeindex = pd.date_range("2018-01-01", periods=3, freq="h")
+        ts.loads_active_power = pd.DataFrame(
+            {"test_load": [1.0, np.nan, 2.0]},
+            index=ts.timeindex,
+        )
+
+        with pytest.raises(ValueError, match="There are null values in loads_active_power"):
+            ts.check_integrity(errors="raise")
+
+    def test_integrity_check_raise_empty_timeindex(self):
+        """Test that an empty time index raises ValueError."""
+        with pytest.raises(ValueError, match="No time index set"):
+            self.edisgo.timeseries.check_integrity(errors="raise")
+
     def test_integrity_check(self, caplog):
         attrs = [
             "loads_active_power",

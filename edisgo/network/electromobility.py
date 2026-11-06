@@ -24,6 +24,7 @@ from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
 from edisgo.tools.tools import align_series_to_timeindex
+from edisgo.tools.integrity import IntegrityCollector
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -907,7 +908,7 @@ class Electromobility:
                     df_dict[band] = df_dict[band].resample(freq).max()
         self.flexibility_bands = df_dict
 
-    def check_integrity(self):
+    def check_integrity(self, errors="warn", collector=None):
         """
         Method to check the integrity of the Electromobility object.
 
@@ -916,6 +917,14 @@ class Electromobility:
         Currently only checks integrity of flexibility bands.
 
         """
+        own_collector = collector is None
+
+        if own_collector:
+            collector = IntegrityCollector(errors)
+
+        def report_issue(message):
+            collector.report(message, logger)
+
         # pick random flex band for some pre-checks
         flex_band = list(self.flexibility_bands.values())[0]
 
@@ -934,11 +943,12 @@ class Electromobility:
         tmp = (diff < 0.0).any()
         if tmp.any():
             max_exceedance = abs(diff.min().min())
-            raise ValueError(
+            message = (
                 f"Lower energy band is higher than upper energy band for the "
                 f"following charging points: {list(tmp[tmp].index)}. The maximum "
                 f"exceedance is {max_exceedance}. Please check."
             )
+            report_issue(message)
 
         diff = (
             self.flexibility_bands["upper_energy"].diff()
@@ -947,11 +957,12 @@ class Electromobility:
         tmp = (diff > 0.0).any()
         if tmp.any():
             max_exceedance = diff.max().max()
-            raise ValueError(
+            message = (
                 f"Upper energy band has power values higher than nominal power for the "
                 f"following charging points: {list(tmp[tmp].index)}. The maximum "
                 f"exceedance is {max_exceedance}. Please check."
             )
+            report_issue(message)
 
         diff = (
             self.flexibility_bands["lower_energy"].diff()
@@ -960,11 +971,15 @@ class Electromobility:
         tmp = (diff > 0.0).any()
         if tmp.any():
             max_exceedance = diff.max().max()
-            raise ValueError(
+            message = (
                 f"Lower energy band has power values higher than nominal power for the "
                 f"following charging points: {list(tmp[tmp].index)}. The maximum "
                 f"exceedance is {max_exceedance}. Please check."
             )
+            report_issue(message)
+
+        if own_collector:
+            collector.raise_if_errors()
 
     def to_csv(self, directory, attributes=None):
         """
