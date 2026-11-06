@@ -12,9 +12,9 @@ and `constraint_store_state`).
 Legend: `[ ]` open · `[x]` tested · `[~]` partly tested (give the reason after
 the entry)
 
-## Status (as of 2026-11-04)
+## Status (as of 2026-11-05)
 
-**84 of 84 entries done**, suite green: 3654 passing assertions, 3
+**85 of 85 entries done**, suite green: 3682 passing assertions, 3
 `@test_broken`, 0 failures, about 6 to 7 min with a Gurobi licence (about 4 min of
 that are the `Main.jl` subprocesses; without Gurobi, as in CI, the two SOC runs
 are skipped). Line coverage of `src/`: 910 of 910 lines (100 %).
@@ -27,7 +27,7 @@ are skipped). Line coverage of `src/`: 910 of 910 lines (100 %).
 | `src/core/solution.jl` | done (2/2) |
 | `src/core/constraint.jl` | done (6/6) |
 | `src/core/constraint_template.jl` | done (5/5) |
-| `src/core/objective.jl` | done (5/5) |
+| `src/core/objective.jl` | done (6/6) |
 | `src/io/json.jl` | done (1/1) |
 | `src/io/common.jl` | done (1/1) |
 | `src/core/variables.jl` | done (40/40) — split into `test/core/variables/test_flow_and_curtailment.jl` (16), `test_flexibilities.jl` (10), `test_slacks.jl` (14) |
@@ -136,6 +136,15 @@ section 6); the tests record the actual behaviour and mark the intended one with
     Before, it only lived in `constraint_cp_state`, which `build_mn_opf_bf_flex`
     calls from the second time step on. Python still rejects fewer than two
     snapshots. (#809)
+17. ~~**The heat balance slacks `phss`/`phps2` are free in `opf_version` 1 and
+    3**~~ — **fixed**: `objective_min_line_loading_max` and `_OG` had no term for
+    them, so the solver switched the heat pumps off and covered the heat demand
+    with `phps2`, electrical power that appears in no power balance. All four
+    objectives now add `heat_slack_penalty` (`HEAT_SLACK_PENALTY = 1e4`), and
+    `from_powermodels` warns when a slack is used. Remaining limit: in versions 3
+    and 4 the quadratic `phvs` penalty grows with the branch costs and can exceed
+    the fixed penalty for a large deviation from the heat pump requirement; the
+    warning then names that requirement as a possible cause. (#695)
 
 Minor findings without `@test_broken`: for an unknown `method`, `Main.jl` prints
 the unsolved network without `status`/`solver`/`solve_time` and exit code 0;
@@ -250,6 +259,7 @@ measurably above the NC optimum.
 
 ### `src/core/objective.jl` → `test/core/test_objective.jl`
 
+- [x] `heat_slack_penalty` — AbstractBFModelEdisgo
 - [x] `objective_min_losses` — AbstractBFModelEdisgo
 - [x] `objective_min_losses_slacks` — AbstractBFModelEdisgo (note: heat pump and
   heat storage are paired by id without a check, see defect 8)

@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -216,6 +218,47 @@ class TestPowerModelsOPF:
                 attr,
                 df,
             )
+
+    @pytest.mark.runonlinux
+    @pytest.mark.parametrize("opf_version", [1, 3])
+    def test_pm_optimize_heat_balance_slacks_unused(self, opf_version):
+        # The heat pumps and heat storage units of the fixture can cover the heat
+        # demand, so the heat balance slacks stay unused and the heat demand is
+        # covered by power drawn from the grid.
+        edisgo = copy.deepcopy(self.edisgo)
+        pm_optimize(
+            edisgo,
+            opf_version=opf_version,
+            silence_moi=True,
+            method="nc",
+            flexible_hps=edisgo.heat_pump.thermal_storage_units_df.index.values,
+        )
+        assert edisgo.opf_results.status == "LOCALLY_SOLVED"
+        hp_slack = edisgo.opf_results.grid_slacks_t.hp_operation_slack
+        hs_slack = edisgo.opf_results.heat_storage_t.p_slack
+        assert not hp_slack.empty
+        assert (hp_slack.abs() < 1e-4).all().all()
+        assert (hs_slack.abs() < 1e-4).all().all()
+
+    @pytest.mark.runonlinux
+    def test_pm_optimize_heat_balance_slacks_warning(self, caplog):
+        # A heat demand far above what heat pump and heat storage can supply is
+        # covered by the heat pump operation slack, and a warning names the heat
+        # pump.
+        edisgo = copy.deepcopy(self.edisgo)
+        hp = edisgo.heat_pump.thermal_storage_units_df.index[0]
+        edisgo.heat_pump.heat_demand_df[hp] *= 100
+        with caplog.at_level("WARNING"):
+            pm_optimize(
+                edisgo,
+                silence_moi=True,
+                method="nc",
+                flexible_hps=edisgo.heat_pump.thermal_storage_units_df.index.values,
+            )
+        assert edisgo.opf_results.status == "LOCALLY_SOLVED"
+        assert edisgo.opf_results.grid_slacks_t.hp_operation_slack[hp].max() > 1e-4
+        assert "heat pump operation slack 'phps2'" in caplog.text
+        assert f"  {hp}: " in caplog.text
 
     @pytest.mark.runonlinux
     def test_pm_optimize(self):

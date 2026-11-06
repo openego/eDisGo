@@ -185,8 +185,9 @@ At every optimised time step the solver chooses:
   :math:`e^\text{th}`, DSM :math:`e^\text{dsm}`);
 * depending on the version, **slack variables** that absorb otherwise-infeasible
   situations (generation curtailment, load shedding, EV and heat-pump shedding,
-  heat-pump operation slacks, overlying-grid slacks) and the auxiliary
-  maximum-line-loading variable.
+  overlying-grid slacks) and the auxiliary maximum-line-loading variable;
+* in every version, the two **heat balance slacks** of each heat pump (see the heat
+  pump constraint below).
 
 Objective
 ~~~~~~~~~
@@ -201,6 +202,14 @@ with the **maximum line loading** (versions 1 and 3) and/or weighted penalties o
 **slack variables** (versions 2 and 4) and the **overlying-grid requirement slacks**
 (versions 3 and 4). The exact combination is the one listed under
 `Optimisation versions`_ above, implemented by the ``objective_*`` functions.
+In every version, the two heat balance slacks carry a large fixed penalty, so they are
+used only if the heat pump data are inconsistent or, in versions 3 and 4, if the
+overlying grid requests a heat pump power far from what the heat demand allows. Their
+values are stored in ``opf_results.grid_slacks_t.hp_operation_slack`` and
+``opf_results.heat_storage_t.p_slack``, and
+:func:`edisgo.io.powermodels_io.from_powermodels` logs a warning with the affected
+heat pumps whenever one of them is used. The heat pump time series are then not
+reliable.
 
 Network constraints (per time step)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -245,9 +254,13 @@ on the previous step and the power chosen in between. With time-step length
 * **Heat pumps with thermal storage** — the electrical power, through the coefficient
   of performance :math:`\mathrm{COP}`, must cover the building's heat demand plus the
   net (dis)charge of the thermal store
-  (:math:`\mathrm{COP}\cdot p^\text{hp}_t = \dot q^\text{demand}_t + \text{(net thermal-store charge)}`,
+  (:math:`\mathrm{COP}\cdot (p^\text{hp}_t + p^\text{hp,slack}_t) = \dot q^\text{demand}_t + \dot q^\text{surplus}_t + \text{(net thermal-store charge)}`,
   Eq. (3.19)); the thermal store has its own energy balance with standing losses
-  (Eq. (3.22)/(3.23)).
+  (Eq. (3.22)/(3.23)). The two heat balance slacks are the heat pump operation slack
+  :math:`p^\text{hp,slack}` (``phps2``, electrical power for heat demand that heat
+  pump and store cannot supply; it is not drawn from the grid) and the surplus heat
+  :math:`\dot q^\text{surplus}` (``phss``, heat that neither the demand nor the store
+  takes up).
 * **Demand-side management** — the shifted energy
   :math:`e^\text{dsm}_t = e^\text{dsm}_{t-1} + \Delta t\, p^\text{dsm}_t`
   (Eq. (3.32)/(3.33)) stays within the DSM band and must **return to zero** by the end
@@ -272,8 +285,9 @@ Results and slacks
 Operation schedules are written into ``edisgo.timeseries`` (charging-point, heat-pump,
 DSM and storage active power) and can then feed a final
 :meth:`~edisgo.edisgo.EDisGo.reinforce`. Heat-storage states, the slack generator and
-the optimisation slack variables are written back as well; which slacks exist depends
-on ``opf_version`` (see :func:`edisgo.io.powermodels_io.from_powermodels`). Solver and
+the optimisation slack variables are written back as well; apart from the heat balance
+slacks, which slacks exist depends on ``opf_version`` (see
+:func:`edisgo.io.powermodels_io.from_powermodels`). Solver and
 Julia output can be silenced with ``silence_moi=True``.
 
 .. note::
@@ -290,8 +304,8 @@ status and solve time, the per-line branch-flow variables
 battery-storage trajectories
 (:class:`~edisgo.opf.results.opf_result_class.HeatStorage`,
 :class:`~edisgo.opf.results.opf_result_class.BatteryStorage`), the exchange with the
-overlying grid, and the grid slack variables — curtailment and load shedding —
-(:class:`~edisgo.opf.results.opf_result_class.GridSlacks`). See its API reference for
+overlying grid, and the slack variables — curtailment, load shedding and the heat pump
+operation slack — (:class:`~edisgo.opf.results.opf_result_class.GridSlacks`). See its API reference for
 the full field list.
 
 Performance
