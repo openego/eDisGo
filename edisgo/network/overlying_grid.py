@@ -371,6 +371,23 @@ def distribute_overlying_grid_requirements(edisgo_obj):
     all charging points where cars are parked, and for DSM to all DSM loads based
     on their available load increase and decrease at each time step.
 
+    For electromobility, charging points of the use cases in
+    :attr:`~.network.electromobility.Electromobility.inflexible_use_cases`
+    keep their fixed charging time series, which is their upper power
+    flexibility band (see
+    :meth:`~.network.electromobility.Electromobility.get_flexibility_bands`).
+    It is subtracted from the overlying grid's charging time series first, and
+    only the rest is distributed to the other charging points, in proportion
+    to their upper power flexibility band. Whether a charging point is
+    inflexible is decided by its sector in
+    :attr:`~.network.topology.Topology.loads_df`.
+
+    In time steps where the overlying grid's charging time series is lower than
+    the fixed series of the inflexible charging points, the rest is set to zero,
+    so that the charging points then charge more than the overlying grid.
+    In time steps where no flexible charging point can charge, the rest is not
+    distributed. A warning is raised in both cases.
+
     Parameters
     -----------
     edisgo_obj : :class:`~.EDisGo`
@@ -387,21 +404,50 @@ def distribute_overlying_grid_requirements(edisgo_obj):
     edisgo_copy.topology = deepcopy(edisgo_obj.topology)
     edisgo_copy.timeseries = deepcopy(edisgo_obj.timeseries)
 
-    # electromobility - distribute charging time series from overlying grid to all
-    # charging points based on upper power flexibility band
+    # electromobility - inflexible charging points keep their fixed charging time
+    # series, and the rest of the charging time series from the overlying grid is
+    # distributed to the flexible charging points based on their upper power
+    # flexibility band
     if not edisgo_obj.overlying_grid.electromobility_active_power.empty:
-        cp_loads = edisgo_obj.topology.loads_df.index[
-            edisgo_obj.topology.loads_df.type == "charging_point"
-        ]
-        # scale flexibility band upper power timeseries
-        scaling_df = edisgo_obj.electromobility.flexibility_bands[
-            "upper_power"
-        ].transpose() / edisgo_obj.electromobility.flexibility_bands["upper_power"].sum(
-            axis=1
+        upper_power = edisgo_obj.electromobility.flexibility_bands["upper_power"]
+        cp_sectors = edisgo_obj.topology.loads_df.loc[
+            edisgo_obj.topology.loads_df.type == "charging_point", "sector"
+        ].reindex(upper_power.columns)
+        is_inflexible = cp_sectors.isin(edisgo_obj.electromobility.inflexible_use_cases)
+        # the bands of inflexible charging points are fixed, so that their upper
+        # power band is their charging time series
+        inflexible_power = upper_power.loc[:, is_inflexible]
+        flexible_upper_power = upper_power.loc[:, ~is_inflexible]
+
+        residual_power = (
+            edisgo_obj.overlying_grid.electromobility_active_power
+            - inflexible_power.sum(axis=1)
         )
-        edisgo_copy.timeseries._loads_active_power.loc[:, cp_loads] = (
-            scaling_df * edisgo_obj.overlying_grid.electromobility_active_power
-        ).transpose()
+        if (residual_power < -1e-6).any():
+            logger.warning(
+                "The electromobility charging time series of the overlying grid is "
+                "lower than the charging time series of the inflexible charging "
+                f"points by up to {-residual_power.min():.4f} MW. No charging is "
+                "distributed to the flexible charging points in these time steps."
+            )
+        residual_power = residual_power.clip(lower=0.0)
+
+        flexible_total = flexible_upper_power.sum(axis=1)
+        undistributed = residual_power.where(flexible_total <= 0.0, 0.0)
+        if (undistributed > 1e-6).any():
+            logger.warning(
+                "No flexible charging point can take the rest of the "
+                "electromobility charging time series of the overlying grid in "
+                f"{(undistributed > 1e-6).sum()} time steps. Up to "
+                f"{undistributed.max():.4f} MW are not distributed."
+            )
+        share = residual_power.div(flexible_total).where(flexible_total > 0.0, 0.0)
+        edisgo_copy.timeseries._loads_active_power.loc[
+            :, flexible_upper_power.columns
+        ] = flexible_upper_power.mul(share, axis="index")
+        edisgo_copy.timeseries._loads_active_power.loc[:, inflexible_power.columns] = (
+            inflexible_power
+        )
 
     # storage units - distribute charging/discharging time series from overlying grid
     # to all storage units based on their installed capacity

@@ -131,7 +131,7 @@ at all**, so you have to specify the desired source explicitly, e.g.:
   supply are set). If you omit it, charging points — including ``public`` ones — are
   left **without a series**. To set them automatically instead, use
   :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy` (see :ref:`charging-strategies`),
-  which covers all charging points (``public``/``hpc`` charged "dumb").
+  which covers all charging points.
 
 See :meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined` for all
 options. If no time index has been set, a full-year index in the reference year is

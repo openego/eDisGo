@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -169,6 +170,8 @@ class TestChargingStrategy:
         park_end_timesteps,
         chargingdemand_kWh,
         nominal_charging_capacity_kW=None,
+        use_case="work",
+        park_time_timesteps=None,
     ):
         """
         Helper for the tests of the residual strategy below: imports the real
@@ -192,15 +195,17 @@ class TestChargingStrategy:
             edisgo.electromobility.charging_processes_df.charging_park_id == park_id
         ].iloc[0]
 
-        park_time_timesteps = park_end_timesteps - park_start_timesteps + 1
+        if park_time_timesteps is None:
+            park_time_timesteps = park_end_timesteps - park_start_timesteps + 1
         edisgo.electromobility.charging_processes_df = pd.DataFrame(
             {
                 "ags": [template.ags],
                 "car_id": [0],
                 "destination": [template.destination],
-                # avoid public/hpc (always dumb-charged even under
-                # "residual") so these events exercise the flex-ranking path
-                "use_case": ["work"],
+                # by default avoid the inflexible use cases (charged along a
+                # linear ramp even under "residual") so these events exercise
+                # the flex-ranking path
+                "use_case": [use_case],
                 "nominal_charging_capacity_kW": [
                     nominal_charging_capacity_kW
                     or template.nominal_charging_capacity_kW
@@ -217,6 +222,141 @@ class TestChargingStrategy:
             }
         )
         return edisgo, park_id
+
+    @pytest.mark.parametrize("strategy", ["reduced", "residual"])
+    @pytest.mark.parametrize("use_case", ["public", "hpc", "street", "highway_fast"])
+    def test_inflexible_event_follows_linear_ramp(self, strategy, use_case):
+        """
+        A charging process of an inflexible use case charges at constant power
+        over its whole parking time [10, 49], as in the eTraGo model of
+        egon-data, and delivers the same energy as with dumb charging.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=10,
+            park_end_timesteps=49,
+            chargingdemand_kWh=10.0,
+            nominal_charging_capacity_kW=11.0,
+            use_case=use_case,
+        )
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+
+        charging_strategy(edisgo, strategy="dumb")
+        dumb_energy = edisgo.timeseries.loads_active_power[edisgo_id].sum()
+        charging_strategy(edisgo, strategy=strategy)
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+
+        assert (written.iloc[:10] == 0).all()
+        assert (written.iloc[50:] == 0).all()
+        assert np.allclose(written.iloc[10:50], written.iloc[10])
+        assert written.sum() == pytest.approx(dumb_energy)
+
+    @pytest.mark.parametrize("strategy", ["reduced", "residual"])
+    def test_inflexible_use_cases_are_configurable(self, strategy):
+        """
+        Without inflexible use cases, a public charging process is
+        flexibilized and does not follow the linear ramp.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=10,
+            park_end_timesteps=49,
+            chargingdemand_kWh=2.0,
+            nominal_charging_capacity_kW=11.0,
+            use_case="public",
+        )
+        edisgo.electromobility.inflexible_use_cases = []
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+
+        charging_strategy(edisgo, strategy="dumb")
+        dumb_energy = edisgo.timeseries.loads_active_power[edisgo_id].sum()
+        charging_strategy(edisgo, strategy=strategy)
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+
+        assert not np.allclose(written.iloc[10:50], written.iloc[10])
+        assert written.sum() == pytest.approx(dumb_energy)
+
+    def test_residual_charges_process_without_flexibility_at_nominal_power(self):
+        """
+        A flexible charging process whose minimum charging time fills its
+        parking time (flex_time == 0) is charged at nominal power from
+        arrival, as with dumb charging, and not along the linear ramp of the
+        inflexible use cases, also if its parking window [10, 13] is one step
+        longer than its parking time of 3 steps.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")
+        # 8.25 kWh at 11 kW take exactly 3 steps of 15 minutes
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=10,
+            park_end_timesteps=13,
+            chargingdemand_kWh=8.25,
+            nominal_charging_capacity_kW=11.0,
+            park_time_timesteps=3,
+        )
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+
+        charging_strategy(edisgo, strategy="dumb")
+        dumb = edisgo.timeseries.loads_active_power[edisgo_id].copy()
+        charging_strategy(edisgo, strategy="residual")
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+
+        assert (dumb.iloc[10:13] > 0).all() and dumb.iloc[13] == 0
+        pd.testing.assert_series_equal(written, dumb)
+
+    @pytest.mark.parametrize(
+        "timeindex, whole_process_in_timeindex",
+        [
+            (pd.date_range("1/1/2011", periods=7 * 24, freq="h"), True),
+            (
+                pd.date_range("1/1/2011", periods=6, freq="h").union(
+                    pd.date_range("1/3/2011", periods=6, freq="h")
+                ),
+                False,
+            ),
+        ],
+        ids=["contiguous", "gapped"],
+    )
+    def test_residual_resampled_time_index_ends_with_zeros(
+        self, timeindex, whole_process_in_timeindex
+    ):
+        """
+        If the time series are resampled to the frequency of the charging
+        processes, the residual strategy writes zeros after the last charging
+        process, also after a gap in the time index. The public process below
+        charges along the linear ramp until its last parking step (07:30), so
+        that a last value carried forward to the end of the time index would
+        show.
+        """
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=4,
+            park_end_timesteps=30,
+            chargingdemand_kWh=5.0,
+            nominal_charging_capacity_kW=11.0,
+            use_case="public",
+        )
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+
+        charging_strategy(edisgo, strategy="dumb")
+        dumb = edisgo.timeseries.loads_active_power[edisgo_id].copy()
+        charging_strategy(edisgo, strategy="residual")
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+
+        assert not written.isna().any()
+        assert (written[written.index >= "2011-01-01 08:00"] == 0).all()
+        if whole_process_in_timeindex:
+            assert written.sum() == pytest.approx(dumb.sum())
 
     def test_residual_drops_fully_out_of_window_events(self):
         """

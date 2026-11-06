@@ -2166,8 +2166,14 @@ class EDisGo:
         charging parks were previously set using
         :attr:`~.edisgo.EDisGo.import_electromobility`.
 
-        It is assumed that only 'private' charging processes at 'home' or at 'work' can
-        be flexibilized. 'public' and 'hpc' charging processes will always be 'dumb'.
+        In the charging strategies 'reduced' and 'residual', charging processes of
+        the use cases in
+        :attr:`~.network.electromobility.Electromobility.inflexible_use_cases`
+        (by default 'public' and 'hpc' as well as 'street', 'retail',
+        'urban_fast' and 'highway_fast') are not flexibilized. They charge
+        along a linear ramp over their whole parking time, i.e. at constant
+        power from arrival to departure, as in the eTraGo model built by
+        egon-data.
 
         The charging time series at each charging parks are written to
         :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power

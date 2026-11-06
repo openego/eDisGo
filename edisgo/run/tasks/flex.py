@@ -261,9 +261,9 @@ def task_import_electromobility(
     flexibility_bands_ucs : str or list of str, optional
         Charging-point use case(s) to compute flexibility bands for
         via :meth:`Electromobility.get_flexibility_bands` after import
-        and charging-strategy application. Valid entries:
-        ``"home"``, ``"work"``, ``"public"``, ``"hpc"``. Pass a single
-        string for one use case or a list for multiple. ``None``
+        and charging-strategy application, e.g. ``"home"``, ``"work"``,
+        ``"public"``, ``"hpc"``. Pass a single string for one use case or
+        a list for multiple. ``None``
         (default) skips flexibility-band computation — build them later
         with the standalone :func:`task_build_flexibility_bands` once the
         analysis time index is fixed, so the bands are resampled to it
@@ -329,9 +329,12 @@ def task_build_flexibility_bands(edisgo, ctx, *, use_case=None):
     ctx : RunContext
         Run context.
     use_case : str or list of str, optional
-        Charging-point use case(s) to compute bands for. Valid entries:
-        ``"home"``, ``"work"``, ``"public"``, ``"hpc"``. Defaults to all
-        four.
+        Charging-point use case(s) to compute bands for, e.g. ``"home"``,
+        ``"work"``, ``"public"``, ``"hpc"``. Defaults to all charging points,
+        whatever their use case. Charging processes of the use cases in
+        :attr:`Electromobility.inflexible_use_cases` get bands fixed to a
+        linear ramp over their parking time, so the optimisation cannot shift
+        them.
 
     Returns
     -------
@@ -343,8 +346,6 @@ def task_build_flexibility_bands(edisgo, ctx, *, use_case=None):
             "Skipping 'build_flexibility_bands': no electromobility data present."
         )
         return edisgo
-    if use_case is None:
-        use_case = ["home", "work", "public", "hpc"]
     edisgo.electromobility.get_flexibility_bands(edisgo, use_case=use_case)
     return edisgo
 

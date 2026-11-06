@@ -140,22 +140,47 @@ class TestElectromobility:
         charging_processes = self.edisgo_obj.electromobility.charging_processes_df
         flex_bands = self.edisgo_obj.electromobility.flexibility_bands
 
-        # check concrete values
-        cp = "Charging_Point_LVGrid_131957_public_1"
+        # check concrete values of a flexible charging point - the charging
+        # process between time steps 349 and 375 charges 36.3654 kWh at 22 kW,
+        # i.e. in 6.6 time steps
+        cp = "Charging_Point_LVGrid_136124_work_1"
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122232
+            flex_bands["upper_power"].loc[:, [cp]].iloc[349:376, 0].values, 0.0244454
+        ).all()
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[67:349, 0].values, 1e-6
+        ).all()
+
+        tmp = flex_bands["upper_energy"].loc[:, [cp]]
+        assert np.isclose(tmp.iloc[348, 0] + 22 / 4 / 1000, tmp.iloc[349, 0])
+        assert np.isclose(tmp.iloc[356, 0], tmp.iloc[357, 0])
+
+        tmp = flex_bands["lower_energy"].loc[:, [cp]]
+        assert np.isclose(tmp.iloc[349, 0], tmp.iloc[350, 0])
+        assert np.isclose(tmp.iloc[374, 0] + 22 / 4 / 1000, tmp.iloc[375, 0])
+
+        # check concrete values of an inflexible charging point - the charging
+        # process between time steps 76 and 107 charges 40.5741 kWh along a
+        # linear ramp over its 32 parking time steps
+        cp = "Charging_Point_LVGrid_131957_public_1"
+        ramp_power = 40.5741 / 32 * 4  # kW
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values,
+            ramp_power / 0.9 / 1000 + 1e-6,
         ).all()
         assert np.isclose(
             flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 1e-6
         ).all()
-
         tmp = flex_bands["upper_energy"].loc[:, [cp]]
-        assert np.isclose(tmp.iloc[648, 0] + 11 / 4 / 1000, tmp.iloc[649, 0])
-        assert np.isclose(tmp.iloc[654, 0], tmp.iloc[655, 0])
-
-        tmp = flex_bands["lower_energy"].loc[:, [cp]]
-        assert np.isclose(tmp.iloc[648, 0], tmp.iloc[649, 0])
-        assert np.isclose(tmp.iloc[654, 0] + 11 / 4 / 1000, tmp.iloc[655, 0])
+        assert np.isclose(
+            tmp.iloc[76:108, 0].diff().iloc[1:].values, ramp_power / 4 / 1000
+        ).all()
+        # the bands of inflexible charging processes are fixed
+        assert np.allclose(
+            flex_bands["upper_energy"].loc[:, cp],
+            flex_bands["lower_energy"].loc[:, cp],
+            atol=1e-5,
+        )
 
         # check charging demand
         for cp in [
@@ -296,6 +321,8 @@ class TestElectromobility:
         )
         electromobility_import.distribute_charging_demand(edisgo_obj)
         electromobility_import.integrate_charging_parks(edisgo_obj)
+        # the event below has to be flexible, whatever the use case of the park
+        edisgo_obj.electromobility.inflexible_use_cases = []
 
         integrated = edisgo_obj.electromobility.integrated_charging_parks_df
         park_id = integrated.index[0]
@@ -346,6 +373,88 @@ class TestElectromobility:
         # to coincide here only because chargingdemand_kWh/park_time_timesteps
         # is linear - assert the true value directly, not this coincidence)
         assert expected_kWh == pytest.approx(proportional_share_kWh)
+
+    def test_inflexible_use_cases(self):
+        electromobility = Electromobility()
+        assert "public" in electromobility.inflexible_use_cases
+        assert "street" in electromobility.inflexible_use_cases
+        electromobility.inflexible_use_cases = "depot"
+        assert electromobility.inflexible_use_cases == ["depot"]
+        electromobility.inflexible_use_cases = ("hpc", "street")
+        assert electromobility.inflexible_use_cases == ["hpc", "street"]
+
+    @pytest.mark.parametrize(
+        "use_case, inflexible_use_cases, fixed",
+        [
+            ("street", None, True),
+            ("highway_fast", None, True),
+            ("hpc", None, True),
+            ("home_detached", None, False),
+            ("work", None, False),
+            ("work", ["work"], True),
+            ("public", [], False),
+        ],
+    )
+    def test_get_flexibility_bands_fixes_inflexible_processes(
+        self, use_case, inflexible_use_cases, fixed
+    ):
+        """
+        Charging processes of inflexible use cases get bands fixed to a linear
+        ramp over their parking time; those of other use cases keep their
+        flexibility.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+        if inflexible_use_cases is not None:
+            edisgo_obj.electromobility.inflexible_use_cases = inflexible_use_cases
+
+        integrated = edisgo_obj.electromobility.integrated_charging_parks_df
+        park_id = integrated.index[0]
+        template = edisgo_obj.electromobility.charging_processes_df[
+            edisgo_obj.electromobility.charging_processes_df.charging_park_id == park_id
+        ].iloc[0]
+        edisgo_id = integrated.at[park_id, "edisgo_id"]
+
+        # 10 kWh at 10 kW need 4 time steps, parked for 40 steps [10, 49]
+        edisgo_obj.electromobility.charging_processes_df = pd.DataFrame(
+            {
+                "ags": [template.ags],
+                "car_id": [0],
+                "destination": [template.destination],
+                "use_case": [use_case],
+                "nominal_charging_capacity_kW": [10.0],
+                "grid_charging_capacity_kW": [10.0],
+                "chargingdemand_kWh": [10.0],
+                "park_time_timesteps": [40],
+                "park_start_timesteps": [10],
+                "park_end_timesteps": [49],
+                "charging_park_id": [park_id],
+                "charging_point_id": [template.charging_point_id],
+            }
+        )
+        edisgo_obj.set_timeindex(pd.date_range("1/1/2011", periods=96, freq="15min"))
+
+        bands = edisgo_obj.electromobility.get_flexibility_bands(edisgo_obj)
+        eta = edisgo_obj.electromobility.eta_charging_points
+        upper_energy = bands["upper_energy"][edisgo_id] * 1e3
+        lower_energy = bands["lower_energy"][edisgo_id] * 1e3
+        upper_power = bands["upper_power"][edisgo_id] * 1e3
+
+        assert upper_energy.iloc[-1] == pytest.approx(10.0)
+        assert lower_energy.iloc[-1] == pytest.approx(10.0, abs=1e-2)
+        if fixed:
+            # 10 kWh in 40 steps of 15 minutes, i.e. at 1 kW
+            assert np.allclose(upper_energy, lower_energy, atol=1e-2)
+            assert np.allclose(upper_energy.iloc[10:50].diff().iloc[1:], 1.0 / 4)
+            assert np.allclose(upper_power.iloc[10:50], 1.0 / eta, atol=1e-2)
+        else:
+            assert upper_energy.iloc[13] == pytest.approx(10.0)
+            assert lower_energy.iloc[45] == pytest.approx(0.0, abs=1e-2)
+            assert np.allclose(upper_power.iloc[10:50], 10.0 / eta, atol=1e-2)
 
     def test_get_flexibility_bands_excludes_events_and_limits_array_size(self):
         """
@@ -554,12 +663,14 @@ class TestElectromobility:
         # reset charging efficiency
         self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 0.9
 
-    def test_resample(self):
+    def test_resample(self, monkeypatch):
         """
         Checks resampling function with flexibility bands determined using standing
         times.
 
         """
+        # the concrete values below are those of flexible charging processes
+        monkeypatch.setattr(self.edisgo_obj.electromobility, "inflexible_use_cases", [])
         # reset Timeseries object and set it to SimBEV's own native
         # calendar/range (start 2011-01-01, 15-min steps, 7 simulated days) so
         # get_flexibility_bands' alignment onto it is a no-op, leaving the

@@ -521,6 +521,38 @@ Changes
   curtailed feed-in. Results of ``opf_version`` 3 with a curtailment request change,
   including the presets ``overlying_grid_opf`` and ``overlying_grid_opf_spatial``;
   rerun such calculations (openego/eDisGo#801)
+* Charging processes of inflexible use cases are now fixed in the optimisation and
+  have the same time shape as in the eTraGo model built by egon-data
+  (openego/eDisGo#789). The inflexible use cases are set in the new attribute
+  :attr:`~.network.electromobility.Electromobility.inflexible_use_cases`. It defaults
+  to ``public`` and ``hpc`` and to the use cases ``street``, ``retail``,
+  ``urban_fast`` and ``highway_fast`` of the electromobility data of egon-data:
+
+  * :meth:`~.network.electromobility.Electromobility.get_flexibility_bands` fixes the
+    bands of these charging processes to a linear ramp over their parking time,
+    i.e. constant charging power from arrival to departure. Before, every charging
+    process got a full flexibility band, so the OPF shifted public and high-power
+    charging as well
+  * The charging strategies ``"reduced"`` and ``"residual"`` charge these processes
+    along a linear ramp over their parking time instead of at full power from
+    arrival, and recognise the use cases of the electromobility data of egon-data,
+    which they treated as flexible before
+  * :func:`~.network.overlying_grid.distribute_overlying_grid_requirements` gives the
+    charging points of these use cases their fixed series and distributes only the
+    rest of the eTraGo charging time series to the other charging points. It warns
+    if the eTraGo series is lower than the fixed series or if no flexible charging
+    point can take the rest
+  * :meth:`~.network.electromobility.Electromobility.get_flexibility_bands` and the
+    runner task ``build_flexibility_bands`` build bands for all charging points by
+    default, whatever their use case
+
+  Results with electromobility flexibility, with the charging strategies
+  ``"reduced"`` and ``"residual"`` or with the presets ``overlying_grid_opf`` and
+  ``overlying_grid_opf_spatial`` change
+* Fixed the charging strategy ``"residual"`` if the time series are resampled to the
+  frequency of the charging processes. The last value of the charging time series was
+  carried forward to the end of the time index, if the time index extended past the
+  last charging process, and a time index with gaps got NaN values after the first gap
 * Fixed the heat pump dispatch in ``opf_version`` 1 (the default) and 3. Their
   objectives did not penalise the slacks of the heat pump balance, so the OPF covered
   part of the heat demand with electrical power that was never drawn from the grid.
