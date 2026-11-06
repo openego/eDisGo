@@ -6,6 +6,23 @@ Release date: not yet released
 Changes
 -------
 
+* All time series are now indexed in one calendar year, the reference year. It is
+  set with the new key ``reference_year`` in section ``timeindex`` of
+  ``config_timeseries.cfg`` and defaults to 2011, the weather year of the model data.
+  Config files without this section fall back to 2011. See
+  :ref:`reference-year` for details
+* Every time index and all time series given by the user or imported from the
+  database are relabelled to the reference year with a warning, keeping each date.
+  29 February is always left out, also if the reference year is a leap year. A time
+  index across the year boundary raises a ``ValueError``
+* The scenario passed to the database imports only selects which data is loaded and
+  no longer sets the year of the time index. Runs without a time index are therefore
+  indexed in 2011 instead of 2035 (``'eGon2035'``) or 2045 (``'eGon100RE'``). As the
+  demandlib load profiles depend on weekdays and holidays, this can change results
+* :func:`~.tools.tools.get_year_based_on_scenario` and
+  :func:`~.tools.tools.get_year_based_on_timeindex` are deprecated and will be
+  removed in a future release. Use :func:`~.tools.tools.get_reference_year` to get
+  the year time series are indexed in
 * Time series that eDisGo writes or reads now follow the time index
   (:attr:`~.network.timeseries.TimeSeries.timeindex`), also if the input data span a
   longer period or the time index has gaps (openego/eDisGo#703):
@@ -420,6 +437,47 @@ Changes
   ``Bus_ChargingPoint_0``, was already taken. The new bus then got another name, but
   the component and the new MV line were connected to the existing bus. This could
   happen after components were removed or aggregated (openego/eDisGo#413)
+* The OPF limits Gurobi to 8 threads by default instead of all cores of the machine,
+  so that other processes and parallel runs of several grids keep running. The number
+  is set with the new parameter ``threads`` of :meth:`~.edisgo.EDisGo.pm_optimize`
+  and of the runner step ``optimize``; ``threads=0`` uses all cores as before
+* The spatial complexity reduction limits the thread pools of scikit-learn (OpenMP)
+  and numpy/scipy (BLAS) to 1 thread by default instead of all cores of the machine.
+  More threads hardly speed up the reduction, as most of its run time is spent in
+  single-threaded code. The number is set with the new parameter ``threads`` of
+  :meth:`~.edisgo.EDisGo.spatial_complexity_reduction` and of the runner
+  ``spatial_reduction`` block; ``threads=0`` uses all cores as before
+  (openego/eDisGo#844)
+* The spatial complexity reduction runs 2.5 to 9 times faster on the tested grids.
+  Apart from the fixes below, the busmap and the reduced grid are the same as
+  before. :func:`~.tools.spatial_complexity_reduction.make_busmap`,
+  :func:`~.tools.spatial_complexity_reduction.apply_busmap` and
+  :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates` work on whole columns
+  instead of looping over buses and lines row by row. With ``mode='kmeansdijkstra'``
+  and ``cluster_area='feeder'``, the shortest paths from each bus to the buses that
+  represent the clusters are only searched within its feeder
+* Fixed :func:`~.tools.spatial_complexity_reduction.make_busmap` changing the
+  coordinates of the EDisGo object to EPSG:3035 for the cluster areas ``'feeder'``
+  and ``'main_feeder'``. The coordinates are now transformed in a copy.
+  :func:`~.tools.spatial_complexity_reduction.spatial_complexity_reduction` was not
+  affected, as :func:`~.tools.spatial_complexity_reduction.apply_busmap` overwrites
+  them afterwards
+* Fixed :func:`~.tools.spatial_complexity_reduction.apply_busmap` setting the shunt
+  susceptance ``b`` of every aggregated line to 0. ``b`` of an aggregated line is now
+  its length times the sum of ``b`` per km of the lines it stands for, so that
+  parallel lines add up
+* Fixed :func:`~.tools.spatial_complexity_reduction.apply_busmap` dropping every line
+  with a missing value in any column, e.g. ``kind``, from the reduced grid without
+  notice. Such lines are now aggregated like all others. A line between two new
+  buses without ``type_info`` raises a ``ValueError``, as r and x of the aggregated
+  line are computed from the line type
+* :func:`~.tools.spatial_complexity_reduction.make_busmap` with
+  ``mode='kmeansdijkstra'`` raises a ``ValueError`` naming the bus if a bus is not
+  connected to any cluster, instead of failing with a ``KeyError``
+* Fixed the spatial complexity reduction removing the prefix ``virtual_`` from bus
+  names with ``str.lstrip``, which strips all leading characters contained in
+  ``"virtual_"``, so that e.g. ``virtual_lv_bus`` became ``bus``. ding0 bus names
+  were not affected
 * Fixed the ``PerformanceWarning: DataFrame is highly fragmented`` raised in grids
   with more than 100 LV grids while checking the voltage at the secondary side of
   the MV/LV stations. The voltage limits of the stations are now built in one step
@@ -445,3 +503,31 @@ Changes
   and a selection whose time steps lie in more than one year. The time series cover
   one year, so on loaded time series such a selection gave empty time series with
   only a warning
+* Fixed :func:`~.flex_opt.reinforce_grid.catch_convergence_reinforce_grid`, which
+  changed the mode of the reinforcement to the mode of the power flow analysis after
+  the first non-converging reinforcement. With ``mode="lv"`` the grid was then
+  reinforced in all voltage levels, including the MV grid and the HV/MV station with
+  the LV worst cases. This happened in the LV step of
+  :meth:`~.edisgo.EDisGo.reinforce` with ``catch_convergence_problems=True`` on
+  worst-case time series and in
+  :func:`~.flex_opt.reinforce_grid.enhanced_reinforce_grid`, so their results can
+  contain less MV and HV/MV reinforcement now
+* Fixed the curtailment in ``opf_version`` 3. The OPF met the curtailment requested
+  by the overlying grid (``overlying_grid.renewables_curtailment``) without reducing
+  the feed-in in the grid, so it placed the curtailment arbitrarily and planned the
+  flexibilities for the full feed-in, while the curtailed feed-in was written back to
+  the generator time series. The OPF now curtails where this relieves the grid, up to
+  the requested amount and not beyond it, and plans the flexibilities for the
+  curtailed feed-in. Results of ``opf_version`` 3 with a curtailment request change,
+  including the presets ``overlying_grid_opf`` and ``overlying_grid_opf_spatial``;
+  rerun such calculations (openego/eDisGo#801)
+* Fixed the heat pump dispatch in ``opf_version`` 1 (the default) and 3. Their
+  objectives did not penalise the slacks of the heat pump balance, so the OPF covered
+  part of the heat demand with electrical power that was never drawn from the grid.
+  The optimised heat pump time series were therefore too low. All versions now
+  penalise these slacks heavily. The heat pump operation slack is stored in
+  ``opf_results.grid_slacks_t.hp_operation_slack`` in every version, next to
+  ``opf_results.heat_storage_t.p_slack``, and
+  :func:`~.io.powermodels_io.from_powermodels` logs a warning with the affected heat
+  pumps, time steps and energy whenever a slack is used. Results of ``opf_version``
+  1 and 3 with heat pumps change; rerun such calculations (openego/eDisGo#695)

@@ -31,6 +31,7 @@ from edisgo.run.tasks.spatial import task_spatial_reduce, task_spatial_restore
 from edisgo.run.tasks.timeseries import (
     _selection_params,
     task_manual_ts,
+    task_oedb_ts,
     task_select_critical_timesteps,
     task_set_timeindex,
 )
@@ -117,14 +118,9 @@ class TestImportFlex:
 class TestBuildFlexibilityBands:
     def test_build_flexibility_bands_scopes_to_timeindex(self):
         """
-        Regression test for eDisGo#703: task_build_flexibility_bands used to
-        need an explicit reduce_timeseries_data_to_given_timeindex call after
-        get_flexibility_bands to trim/year-align the bands to the active
-        timeindex; get_flexibility_bands now does this itself, so the task
-        (which no longer makes that call) must still produce bands matching
-        edisgo.timeseries.timeindex exactly - including across the year
-        mismatch between SimBEV's own calendar (2011 in this fixture) and
-        the scenario timeindex (2035 here).
+        task_build_flexibility_bands produces bands matching
+        edisgo.timeseries.timeindex exactly, also for a time index shorter than
+        SimBEV's simulated range and set in another year than the reference year.
         """
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         electromobility_import.import_electromobility_from_dir(
@@ -135,8 +131,8 @@ class TestBuildFlexibilityBands:
         electromobility_import.distribute_charging_demand(edisgo)
         electromobility_import.integrate_charging_parks(edisgo)
 
-        short_timeindex = pd.date_range("2035-01-15", periods=24, freq="h")
-        edisgo.set_timeindex(short_timeindex)
+        edisgo.set_timeindex(pd.date_range("2035-01-15", periods=24, freq="h"))
+        short_timeindex = pd.date_range("2011-01-15", periods=24, freq="h")
 
         ctx = RunContext(flags={"has_electromobility": True})
         result = task_build_flexibility_bands(edisgo, ctx)
@@ -184,15 +180,13 @@ class TestImportOverlyingGridData:
 
     def test_etrago_dispatchable_ts_aligned_to_timeindex(self):
         """
-        eTraGo data is indexed in its weather year (2011), the EDisGo object in
-        the scenario year. The dispatchable generator time series must be
-        shifted onto the EDisGo time index like all other overlying-grid data
-        (regression: it was passed on unaligned, which left the dispatchable
-        generators without time series and the OPF failed on NaN).
+        The dispatchable generator time series from eTraGo are aligned to the
+        EDisGo time index like all other overlying-grid data, so that the
+        dispatchable generators get time series without NaN.
         """
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        timeindex = pd.date_range("2035-01-15", periods=3, freq="h")
-        edisgo.set_timeindex(timeindex)
+        edisgo.set_timeindex(pd.date_range("2035-01-15", periods=3, freq="h"))
+        timeindex = pd.date_range("2011-01-15", periods=3, freq="h")
         etrago_index = pd.date_range("2011-01-01", periods=8760, freq="h")
         disp_ts = pd.DataFrame({"gas": 0.5}, index=etrago_index)
         ctx = self._ctx(
@@ -215,6 +209,32 @@ class TestImportOverlyingGridData:
         result = task_import_overlying_grid_data(edisgo_obj, ctx)
         assert result is edisgo_obj
         assert "path" in caplog.text.lower()
+
+    def test_etrago_dispatchable_generators_ts_is_aligned(self, edisgo_obj, caplog):
+        """
+        dispatchable_generators_active_power and renewables_potential from
+        eTraGo are both aligned to edisgo.timeseries.timeindex by
+        OverlyingGrid.from_etrago before the task applies them, so the
+        resulting active power series are not empty.
+        """
+        disp_ts = pd.DataFrame(
+            {"other": [1.0, 1.0, 1.0]},
+            index=pd.date_range("2035-01-01", periods=3, freq="h"),
+        )
+        ctx = self._ctx(
+            {"enabled": True, "source": "etrago"},
+            overlying_grid_data={"dispatchable_generators_active_power": disp_ts},
+        )
+
+        with caplog.at_level("WARNING"):
+            result = task_import_overlying_grid_data(edisgo_obj, ctx)
+
+        assert "2035" in caplog.text
+        assert not result.timeseries.generators_active_power.empty
+        pd.testing.assert_index_equal(
+            result.timeseries.generators_active_power.index,
+            edisgo_obj.timeseries.timeindex,
+        )
 
 
 def _grid_with_district_heating():
@@ -643,6 +663,35 @@ class TestSetTimeindex:
         ]
 
 
+class TestOedbTs:
+    """
+    fluctuating/conventional_loads are disabled below to keep these tests
+    DB-free, in line with this module's convention (see module docstring).
+    Only the scenario validation and time-index resolution are exercised;
+    the actual oedb import is covered separately in
+    tests/io/test_timeseries_import.py.
+    """
+
+    def test_reference_year_independent_of_scenario(self, edisgo_obj):
+        # without timeindex, the time index is set to the reference year for
+        # every scenario
+        edisgo_obj.set_timeindex(pd.DatetimeIndex([]))
+        ctx = RunContext(scenario="eGon100RE")
+        result = task_oedb_ts(
+            edisgo_obj, ctx, fluctuating=None, conventional_loads=None
+        )
+        assert not result.timeseries.timeindex.empty
+        assert result.timeseries.timeindex[0].year == 2011
+
+    def test_without_scenario(self, edisgo_obj):
+        # no scenario is needed if no data is loaded from the oedb
+        edisgo_obj.set_timeindex(pd.DatetimeIndex([]))
+        result = task_oedb_ts(
+            edisgo_obj, RunContext(), fluctuating=None, conventional_loads=None
+        )
+        assert result.timeseries.timeindex[0].year == 2011
+
+
 class TestSelectCriticalTimesteps:
     def test_without_active_power_raises(self, edisgo_obj):
         with pytest.raises(ValueError, match="active-power time series"):
@@ -771,6 +820,7 @@ class TestOptimizeTaskDelegation:
         # shortcut expanded to explicit name lists (empty ok if grid lacks type)
         assert "flexible_hps" in captured and "flexible_storage_units" in captured
         assert isinstance(captured["flexible_hps"], list)
+        assert captured["threads"] == 8
 
     def test_flexible_defaults_to_config_flexibilities(self, edisgo_obj):
         """
@@ -878,3 +928,17 @@ def test_spatial_reduce_with_null_block_is_a_noop():
     sentinel = object()
     ctx = RunContext(raw_config={"spatial_reduction": None})
     assert task_spatial_reduce(sentinel, ctx) is sentinel
+
+
+def test_spatial_reduce_forwards_threads(edisgo_obj):
+    """``threads`` of the spatial_reduction block reaches
+    EDisGo.spatial_complexity_reduction."""
+    captured = {}
+
+    def fake_reduction(**kw):
+        captured.update(kw)
+
+    edisgo_obj.spatial_complexity_reduction = fake_reduction
+    ctx = RunContext(raw_config={"spatial_reduction": {"enabled": True, "threads": 4}})
+    task_spatial_reduce(edisgo_obj, ctx)
+    assert captured["threads"] == 4
