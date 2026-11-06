@@ -1914,9 +1914,10 @@ def apply_reduced_results_to_full_grid(
     full topology. It writes back the given flexible charging points, heat
     pumps, DSM loads and storage units, and always all generators: with
     ``opf_version`` 3 and 4 the OPF curtails solar and wind generators (see
-    :func:`~.io.powermodels_io.from_powermodels`), and for every other
-    generator the write-back returns its unchanged series. Inflexible loads
-    are untouched, as the OPF does not change them.
+    :func:`~.io.powermodels_io.from_powermodels`). Generators the OPF did not
+    change get their own series back, because a merged generator's series is
+    the sum of its members' series. Inflexible loads are untouched, as the
+    OPF does not change them.
 
     ``full_grid`` and ``reduced_grid`` are matched by name for storage units
     (never aggregated by :func:`spatial_complexity_reduction`, so their names
@@ -1951,6 +1952,17 @@ def apply_reduced_results_to_full_grid(
     Weights always sum back to the representative's value exactly at every
     time step; a time step where every member's weight is 0 falls back to an
     equal split.
+
+    Limitations of the generator write-back:
+
+    * The split ignores where the members sit within their cluster, so it is
+      not necessarily the curtailment an OPF on the full grid would choose.
+    * With ``generator_aggregation_mode="bus"`` merged generators get type
+      ``"aggregated"``. The OPF only curtails generators of type ``"solar"``
+      and ``"wind"``, so the feed-in of these generators comes back
+      unchanged.
+    * Solver tolerance can leave a curtailed generator slightly below zero
+      (about -1e-6 MW).
 
     Reactive power is not read from ``reduced_grid``. After writing active
     power, this function calls
@@ -2050,15 +2062,16 @@ def apply_reduced_results_to_full_grid(
     def _disaggregate(
         active_power: DataFrame,
         name_map: dict,
-        envelope: DataFrame,
+        weights_source: DataFrame,
         target: DataFrame,
     ) -> None:
         """Split each representative's series onto its members per time step.
 
-        ``envelope`` holds each member's pre-OPF flexibility envelope
-        (columns = member names, index = time index); members missing from
-        ``envelope`` are treated as having an all-zero envelope (equal-split
-        fallback).
+        ``weights_source`` holds each member's pre-OPF weight (columns =
+        member names, index = time index): a flexibility band, the capped
+        heat demand or the uncurtailed feed-in. A member missing from it gets
+        weight 0. A time step where all members' weights are 0 is split
+        equally.
         """
         ti = full_grid.timeseries.timeindex
         for representative, members in name_map.items():
@@ -2068,12 +2081,14 @@ def apply_reduced_results_to_full_grid(
             weights = pd.DataFrame(index=ti, columns=members, dtype=float)
             for member in members:
                 weights[member] = (
-                    envelope.loc[ti, member] if member in envelope.columns else 0.0
+                    weights_source.loc[ti, member]
+                    if member in weights_source.columns
+                    else 0.0
                 )
             weight_sum = weights.sum(axis="columns")
-            zero_envelope = weight_sum == 0
+            no_weight = weight_sum == 0
             shares = weights.div(weight_sum.replace(0, np.nan), axis="index")
-            shares.loc[zero_envelope, :] = 1.0 / len(members)
+            shares.loc[no_weight, :] = 1.0 / len(members)
             representative_power = active_power.loc[ti, representative]
             for member in members:
                 target.loc[ti, member] = shares[member] * representative_power

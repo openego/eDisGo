@@ -146,7 +146,7 @@ Changes
   ``spatial_restore`` task. ``spatial_reduce`` stashes a deepcopy of the full grid
   *before* the OPF runs and ``spatial_restore`` returns that stash, but
   :meth:`~.edisgo.EDisGo.map_reduced_results_to_full_grid` transfers only the
-  flexible-component dispatch time series — so the object the pipeline continued
+  dispatch time series, not the OPF results — so the object the pipeline continued
   with still held the pristine, empty ``OPFResults`` constructed before the solve,
   and ``save`` with ``save_opf_results: true`` wrote an ``opf_results/`` directory
   containing no CSV files at all. This affected every run with

@@ -922,12 +922,19 @@ def test_curtailment_reaches_the_full_grid(aggregation_mode):
     The full grid must then satisfy what the OPF result means physically:
     every reduced generator's dispatch equals the sum of its full-grid
     members, so the feed-in towards the overlying grid is the one the OPF
-    found; no generator feeds in less than 0 or more than its potential;
+    found; each member is curtailed by its representative's fraction, so no
+    generator feeds in less than 0 or more than its uncurtailed feed-in;
     reactive power follows the curtailed active power at an unchanged Q/P
     ratio; and generators the OPF did not curtail keep their series.
     """
     edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
     edisgo.set_time_series_worst_case_analysis()
+    # worst-case feed-in is proportional to p_nom; scale it per generator so
+    # that a split by p_nom differs from the split by feed-in
+    edisgo.timeseries._generators_active_power *= np.random.default_rng(1).uniform(
+        0.5, 1.0, edisgo.timeseries.generators_active_power.shape
+    )
+    edisgo.set_time_series_reactive_power_control()
     p_before = edisgo.timeseries.generators_active_power.copy()
     q_before = edisgo.timeseries.generators_reactive_power.copy()
     gens_df = edisgo.topology.generators_df
@@ -976,6 +983,10 @@ def test_curtailment_reaches_the_full_grid(aggregation_mode):
     # the dispatch of every reduced generator reaches the full grid in total
     for name, group in members.items():
         assert np.allclose(p[group].sum(axis=1), dispatch[name]), name
+        # split in proportion to the members' uncurtailed feed-in
+        fraction_of_group = dispatch[name] / p_before[group].sum(axis=1)
+        expected = p_before[group].mul(fraction_of_group, axis=0).fillna(0.0)
+        assert np.allclose(p[group], expected), name
     assert np.allclose(p[renewable].sum(axis=1), dispatch[red_renewable].sum(axis=1))
     # each generator stays between 0 and its uncurtailed feed-in
     assert (p >= -1e-9).all().all()
@@ -1004,8 +1015,10 @@ def test_opf_without_curtailment_request_keeps_the_feed_in():
     the OPF may curtail less than requested but never more, so the full grid
     must come out of the write-back with the feed-in it went in with.
 
-    The barrier solver stops about 1e-4 MW short of that (with or without
-    spatial reduction), hence the absolute tolerance of 1 kW per generator.
+    The solver stops slightly short of zero curtailment (about 1e-4 MW in
+    total, with or without spatial reduction), hence the absolute tolerance
+    of 1 kW per generator. ``method="nc"`` solves with Ipopt, which needs no
+    license, so the test also runs in CI.
     """
     edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
     edisgo.set_time_series_worst_case_analysis()
@@ -1034,7 +1047,7 @@ def test_opf_without_curtailment_request_keeps_the_feed_in():
         }
     )
     reduced = task_spatial_reduce(edisgo, ctx)
-    reduced = task_optimize(reduced, ctx, flexible=[], opf_version=3)
+    reduced = task_optimize(reduced, ctx, flexible=[], opf_version=3, method="nc")
     full = task_spatial_restore(reduced, ctx)
 
     # opf_version 3 ran, with the curtailment requirement
