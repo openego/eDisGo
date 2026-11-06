@@ -2245,6 +2245,26 @@ class TestEDisGo:
         assert len(self.edisgo.topology.generators_df) == 17
         assert len(set(busmap_df["new_bus"].to_list())) == 32
         assert len(set(linemap_df["new_line_name"].to_list())) == 21
+    #Neu test
+    def test_invalid_integrity_mode(self):
+        with pytest.raises(ValueError, match="errors must be"):
+            self.edisgo.check_integrity(errors="invalid")
+    def test_integrity_raise_missing_timeseries(self):
+        self.edisgo.topology.check_integrity = lambda **kwargs: None
+        # Eliminar una columna de las series temporales para provocar una inconsistencia
+        generators = self.edisgo.topology.generators_df.index
+        self.edisgo.timeseries.generators_active_power.drop(
+            columns=generators[0], inplace=True, errors="ignore"
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            self.edisgo.check_integrity(errors="raise")
+
+        message = str(exc_info.value)
+
+        assert "generators_active_power" in message
+        assert "generators_reactive_power" in message
+
 
     def test_check_integrity(self, caplog):
         self.edisgo.check_integrity()
@@ -2417,7 +2437,7 @@ class TestEDisGo:
         ] = 1.0
         msg = "Lower energy band is higher than upper energy band for the "
         with pytest.raises(ValueError, match=msg):
-            self.edisgo.check_integrity()
+            self.edisgo.check_integrity(errors ="raise")
 
         # reset values
         caplog.clear()

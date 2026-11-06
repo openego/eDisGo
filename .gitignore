@@ -34,3 +34,5 @@ eDisGo.egg-info/
 *.jl.*.cov
 *.jl.cov
 *.jl.mem
+# Local Python virtual environment
+.venv311_edisgo/

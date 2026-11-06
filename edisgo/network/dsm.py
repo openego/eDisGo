@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 
 from edisgo.tools import tools
+from edisgo.tools.integrity import IntegrityCollector
 
 logger = logging.getLogger(__name__)
 
@@ -308,13 +309,20 @@ class DSM:
             # make sure to destroy ZipFile Class to close any open connections
             zip.close()
 
-    def check_integrity(self):
+    def check_integrity(self, errors="warn", collector=None):
         """
         Check data integrity.
 
         Checks for duplicated and missing labels as well as implausible values.
 
         """
+        own_collector = collector is None
+
+        if own_collector:
+            collector = IntegrityCollector(errors)
+
+        def report_issue(message):
+            collector.report(message, logger)
         # check for duplicate columns
         duplicated_labels = []
         for ts in self._attributes:
@@ -326,9 +334,9 @@ class DSM:
             duplicates = set(
                 np.concatenate([list.tolist() for list in duplicated_labels])
             )
-            logger.warning(
-                f"DSM timeseries contain the following duplicates: {duplicates}."
-            )
+            message = f"DSM timeseries contain the following duplicates: {duplicates}."
+
+            report_issue(message)
 
         # check that all profiles exist for the same loads
         columns = set(
@@ -338,29 +346,36 @@ class DSM:
             df = getattr(self, ts)
             missing_entries = [_ for _ in columns if _ not in df.columns]
             if len(missing_entries) > 0:
-                logger.warning(
+                message = (
                     f"DSM timeseries {ts} is missing the following "
                     f"entries: {missing_entries}."
                 )
+                report_issue(message)
 
         # check for implausible values
         if not (self.p_min <= 0.0).all().all():
-            logger.warning(
+            message = (
                 "DSM timeseries p_min contains values larger than zero, which is "
                 "not allowed."
             )
+            report_issue(message)
         if not (self.e_min <= 0.0).all().all():
-            logger.warning(
+            message = (
                 "DSM timeseries e_min contains values larger than zero, which is "
                 "not allowed."
             )
+            report_issue(message)
         if not (self.p_max >= 0.0).all().all():
-            logger.warning(
+            message = (
                 "DSM timeseries p_max contains values smaller than zero, which is "
                 "not allowed."
             )
+            report_issue(message)
         if not (self.e_max >= 0.0).all().all():
-            logger.warning(
+            message = (
                 "DSM timeseries e_max contains values smaller than zero, which is "
                 "not allowed."
             )
+            report_issue(message)
+        if own_collector:
+            collector.raise_if_errors()
