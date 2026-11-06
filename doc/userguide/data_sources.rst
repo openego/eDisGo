@@ -53,7 +53,7 @@ Grid topology and time series — SimBench
 
 `SimBench <https://simbench.de>`_ is an open benchmark data set of synthetic German
 grids on all voltage levels, with one year of 15-minute profiles for every load,
-generator and storage unit and three scenarios (0: today, 1: 2024, 2: 2034). The
+generator and storage unit and three scenarios (0: 2016, 1: 2024, 2: 2034). The
 scenarios 1 and 2 contain heat pumps, home charging points and PV systems with
 home battery.
 
