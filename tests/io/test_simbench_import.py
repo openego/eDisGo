@@ -178,6 +178,10 @@ class TestImportSimbenchGrid:
         )
         assert edisgo.topology.storage_units_df.empty
 
+    def test_path_without_grid(self, tmp_path):
+        with pytest.raises(FileNotFoundError, match="No SimBench grid found"):
+            EDisGo().import_simbench_grid(str(tmp_path))
+
     def test_grid_without_mv_grid(self, tmp_path):
         def drop_hvmv_transformers(trafos):
             return trafos[trafos.voltLvl != 4]

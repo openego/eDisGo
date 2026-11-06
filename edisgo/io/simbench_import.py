@@ -236,6 +236,10 @@ def import_simbench_grid(path, edisgo_obj):
     edisgo_obj : :class:`~.EDisGo`
 
     """
+    if not os.path.isfile(os.path.join(path, "Node.csv")):
+        raise FileNotFoundError(
+            f"No SimBench grid found in '{path}': the folder has no Node.csv."
+        )
     nodes = _read(path, "Node").set_index("id")
     coordinates = _read(path, "Coordinates").set_index("id")
     switches = _read(path, "Switch")
