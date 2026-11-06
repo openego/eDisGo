@@ -77,6 +77,7 @@ dev_requirements = [
     "ruff < 0.18.0",
     "pre-commit < 4.7.0",
     "pylint < 4.2.0",
+    "hypothesis < 6.171.0",
     "pytest < 9.3.0",
     "nbclient < 0.12.0",
     "pytest-xdist < 4.0.0",
