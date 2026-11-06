@@ -173,6 +173,17 @@ def _generator_type(simbench_type):
     return "others"
 
 
+def _is_pv_with_battery(storage):
+    """
+    Whether SimBench storage units are PV systems with a home battery.
+
+    SimBench gives for these ('PV_Storage', 'PV_Storage_MV') the power at the grid
+    connection of the PV system and its battery together, which is always feed-in.
+
+    """
+    return storage.type.str.startswith("PV_Storage")
+
+
 def _transformer_impedance(trafos, trafo_types):
     """Add s_nom, r_pu and x_pu (on the transformer's own rating) to `trafos`."""
     types = trafo_types.set_index("id").loc[trafos.type]
@@ -209,7 +220,11 @@ def import_simbench_grid(path, edisgo_obj):
       home charging loads (profiles 'HLS_*') get type 'charging_point'. All other
       loads, including LV grids that SimBench represents as one load at an MV
       bus, are conventional loads.
-    * Storage units, e.g. home batteries of PV systems, become storage units.
+    * SimBench storage units of type 'PV_Storage' and 'PV_Storage_MV' are PV
+      systems with a home battery. Their SimBench time series is the feed-in of
+      PV system and battery together, so they become generators of type 'solar'
+      with subtype 'PV_Storage' or 'PV_Storage_MV'. Other SimBench storage units,
+      which only occur in HV and EHV grids, become storage units.
 
     Conventional power plants, shunts, three-winding transformers and
     measurements of SimBench are not imported.
@@ -332,25 +347,35 @@ def import_simbench_grid(path, edisgo_obj):
         index=pd.Index(loads.id.values, name="name"),
     )
 
-    # generators
+    # generators, including PV systems with a home battery
     res = _read(path, "RES")
-    generators_df = pd.DataFrame(
-        {
-            "bus": res.node.map(bus).values,
-            "p_nom": res.pRES.values,
-            "type": res.type.map(_generator_type).values,
-            "control": "PQ",
-            "weather_cell_id": np.nan,
-            "subtype": res.type.values,
-            "source_id": np.nan,
-        },
-        index=pd.Index(res.id.values, name="name"),
-    )
-
-    # storage units; SimBench gives one efficiency for charging and discharging
     storage = _read(path, "Storage")
     if storage.empty:
-        storage = pd.DataFrame(columns=["id", "node", "sR", "eStore", "etaStore"])
+        storage = pd.DataFrame(
+            {col: pd.Series(dtype=str) for col in ["id", "node", "type"]}
+            | {col: pd.Series(dtype=float) for col in ["sR", "eStore", "etaStore"]}
+        )
+    pv_battery = storage[_is_pv_with_battery(storage)]
+    storage = storage[~_is_pv_with_battery(storage)]
+    generators_df = pd.DataFrame(
+        {
+            "bus": np.concatenate([res.node.values, pv_battery.node.values]),
+            "p_nom": np.concatenate([res.pRES.values, pv_battery.sR.values]),
+            "type": np.concatenate(
+                [res.type.map(_generator_type).values, ["solar"] * len(pv_battery)]
+            ),
+            "control": "PQ",
+            "weather_cell_id": np.nan,
+            "subtype": np.concatenate([res.type.values, pv_battery.type.values]),
+            "source_id": np.nan,
+        },
+        index=pd.Index(
+            np.concatenate([res.id.values, pv_battery.id.values]), name="name"
+        ),
+    )
+    generators_df["bus"] = generators_df.bus.map(bus)
+
+    # storage units; SimBench gives one efficiency for charging and discharging
     storage_units_df = pd.DataFrame(
         {
             "bus": storage.node.map(bus).values,
@@ -399,7 +424,9 @@ def simbench_time_series(path, edisgo_obj, timeindex=None):
     each component, as in the `simbench` python package: loads with `pLoad` and
     `qLoad`, generators with `pRES` and `qRES`, storage units with `pStor` and
     `qStor`. SimBench uses the load sign convention for storage units, eDisGo the
-    generator sign convention, so the sign of storage time series is flipped.
+    generator sign convention, so the sign of storage time series is flipped. Time
+    series of PV systems with a home battery are returned as generator time series
+    (see :func:`import_simbench_grid`).
 
     SimBench profiles are 15-minute values for 2016. Their time labels are in
     local time, so that the hour switched to daylight saving time is missing and
@@ -427,26 +454,45 @@ def simbench_time_series(path, edisgo_obj, timeindex=None):
 
     """
 
-    def scaled(table, p_col, q_col, suffix=("", ""), sign=1):
+    def scaled(table, p_col, q_col, suffix=("", ""), sign=1, select=None):
         elements = _read(path, table)
+        if select is not None and not elements.empty:
+            elements = elements[select(elements)]
         if elements.empty:
-            return {}
+            return [pd.DataFrame(), pd.DataFrame()]
         profiles = _read(path, f"{table}Profile")
         start = pd.to_datetime(profiles.pop("time")[0], format="%d.%m.%Y %H:%M")
         profiles.index = pd.date_range(start, periods=len(profiles), freq="15min")
         profiles = shift_to_reference_year(edisgo_obj, profiles, f"{table}Profile")
         if timeindex is not None:
             profiles = profiles.loc[timeindex]
-        name = {"Load": "loads", "RES": "generators", "Storage": "storage_units"}
-        return {
-            f"{name[table]}_{pq}": sign
+        return [
+            sign
             * profiles[elements.profile + sfx].set_axis(elements.id, axis=1)
             * elements[col].values
-            for pq, col, sfx in zip(["p", "q"], [p_col, q_col], suffix)
-        }
+            for col, sfx in zip([p_col, q_col], suffix)
+        ]
 
+    loads = scaled("Load", "pLoad", "qLoad", suffix=("_pload", "_qload"))
+    res = scaled("RES", "pRES", "qRES")
+    pv_battery = scaled(
+        "Storage", "pStor", "qStor", sign=-1, select=_is_pv_with_battery
+    )
+    storage = scaled(
+        "Storage",
+        "pStor",
+        "qStor",
+        sign=-1,
+        select=lambda df: ~_is_pv_with_battery(df),
+    )
+    time_series = {
+        "loads": loads,
+        "generators": [pd.concat([r, b], axis=1) for r, b in zip(res, pv_battery)],
+        "storage_units": storage,
+    }
     return {
-        **scaled("Load", "pLoad", "qLoad", suffix=("_pload", "_qload")),
-        **scaled("RES", "pRES", "qRES"),
-        **scaled("Storage", "pStor", "qStor", sign=-1),
+        f"{component}_{pq}": ts
+        for component, (p, q) in time_series.items()
+        for pq, ts in [("p", p), ("q", q)]
+        if not ts.empty
     }

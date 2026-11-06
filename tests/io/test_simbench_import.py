@@ -96,15 +96,22 @@ class TestImportSimbenchGrid:
             load.qLoad * profiles[f"{load.profile}_qload"].values,
         )
 
-    def test_storage_sign_is_flipped(self, edisgo):
-        # SimBench: positive power charges the storage, eDisGo: discharges it
+    def test_pv_with_battery_is_feed_in(self, edisgo):
+        # SimBench PV storage units are PV systems with a home battery; their
+        # profile is the feed-in of both, given in the load sign convention
         path = pytest.simbench_test_network_path
-        storage = pd.read_csv(f"{path}/Storage.csv", sep=";", index_col="id").iloc[0]
+        storage = pd.read_csv(f"{path}/Storage.csv", sep=";", index_col="id")
         profiles = pd.read_csv(f"{path}/StorageProfile.csv", sep=";")
+        assert edisgo.topology.storage_units_df.empty
+        generators = edisgo.topology.generators_df.loc[storage.index]
+        assert (generators.type == "solar").all()
+        assert (generators.subtype == storage.type).all()
+        unit = storage.iloc[0]
+        feed_in = edisgo.timeseries.generators_active_power[unit.name]
         np.testing.assert_allclose(
-            edisgo.timeseries.storage_units_active_power[storage.name].values,
-            -storage.pStor * profiles[storage.profile].values,
+            feed_in.values, -unit.pStor * profiles[unit.profile].values
         )
+        assert (feed_in >= 0).all()
 
     def test_power_flow(self, edisgo):
         edisgo.analyze()
@@ -155,6 +162,21 @@ class TestImportSimbenchGrid:
         edisgo = EDisGo()
         edisgo.import_simbench_grid(path, time_series=False)
         assert nx.is_connected(edisgo.topology.to_graph())
+
+    def test_grid_without_storage(self, tmp_path):
+        # SimBench grids of scenario 0 have no storage units
+        path = tmp_path / "simbench_grid"
+        shutil.copytree(pytest.simbench_test_network_path, path)
+        (path / "Storage.csv").unlink()
+        (path / "StorageProfile.csv").unlink()
+        edisgo = EDisGo()
+        edisgo.import_simbench_grid(str(path))
+        generators = edisgo.topology.generators_df
+        assert pd.api.types.is_float_dtype(generators.p_nom)
+        assert set(edisgo.timeseries.generators_active_power.columns) == set(
+            generators.index
+        )
+        assert edisgo.topology.storage_units_df.empty
 
     def test_grid_without_mv_grid(self, tmp_path):
         def drop_hvmv_transformers(trafos):
