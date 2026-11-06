@@ -211,6 +211,10 @@ function opf_check_plausible(sol, data, v::Int; exact_current::Bool=true)
         hp, hs = s["heatpumps"]["1"], s["heat_storage"]["1"]
         @test d["heatpumps"]["1"]["cop"] * (hp["php"] + hp["phps2"]) ≈
               d["heatpumps"]["1"]["pd"] + hs["phss"] - hs["phs"] atol = tol
+        # Heat pump and heat storage can cover the heat demand of the fixture, so
+        # the heat balance slacks stay unused in every version.
+        @test hp["phps2"] ≈ 0.0 atol = tol
+        @test hs["phss"] ≈ 0.0 atol = tol
         if v in (2, 4)
             pgc = s["gen_nd"]["1"]["pgc"]
             @test -tol <= pgc <= d["gen_nd"]["1"]["pg"] + tol

@@ -15,8 +15,8 @@ Spatial complexity reduction tasks bracketing ``optimize``.
   the full grid on ``ctx`` and spatially reduces the working object so
   ``optimize`` runs on a smaller grid.
 * :func:`task_spatial_restore` (``spatial_restore``) — writes the optimized
-  flexible-component dispatch back onto the stashed full grid, carries the
-  OPF results over to it, and makes it the active object again, so
+  dispatch (flexible components and generators) back onto the stashed full
+  grid, carries the OPF results over to it, and makes it the active object again, so
   ``reinforce`` runs on the full topology.
 
 Both are no-ops when ``spatial_reduction.enabled`` is false (the default),
@@ -100,8 +100,9 @@ def task_spatial_reduce(edisgo, ctx, **overrides):
 @register_task("spatial_restore", requires={"reduced_grid", "optimized_dispatch"})
 def task_spatial_restore(edisgo, ctx, **overrides):
     """
-    Write optimized flexible-component dispatch back onto the stashed full
-    grid, and make it the active object again.
+    Write the OPF's dispatch (flexible components and the curtailed generator
+    feed-in) back onto the stashed full grid, and make it the active object
+    again.
 
     Reads the flexible-component name lists ``optimize`` wrote to
     ``ctx.flags`` and passes them, together with ``edisgo`` (the reduced,
@@ -154,7 +155,7 @@ def task_spatial_restore(edisgo, ctx, **overrides):
     Returns
     -------
     edisgo.EDisGo
-        The full-grid EDisGo instance with flexible dispatch and
+        The full-grid EDisGo instance with the OPF dispatch and
         ``opf_results`` restored, or ``edisgo`` unchanged if there is no
         stash to restore from.
 

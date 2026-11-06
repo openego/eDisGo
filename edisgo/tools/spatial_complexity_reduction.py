@@ -1905,31 +1905,36 @@ def apply_reduced_results_to_full_grid(
     flexible_storage_units: list | None = None,
 ) -> EDisGo:
     """
-    Write optimized flexible-component dispatch from a spatially-reduced grid
-    back onto the full grid.
+    Write the OPF's active-power results from a spatially-reduced grid back
+    onto the full grid.
 
     Counterpart to :func:`spatial_complexity_reduction`: where that function
     shrinks a grid for a faster OPF, this function maps the OPF's active-power
     results back onto the pre-reduction grid so reinforcement can run on the
-    full topology. Only components the OPF actually rewrites are touched —
-    flexible charging points, heat pumps, DSM loads, and storage units.
-    Inflexible loads/generators are untouched: the OPF never changed their
-    series, so ``full_grid`` already holds the correct values for them.
+    full topology. It writes back the given flexible charging points, heat
+    pumps, DSM loads and storage units, and always all generators: with
+    ``opf_version`` 3 and 4 the OPF curtails solar and wind generators (see
+    :func:`~.io.powermodels_io.from_powermodels`). Generators the OPF did not
+    change get their own series back, because a merged generator's series is
+    the sum of its members' series. Inflexible loads are untouched, as the
+    OPF does not change them.
 
     ``full_grid`` and ``reduced_grid`` are matched by name for storage units
     (never aggregated by :func:`spatial_complexity_reduction`, so their names
-    are unchanged) and, for the other three flexibility types, by the
-    ``old_name`` column that :func:`spatial_complexity_reduction` writes onto
-    ``reduced_grid.topology.loads_df`` when ``aggregation_mode=True``. A
-    member listed in ``old_name`` is a load whose active-power series was
-    merged into one representative row; when ``aggregation_mode=False`` (or a
-    given member was not merged), ``old_name`` is absent and the member's own
-    name is used directly — i.e. a plain by-name write-back.
+    are unchanged) and, for the other flexibility types and the generators,
+    by the ``old_name`` column that
+    :func:`spatial_complexity_reduction` writes onto
+    ``reduced_grid.topology.loads_df`` / ``generators_df`` when
+    ``aggregation_mode=True``. A member listed in ``old_name`` is a component
+    whose active-power series was merged into one representative row; when
+    ``aggregation_mode=False`` (or a given member was not merged),
+    ``old_name`` is absent and the member's own name is used directly — i.e.
+    a plain by-name write-back.
 
     For a merged representative, the representative's optimized series is
     disaggregated onto its ``old_name`` members **per time step**, weighted by
-    each member's own pre-OPF flexibility envelope (a known input, never the
-    optimized result):
+    a pre-OPF value of each member (a known input, never the optimized
+    result):
 
     * charging points — ``upper_power(t)`` from
       ``electromobility.flexibility_bands`` (a charging point with no
@@ -1939,11 +1944,25 @@ def apply_reduced_results_to_full_grid(
       electrical-equivalent heat demand capped at the heat pump's own rated
       power, mirroring how a charging point's ``upper_power(t)`` is already a
       capped bound rather than raw uncapped demand;
-    * DSM loads — ``p_max(t)`` from :attr:`~.network.dsm.DSM.p_max`.
+    * DSM loads — ``p_max(t)`` from :attr:`~.network.dsm.DSM.p_max`;
+    * generators — the member's uncurtailed feed-in ``p(t)``, which
+      ``full_grid`` still holds, so all members of a representative are
+      curtailed by the same fraction.
 
     Weights always sum back to the representative's value exactly at every
     time step; a time step where every member's weight is 0 falls back to an
     equal split.
+
+    Limitations of the generator write-back:
+
+    * The split ignores where the members sit within their cluster, so it is
+      not necessarily the curtailment an OPF on the full grid would choose.
+    * With ``generator_aggregation_mode="bus"`` merged generators get type
+      ``"aggregated"``. The OPF only curtails generators of type ``"solar"``
+      and ``"wind"``, so the feed-in of these generators comes back
+      unchanged.
+    * Solver tolerance can leave a curtailed generator slightly below zero
+      (about -1e-6 MW).
 
     Reactive power is not read from ``reduced_grid``. After writing active
     power, this function calls
@@ -1959,9 +1978,11 @@ def apply_reduced_results_to_full_grid(
     full_grid : :class:`~.EDisGo`
         The pre-reduction EDisGo instance to write dispatch onto, modified in
         place. Must contain every component named in ``flexible_cps`` /
-        ``flexible_hps`` / ``flexible_loads`` / ``flexible_storage_units`` and
-        (for merged components) every name listed in ``reduced_grid``'s
-        ``old_name`` columns.
+        ``flexible_hps`` / ``flexible_loads`` / ``flexible_storage_units``,
+        every generator of ``reduced_grid`` and (for merged components) every
+        name listed in ``reduced_grid``'s ``old_name`` columns. It must still
+        hold the uncurtailed generator feed-in, i.e. be a copy taken before
+        the OPF.
     reduced_grid : :class:`~.EDisGo`
         The spatially-reduced EDisGo instance the OPF ran on. Supplies the
         optimized active-power series and, if aggregated, the ``old_name``
@@ -1979,7 +2000,7 @@ def apply_reduced_results_to_full_grid(
     -------
     :class:`~.EDisGo`
         ``full_grid``, with active power written for the given flexible
-        components and reactive power recomputed.
+        components and all generators, and reactive power recomputed.
 
     """
     # NOTE: "x or []" is unsafe here - callers may pass a numpy array (e.g.
@@ -2018,7 +2039,7 @@ def apply_reduced_results_to_full_grid(
                 f"select_critical_timesteps) before spatial_reduce."
             )
 
-    def _old_name_map(loads_df: DataFrame, names: list) -> dict:
+    def _old_name_map(components_df: DataFrame, names: list) -> dict:
         """Map each representative name in ``names`` to its member names.
 
         A name absent from ``old_name`` (not merged, or
@@ -2026,7 +2047,11 @@ def apply_reduced_results_to_full_grid(
         """
         name_map = {}
         for name in names:
-            old_name = loads_df.at[name, "old_name"] if "old_name" in loads_df else None
+            old_name = (
+                components_df.at[name, "old_name"]
+                if "old_name" in components_df
+                else None
+            )
             name_map[name] = old_name if isinstance(old_name, list) else [name]
         return name_map
 
@@ -2037,15 +2062,16 @@ def apply_reduced_results_to_full_grid(
     def _disaggregate(
         active_power: DataFrame,
         name_map: dict,
-        envelope: DataFrame,
+        weights_source: DataFrame,
         target: DataFrame,
     ) -> None:
         """Split each representative's series onto its members per time step.
 
-        ``envelope`` holds each member's pre-OPF flexibility envelope
-        (columns = member names, index = time index); members missing from
-        ``envelope`` are treated as having an all-zero envelope (equal-split
-        fallback).
+        ``weights_source`` holds each member's pre-OPF weight (columns =
+        member names, index = time index): a flexibility band, the capped
+        heat demand or the uncurtailed feed-in. A member missing from it gets
+        weight 0. A time step where all members' weights are 0 is split
+        equally.
         """
         ti = full_grid.timeseries.timeindex
         for representative, members in name_map.items():
@@ -2055,12 +2081,14 @@ def apply_reduced_results_to_full_grid(
             weights = pd.DataFrame(index=ti, columns=members, dtype=float)
             for member in members:
                 weights[member] = (
-                    envelope.loc[ti, member] if member in envelope.columns else 0.0
+                    weights_source.loc[ti, member]
+                    if member in weights_source.columns
+                    else 0.0
                 )
             weight_sum = weights.sum(axis="columns")
-            zero_envelope = weight_sum == 0
+            no_weight = weight_sum == 0
             shares = weights.div(weight_sum.replace(0, np.nan), axis="index")
-            shares.loc[zero_envelope, :] = 1.0 / len(members)
+            shares.loc[no_weight, :] = 1.0 / len(members)
             representative_power = active_power.loc[ti, representative]
             for member in members:
                 target.loc[ti, member] = shares[member] * representative_power
@@ -2119,6 +2147,19 @@ def apply_reduced_results_to_full_grid(
             reduced_grid.timeseries.storage_units_active_power,
             flexible_storage_units,
             full_grid.timeseries._storage_units_active_power,
+        )
+
+    gens_df = reduced_grid.topology.generators_df
+    if not gens_df.empty:
+        name_map = _old_name_map(gens_df, gens_df.index.tolist())
+        members_flat = [m for members in name_map.values() for m in members]
+        # weights: the uncurtailed feed-in that full_grid still holds (the
+        # list selection returns a copy, so the write-back does not alter it)
+        _disaggregate(
+            reduced_grid.timeseries.generators_active_power,
+            name_map,
+            full_grid.timeseries.generators_active_power[members_flat],
+            full_grid.timeseries._generators_active_power,
         )
 
     full_grid.set_time_series_reactive_power_control()
