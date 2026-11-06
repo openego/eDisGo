@@ -532,3 +532,13 @@ Changes
   complexity reduction, ``opf_version`` 3 or 4 and a curtailment request, including
   the preset ``overlying_grid_opf_spatial``, can decrease; rerun such calculations
   (openego/eDisGo#850)
+* Fixed the heat pump dispatch in ``opf_version`` 1 (the default) and 3. Their
+  objectives did not penalise the slacks of the heat pump balance, so the OPF covered
+  part of the heat demand with electrical power that was never drawn from the grid.
+  The optimised heat pump time series were therefore too low. All versions now
+  penalise these slacks heavily. The heat pump operation slack is stored in
+  ``opf_results.grid_slacks_t.hp_operation_slack`` in every version, next to
+  ``opf_results.heat_storage_t.p_slack``, and
+  :func:`~.io.powermodels_io.from_powermodels` logs a warning with the affected heat
+  pumps, time steps and energy whenever a slack is used. Results of ``opf_version``
+  1 and 3 with heat pumps change; rerun such calculations (openego/eDisGo#695)
