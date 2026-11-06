@@ -3557,9 +3557,11 @@ class EDisGo:
             If "standard_lines" is selected, the values of the standard line of the
             respective voltage level are used to set "type_info" and "kind".
             If "combined_name" is selected, "type_info" and "kind" contain the
-            concatenated values of the merged lines. x and r of the lines are not
-            influenced by this as they are always determined from the x and r values of
-            the aggregated lines.
+            concatenated values of the merged lines. The electrical parameters do not
+            depend on this setting: r and x are computed from the per-km values of the
+            line types of the aggregated lines, treated as parallel systems, and the
+            susceptance b is the new length times the sum of b per km of the aggregated
+            lines.
             Default: "standard_lines".
         aggregation_mode : bool
             Specifies, whether to aggregate loads and generators at the same bus or not.
