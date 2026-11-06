@@ -2,6 +2,7 @@ import copy
 
 from contextlib import nullcontext as does_not_raise
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 import pytest
@@ -347,6 +348,223 @@ class TestSpatialComplexityReduction:
                 single.loc[line, "x"], rel=1e-6
             ), f"reactance does not scale with num_parallel for {line}"
 
+    @pytest.mark.parametrize(
+        "cluster_area, mode",
+        [
+            ("grid", "kmeans"),
+            ("feeder", "kmeansdijkstra"),
+            ("main_feeder", "kmeansdijkstra"),
+            ("main_feeder", "equidistant_nodes"),
+        ],
+    )
+    def test_make_busmap_keeps_coordinates(self, test_edisgo_obj, cluster_area, mode):
+        """
+        make_busmap clusters in EPSG:3035 (metres), but the coordinates of the
+        EDisGo object must stay unchanged for every cluster area.
+        """
+        buses_before = test_edisgo_obj.topology.buses_df.copy()
+        spatial_complexity_reduction.make_busmap(
+            test_edisgo_obj,
+            mode=mode,
+            cluster_area=cluster_area,
+            reduction_factor=0.25,
+        )
+        pd.testing.assert_frame_equal(test_edisgo_obj.topology.buses_df, buses_before)
+
+    def test_apply_busmap_aggregates_line_susceptance(self, test_edisgo_obj):
+        """
+        An aggregated line gets its new length times the sum of b per km of the
+        lines it stands for, so that the susceptances of parallel lines add up.
+        A line with b = NaN does not contribute.
+        """
+        busmap_df = self.setup_busmap_df(test_edisgo_obj)
+        lines_df = test_edisgo_obj.topology.lines_df
+        assert (lines_df.length > 0).all()
+        # A second line parallel to a line between two new buses, so that one
+        # aggregated line stands for two lines with different b per km.
+        new_bus = busmap_df.new_bus
+        between_new_buses = lines_df.index[
+            new_bus.loc[lines_df.bus0].to_numpy()
+            != new_bus.loc[lines_df.bus1].to_numpy()
+        ]
+        lines_df = pd.concat(
+            [lines_df, lines_df.loc[[between_new_buses[0]]].rename(lambda _: "par")]
+        )
+        rng = np.random.default_rng(42)
+        b_per_km = pd.Series(rng.uniform(1e-4, 5e-4, len(lines_df)), lines_df.index)
+        lines_df["b"] = b_per_km * lines_df.length
+        lines_df.loc[between_new_buses[1], "b"] = np.nan
+        b_per_km.loc[between_new_buses[1]] = 0.0
+        test_edisgo_obj.topology.lines_df = lines_df
+
+        linemap_df = spatial_complexity_reduction.apply_busmap(
+            test_edisgo_obj, busmap_df
+        )
+
+        new_lines_df = test_edisgo_obj.topology.lines_df
+        assert (
+            linemap_df.loc["par", "new_line_name"]
+            == linemap_df.loc[between_new_buses[0], "new_line_name"]
+        )
+        b_per_km_sum = b_per_km.groupby(linemap_df.new_line_name).sum()
+        expected = new_lines_df.length * b_per_km_sum.loc[new_lines_df.index]
+        np.testing.assert_allclose(new_lines_df.b, expected, rtol=1e-12)
+
+    def test_rename_virtual_buses_strips_only_the_prefix(self):
+        """
+        The name of the real bus is the name of the virtual bus without the
+        prefix "virtual_", even if the real name starts with characters that
+        occur in "virtual_" (here "lv_bus").
+        """
+        partial_busmap_df = pd.DataFrame(
+            {"new_bus": ["Bus_A", "Bus_B", "Trafo"]},
+            index=["lv_bus", "virtual_lv_bus", "Trafo"],
+        )
+
+        result = spatial_complexity_reduction.rename_virtual_buses(
+            partial_busmap_df, "Trafo"
+        )
+
+        assert result.loc["virtual_lv_bus", "new_bus"] == "virtual_Bus_A"
+        assert result.loc["lv_bus", "new_bus"] == "Bus_A"
+
+    @pytest.mark.parametrize("cluster_area", ["grid", "feeder"])
+    def test_make_busmap_maps_buses_to_closest_medoid(
+        self, test_edisgo_obj, cluster_area
+    ):
+        """
+        With mode "kmeansdijkstra", every cluster is represented by one of its
+        buses, the medoid, whose coordinates the new bus takes. Every bus is
+        mapped to the medoid it reaches on the shortest path through the grid;
+        in cluster area "feeder" only the medoids of its own feeder count.
+
+        Checked for the LV grids, as virtual buses in the MV grid are renamed
+        afterwards. The check does not depend on the exact clusters k-means
+        finds, which vary with rounding between platforms.
+        """
+        if cluster_area == "grid":
+            # By default the cluster of the transformer bus takes the coordinates
+            # of the transformer bus, which would hide its medoid.
+            busmap_df = spatial_complexity_reduction.make_busmap_grid(
+                test_edisgo_obj,
+                mode="kmeansdijkstra",
+                reduction_factor=0.25,
+                preserve_trafo_bus_coordinates=False,
+            )
+        else:
+            busmap_df = spatial_complexity_reduction.make_busmap(
+                test_edisgo_obj,
+                mode="kmeansdijkstra",
+                cluster_area="feeder",
+                reduction_factor=0.25,
+            )
+
+        buses_df = test_edisgo_obj.topology.buses_df
+        number_of_checked_buses = 0
+        for grid in test_edisgo_obj.topology.mv_grid.lv_grids:
+            graph = grid.graph
+            transformer_bus = grid.transformers_df.bus1.iloc[0]
+            busmap = busmap_df.loc[grid.buses_df.index]
+
+            # Buses with the coordinates of their new bus can be its medoid.
+            # Several buses can share coordinates, so there may be more than one.
+            # The tolerance of 1e-7 degrees (about 1 cm) covers the transformation
+            # to EPSG:3035 and back, which changes the latitude by about 4e-9.
+            has_new_coordinates = np.isclose(
+                busmap.new_x, buses_df.loc[busmap.index, "x"], rtol=0, atol=1e-7
+            ) & np.isclose(
+                busmap.new_y, buses_df.loc[busmap.index, "y"], rtol=0, atol=1e-7
+            )
+            medoid_candidates = busmap[has_new_coordinates].groupby("new_bus").groups
+            # In cluster area "feeder" the transformer bus is not clustered.
+            unclustered = {transformer_bus} if cluster_area == "feeder" else set()
+            clusters = set(busmap.new_bus) - unclustered
+            assert clusters <= set(medoid_candidates)
+
+            graph_without_transformer = graph.copy()
+            graph_without_transformer.remove_node(transformer_bus)
+            feeder = {
+                bus: number
+                for number, buses in enumerate(
+                    nx.connected_components(graph_without_transformer)
+                )
+                for bus in buses
+            }
+            distance = {
+                cluster: nx.multi_source_dijkstra_path_length(
+                    graph, set(medoid_candidates[cluster]), weight="length"
+                )
+                for cluster in clusters
+            }
+            for bus, new_bus in busmap.new_bus.items():
+                if new_bus in unclustered:
+                    continue
+                for other in clusters - {new_bus}:
+                    if (
+                        cluster_area == "feeder"
+                        and feeder[medoid_candidates[other][0]] != feeder[bus]
+                    ):
+                        continue
+                    assert distance[new_bus][bus] <= distance[other][bus] + 1e-9, (
+                        f"{bus} is mapped to {new_bus}, but the medoid of {other} "
+                        f"is closer"
+                    )
+                number_of_checked_buses += 1
+        assert number_of_checked_buses > 0
+
+    def test_make_busmap_raises_for_unreachable_bus(self, test_edisgo_obj):
+        """A bus without a line to any cluster medoid raises a clear error."""
+        topology = test_edisgo_obj.topology
+        mv_grid = topology.mv_grid
+        topology.buses_df.loc["isolated_bus"] = topology.buses_df.loc[
+            mv_grid.buses_df.index[5]
+        ]
+
+        with pytest.raises(ValueError, match="isolated_bus"):
+            spatial_complexity_reduction.make_busmap(
+                test_edisgo_obj,
+                mode="kmeansdijkstra",
+                cluster_area="grid",
+                reduction_factor=0.3,
+                grid=mv_grid,
+            )
+
+    def test_apply_busmap_keeps_lines_with_missing_values(self, test_edisgo_obj):
+        """
+        A line between two new buses is aggregated even if one of its columns,
+        here "kind", is NaN.
+        """
+        busmap_df = self.setup_busmap_df(test_edisgo_obj)
+        lines_df = test_edisgo_obj.topology.lines_df
+        new_bus = busmap_df.new_bus
+        between_new_buses = lines_df.index[
+            new_bus.loc[lines_df.bus0].to_numpy()
+            != new_bus.loc[lines_df.bus1].to_numpy()
+        ]
+        line = between_new_buses[0]
+        lines_df.loc[line, "kind"] = np.nan
+
+        linemap_df = spatial_complexity_reduction.apply_busmap(
+            test_edisgo_obj, busmap_df
+        )
+
+        assert line in linemap_df.index
+
+    def test_apply_busmap_raises_for_line_without_type(self, test_edisgo_obj):
+        """r and x of an aggregated line need the line type."""
+        busmap_df = self.setup_busmap_df(test_edisgo_obj)
+        lines_df = test_edisgo_obj.topology.lines_df
+        new_bus = busmap_df.new_bus
+        between_new_buses = lines_df.index[
+            new_bus.loc[lines_df.bus0].to_numpy()
+            != new_bus.loc[lines_df.bus1].to_numpy()
+        ]
+        line = between_new_buses[0]
+        lines_df.loc[line, "type_info"] = np.nan
+
+        with pytest.raises(ValueError, match=line):
+            spatial_complexity_reduction.apply_busmap(test_edisgo_obj, busmap_df)
+
     def test_spatial_complexity_reduction(self, test_edisgo_obj):
         (
             busmap_df,
@@ -521,23 +739,8 @@ class TestApplyReducedResultsToFullGrid:
         )
         return full_grid, reduced_grid
 
-    def _first_representative_with(self, reduced_grid, n_members):
-        loads_df = reduced_grid.topology.loads_df
-        candidates = loads_df[
-            loads_df["old_name"].apply(
-                lambda v: isinstance(v, list) and len(v) == n_members
-            )
-        ]
-        assert not candidates.empty, (
-            f"fixture grid has no aggregated load representative with "
-            f"exactly {n_members} old_name member(s); adjust the fixture "
-            f"or reduction_factor."
-        )
-        return candidates.index[0]
-
-    def test_by_name_write_back_aggregation_mode_false(self, test_edisgo_obj):
-        # aggregation_mode=False: no merging, so restore is a plain by-name
-        # write-back for every flexibility type.
+    @pytest.fixture
+    def full_and_reduced_unaggregated(self, test_edisgo_obj):
         full_grid = copy.deepcopy(test_edisgo_obj)
         reduced_grid, _, _ = full_grid.spatial_complexity_reduction(
             copy_edisgo=True,
@@ -546,6 +749,30 @@ class TestApplyReducedResultsToFullGrid:
             reduction_factor=0.1,
             aggregation_mode=False,
         )
+        return full_grid, reduced_grid
+
+    def _first_representative_with(
+        self, reduced_grid, n_members, component="loads", types=None
+    ):
+        df = getattr(reduced_grid.topology, f"{component}_df")
+        if types is not None:
+            df = df[df.type.isin(types)]
+        candidates = df[
+            df["old_name"].apply(lambda v: isinstance(v, list) and len(v) == n_members)
+        ]
+        assert not candidates.empty, (
+            f"fixture grid has no aggregated {component} representative with "
+            f"exactly {n_members} old_name member(s); adjust the fixture "
+            f"or reduction_factor."
+        )
+        return candidates.index[0]
+
+    def test_by_name_write_back_aggregation_mode_false(
+        self, full_and_reduced_unaggregated
+    ):
+        # aggregation_mode=False: no merging, so restore is a plain by-name
+        # write-back for every flexibility type.
+        full_grid, reduced_grid = full_and_reduced_unaggregated
         ti = full_grid.timeseries.timeindex
         load_name = reduced_grid.topology.loads_df.index[0]
         storage_name = reduced_grid.topology.storage_units_df.index[0]
@@ -581,21 +808,16 @@ class TestApplyReducedResultsToFullGrid:
             ti, storage_name
         ].tolist() == [5.0, 6.0, 7.0, 8.0]
 
-    def test_accepts_numpy_array_flexible_component_lists(self, test_edisgo_obj):
+    def test_accepts_numpy_array_flexible_component_lists(
+        self, full_and_reduced_unaggregated
+    ):
         # Regression test: task_optimize derives flexible_loads as
         # edisgo.dsm.p_min.columns.values (a numpy array), unlike the other
         # three flexible_* lists which are built with .tolist(). "x or []"
         # raises ValueError ("truth value of an array... is ambiguous") for
         # any such array with more than one element - a real crash hit on
         # the first end-to-end pipeline run using aggregation_mode=False.
-        full_grid = copy.deepcopy(test_edisgo_obj)
-        reduced_grid, _, _ = full_grid.spatial_complexity_reduction(
-            copy_edisgo=True,
-            mode="kmeansdijkstra",
-            cluster_area="feeder",
-            reduction_factor=0.1,
-            aggregation_mode=False,
-        )
+        full_grid, reduced_grid = full_and_reduced_unaggregated
         ti = full_grid.timeseries.timeindex
         load_name = reduced_grid.topology.loads_df.index[0]
         full_grid.dsm.p_max = pd.DataFrame(1.0, index=ti, columns=[load_name])
@@ -714,6 +936,63 @@ class TestApplyReducedResultsToFullGrid:
         assert result.timeseries.storage_units_active_power.loc[
             ti, storage_name
         ].tolist() == [1.0, 1.0, 1.0, 1.0]
+
+    def test_generators_by_name_aggregation_mode_false(
+        self, full_and_reduced_unaggregated
+    ):
+        # With opf_version 3 and 4 the OPF writes the curtailed feed-in onto
+        # the reduced grid's solar and wind generators. Restore must carry it
+        # onto the full grid, otherwise reinforcement runs on the uncurtailed
+        # feed-in; every other generator keeps its series.
+        full_grid, reduced_grid = full_and_reduced_unaggregated
+        ti = full_grid.timeseries.timeindex
+        gens_df = reduced_grid.topology.generators_df
+        curtailed = gens_df.index[gens_df.type.isin(["solar", "wind"])][0]
+        before = full_grid.timeseries.generators_active_power.copy()
+        assert (before[curtailed] > 0).any(), "fixture: no feed-in to curtail"
+
+        reduced_grid.timeseries._generators_active_power.loc[ti, curtailed] = (
+            0.5 * before[curtailed].values
+        )
+
+        result = spatial_complexity_reduction.apply_reduced_results_to_full_grid(
+            full_grid=full_grid, reduced_grid=reduced_grid
+        )
+
+        gens_p = result.timeseries.generators_active_power
+        assert np.allclose(gens_p[curtailed], 0.5 * before[curtailed])
+        others = before.columns.drop(curtailed)
+        pd.testing.assert_frame_equal(gens_p[others], before[others])
+
+    def test_generators_disaggregated_by_feed_in(self, full_and_reduced):
+        full_grid, reduced_grid = full_and_reduced
+        ti = full_grid.timeseries.timeindex
+        rep = self._first_representative_with(
+            reduced_grid, n_members=2, component="generators", types=["solar"]
+        )
+        members = reduced_grid.topology.generators_df.at[rep, "old_name"]
+        # a member without feed-in must not receive any of the dispatch
+        full_grid.timeseries._generators_active_power.loc[ti, members[0]] = 0.0
+        before = full_grid.timeseries.generators_active_power.copy()
+        assert (before[members[1]] > 0).any(), "fixture: no feed-in to curtail"
+
+        # the OPF curtails the representative to 40 % of its members' feed-in
+        reduced_grid.timeseries._generators_active_power.loc[ti, rep] = (
+            0.4 * before[members].sum(axis=1).values
+        )
+
+        result = spatial_complexity_reduction.apply_reduced_results_to_full_grid(
+            full_grid=full_grid, reduced_grid=reduced_grid
+        )
+
+        gens_p = result.timeseries.generators_active_power
+        # every member is curtailed by the same fraction of its own feed-in
+        assert np.allclose(gens_p[members], 0.4 * before[members])
+        assert (gens_p[members[0]] == 0).all()
+        # the other generators get their unchanged series back
+        others = before.columns.difference(members)
+        assert np.allclose(gens_p[others], before[others])
+        assert rep not in gens_p.columns
 
     def test_reactive_power_recomputed_after_restore(self, full_and_reduced):
         full_grid, reduced_grid = full_and_reduced

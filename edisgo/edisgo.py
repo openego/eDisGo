@@ -3551,9 +3551,11 @@ class EDisGo:
             If "standard_lines" is selected, the values of the standard line of the
             respective voltage level are used to set "type_info" and "kind".
             If "combined_name" is selected, "type_info" and "kind" contain the
-            concatenated values of the merged lines. x and r of the lines are not
-            influenced by this as they are always determined from the x and r values of
-            the aggregated lines.
+            concatenated values of the merged lines. The electrical parameters do not
+            depend on this setting: r and x are computed from the per-km values of the
+            line types of the aggregated lines, treated as parallel systems, and the
+            susceptance b is the new length times the sum of b per km of the aggregated
+            lines.
             Default: "standard_lines".
         aggregation_mode : bool
             Specifies, whether to aggregate loads and generators at the same bus or not.
@@ -3614,17 +3616,17 @@ class EDisGo:
         flexible_storage_units: list | None = None,
     ) -> EDisGo:
         """
-        Writes optimized flexible-component dispatch from a spatially-reduced
-        grid back onto this (full) grid.
+        Writes the OPF's active-power results from a spatially-reduced grid
+        back onto this (full) grid.
 
         Counterpart to :meth:`spatial_complexity_reduction`: where that
         method shrinks this grid for a faster OPF, this method maps the OPF's
         active-power results from ``reduced_grid`` back onto ``self`` so
-        reinforcement can run on the full topology. Only components the OPF
-        actually rewrites are touched — flexible charging points, heat pumps,
-        DSM loads, and storage units. Inflexible loads/generators are
-        untouched, since the OPF never changed their series and ``self``
-        already holds the correct values for them.
+        reinforcement can run on the full topology. It writes back the given
+        flexible charging points, heat pumps, DSM loads and storage units, and
+        always all generators, so that the curtailment of ``opf_version`` 3
+        and 4 reaches the full grid. ``self`` must therefore still hold the
+        uncurtailed generator feed-in. Inflexible loads are untouched.
 
         See
         :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
@@ -3652,7 +3654,7 @@ class EDisGo:
         -------
         :class:`~.EDisGo`
             ``self``, with active power written for the given flexible
-            components and reactive power recomputed.
+            components and all generators, and reactive power recomputed.
 
         """
         return apply_reduced_results_to_full_grid(

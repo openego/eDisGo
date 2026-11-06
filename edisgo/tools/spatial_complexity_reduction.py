@@ -43,6 +43,140 @@ coor_transform = Transformer.from_crs("EPSG:4326", "EPSG:3035", always_xy=True)
 coor_transform_back = Transformer.from_crs("EPSG:3035", "EPSG:4326", always_xy=True)
 
 
+def _transform_coordinates(
+    df: DataFrame, transformer: Transformer, x_col: str = "x", y_col: str = "y"
+) -> DataFrame:
+    """
+    Return a copy of `df` with the coordinates in `x_col` and `y_col` transformed.
+
+    The input dataframe is not changed.
+
+    """
+    df = df.copy()
+    x, y = transformer.transform(df[x_col].to_numpy(), df[y_col].to_numpy())
+    df[x_col] = x
+    df[y_col] = y
+    return df
+
+
+def _bus_weights(
+    edisgo_obj: EDisGo,
+    bus_to_new_bus: pd.Series,
+    buses: list | pd.Index,
+    with_transformers: bool,
+) -> pd.Series:
+    """
+    Weight of each bus in `buses` for the k-means clustering.
+
+    The weight is 1 + 1000 * (p_gen + p_load + s_tran) with p_gen and p_load the
+    nominal generation and peak load in MW at all buses that `bus_to_new_bus` maps
+    to the bus, and s_tran the nominal apparent power in MVA of the transformers
+    whose primary side is the bus (only if `with_transformers` is True).
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    bus_to_new_bus : :pandas:`pandas.Series<Series>`
+        Maps the buses of the grid (index) to the bus they are aggregated to.
+    buses : list(str) or :pandas:`pandas.Index<Index>`
+        Buses to get the weight for.
+    with_transformers : bool
+        If True, the transformer capacity is part of the weight (used for the MV
+        grid).
+
+    Returns
+    -------
+    :pandas:`pandas.Series<Series>`
+        Weight of each bus in `buses`.
+
+    """
+    topology = edisgo_obj.topology
+    generators_df = topology.generators_df
+    loads_df = topology.loads_df
+    p_gen = (
+        generators_df.p_nom.groupby(generators_df.bus.map(bus_to_new_bus))
+        .sum()
+        .reindex(buses, fill_value=0.0)
+    )
+    p_load = (
+        loads_df.p_set.groupby(loads_df.bus.map(bus_to_new_bus))
+        .sum()
+        .reindex(buses, fill_value=0.0)
+    )
+    if with_transformers:
+        s_tran = (
+            topology.transformers_df.groupby("bus0")
+            .s_nom.sum()
+            .reindex(buses, fill_value=0.0)
+        )
+    else:
+        s_tran = 0
+    return 1 + 1000 * (p_gen + p_load + s_tran)
+
+
+def _assign_to_medoids(
+    graph: nx.Graph, buses_df: DataFrame, kmeans: KMeans, n_clusters: int
+) -> tuple[np.ndarray, list]:
+    """
+    Assign every bus to the closest medoid of the k-means clusters.
+
+    The medoid of a cluster is the bus closest to the cluster center. Every bus is
+    then assigned to the medoid with the shortest path in the grid graph (Dijkstra,
+    weighted by line length). On equal distance, the medoid of the cluster with the
+    lower number is chosen.
+
+    Parameters
+    ----------
+    graph : :networkx:`networkx.Graph<>`
+        Graph containing all buses in `buses_df`, with the line length as edge
+        attribute "length".
+    buses_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Buses to assign, with the coordinates the clustering was fitted on in
+        columns "x" and "y".
+    kmeans : ``sklearn.cluster.KMeans``
+        Fitted k-means clustering.
+    n_clusters : int
+        Number of clusters.
+
+    Returns
+    -------
+    tuple(:numpy:`numpy.ndarray<ndarray>`, list(str))
+        Number of the assigned medoid for each bus in `buses_df` and the bus names
+        of the medoids, ordered by cluster number.
+
+    Raises
+    ------
+    ValueError
+        If a bus in `buses_df` cannot be reached from any medoid in `graph`.
+
+    """
+    buses = buses_df.index
+    dist_to_cluster_center = kmeans.transform(buses_df.loc[:, ["x", "y"]]).min(axis=1)
+    medoids = []
+    for n in range(n_clusters):
+        members = np.flatnonzero(kmeans.labels_ == n)
+        medoids.append(buses[members[np.argmin(dist_to_cluster_center[members])]])
+
+    position = {bus: i for i, bus in enumerate(buses)}
+    distances = np.full((len(buses), n_clusters), np.inf)
+    for n, medoid in enumerate(medoids):
+        path_lengths = nx.single_source_dijkstra_path_length(
+            graph, medoid, weight="length"
+        )
+        for bus, length in path_lengths.items():
+            i = position.get(bus)
+            if i is not None:
+                distances[i, n] = length
+    unreachable = np.isinf(distances).all(axis=1)
+    if unreachable.any():
+        raise ValueError(
+            f"Bus(es) {buses[unreachable].tolist()} cannot be reached from any "
+            f"cluster medoid in the grid graph. Check that they are connected by "
+            f"lines."
+        )
+    return distances.argmin(axis=1), medoids
+
+
 def _make_grid_list(edisgo_obj: EDisGo, grid: object = None) -> list:
     """
     Get a list of all grids in the EDisGo object or a list with the specified grid.
@@ -139,9 +273,9 @@ def rename_virtual_buses(
         if node.split("_")[0] == "virtual":
             if (
                 partial_busmap_df.loc[node, "new_bus"]
-                != partial_busmap_df.loc[node.lstrip("virtual_"), "new_bus"]
+                != partial_busmap_df.loc[node.removeprefix("virtual_"), "new_bus"]
             ):
-                pairs.append([node, node.lstrip("virtual_")])
+                pairs.append([node, node.removeprefix("virtual_")])
 
     logger.debug(f"Pairs: {pairs}")
     logger.debug(f"Length pairs: {len(pairs)}")
@@ -426,63 +560,10 @@ def make_busmap_grid(
 
     """
 
-    def calculate_weighting(series):
-        p_gen = edisgo_obj.topology.generators_df.loc[
-            edisgo_obj.topology.generators_df.bus == series.name, "p_nom"
-        ].sum()
-        p_load = edisgo_obj.topology.loads_df.loc[
-            edisgo_obj.topology.loads_df.bus == series.name, "p_set"
-        ].sum()
-        if str(grid).split("_")[0] == "MVGrid":
-            s_tran = edisgo_obj.topology.transformers_df.loc[
-                edisgo_obj.topology.transformers_df.bus0 == series.name, "s_nom"
-            ].sum()
-        else:
-            s_tran = 0
-        series.loc["weight"] = 1 + 1000 * (p_gen + p_load + s_tran)
-        return series
-
-    def transform_coordinates(series):
-        x = series.x
-        y = series.y
-        x, y = coor_transform.transform(x, y)
-        series["x"] = x
-        series["y"] = y
-        return series
-
-    def transform_coordinates_back(series):
-        x = series.new_x
-        y = series.new_y
-        x, y = coor_transform_back.transform(x, y)
-        series["new_x"] = x
-        series["new_y"] = y
-        return series
-
-    def rename_new_buses(series):
-        if str(grid).split("_")[0] == "LVGrid":
-            series["new_bus"] = (
-                "Bus_mvgd_"
-                + str(edisgo_obj.topology.mv_grid.id)
-                + "_lvgd_"
-                + str(grid.id)
-                + "_"
-                + str(int(series["new_bus"]))
-            )
-
-        elif str(grid).split("_")[0] == "MVGrid":
-            series["new_bus"] = (
-                "Bus_mvgd_"
-                + str(edisgo_obj.topology.mv_grid.id)
-                + "_"
-                + str(int(series["new_bus"]))
-            )
-        elif grid is None:
-            logger.error("Grid is None")
-        return series
-
     logger.debug("Start making busmap for grids.")
 
     grid_list = _make_grid_list(edisgo_obj, grid=grid)
+    mvgd_id = edisgo_obj.topology.mv_grid.id
 
     # Collect per-grid busmaps in a list and concat once after the loop instead
     # of growing the DataFrame on every iteration.
@@ -492,12 +573,17 @@ def make_busmap_grid(
         v_grid = grid.nominal_voltage
         logger.debug(f"Make busmap for grid: {grid}, v_nom={v_grid}")
 
-        buses_df = grid.buses_df
+        grid_type = str(grid).split("_")[0]
+        buses_df = _transform_coordinates(grid.buses_df, coor_transform)
         graph = grid.graph
         transformer_bus = grid.transformers_df.bus1.iloc[0]
 
-        buses_df = buses_df.apply(transform_coordinates, axis="columns")
-        buses_df = buses_df.apply(calculate_weighting, axis="columns")
+        buses_df["weight"] = _bus_weights(
+            edisgo_obj,
+            pd.Series(buses_df.index, index=buses_df.index),
+            buses_df.index,
+            with_transformers=grid_type == "MVGrid",
+        )
         # Calculate number of clusters
         number_of_distinct_nodes = buses_df.groupby(by=["x", "y"]).first().shape[0]
         logger.debug("Number_of_distinct_nodes = " + str(number_of_distinct_nodes))
@@ -508,55 +594,21 @@ def make_busmap_grid(
 
         kmeans.fit(buses_df.loc[:, ["x", "y"]], sample_weight=buses_df.loc[:, "weight"])
 
-        partial_busmap_df = pd.DataFrame(index=buses_df.index)
-
         if mode == "kmeans":
-            partial_busmap_df.loc[:, "new_bus"] = kmeans.labels_
-            for index, new_bus in zip(
-                partial_busmap_df.index, partial_busmap_df.new_bus
-            ):
-                partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
-                    kmeans.cluster_centers_[new_bus]
-                )
-
+            cluster = kmeans.labels_
+            new_coordinates = kmeans.cluster_centers_[cluster]
         elif mode == "kmeansdijkstra":
             # Use dijkstra to select clusters
-            dist_to_cluster_center = pd.DataFrame(
-                data=kmeans.transform(buses_df.loc[:, ["x", "y"]]), index=buses_df.index
-            ).min(axis="columns")
+            cluster, medoids = _assign_to_medoids(graph, buses_df, kmeans, n_clusters)
+            new_coordinates = buses_df.loc[medoids, ["x", "y"]].to_numpy()[cluster]
 
-            buses_df.loc[:, "cluster_number"] = kmeans.labels_
-            medoid_bus_name = {}
-
-            for n in range(0, n_clusters):
-                medoid_bus_name[
-                    dist_to_cluster_center.loc[
-                        buses_df.loc[:, "cluster_number"].isin([n])
-                    ].idxmin()
-                ] = int(n)
-
-            dijkstra_distances_df = pd.DataFrame(
-                index=buses_df.index, columns=medoid_bus_name, dtype=float
-            )
-
-            for bus in medoid_bus_name:
-                path_series = pd.Series(
-                    nx.single_source_dijkstra_path_length(graph, bus, weight="length")
-                )
-                dijkstra_distances_df[bus] = path_series
-
-            buses_df.loc[:, "medoid"] = dijkstra_distances_df.idxmin(axis=1)
-            partial_busmap_df = pd.DataFrame(index=buses_df.index)
-
-            for index in buses_df.index:
-                partial_busmap_df.loc[index, "new_bus"] = int(
-                    medoid_bus_name[buses_df.loc[index, "medoid"]]
-                )
-                partial_busmap_df.loc[index, ["new_x", "new_y"]] = buses_df.loc[
-                    buses_df.loc[index, "medoid"], ["x", "y"]
-                ].values
-
-        partial_busmap_df = partial_busmap_df.apply(rename_new_buses, axis="columns")
+        if grid_type == "LVGrid":
+            prefix = f"Bus_mvgd_{mvgd_id}_lvgd_{grid.id}_"
+        else:
+            prefix = f"Bus_mvgd_{mvgd_id}_"
+        partial_busmap_df = pd.DataFrame(index=buses_df.index)
+        partial_busmap_df["new_bus"] = [prefix + str(int(n)) for n in cluster]
+        partial_busmap_df[["new_x", "new_y"]] = new_coordinates
 
         partial_busmap_df.loc[
             partial_busmap_df.new_bus.isin(
@@ -581,11 +633,11 @@ def make_busmap_grid(
 
         partial_busmap_df.index.name = "old_bus"
 
-        if str(grid).split("_")[0] == "MVGrid":
+        if grid_type == "MVGrid":
             partial_busmap_df = rename_virtual_buses(partial_busmap_df, transformer_bus)
 
-        partial_busmap_df = partial_busmap_df.apply(
-            transform_coordinates_back, axis="columns"
+        partial_busmap_df = _transform_coordinates(
+            partial_busmap_df, coor_transform_back, "new_x", "new_y"
         )
 
         busmap_df_list.append(partial_busmap_df)
@@ -665,46 +717,11 @@ def make_busmap_feeders(
 
         return name
 
-    def calculate_weighting(series):
-        buses = partial_busmap_df.loc[
-            partial_busmap_df.new_bus.isin([series.name])
-        ].index.tolist()
-        p_gen = edisgo_obj.topology.generators_df.loc[
-            edisgo_obj.topology.generators_df.bus.isin(buses), "p_nom"
-        ].sum()
-        p_load = edisgo_obj.topology.loads_df.loc[
-            edisgo_obj.topology.loads_df.bus.isin(buses), "p_set"
-        ].sum()
-        if str(grid).split("_")[0] == "MVGrid":
-            s_tran = edisgo_obj.topology.transformers_df.loc[
-                edisgo_obj.topology.transformers_df.bus0 == series.name, "s_nom"
-            ].sum()
-        else:
-            s_tran = 0
-        series.loc["weight"] = 1 + 1000 * (p_gen + p_load + s_tran)
-        return series
-
-    def transform_coordinates(series):
-        x = series.x
-        y = series.y
-        x, y = coor_transform.transform(x, y)
-        series["x"] = x
-        series["y"] = y
-        return series
-
-    def transform_coordinates_back(ser):
-        x = ser.new_x
-        y = ser.new_y
-        x, y = coor_transform_back.transform(x, y)
-        ser["new_x"] = x
-        ser["new_y"] = y
-        return ser
-
     logger.debug("Start making busmap for feeders.")
 
-    edisgo_obj.topology.buses_df = edisgo_obj.topology.buses_df.apply(
-        transform_coordinates, axis="columns"
-    )
+    # Clustering is done in EPSG:3035 (metres). The coordinates are transformed in a
+    # copy, so that the coordinates of the EDisGo object stay unchanged.
+    buses_df = _transform_coordinates(edisgo_obj.topology.buses_df, coor_transform)
 
     grid_list = _make_grid_list(edisgo_obj, grid=grid)
     # Collect per-grid busmaps in a list and concat once after the loop instead
@@ -725,9 +742,10 @@ def make_busmap_feeders(
         v_grid = grid.nominal_voltage
         logger.debug(f"Make busmap for grid: {grid}, v_nom={v_grid}")
 
+        grid_buses_df = buses_df.loc[grid.buses_df.index]
         graph_root = grid.graph
         transformer_node = grid.transformers_df.bus1.values[0]
-        transformer_coordinates = grid.buses_df.loc[
+        transformer_coordinates = grid_buses_df.loc[
             transformer_node, ["x", "y"]
         ].tolist()
         logger.debug(f"Transformer node: {transformer_node}")
@@ -736,17 +754,28 @@ def make_busmap_feeders(
         neighbors.sort()
         logger.debug(f"Transformer has {len(neighbors)} neighbors: {neighbors}")
 
-        graph_without_transformer = copy.deepcopy(graph_root)
+        graph_without_transformer = graph_root.copy()
         graph_without_transformer.remove_node(transformer_node)
 
-        partial_busmap_df = pd.DataFrame(index=grid.buses_df.index)
+        partial_busmap_df = pd.DataFrame(index=grid_buses_df.index)
         partial_busmap_df.index.name = "old_bus"
-        # Vectorised initialisation: new_bus is the bus itself, new_x/new_y are
-        # its coordinates (equivalent to the former per-bus loop).
         partial_busmap_df["new_bus"] = partial_busmap_df.index
-        partial_busmap_df[["new_x", "new_y"]] = grid.buses_df.loc[
+        partial_busmap_df[["new_x", "new_y"]] = grid_buses_df.loc[
             partial_busmap_df.index, ["x", "y"]
         ].values
+
+        weights = _bus_weights(
+            edisgo_obj,
+            partial_busmap_df["new_bus"],
+            partial_busmap_df.index,
+            with_transformers=str(grid).split("_")[0] == "MVGrid",
+        )
+
+        # New bus and coordinates of the buses of all feeders, written to the
+        # busmap at once after the loop.
+        feeder_buses = []
+        feeder_new_buses = []
+        feeder_new_coordinates = []
 
         number_of_feeder = 0
         feeder_graphs = list(nx.connected_components(graph_without_transformer))
@@ -755,15 +784,10 @@ def make_busmap_feeders(
             feeder_nodes = list(feeder_nodes)
             feeder_nodes.sort()
 
-            feeder_buses_df = grid.buses_df.loc[feeder_nodes, :]
-            # return feeder_buses_df
-            feeder_buses_df = feeder_buses_df.apply(calculate_weighting, axis="columns")
+            feeder_buses_df = grid_buses_df.loc[feeder_nodes, :]
 
-            if focus_mode:
+            if focus_mode and buses_of_interest.isdisjoint(feeder_nodes):
                 selected_reduction_factor = reduction_factor_not_focused
-                for bus in feeder_nodes:
-                    if bus in buses_of_interest:
-                        selected_reduction_factor = reduction_factor
             else:
                 selected_reduction_factor = reduction_factor
 
@@ -776,69 +800,48 @@ def make_busmap_feeders(
 
             # Aggregate to transformer bus if there are no clusters
             if n_clusters == 0:
-                for index in feeder_buses_df.index.tolist():
-                    partial_busmap_df.loc[index, "new_bus"] = transformer_node
-                    partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
-                        transformer_coordinates
-                    )
+                feeder_new_buses += [transformer_node] * len(feeder_nodes)
+                feeder_new_coordinates.append(
+                    np.tile(transformer_coordinates, (len(feeder_nodes), 1))
+                )
             else:
                 kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
                 kmeans.fit(
                     feeder_buses_df.loc[:, ["x", "y"]],
-                    sample_weight=feeder_buses_df.loc[:, "weight"],
+                    sample_weight=weights.loc[feeder_nodes],
                 )
 
                 if mode == "kmeans":
-                    n = 0
-                    for index in feeder_buses_df.index.tolist():
-                        partial_busmap_df.loc[index, "new_bus"] = make_name(
-                            kmeans.labels_[n] + 1
-                        )
-                        partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
-                            kmeans.cluster_centers_[kmeans.labels_[n]]
-                        )
-                        n = n + 1
+                    cluster = kmeans.labels_
+                    new_coordinates = kmeans.cluster_centers_[cluster]
                 elif mode == "kmeansdijkstra":
-                    dist_to_cluster_center = pd.DataFrame(
-                        data=kmeans.transform(feeder_buses_df.loc[:, ["x", "y"]]),
-                        index=feeder_buses_df.index,
-                    ).min(axis="columns")
-                    feeder_buses_df.loc[:, "cluster_number"] = kmeans.labels_
-                    medoid_bus_name = {}
-
-                    for n in range(0, n_clusters):
-                        medoid_bus_name[
-                            dist_to_cluster_center.loc[
-                                feeder_buses_df.loc[:, "cluster_number"].isin([n])
-                            ].idxmin()
-                        ] = int(n)
-
-                    dijkstra_distances_df = pd.DataFrame(
-                        index=feeder_buses_df.index, columns=medoid_bus_name
+                    # A feeder is a connected component of the grid without the
+                    # transformer bus. A shortest path between two of its buses
+                    # never enters another feeder, as it would have to pass the
+                    # transformer bus twice. It may pass the transformer bus once,
+                    # e.g. in a ring closed at the station, so the subgraph of the
+                    # feeder and the transformer bus is enough.
+                    cluster, medoids = _assign_to_medoids(
+                        graph_root.subgraph(feeder_nodes + [transformer_node]).copy(),
+                        feeder_buses_df,
+                        kmeans,
+                        n_clusters,
                     )
+                    new_coordinates = feeder_buses_df.loc[
+                        medoids, ["x", "y"]
+                    ].to_numpy()[cluster]
 
-                    for bus in medoid_bus_name:
-                        path_series = pd.Series(
-                            nx.single_source_dijkstra_path_length(
-                                graph_root, bus, cutoff=None, weight="length"
-                            )
-                        )
-                        dijkstra_distances_df.loc[:, bus] = path_series
-
-                    feeder_buses_df.loc[:, "medoid"] = dijkstra_distances_df.apply(
-                        pd.to_numeric
-                    ).idxmin(axis=1)
-
-                    for index in feeder_buses_df.index.tolist():
-                        partial_busmap_df.loc[index, "new_bus"] = make_name(
-                            medoid_bus_name[feeder_buses_df.loc[index, "medoid"]] + 1
-                        )
-                        partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
-                            feeder_buses_df.loc[
-                                feeder_buses_df.loc[index, "medoid"], ["x", "y"]
-                            ].values
-                        )
+                names = [make_name(n + 1) for n in range(n_clusters)]
+                feeder_new_buses += [names[n] for n in cluster]
+                feeder_new_coordinates.append(new_coordinates)
+            feeder_buses += feeder_nodes
             number_of_feeder = number_of_feeder + 1
+
+        if feeder_buses:
+            partial_busmap_df.loc[feeder_buses, "new_bus"] = feeder_new_buses
+            partial_busmap_df.loc[feeder_buses, ["new_x", "new_y"]] = np.concatenate(
+                feeder_new_coordinates
+            )
 
         if str(grid).split("_")[0] == "MVGrid":
             partial_busmap_df = rename_virtual_buses(
@@ -848,7 +851,7 @@ def make_busmap_feeders(
         busmap_df_list.append(partial_busmap_df)
 
     busmap_df = pd.concat(busmap_df_list) if busmap_df_list else pd.DataFrame()
-    busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
+    busmap_df = _transform_coordinates(busmap_df, coor_transform_back, "new_x", "new_y")
     busmap_df.sort_index(inplace=True)
     return busmap_df
 
@@ -926,41 +929,6 @@ def make_busmap_main_feeders(
 
         return name
 
-    def calculate_weighting(series):
-        buses = partial_busmap_df.loc[
-            partial_busmap_df.new_bus.isin([series.name])
-        ].index.tolist()
-        p_gen = edisgo_obj.topology.generators_df.loc[
-            edisgo_obj.topology.generators_df.bus.isin(buses), "p_nom"
-        ].sum()
-        p_load = edisgo_obj.topology.loads_df.loc[
-            edisgo_obj.topology.loads_df.bus.isin(buses), "p_set"
-        ].sum()
-        if str(grid).split("_")[0] == "MVGrid":
-            s_tran = edisgo_obj.topology.transformers_df.loc[
-                edisgo_obj.topology.transformers_df.bus0 == series.name, "s_nom"
-            ].sum()
-        else:
-            s_tran = 0
-        series.loc["weight"] = 1 + 1000 * (p_gen + p_load + s_tran)
-        return series
-
-    def transform_coordinates(series):
-        x = series.x
-        y = series.y
-        x, y = coor_transform.transform(x, y)
-        series["x"] = x
-        series["y"] = y
-        return series
-
-    def transform_coordinates_back(ser):
-        x = ser.new_x
-        y = ser.new_y
-        x, y = coor_transform_back.transform(x, y)
-        ser["new_x"] = x
-        ser["new_y"] = y
-        return ser
-
     def next_main_node(node_to_delete, graph_root, main_feeder_nodes):
         for node, predecessor in nx.bfs_predecessors(graph_root, source=node_to_delete):
             if node in main_feeder_nodes:
@@ -968,10 +936,12 @@ def make_busmap_main_feeders(
 
     logger.debug("Start making busmap for main feeders")
 
+    # Clustering is done in EPSG:3035 (metres). The coordinates are transformed in a
+    # copy, so that the coordinates of the EDisGo object stay unchanged.
     if mode != "aggregate_to_main_feeder":
-        edisgo_obj.topology.buses_df = edisgo_obj.topology.buses_df.apply(
-            transform_coordinates, axis="columns"
-        )
+        buses_df = _transform_coordinates(edisgo_obj.topology.buses_df, coor_transform)
+    else:
+        buses_df = edisgo_obj.topology.buses_df
 
     grid_list = _make_grid_list(edisgo_obj, grid=grid)
     # Collect per-grid busmaps in a list and concat once after the loop instead
@@ -992,9 +962,10 @@ def make_busmap_main_feeders(
         v_grid = grid.nominal_voltage
         logger.debug(f"Make busmap for grid: {grid}, v_nom={v_grid}")
 
+        grid_buses_df = buses_df.loc[grid.buses_df.index]
         graph_root = grid.graph
         transformer_node = grid.transformers_df.bus1.values[0]
-        transformer_coordinates = grid.buses_df.loc[
+        transformer_coordinates = grid_buses_df.loc[
             transformer_node, ["x", "y"]
         ].tolist()
         logger.debug(f"Transformer node: {transformer_node}")
@@ -1003,7 +974,7 @@ def make_busmap_main_feeders(
         neighbors.sort()
         logger.debug(f"Transformer has {len(neighbors)} neighbors: {neighbors}")
 
-        graph_without_transformer = copy.deepcopy(graph_root)
+        graph_without_transformer = graph_root.copy()
         graph_without_transformer.remove_node(transformer_node)
 
         end_nodes = []
@@ -1039,28 +1010,30 @@ def make_busmap_main_feeders(
 
         # delete duplicates
         main_feeder_nodes = list(dict.fromkeys(main_feeder_nodes))
-        nodes = list(graph_root.nodes())
-        not_main_nodes = []
-        for node in nodes:
-            if node not in main_feeder_nodes:
-                not_main_nodes.append(node)
-        partial_busmap_df = pd.DataFrame(index=grid.buses_df.index)
+        main_feeder_node_set = set(main_feeder_nodes)
+        not_main_nodes = [
+            node for node in graph_root.nodes() if node not in main_feeder_node_set
+        ]
+        partial_busmap_df = pd.DataFrame(index=grid_buses_df.index)
         partial_busmap_df.index.name = "old_bus"
-        # Vectorised initialisation: new_bus is the bus itself, new_x/new_y are
-        # its coordinates (equivalent to the former per-bus loop).
+        # Initially every bus is mapped to itself with its own coordinates.
         partial_busmap_df["new_bus"] = partial_busmap_df.index
-        partial_busmap_df[["new_x", "new_y"]] = grid.buses_df.loc[
+        partial_busmap_df[["new_x", "new_y"]] = grid_buses_df.loc[
             partial_busmap_df.index, ["x", "y"]
         ].values
 
-        graph_cleaned = copy.deepcopy(graph_root)
+        graph_cleaned = graph_root.copy()
         graph_cleaned.remove_nodes_from(not_main_nodes)
 
-        for node_to_delete in not_main_nodes:
-            node = next_main_node(node_to_delete, graph_root, main_feeder_nodes)
-            partial_busmap_df.loc[node_to_delete, "new_bus"] = node
-            coordinates = partial_busmap_df.loc[node, ["new_x", "new_y"]].values
-            partial_busmap_df.loc[node_to_delete, ["new_x", "new_y"]] = coordinates
+        if not_main_nodes:
+            next_main_nodes = [
+                next_main_node(node, graph_root, main_feeder_node_set)
+                for node in not_main_nodes
+            ]
+            partial_busmap_df.loc[not_main_nodes, ["new_x", "new_y"]] = (
+                partial_busmap_df.loc[next_main_nodes, ["new_x", "new_y"]].values
+            )
+            partial_busmap_df.loc[not_main_nodes, "new_bus"] = next_main_nodes
 
         # Advanced method
         if mode == "equidistant_nodes":
@@ -1082,21 +1055,21 @@ def make_busmap_main_feeders(
 
                 return x_new, y_new
 
+            distances_from_transformer = nx.single_source_dijkstra_path_length(
+                graph_cleaned, transformer_node, weight="length"
+            )
             i = 0
             for end_node in end_nodes:
                 number_of_feeder = end_nodes.index(end_node)
                 feeder = main_feeders_df.loc[number_of_feeder, :]
 
                 # Calculate nodes per feeder
-                if focus_mode:
+                if focus_mode and buses_of_interest.isdisjoint(
+                    partial_busmap_df.index[
+                        partial_busmap_df.new_bus.isin(feeder.path[1:])
+                    ]
+                ):
                     selected_reduction_factor = reduction_factor_not_focused
-                    for node in feeder.path[1:]:
-                        buses = partial_busmap_df.loc[
-                            partial_busmap_df.new_bus.isin([node])
-                        ].index.tolist()
-                        for bus in buses:
-                            if bus in buses_of_interest:
-                                selected_reduction_factor = reduction_factor
                 else:
                     selected_reduction_factor = reduction_factor
                 # Nodes per feeder should be minimum 1
@@ -1119,19 +1092,13 @@ def make_busmap_main_feeders(
                 old_feeder = np.zeros(feeder.number_of_nodes_in_path + 1, dtype=int)
                 node_number = 0
                 for node in feeder.path:
-                    distance_from_transformer = nx.shortest_path_length(
-                        graph_cleaned,
-                        source=transformer_node,
-                        target=node,
-                        weight="length",
-                    )
                     old_feeder[node_number] = np.abs(
-                        new_feeder - distance_from_transformer
+                        new_feeder - distances_from_transformer[node]
                     ).argmin()
                     node_number += 1
 
                 # Make busmap for feeders
-                end_coordinates = grid.buses_df.loc[
+                end_coordinates = grid_buses_df.loc[
                     end_nodes[number_of_feeder], ["x", "y"]
                 ].tolist()
                 for node_number in range(0, old_feeder.shape[0]):
@@ -1156,20 +1123,20 @@ def make_busmap_main_feeders(
                 number_of_feeder = end_nodes.index(end_node)
                 feeder = main_feeders_df.loc[number_of_feeder, :]
                 feeder.loc["path"].remove(transformer_node)
-                feeder_buses_df = grid.buses_df.loc[feeder.path, :]
-                feeder_buses_df = feeder_buses_df.apply(
-                    calculate_weighting, axis="columns"
+                feeder_buses_df = grid_buses_df.loc[feeder.path, :]
+                weights = _bus_weights(
+                    edisgo_obj,
+                    partial_busmap_df["new_bus"],
+                    feeder_buses_df.index,
+                    with_transformers=str(grid).split("_")[0] == "MVGrid",
                 )
 
-                if focus_mode:
+                if focus_mode and buses_of_interest.isdisjoint(
+                    partial_busmap_df.index[
+                        partial_busmap_df.new_bus.isin(feeder_buses_df.index)
+                    ]
+                ):
                     selected_reduction_factor = reduction_factor_not_focused
-                    for node in feeder_buses_df.index.to_list():
-                        buses = partial_busmap_df.loc[
-                            partial_busmap_df.new_bus.isin([node])
-                        ].index.tolist()
-                        for bus in buses:
-                            if bus in buses_of_interest:
-                                selected_reduction_factor = reduction_factor
                 else:
                     selected_reduction_factor = reduction_factor
 
@@ -1185,77 +1152,48 @@ def make_busmap_main_feeders(
                 logger.debug(f"n_clusters = {n_clusters}")
 
                 # Aggregate to transformer bus if there are no clusters
+                feeder_nodes = feeder_buses_df.index
                 if n_clusters == 0:
-                    for index in feeder_buses_df.index.tolist():
-                        partial_busmap_df.loc[index, "new_bus"] = transformer_node
-                        partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
-                            transformer_coordinates
-                        )
+                    partial_busmap_df.loc[feeder_nodes, "new_bus"] = transformer_node
+                    partial_busmap_df.loc[feeder_nodes, "new_x"] = (
+                        transformer_coordinates[0]
+                    )
+                    partial_busmap_df.loc[feeder_nodes, "new_y"] = (
+                        transformer_coordinates[1]
+                    )
                 else:
                     kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
                     kmeans.fit(
                         feeder_buses_df.loc[:, ["x", "y"]],
-                        sample_weight=feeder_buses_df.loc[:, "weight"],
+                        sample_weight=weights,
                     )
 
                     if mode == "kmeans":
-                        n = 0
-                        for index in feeder_buses_df.index.tolist():
-                            partial_busmap_df.loc[index, "new_bus"] = make_name(
-                                kmeans.labels_[n] + 1
-                            )
-                            partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
-                                kmeans.cluster_centers_[kmeans.labels_[n]]
-                            )
-                            n = n + 1
+                        cluster = kmeans.labels_
+                        new_coordinates = kmeans.cluster_centers_[cluster]
                     elif mode == "kmeansdijkstra":
-                        dist_to_cluster_center = pd.DataFrame(
-                            data=kmeans.transform(feeder_buses_df.loc[:, ["x", "y"]]),
-                            index=feeder_buses_df.index,
-                        ).min(axis="columns")
-                        feeder_buses_df.loc[:, "cluster_number"] = kmeans.labels_
-                        medoid_bus_name = {}
-
-                        for n in range(0, n_clusters):
-                            medoid_bus_name[
-                                dist_to_cluster_center.loc[
-                                    feeder_buses_df.loc[:, "cluster_number"].isin([n])
-                                ].idxmin()
-                            ] = int(n)
-
-                        dijkstra_distances_df = pd.DataFrame(
-                            index=feeder_buses_df.index, columns=medoid_bus_name
+                        cluster, medoids = _assign_to_medoids(
+                            graph_root, feeder_buses_df, kmeans, n_clusters
                         )
+                        new_coordinates = feeder_buses_df.loc[
+                            medoids, ["x", "y"]
+                        ].to_numpy()[cluster]
 
-                        for bus in medoid_bus_name:
-                            path_series = pd.Series(
-                                nx.single_source_dijkstra_path_length(
-                                    graph_root, bus, cutoff=None, weight="length"
-                                )
-                            )
-                            dijkstra_distances_df[bus] = path_series
-
-                        feeder_buses_df.loc[:, "medoid"] = dijkstra_distances_df.idxmin(
-                            axis=1
-                        )
-
-                        for index in feeder_buses_df.index.tolist():
-                            partial_busmap_df.loc[index, "new_bus"] = make_name(
-                                medoid_bus_name[feeder_buses_df.loc[index, "medoid"]]
-                                + 1
-                            )
-                            partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
-                                feeder_buses_df.loc[
-                                    feeder_buses_df.loc[index, "medoid"], ["x", "y"]
-                                ].values
-                            )
+                    names = [make_name(n + 1) for n in range(n_clusters)]
+                    partial_busmap_df.loc[feeder_nodes, "new_bus"] = [
+                        names[n] for n in cluster
+                    ]
+                    partial_busmap_df.loc[feeder_nodes, ["new_x", "new_y"]] = (
+                        new_coordinates
+                    )
 
         if mode != "aggregate_to_main_feeder":
             # Backmap
-            for node in not_main_nodes:
-                partial_busmap_df.loc[node] = partial_busmap_df.loc[
-                    partial_busmap_df.loc[node, "new_bus"]
-                ]
+            # The other nodes point to their main feeder node, whose row is final.
+            if not_main_nodes:
+                partial_busmap_df.loc[not_main_nodes] = partial_busmap_df.loc[
+                    partial_busmap_df.loc[not_main_nodes, "new_bus"]
+                ].values
 
         if str(grid).split("_")[0] == "MVGrid":
             partial_busmap_df = rename_virtual_buses(
@@ -1266,7 +1204,9 @@ def make_busmap_main_feeders(
 
     busmap_df = pd.concat(busmap_df_list) if busmap_df_list else pd.DataFrame()
     if mode != "aggregate_to_main_feeder":
-        busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
+        busmap_df = _transform_coordinates(
+            busmap_df, coor_transform_back, "new_x", "new_y"
+        )
 
     return busmap_df
 
@@ -1408,8 +1348,10 @@ def apply_busmap(
         If "standard_lines" is selected, the values of the standard line of the
         respective voltage level are used to set "type_info" and "kind".
         If "combined_name" is selected, "type_info" and "kind" contain the
-        concatenated values of the merged lines. x and r of the lines are not influenced
-        by this as they are always determined from the x and r values of the aggregated
+        concatenated values of the merged lines. The electrical parameters do not
+        depend on this setting: r and x are computed from the per-km values of the
+        line types of the aggregated lines, treated as parallel systems, and the
+        susceptance b is the new length times the sum of b per km of the aggregated
         lines.
         Default: "standard_lines".
     aggregation_mode : bool
@@ -1441,39 +1383,6 @@ def apply_busmap(
 
     """
 
-    def apply_busmap_on_buses_df(series):
-        series.loc["bus"] = busmap_df.loc[series.name, "new_bus"]
-        series.loc["x"] = busmap_df.loc[series.name, "new_x"]
-        series.loc["y"] = busmap_df.loc[series.name, "new_y"]
-        return series
-
-    def apply_busmap_on_lines_df(series):
-        series.loc["bus0"] = busmap_df.loc[series.bus0, "new_bus"]
-        series.loc["bus1"] = busmap_df.loc[series.bus1, "new_bus"]
-        return series
-
-    def remove_lines_with_the_same_bus(series):
-        if series.bus0 == series.bus1:
-            return  # Drop lines which connect the same bus.
-        elif (
-            series.bus0.split("_")[0] == "virtual"
-            and series.bus0.lstrip("virtual_") == slack_bus
-        ) or (
-            series.bus1.split("_")[0] == "virtual"
-            and series.bus1.lstrip("virtual_") == slack_bus
-        ):
-            logger.debug(
-                f"Drop line because connected to virtual_slack bus {series.name}"
-            )
-            return
-        elif series.bus0.lstrip("virtual_") == series.bus1.lstrip("virtual_"):
-            logger.debug(
-                f"Drop line because it shorts the circuit breaker {series.name}"
-            )
-            return
-        else:
-            return series
-
     def get_ordered_lines_df(lines_df):
         """Order lines so that a grouping is possible."""
         order = lines_df.bus0 < lines_df.bus1
@@ -1482,113 +1391,152 @@ def apply_busmap(
         lines_df = pd.concat([lines_df_p, lines_df_n], sort=True)
         return lines_df
 
-    def aggregate_lines_df(df):
-        series = pd.Series(index=lines_df.columns, dtype="object")
+    def aggregate_lines(lines_df):
+        """
+        Aggregate all lines between the same pair of buses to one line.
 
-        bus0 = df.loc[:, "bus0"].values[0]
-        bus1 = df.loc[:, "bus1"].values[0]
-        v_nom = buses_df.loc[bus0, "v_nom"]
-
-        coor_bus0 = buses_df.loc[bus0, ["x", "y"]].values.tolist()
-        coor_bus1 = buses_df.loc[bus1, ["x", "y"]].values.tolist()
-
-        coor_bus0 = coor_transform.transform(coor_bus0[0], coor_bus0[1])
-        coor_bus1 = coor_transform.transform(coor_bus1[0], coor_bus1[1])
-
-        length = (
-            math.dist(coor_bus0, coor_bus1)
-            / 1000
-            * edisgo_obj.config["grid_connection"]["branch_detour_factor"]
+        The length is the distance between the new buses times the branch detour
+        factor, at least 1 m. x and r follow from the per-km values of the aggregated
+        line types, which are treated as parallel systems. b is the length times the
+        sum of b per km of the aggregated lines, so that the susceptances of parallel
+        lines add up; lines without length or b do not contribute. s_nom and
+        num_parallel are summed.
+        """
+        missing_type = lines_df.type_info.isna()
+        if missing_type.any():
+            raise ValueError(
+                f"Line(s) {lines_df.index[missing_type].tolist()} have no "
+                f"type_info. The spatial complexity reduction needs the line type "
+                f"to compute r and x of the aggregated lines."
+            )
+        detour_factor = edisgo_obj.config["grid_connection"]["branch_detour_factor"]
+        bus_x, bus_y = coor_transform.transform(
+            buses_df.x.to_numpy(), buses_df.y.to_numpy()
         )
+        coordinates = dict(zip(buses_df.index, zip(bus_x, bus_y)))
+        v_nom_of_bus = buses_df.v_nom.to_dict()
+        is_mv_bus = buses_df.lv_grid_id.isna().to_dict()
 
-        if length == 0:
-            length = 0.001
-            logger.warning(
-                f"Length of line between {bus0} and {bus1} cannot be 0 m and is "
-                f"therefore set to 1 m."
+        per_km_values = {}
+
+        def per_km(line_type, v_nom, column):
+            key = (line_type, v_nom, column)
+            if key not in per_km_values:
+                try:
+                    value = line_data_df.loc[line_data_df.U_n.isin([v_nom])].loc[
+                        line_type, column
+                    ]
+                except KeyError:
+                    value = line_data_df.loc[line_type, column]
+                    logger.error(
+                        f"Line type {line_type} not in voltage level {v_nom} kV."
+                    )
+                per_km_values[key] = value
+            return per_km_values[key]
+
+        names = lines_df.index.to_numpy()
+        s_nom = lines_df["s_nom"].to_numpy(dtype=float)
+        type_infos = lines_df["type_info"].to_numpy()
+        kinds = lines_df["kind"].to_numpy()
+        num_parallel = lines_df["num_parallel"].to_numpy()
+        parallel_systems = lines_df["num_parallel"].astype(float).to_numpy()
+        old_length = lines_df["length"].to_numpy(dtype=float)
+        if "b" in lines_df.columns:
+            old_b = lines_df["b"].to_numpy(dtype=float)
+        else:
+            old_b = np.zeros(len(lines_df))
+        # Susceptance per km of each line. Lines without length or susceptance
+        # do not contribute.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            b_per_km = np.where(old_length > 0, old_b / old_length, 0.0)
+        b_per_km = np.nan_to_num(b_per_km, nan=0.0, posinf=0.0, neginf=0.0)
+
+        groups = lines_df.groupby(by=["bus0", "bus1"]).indices
+        rows = []
+        for bus0, bus1 in sorted(groups):
+            idx = groups[(bus0, bus1)]
+            v_nom = v_nom_of_bus[bus0]
+
+            length = (
+                math.dist(coordinates[bus0], coordinates[bus1]) / 1000 * detour_factor
             )
-        if length < 0.001:
-            logger.debug(
-                f"Length of line between {bus0} and {bus1} is smaller than 1 m. To "
-                f"avoid stability issues in the power flow analysis it is set to 1 m."
+            if length == 0:
+                length = 0.001
+                logger.warning(
+                    f"Length of line between {bus0} and {bus1} cannot be 0 m and is "
+                    f"therefore set to 1 m."
+                )
+            if length < 0.001:
+                logger.debug(
+                    f"Length of line between {bus0} and {bus1} is smaller than 1 m. "
+                    f"To avoid stability issues in the power flow analysis it is set "
+                    f"to 1 m."
+                )
+
+            # Get type of the line to get the according standard line for the
+            # voltage level
+            if is_mv_bus[bus0]:
+                type_line = f"mv_line_{int(v_nom)}kv"
+            else:
+                type_line = "lv_line"
+
+            if len(idx) > 1:
+                if line_naming_convention == "combined_name":
+                    type_info = "Merged: "
+                    for value in type_infos[idx]:
+                        type_info = type_info + str(value) + " "
+                    kind = "Combined: "
+                    for value in kinds[idx]:
+                        kind = kind + str(value) + " "
+                elif line_naming_convention == "standard_lines":
+                    type_info = edisgo_obj.config["grid_expansion_standard_equipment"][
+                        type_line
+                    ]
+                    kind = kinds[idx[0]]
+            else:
+                type_info = type_infos[idx[0]]
+                kind = kinds[idx[0]]
+
+            # The per-km values describe one system of the given type, so a line
+            # standing for ``num_parallel`` systems contributes that many of them
+            # to the parallel sum.
+            x_sum = 0
+            for line_type, n_parallel in zip(type_infos[idx], parallel_systems[idx]):
+                x_sum = x_sum + n_parallel / per_km(line_type, v_nom, "L_per_km")
+            x_sum = 1 / x_sum
+            x = length * 2 * math.pi * 50 * x_sum / 1000
+
+            r_sum = 0
+            for line_type, n_parallel in zip(type_infos[idx], parallel_systems[idx]):
+                r_sum = r_sum + n_parallel / per_km(line_type, v_nom, "R_per_km")
+            r_sum = 1 / r_sum
+            r = length * r_sum
+
+            rows.append(
+                {
+                    "length": length,
+                    "bus0": bus0,
+                    "bus1": bus1,
+                    "x": x,
+                    "r": r,
+                    # The susceptances of parallel lines add up.
+                    "b": length * b_per_km[idx].sum(),
+                    # Summed one after the other in a fixed order, so that s_nom
+                    # does not depend on how numpy groups the additions.
+                    "s_nom": sum(v for v in s_nom[idx].tolist() if not math.isnan(v)),
+                    "num_parallel": int(np.nansum(num_parallel[idx])),
+                    "type_info": type_info,
+                    "kind": kind,
+                    "old_line_name": names[idx].tolist(),
+                }
             )
-
-        # Get type of the line to get the according standard line for the voltage_level
-        if np.isnan(buses_df.loc[df.bus0, "lv_grid_id"])[0]:
-            type_line = f"mv_line_{int(v_nom)}kv"
-        else:
-            type_line = "lv_line"
-
-        if len(df["type_info"].values) > 1:
-            if line_naming_convention == "combined_name":
-                type_info = "Merged: "
-                for x in df["type_info"].values:
-                    type_info = type_info + str(x) + " "
-            elif line_naming_convention == "standard_lines":
-                type_info = edisgo_obj.config["grid_expansion_standard_equipment"][
-                    type_line
-                ]
-        else:
-            type_info = df["type_info"].values[0]
-
-        if len(df["kind"].values) > 1:
-            if line_naming_convention == "combined_name":
-                kind = "Combined: "
-                for x in df["kind"].values:
-                    kind = kind + str(x) + " "
-            elif line_naming_convention == "standard_lines":
-                kind = df["kind"].values[0]
-        else:
-            kind = df["kind"].values[0]
-
-        # The per-km values describe one system of the given type, so a line
-        # standing for ``num_parallel`` systems contributes that many of them to
-        # the parallel sum.
-        parallel_systems = df["num_parallel"].astype(float).values
-
-        x_sum = 0
-        for line_type, n_parallel in zip(df["type_info"].values, parallel_systems):
-            try:
-                x_line = line_data_df.loc[line_data_df.U_n.isin([v_nom])].loc[
-                    line_type, "L_per_km"
-                ]
-            except KeyError:
-                x_line = line_data_df.loc[line_type, "L_per_km"]
-                logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
-            x_sum = x_sum + n_parallel / x_line
-        x_sum = 1 / x_sum
-        x = length * 2 * math.pi * 50 * x_sum / 1000
-
-        r_sum = 0
-        for line_type, n_parallel in zip(df["type_info"].values, parallel_systems):
-            try:
-                r_line = line_data_df.loc[line_data_df.U_n.isin([v_nom])].loc[
-                    line_type, "R_per_km"
-                ]
-            except KeyError:
-                r_line = line_data_df.loc[line_type, "R_per_km"]
-                logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
-
-            r_sum = r_sum + n_parallel / r_line
-        r_sum = 1 / r_sum
-        r = length * r_sum
-
-        series.loc["length"] = length
-        series.loc["bus0"] = bus0
-        series.loc["bus1"] = bus1
-        series.loc["x"] = x
-        series.loc["r"] = r
-        series.loc["b"] = 0.0
-        series.loc["s_nom"] = df["s_nom"].sum()
-        series.loc["num_parallel"] = int(df.loc[:, "num_parallel"].sum())
-        series.loc["type_info"] = type_info
-        series.loc["kind"] = kind
-        series.loc["old_line_name"] = df.index.to_list()
-        return series
-
-    def apply_busmap_on_components(series):
-        series.loc["bus"] = busmap_df.loc[series.loc["bus"], "new_bus"]
-        return series
+        columns = list(lines_df.columns)
+        columns += [c for c in ["b", "old_line_name"] if c not in columns]
+        aggregated_lines_df = pd.DataFrame(rows, columns=columns)
+        aggregated_lines_df.index = (
+            "Line_" + aggregated_lines_df["bus0"] + "_to_" + aggregated_lines_df["bus1"]
+        ).to_numpy()
+        return aggregated_lines_df
 
     def aggregate_loads_df(df):
         series = pd.Series(index=df.columns, dtype="object")
@@ -1655,11 +1603,6 @@ def apply_busmap(
 
             setattr(edisgo_obj.timeseries, timeseries_name, timeseries)
 
-    def apply_busmap_on_transformers_df(series):
-        series.loc["bus0"] = busmap_df.loc[series.loc["bus0"], "new_bus"]
-        series.loc["bus1"] = busmap_df.loc[series.loc["bus1"], "new_bus"]
-        return series
-
     # Copy dataframes from edisgo object
     buses_df = edisgo_obj.topology.buses_df.copy()
     lines_df = edisgo_obj.topology.lines_df.copy()
@@ -1671,10 +1614,17 @@ def apply_busmap(
 
     slack_bus = edisgo_obj.topology.transformers_hvmv_df.bus1.iloc[0]
 
+    new_bus = busmap_df["new_bus"]
+
+    def map_buses(buses: pd.Series) -> np.ndarray:
+        return new_bus.loc[buses.to_numpy()].to_numpy()
+
     # Manipulate buses_df
-    buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
+    buses_df["bus"] = map_buses(buses_df.index.to_series())
+    buses_df["x"] = busmap_df.loc[buses_df.index, "new_x"].to_numpy()
+    buses_df["y"] = busmap_df.loc[buses_df.index, "new_y"].to_numpy()
     buses_df = buses_df.groupby(by=["bus"], dropna=False, as_index=False).first()
-    buses_df.loc[:, "in_building"] = False
+    buses_df["in_building"] = False
     buses_df = buses_df.set_index("bus")
 
     # Manipulate lines_df
@@ -1688,19 +1638,31 @@ def apply_busmap(
             ]
         )
 
-        lines_df = lines_df.apply(apply_busmap_on_lines_df, axis=1)
-        lines_df = lines_df.apply(
-            remove_lines_with_the_same_bus, axis="columns", result_type="broadcast"
-        ).dropna()
-        lines_df = get_ordered_lines_df(lines_df)
-        lines_df = lines_df.groupby(by=["bus0", "bus1"]).apply(aggregate_lines_df)
-        lines_df.index = (
-            "Line_" + lines_df.loc[:, "bus0"] + "_to_" + lines_df.loc[:, "bus1"]
+        lines_df["bus0"] = map_buses(lines_df.bus0)
+        lines_df["bus1"] = map_buses(lines_df.bus1)
+        # Drop lines which connect the same bus, are connected to the virtual
+        # slack bus or short the circuit breaker.
+        bus0 = lines_df.bus0.str.removeprefix("virtual_")
+        bus1 = lines_df.bus1.str.removeprefix("virtual_")
+        is_virtual_0 = lines_df.bus0.str.startswith("virtual_")
+        is_virtual_1 = lines_df.bus1.str.startswith("virtual_")
+        drop = (
+            (lines_df.bus0 == lines_df.bus1)
+            | (is_virtual_0 & (bus0 == slack_bus))
+            | (is_virtual_1 & (bus1 == slack_bus))
+            | (bus0 == bus1)
         )
+        logger.debug(
+            f"Drop {drop.sum()} lines that connect buses of the same new bus, the "
+            f"virtual slack bus or both sides of a circuit breaker."
+        )
+        lines_df = lines_df.loc[~drop]
+        lines_df = get_ordered_lines_df(lines_df)
+        lines_df = aggregate_lines(lines_df)
 
     # Manipulate loads_df
     if not loads_df.empty:
-        loads_df = loads_df.apply(apply_busmap_on_components, axis="columns")
+        loads_df["bus"] = map_buses(loads_df.bus)
 
         if aggregation_mode:
             if load_aggregation_mode == "sector":
@@ -1730,7 +1692,8 @@ def apply_busmap(
         generators_df = generators_df.loc[
             generators_df.loc[:, "bus"].isin(busmap_df.index), :
         ]
-        generators_df = generators_df.apply(apply_busmap_on_components, axis="columns")
+        generators_df = generators_df.copy()
+        generators_df["bus"] = map_buses(generators_df.bus)
 
         if aggregation_mode:
             if generator_aggregation_mode == "bus":
@@ -1761,14 +1724,11 @@ def apply_busmap(
 
     # Manipulate storage_units_df
     if not storage_units_df.empty:
-        storage_units_df = storage_units_df.apply(
-            apply_busmap_on_components, axis="columns"
-        )
+        storage_units_df["bus"] = map_buses(storage_units_df.bus)
 
     # Manipulate transformers_df
-    transformers_df = transformers_df.apply(
-        apply_busmap_on_transformers_df, axis="columns"
-    )
+    transformers_df["bus0"] = map_buses(transformers_df.bus0)
+    transformers_df["bus1"] = map_buses(transformers_df.bus1)
 
     # Manipulate switches_df
     if not switches_df.empty:
@@ -1825,10 +1785,14 @@ def apply_busmap(
     edisgo_obj.topology.switches_df = switches_df
 
     # Make linemap_df
-    linemap_df = pd.DataFrame()
-    for new_line_name, old_line_names in zip(lines_df.index, lines_df.old_line_name):
-        for old_line_name in old_line_names:
-            linemap_df.loc[old_line_name, "new_line_name"] = new_line_name
+    if lines_df.empty:
+        linemap_df = pd.DataFrame()
+    else:
+        old_line_names = lines_df.old_line_name.explode()
+        linemap_df = pd.DataFrame(
+            {"new_line_name": old_line_names.index.to_numpy()},
+            index=old_line_names.to_numpy(),
+        )
 
     return linemap_df
 
@@ -1941,31 +1905,36 @@ def apply_reduced_results_to_full_grid(
     flexible_storage_units: list | None = None,
 ) -> EDisGo:
     """
-    Write optimized flexible-component dispatch from a spatially-reduced grid
-    back onto the full grid.
+    Write the OPF's active-power results from a spatially-reduced grid back
+    onto the full grid.
 
     Counterpart to :func:`spatial_complexity_reduction`: where that function
     shrinks a grid for a faster OPF, this function maps the OPF's active-power
     results back onto the pre-reduction grid so reinforcement can run on the
-    full topology. Only components the OPF actually rewrites are touched —
-    flexible charging points, heat pumps, DSM loads, and storage units.
-    Inflexible loads/generators are untouched: the OPF never changed their
-    series, so ``full_grid`` already holds the correct values for them.
+    full topology. It writes back the given flexible charging points, heat
+    pumps, DSM loads and storage units, and always all generators: with
+    ``opf_version`` 3 and 4 the OPF curtails solar and wind generators (see
+    :func:`~.io.powermodels_io.from_powermodels`). Generators the OPF did not
+    change get their own series back, because a merged generator's series is
+    the sum of its members' series. Inflexible loads are untouched, as the
+    OPF does not change them.
 
     ``full_grid`` and ``reduced_grid`` are matched by name for storage units
     (never aggregated by :func:`spatial_complexity_reduction`, so their names
-    are unchanged) and, for the other three flexibility types, by the
-    ``old_name`` column that :func:`spatial_complexity_reduction` writes onto
-    ``reduced_grid.topology.loads_df`` when ``aggregation_mode=True``. A
-    member listed in ``old_name`` is a load whose active-power series was
-    merged into one representative row; when ``aggregation_mode=False`` (or a
-    given member was not merged), ``old_name`` is absent and the member's own
-    name is used directly — i.e. a plain by-name write-back.
+    are unchanged) and, for the other flexibility types and the generators,
+    by the ``old_name`` column that
+    :func:`spatial_complexity_reduction` writes onto
+    ``reduced_grid.topology.loads_df`` / ``generators_df`` when
+    ``aggregation_mode=True``. A member listed in ``old_name`` is a component
+    whose active-power series was merged into one representative row; when
+    ``aggregation_mode=False`` (or a given member was not merged),
+    ``old_name`` is absent and the member's own name is used directly — i.e.
+    a plain by-name write-back.
 
     For a merged representative, the representative's optimized series is
     disaggregated onto its ``old_name`` members **per time step**, weighted by
-    each member's own pre-OPF flexibility envelope (a known input, never the
-    optimized result):
+    a pre-OPF value of each member (a known input, never the optimized
+    result):
 
     * charging points — ``upper_power(t)`` from
       ``electromobility.flexibility_bands`` (a charging point with no
@@ -1975,11 +1944,25 @@ def apply_reduced_results_to_full_grid(
       electrical-equivalent heat demand capped at the heat pump's own rated
       power, mirroring how a charging point's ``upper_power(t)`` is already a
       capped bound rather than raw uncapped demand;
-    * DSM loads — ``p_max(t)`` from :attr:`~.network.dsm.DSM.p_max`.
+    * DSM loads — ``p_max(t)`` from :attr:`~.network.dsm.DSM.p_max`;
+    * generators — the member's uncurtailed feed-in ``p(t)``, which
+      ``full_grid`` still holds, so all members of a representative are
+      curtailed by the same fraction.
 
     Weights always sum back to the representative's value exactly at every
     time step; a time step where every member's weight is 0 falls back to an
     equal split.
+
+    Limitations of the generator write-back:
+
+    * The split ignores where the members sit within their cluster, so it is
+      not necessarily the curtailment an OPF on the full grid would choose.
+    * With ``generator_aggregation_mode="bus"`` merged generators get type
+      ``"aggregated"``. The OPF only curtails generators of type ``"solar"``
+      and ``"wind"``, so the feed-in of these generators comes back
+      unchanged.
+    * Solver tolerance can leave a curtailed generator slightly below zero
+      (about -1e-6 MW).
 
     Reactive power is not read from ``reduced_grid``. After writing active
     power, this function calls
@@ -1995,9 +1978,11 @@ def apply_reduced_results_to_full_grid(
     full_grid : :class:`~.EDisGo`
         The pre-reduction EDisGo instance to write dispatch onto, modified in
         place. Must contain every component named in ``flexible_cps`` /
-        ``flexible_hps`` / ``flexible_loads`` / ``flexible_storage_units`` and
-        (for merged components) every name listed in ``reduced_grid``'s
-        ``old_name`` columns.
+        ``flexible_hps`` / ``flexible_loads`` / ``flexible_storage_units``,
+        every generator of ``reduced_grid`` and (for merged components) every
+        name listed in ``reduced_grid``'s ``old_name`` columns. It must still
+        hold the uncurtailed generator feed-in, i.e. be a copy taken before
+        the OPF.
     reduced_grid : :class:`~.EDisGo`
         The spatially-reduced EDisGo instance the OPF ran on. Supplies the
         optimized active-power series and, if aggregated, the ``old_name``
@@ -2015,7 +2000,7 @@ def apply_reduced_results_to_full_grid(
     -------
     :class:`~.EDisGo`
         ``full_grid``, with active power written for the given flexible
-        components and reactive power recomputed.
+        components and all generators, and reactive power recomputed.
 
     """
     # NOTE: "x or []" is unsafe here - callers may pass a numpy array (e.g.
@@ -2054,7 +2039,7 @@ def apply_reduced_results_to_full_grid(
                 f"select_critical_timesteps) before spatial_reduce."
             )
 
-    def _old_name_map(loads_df: DataFrame, names: list) -> dict:
+    def _old_name_map(components_df: DataFrame, names: list) -> dict:
         """Map each representative name in ``names`` to its member names.
 
         A name absent from ``old_name`` (not merged, or
@@ -2062,7 +2047,11 @@ def apply_reduced_results_to_full_grid(
         """
         name_map = {}
         for name in names:
-            old_name = loads_df.at[name, "old_name"] if "old_name" in loads_df else None
+            old_name = (
+                components_df.at[name, "old_name"]
+                if "old_name" in components_df
+                else None
+            )
             name_map[name] = old_name if isinstance(old_name, list) else [name]
         return name_map
 
@@ -2073,15 +2062,16 @@ def apply_reduced_results_to_full_grid(
     def _disaggregate(
         active_power: DataFrame,
         name_map: dict,
-        envelope: DataFrame,
+        weights_source: DataFrame,
         target: DataFrame,
     ) -> None:
         """Split each representative's series onto its members per time step.
 
-        ``envelope`` holds each member's pre-OPF flexibility envelope
-        (columns = member names, index = time index); members missing from
-        ``envelope`` are treated as having an all-zero envelope (equal-split
-        fallback).
+        ``weights_source`` holds each member's pre-OPF weight (columns =
+        member names, index = time index): a flexibility band, the capped
+        heat demand or the uncurtailed feed-in. A member missing from it gets
+        weight 0. A time step where all members' weights are 0 is split
+        equally.
         """
         ti = full_grid.timeseries.timeindex
         for representative, members in name_map.items():
@@ -2091,12 +2081,14 @@ def apply_reduced_results_to_full_grid(
             weights = pd.DataFrame(index=ti, columns=members, dtype=float)
             for member in members:
                 weights[member] = (
-                    envelope.loc[ti, member] if member in envelope.columns else 0.0
+                    weights_source.loc[ti, member]
+                    if member in weights_source.columns
+                    else 0.0
                 )
             weight_sum = weights.sum(axis="columns")
-            zero_envelope = weight_sum == 0
+            no_weight = weight_sum == 0
             shares = weights.div(weight_sum.replace(0, np.nan), axis="index")
-            shares.loc[zero_envelope, :] = 1.0 / len(members)
+            shares.loc[no_weight, :] = 1.0 / len(members)
             representative_power = active_power.loc[ti, representative]
             for member in members:
                 target.loc[ti, member] = shares[member] * representative_power
@@ -2155,6 +2147,19 @@ def apply_reduced_results_to_full_grid(
             reduced_grid.timeseries.storage_units_active_power,
             flexible_storage_units,
             full_grid.timeseries._storage_units_active_power,
+        )
+
+    gens_df = reduced_grid.topology.generators_df
+    if not gens_df.empty:
+        name_map = _old_name_map(gens_df, gens_df.index.tolist())
+        members_flat = [m for members in name_map.values() for m in members]
+        # weights: the uncurtailed feed-in that full_grid still holds (the
+        # list selection returns a copy, so the write-back does not alter it)
+        _disaggregate(
+            reduced_grid.timeseries.generators_active_power,
+            name_map,
+            full_grid.timeseries.generators_active_power[members_flat],
+            full_grid.timeseries._generators_active_power,
         )
 
     full_grid.set_time_series_reactive_power_control()
@@ -2227,7 +2232,7 @@ def compare_voltage(
             ]
         except KeyError:
             voltages_df.loc[index, "v_reduced"] = v_reduced.loc[
-                busmap_df.loc[index, "new_bus"].lstrip("virtual_")
+                busmap_df.loc[index, "new_bus"].removeprefix("virtual_")
             ]
     voltages_df.loc[:, "v_diff"] = (
         voltages_df.loc[:, "v_unreduced"] - voltages_df.loc[:, "v_reduced"]
