@@ -23,8 +23,13 @@ complete data set.
 
 """
 
+from __future__ import annotations
+
 import logging
 import os
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
@@ -35,6 +40,9 @@ from edisgo.tools.tools import shift_to_reference_year
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import MultiPoint
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +60,7 @@ GENERATOR_TYPES = {
 LOAD_SECTORS = {"H": "residential", "G": "cts", "L": "agricultural"}
 
 
-def _read(path, table):
+def _read(path: str, table: str) -> pd.DataFrame:
     """Read one SimBench csv table; missing tables are returned empty."""
     file = os.path.join(path, f"{table}.csv")
     if not os.path.isfile(file):
@@ -60,13 +68,15 @@ def _read(path, table):
     return pd.read_csv(file, sep=";", low_memory=False)
 
 
-def _subnet_id(subnet):
+def _subnet_id(subnet: str) -> int:
     """Integer grid ID from a SimBench subnet name, e.g. 'LV1.108' -> 1108."""
     level, number = subnet.split(".")
     return int(level.lstrip("MLV")) * 1000 + int(number)
 
 
-def _fuse_closed_switches(nodes, switches):
+def _fuse_closed_switches(
+    nodes: pd.DataFrame, switches: pd.DataFrame
+) -> dict[str, str]:
     """
     Map every node to the node it is fused with via closed switches.
 
@@ -88,7 +98,12 @@ def _fuse_closed_switches(nodes, switches):
     return mapping
 
 
-def _close_switches_to_islands(nodes, switches, lines, trafos):
+def _close_switches_to_islands(
+    nodes: pd.DataFrame,
+    switches: pd.DataFrame,
+    lines: pd.DataFrame,
+    trafos: pd.DataFrame,
+) -> pd.DataFrame:
     """
     Close open switches that are the only connection of a grid part.
 
@@ -114,8 +129,12 @@ def _close_switches_to_islands(nodes, switches, lines, trafos):
 
 
 def _ding0_names(
-    buses_df, transformers_hvmv_df, transformers_df, switches_df, mv_grid_id
-):
+    buses_df: pd.DataFrame,
+    transformers_hvmv_df: pd.DataFrame,
+    transformers_df: pd.DataFrame,
+    switches_df: pd.DataFrame,
+    mv_grid_id: int,
+) -> tuple[dict[str, str], dict[str, str]]:
     """
     New names for station buses, transformers and open switch buses.
 
@@ -156,7 +175,7 @@ def _ding0_names(
     return bus_names, trafo_names
 
 
-def _load_type_and_sector(profile):
+def _load_type_and_sector(profile: str) -> tuple[str, str]:
     """eDisGo load type and sector from the name of a SimBench load profile."""
     if profile.startswith(("Air_", "Soil_")):
         return "heat_pump", "individual_heating"
@@ -165,7 +184,7 @@ def _load_type_and_sector(profile):
     return "conventional_load", LOAD_SECTORS.get(profile[0], "other")
 
 
-def _generator_type(simbench_type):
+def _generator_type(simbench_type: str) -> str:
     """eDisGo generator type from the SimBench RES type, e.g. 'Wind_MV'."""
     for key, value in GENERATOR_TYPES.items():
         if simbench_type.lower().startswith(key):
@@ -173,7 +192,7 @@ def _generator_type(simbench_type):
     return "others"
 
 
-def _is_pv_with_battery(storage):
+def _is_pv_with_battery(storage: pd.DataFrame) -> pd.Series:
     """
     Whether SimBench storage units are PV systems with a home battery.
 
@@ -184,7 +203,9 @@ def _is_pv_with_battery(storage):
     return storage.type.str.startswith("PV_Storage")
 
 
-def _transformer_impedance(trafos, trafo_types):
+def _transformer_impedance(
+    trafos: pd.DataFrame, trafo_types: pd.DataFrame
+) -> pd.DataFrame:
     """Add s_nom, r_pu and x_pu (on the transformer's own rating) to `trafos`."""
     types = trafo_types.set_index("id").loc[trafos.type]
     s_nom = types.sR.values
@@ -195,7 +216,7 @@ def _transformer_impedance(trafos, trafo_types):
     )
 
 
-def import_simbench_grid(path, edisgo_obj):
+def import_simbench_grid(path: str, edisgo_obj: EDisGo) -> None:
     """
     Import the network topology of a SimBench grid.
 
@@ -396,7 +417,7 @@ def import_simbench_grid(path, edisgo_obj):
         buses_df, transformers_hvmv_df, transformers_df, switches_df, mv_grid_id
     )
 
-    def rename(df, bus_columns):
+    def rename(df: pd.DataFrame, bus_columns: list[str]) -> pd.DataFrame:
         df = df.rename(index=trafo_names)
         for col in bus_columns:
             df[col] = df[col].map(bus_names).fillna(df[col])
@@ -420,7 +441,9 @@ def import_simbench_grid(path, edisgo_obj):
     topology.check_integrity()
 
 
-def simbench_time_series(path, edisgo_obj, timeindex=None):
+def simbench_time_series(
+    path: str, edisgo_obj: EDisGo, timeindex: pd.DatetimeIndex | None = None
+) -> dict[str, pd.DataFrame]:
     """
     Active and reactive power time series of all components from SimBench profiles.
 
@@ -458,7 +481,14 @@ def simbench_time_series(path, edisgo_obj, timeindex=None):
 
     """
 
-    def scaled(table, p_col, q_col, suffix=("", ""), sign=1, select=None):
+    def scaled(
+        table: str,
+        p_col: str,
+        q_col: str,
+        suffix: tuple[str, str] = ("", ""),
+        sign: int = 1,
+        select: Callable[[pd.DataFrame], pd.Series] | None = None,
+    ) -> list[pd.DataFrame]:
         elements = _read(path, table)
         if select is not None and not elements.empty:
             elements = elements[select(elements)]

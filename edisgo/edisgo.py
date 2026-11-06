@@ -267,7 +267,12 @@ class EDisGo:
         if path is not None:
             import_ding0_grid(path, self, legacy_ding0_grids)
 
-    def import_simbench_grid(self, path, time_series=True, timeindex=None):
+    def import_simbench_grid(
+        self,
+        path: str,
+        time_series: bool = True,
+        timeindex: pd.DatetimeIndex | None = None,
+    ) -> None:
         """
         Import a `SimBench <https://simbench.de>`_ grid from its csv files.
 
