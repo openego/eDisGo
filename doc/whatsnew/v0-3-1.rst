@@ -146,7 +146,7 @@ Changes
   ``spatial_restore`` task. ``spatial_reduce`` stashes a deepcopy of the full grid
   *before* the OPF runs and ``spatial_restore`` returns that stash, but
   :meth:`~.edisgo.EDisGo.map_reduced_results_to_full_grid` transfers only the
-  flexible-component dispatch time series — so the object the pipeline continued
+  dispatch time series, not the OPF results — so the object the pipeline continued
   with still held the pristine, empty ``OPFResults`` constructed before the solve,
   and ``save`` with ``save_opf_results: true`` wrote an ``opf_results/`` directory
   containing no CSV files at all. This affected every run with
@@ -521,6 +521,17 @@ Changes
   curtailed feed-in. Results of ``opf_version`` 3 with a curtailment request change,
   including the presets ``overlying_grid_opf`` and ``overlying_grid_opf_spatial``;
   rerun such calculations (openego/eDisGo#801)
+* Fixed the curtailment of ``opf_version`` 3 and 4 with spatial complexity reduction.
+  :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
+  (used by :meth:`~.edisgo.EDisGo.map_reduced_results_to_full_grid` and the
+  ``spatial_restore`` task) wrote the optimised flexibilities back onto the full grid
+  but not the curtailed solar and wind feed-in, so the full grid was reinforced for
+  the uncurtailed feed-in. It now always writes back all generators as well; where
+  the reduction merged generators, the curtailment is split in proportion to each
+  generator's uncurtailed feed-in. Grid expansion costs of runs with spatial
+  complexity reduction, ``opf_version`` 3 or 4 and a curtailment request, including
+  the preset ``overlying_grid_opf_spatial``, can decrease; rerun such calculations
+  (openego/eDisGo#850)
 * Fixed the heat pump dispatch in ``opf_version`` 1 (the default) and 3. Their
   objectives did not penalise the slacks of the heat pump balance, so the OPF covered
   part of the heat demand with electrical power that was never drawn from the grid.
