@@ -185,6 +185,27 @@ class TestTimeseriesImport:
         assert ind_full.get_loc(pd.Timestamp("12/31/2020 23:00")) == 8759
         assert ind[0] == pd.Timestamp("3/1/2020 00:00")
 
+    def test__select_time_steps(self):
+        df = pd.DataFrame(
+            {"a": [1.0, 2.0, 3.0]},
+            index=pd.date_range("1/1/2011", periods=3, freq="h"),
+        )
+
+        # test hourly time index
+        timeindex = pd.date_range("1/1/2011 01:00", periods=2, freq="h")
+        result = timeseries_import._select_time_steps(df, timeindex)
+        assert_index_equal(result.index, timeindex)
+        assert result.a.tolist() == [2.0, 3.0]
+
+        # test 15-minute time index with a gap: each hourly value is used for all
+        # time steps within that hour
+        timeindex = pd.DatetimeIndex(
+            ["1/1/2011 00:30", "1/1/2011 00:45", "1/1/2011 02:15"]
+        )
+        result = timeseries_import._select_time_steps(df, timeindex)
+        assert_index_equal(result.index, timeindex)
+        assert result.a.tolist() == [1.0, 1.0, 3.0]
+
     @pytest.mark.oep
     def test_query_feedin_oedb_legacy_live(self, oep_engine, monkeypatch):
         """Test the legacy OEP query contract for one weather cell."""
@@ -264,6 +285,15 @@ class TestTimeseriesImport:
         assert feedin[("wind", 1122074)].tolist() == [0.005, 0.01]
         weather_cells_mock.assert_called_once_with(edisgo)
         query_mock.assert_called_once_with(edisgo, {1122074})
+
+        # test 15-minute time index
+        requested_timeindex = pd.date_range("1/1/2011 01:00", periods=8, freq="15min")
+        feedin = timeseries_import.feedin_oedb_legacy(
+            edisgo,
+            timeindex=requested_timeindex,
+        )
+        assert_index_equal(feedin.index, requested_timeindex)
+        assert feedin[("solar", 1122074)].tolist() == 4 * [0.01] + 4 * [0.02]
 
     @pytest.mark.oep
     def test_feedin_oedb_live(self, oep_engine):
