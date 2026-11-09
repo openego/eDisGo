@@ -237,13 +237,33 @@ line up front, in three cases:
    :math:`\lceil S_\text{nom,old} \cdot \text{overload} / S_\text{nom,standard} \rceil`
    parallel standard lines.
 
+With the option ``crosssection_escalation`` of :py:meth:`~edisgo.EDisGo.reinforce`
+(off by default), LV lines are treated differently:
+
+* A line that case 3 would replace by more than two parallel standard lines gets the
+  smallest LV cable type with at most two parallel cables that carries the load
+  and whose resistance is not higher than that of the parallel standard lines
+  instead. If no such cable exists, case 3 applies.
+* Cables that are at least as strong as the standard type, e.g. cables escalated in a
+  previous iteration, get parallel cables of their own type as in case 1, instead of
+  being replaced by standard lines, if their resistance is not higher.
+* With ``crosssection_escalation_existing``, lines of case 1 are escalated as well,
+  but only if this does not need more new cables than adding parallel standard lines.
+
+As line costs depend on the length and the number of new cables only, not on the
+cross-section, an escalated line never costs more than the lines it replaces. The
+resistance criterion avoids larger voltage drops, which would cause additional
+reinforcement due to voltage issues. The total grid expansion costs can still
+differ in either direction, as the changed impedances affect the power flow.
+
 The relative overload is the largest ratio of current to allowed current over all
 analysed time steps. One step solves the overload of the analysed time steps; the
 loop only repeats if the changed impedances create new overloads elsewhere.
 
 .. only:: html
 
-   Choose a line and an overload to see which case applies, the result and its cost.
+   Choose a line and an overload to see which case applies, the result and its cost,
+   and switch on ``crosssection_escalation`` to see how it changes the result.
 
    .. raw:: html
       :file: reinforcement_line_overloading.html

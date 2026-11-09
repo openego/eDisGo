@@ -252,6 +252,52 @@ class TestReinforceGrid:
         assert calls
         assert set(calls) == {choose_cheaper}
 
+    @pytest.mark.parametrize(
+        "line_type, scaling, expected",
+        [
+            # thin cable that would be replaced by three standard lines gets
+            # two cables of a larger cross-section instead
+            ("NAYY 4x1x95", 2.5, ("NAYY 4x1x300", 2, 2.0)),
+            # cable stronger than the standard type gets parallel cables of its
+            # own type instead of being replaced by five standard lines
+            (None, 4, ("NAYY 4x1x300", 3, 2.0)),
+        ],
+    )
+    def test_reinforce_crosssection_escalation(self, line_type, scaling, expected):
+        line = "Line_10000017"
+
+        def reinforce(**kwargs):
+            edisgo = copy.deepcopy(self.edisgo)
+            if line_type is not None:
+                edisgo.topology.change_line_type([line], line_type)
+            edisgo.timeseries.scale_timeseries(
+                p_scaling_factor=scaling, q_scaling_factor=scaling
+            )
+            edisgo.reinforce(mode="lv", **kwargs)
+            return edisgo
+
+        edisgo_off = reinforce()
+        edisgo_on = reinforce(crosssection_escalation=True)
+
+        assert edisgo_off.topology.lines_df.at[line, "type_info"] == "NAYY 4x1x150"
+        type_info, num_parallel, quantity = expected
+        assert edisgo_on.topology.lines_df.at[line, "type_info"] == type_info
+        assert edisgo_on.topology.lines_df.at[line, "num_parallel"] == num_parallel
+        # escalated line is logged with its type and number of new cables
+        changes = edisgo_on.results.equipment_changes.loc[[line]]
+        assert changes.equipment.tolist() == [type_info]
+        assert changes.quantity.tolist() == [quantity]
+        log = edisgo_on.results.reinforce_log
+        log = log[log.changed_component == line]
+        assert log.equipment.tolist() == [type_info]
+        assert log.quantity.tolist() == [quantity]
+        # total grid expansion costs are lower than without escalation and
+        # consistent with the reinforcement log
+        costs_off = edisgo_off.results.grid_expansion_costs.total_costs.sum()
+        costs_on = edisgo_on.results.grid_expansion_costs.total_costs.sum()
+        assert costs_on < costs_off
+        assert np.isclose(edisgo_on.results.reinforce_log.costs.sum(), costs_on)
+
     @staticmethod
     def _split(edisgo, grid, lines):
         """Connect `lines` to the station of `grid`, as splitting a feeder does."""
