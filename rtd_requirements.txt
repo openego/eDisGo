@@ -22,6 +22,6 @@ nbsphinx < 0.10.0
 myst-parser < 6.0.0
 ipython < 9.0.0
 sshtunnel < 0.6.0
-threadpoolctl < 3.8.0
+threadpoolctl < 3.9.0
 urllib3 < 2.9.0
 workalendar < 17.1.0
