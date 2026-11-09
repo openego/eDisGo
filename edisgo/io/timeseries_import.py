@@ -88,6 +88,32 @@ def _timeindex_helper_func(edisgo_object, timeindex=None):
     return timeindex, timeindex_full
 
 
+def _select_time_steps(df, timeindex):
+    """
+    Select the time steps in `timeindex` from hourly data.
+
+    The data from the database is given in hourly resolution. In case `timeindex`
+    has a finer resolution, each hourly value is used for all time steps within
+    that hour.
+
+    Parameters
+    ----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        Hourly time series data.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time steps to select.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Time series data indexed by `timeindex`.
+
+    """
+    df = df.loc[timeindex.floor("h")]
+    df.index = timeindex
+    return df
+
+
 def feedin_oedb_legacy(edisgo_object, timeindex=None):
     """
     Import feed-in time series data for wind and solar power plants from the
@@ -135,7 +161,7 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
     timeindex, timeindex_full = _timeindex_helper_func(edisgo_object, timeindex)
     feedin_df.index = timeindex_full
 
-    return feedin_df.loc[timeindex, :].astype("float")
+    return _select_time_steps(feedin_df, timeindex).astype("float")
 
 
 def _query_feedin_oedb_legacy(edisgo_object, weather_cell_ids, engine=None):
@@ -243,7 +269,7 @@ def feedin_oedb(
     timeindex, timeindex_full = _timeindex_helper_func(edisgo_object, timeindex)
     feedin_df.index = timeindex_full
 
-    return feedin_df.loc[timeindex, :].astype("float")
+    return _select_time_steps(feedin_df, timeindex).astype("float")
 
 
 def _query_feedin_oedb(engine, weather_cell_ids):
@@ -367,7 +393,7 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
         inplace=True,
     )
 
-    return elec_demand.loc[timeindex]
+    return _select_time_steps(elec_demand, timeindex)
 
 
 def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
@@ -408,7 +434,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
         {w_id: ts.cop for w_id, ts in cop.iterrows()}, index=timeindex_full
     )
 
-    return cop.loc[timeindex, :]
+    return _select_time_steps(cop, timeindex)
 
 
 def _query_cop_oedb(engine, weather_cell_ids):
@@ -539,7 +565,9 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
     else:
         dh_profile_df = pd.DataFrame(index=timeindex_full)
 
-    return pd.concat([individual_heating_df, dh_profile_df], axis=1).loc[timeindex, :]
+    return _select_time_steps(
+        pd.concat([individual_heating_df, dh_profile_df], axis=1), timeindex
+    )
 
 
 def electricity_demand_oedb(
@@ -662,9 +690,10 @@ def electricity_demand_oedb(
     else:
         ind_profiles_df = pd.DataFrame()
 
-    return pd.concat(
-        [residential_profiles_df, cts_profiles_df, ind_profiles_df], axis=1
-    ).loc[timeindex, :]
+    return _select_time_steps(
+        pd.concat([residential_profiles_df, cts_profiles_df, ind_profiles_df], axis=1),
+        timeindex,
+    )
 
 
 def _get_zensus_cells_of_buildings(building_ids, engine):

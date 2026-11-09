@@ -771,6 +771,49 @@ class TestTools:
         )
         assert tools.shift_to_reference_year(edisgo_obj, df) is df
 
+    def test_align_series_to_timeindex_resolution(self, caplog):
+        index_15min = pd.date_range("1/1/2011", periods=8, freq="15min")
+        index_hourly = pd.date_range("1/1/2011", periods=2, freq="H")
+
+        # test power is averaged on a coarser time index
+        ts = pd.Series([0.0, 0.0, 0.0, 100.0, 4.0, 4.0, 4.0, 4.0], index=index_15min)
+        with caplog.at_level(logging.WARNING):
+            aligned = tools.align_series_to_timeindex(ts, index_hourly, name="ts")
+        assert "resampling to 0 days 01:00:00" in caplog.text
+        assert_index_equal(aligned.index, index_hourly)
+        assert aligned.tolist() == [25.0, 4.0]
+
+        # test power is kept for all time steps of a finer time index
+        ts = pd.Series([1.0, 2.0], index=index_hourly)
+        aligned = tools.align_series_to_timeindex(ts, index_15min)
+        assert aligned.tolist() == 4 * [1.0] + 4 * [2.0]
+
+        # test state of charge is taken at the time steps of a coarser time index
+        soc = pd.Series(
+            np.arange(9.0), index=pd.date_range("1/1/2011", periods=9, freq="15min")
+        )
+        aligned = tools.align_series_to_timeindex(
+            soc, index_hourly, extra_step=True, state=True
+        )
+        assert aligned.tolist() == [0.0, 4.0, 8.0]
+
+        # test state of charge is interpolated on a finer time index
+        soc = pd.Series(
+            [0.0, 4.0, 8.0], index=pd.date_range("1/1/2011", periods=3, freq="H")
+        )
+        aligned = tools.align_series_to_timeindex(
+            soc, index_15min, extra_step=True, state=True
+        )
+        assert aligned.tolist() == list(np.arange(9.0))
+
+        # test time steps picked by hand are only selected, not resampled
+        ts = pd.Series(
+            np.arange(48.0), index=pd.date_range("1/1/2011", periods=48, freq="H")
+        )
+        timeindex = pd.DatetimeIndex(["1/1/2011 03:00", "1/2/2011 03:00"])
+        aligned = tools.align_series_to_timeindex(ts, timeindex)
+        assert aligned.tolist() == [3.0, 27.0]
+
     def test_get_reference_year_config_without_timeindex(self, tmp_path):
         # config files without section 'timeindex' fall back to 2011
         default_dir = os.path.join(os.path.dirname(tools.__file__), "..", "config")

@@ -21,7 +21,7 @@ import pandas as pd
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import session_scope_egon_data
-from edisgo.io.timeseries_import import _timeindex_helper_func
+from edisgo.io.timeseries_import import _select_time_steps, _timeindex_helper_func
 from edisgo.tools import tools
 from edisgo.tools.config import Config
 
@@ -100,7 +100,7 @@ def oedb(
             [dsm_cts[dsm_profile], dsm_ind[dsm_profile]], axis=1
         )
         dsm_ind_cts_tmp.index = timeindex_full
-        dsm_ind_cts[dsm_profile] = dsm_ind_cts_tmp.loc[timeindex, :]
+        dsm_ind_cts[dsm_profile] = _select_time_steps(dsm_ind_cts_tmp, timeindex)
 
     return dsm_ind_cts
 

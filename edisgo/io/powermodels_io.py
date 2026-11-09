@@ -1152,6 +1152,7 @@ def _build_battery_storage(
             edisgo_obj.overlying_grid.storage_units_soc,
             name="OverlyingGrid.storage_units_soc",
             extra_step=True,
+            state=True,
         )
         data = pd.concat(
             [soc_aligned] * len(edisgo_obj.topology.storage_units_df),

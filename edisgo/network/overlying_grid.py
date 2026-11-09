@@ -281,6 +281,7 @@ class OverlyingGrid:
                     df,
                     name=f"OverlyingGrid.{attr}",
                     extra_step=attr in _SOC_ATTRS,
+                    state=attr in _SOC_ATTRS,
                 )
 
             setattr(self, attr, df)
@@ -321,6 +322,7 @@ class OverlyingGrid:
                     ts,
                     name=f"OverlyingGrid.{attr}",
                     extra_step=attr in _SOC_ATTRS,
+                    state=attr in _SOC_ATTRS,
                 )
             setattr(self, attr, ts)
 
