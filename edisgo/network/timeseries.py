@@ -30,6 +30,7 @@ from edisgo.tools.tools import (
     shift_to_reference_year,
     split_into_contiguous_runs,
 )
+from edisgo.tools.integrity import IntegrityCollector
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -2220,30 +2221,39 @@ class TimeSeries:
                 )
             )
 
-    def check_integrity(self):
+    def check_integrity(self, errors="warn", collector=None):
         """
         Check for NaN, duplicated indices or columns and if time series is empty.
         """
+        own_collector = collector is None
+        if own_collector:
+            collector = IntegrityCollector(errors)
+        def report_issue(message):
+            collector.report(message, logger)
+
         if len(self.timeindex) == 0:
-            logger.warning("No time index set. Empty time series will be returned.")
+            message = ("No time index set. Empty time series will be returned.")
+            report_issue(message)
         else:
             for attr in self._attributes:
                 df = getattr(self, attr)
 
                 if df.isnull().any().any():
-                    logger.warning(f"There are null values in {attr}")
+                    message = (f"There are null values in {attr}")
+                    report_issue(message)
 
                 if any(df.index.duplicated()):
                     duplicated_labels = df.index[df.index.duplicated()].values
-                    logger.warning(
-                        f"{attr} has duplicated indices: {duplicated_labels}"
-                    )
+
+                    message = f"{attr} has duplicated indices: {duplicated_labels}"
+                    report_issue(message)
 
                 if any(df.columns.duplicated()):
                     duplicated_labels = df.columns[df.columns.duplicated()].values
-                    logger.warning(
-                        f"{attr} has duplicated columns: {duplicated_labels}"
-                    )
+                    message = f"{attr} has duplicated columns: {duplicated_labels}"
+                    report_issue(message)
+        if own_collector:
+            collector.raise_if_errors()
 
     def drop_component_time_series(self, df_name, comp_names):
         """

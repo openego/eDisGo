@@ -1794,6 +1794,21 @@ class TestTopologyWithEdisgoObject:
         # check new storage
         assert self.edisgo.topology.storage_units_df.at[comp_name, "p_nom"] == 0.03
 
+    def test_check_integrity_raise_duplicate(self):
+        """Test that duplicate components raise ValueError."""
+        topology = self.edisgo.topology
+        comps = topology._buses_df
+
+        duplicate = comps.loc["BusBar_MVGrid_1_LVGrid_2_MV"]
+
+        try:
+            topology._buses_df = pd.concat([comps, duplicate.to_frame().T])
+
+            with pytest.raises(ValueError, match="duplicate entry"):
+                topology.check_integrity(errors="raise")
+        finally:
+            topology._buses_df = comps
+
     def test_check_integrity(self, caplog):
         """Test of validation of grids."""
         comps_dict = {
