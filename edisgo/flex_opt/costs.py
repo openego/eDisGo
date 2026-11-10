@@ -97,11 +97,11 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         )
         return costs_trafos.loc[trafos.index, :]
 
-    def _get_line_costs(lines_added):
-        costs_lines = line_expansion_costs(edisgo_obj, lines_added.index)
+    def _get_line_costs(line_names, quantity):
+        costs_lines = line_expansion_costs(edisgo_obj, line_names)
         # Align quantity to costs_lines index and compute elementwise (vectorised
         # equivalent of the former per-row apply).
-        quantity_aligned = lines_added["quantity"].reindex(costs_lines.index)
+        quantity_aligned = quantity.reindex(costs_lines.index)
         costs_lines["costs"] = (
             costs_lines["costs_earthworks"]
             + costs_lines["costs_cable"] * quantity_aligned
@@ -159,38 +159,11 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         )
 
         # costs for lines
-        # get changed lines
-        lines = equipment_changes.loc[
-            equipment_changes.index.isin(edisgo_obj.topology.lines_df.index)
-        ]
-        lines_added = lines.iloc[
-            (
-                lines.equipment
-                == edisgo_obj.topology.lines_df.loc[lines.index, "type_info"]
-            ).values
-        ]["quantity"].to_frame()
-        lines_added_unique = lines_added.index.unique()
-        lines_added = (
-            lines_added.groupby(level=0).sum().loc[lines_added_unique, ["quantity"]]
-        )
-        # use the minimum of quantity and num_parallel, as sometimes lines are added
-        # and in a next reinforcement step removed again, e.g. when feeder is split
-        # at 2/3 and a new single standard line is added
-        lines_added = pd.merge(
-            lines_added,
-            edisgo_obj.topology.lines_df.loc[:, ["num_parallel"]],
-            how="left",
-            left_index=True,
-            right_index=True,
-        )
-        lines_added["quantity_added"] = lines_added.loc[
-            :, ["quantity", "num_parallel"]
-        ].min(axis=1)
-        lines_added["length"] = edisgo_obj.topology.lines_df.loc[
-            lines_added.index, "length"
-        ]
+        lines_added = _added_line_quantities(edisgo_obj, equipment_changes)
         if not lines_added.empty:
-            line_costs = _get_line_costs(lines_added)
+            line_costs = _get_line_costs(
+                lines_added.index, lines_added["quantity_added"]
+            )
             costs = pd.concat(
                 [
                     costs,
@@ -231,6 +204,46 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         )
 
     return costs
+
+
+def _added_line_quantities(edisgo_obj, equipment_changes):
+    """
+    Returns the number of added cables ('quantity_added') and the length of each
+    changed line in `equipment_changes` that is still in the grid.
+
+    """
+    # get changed lines
+    lines = equipment_changes.loc[
+        equipment_changes.index.isin(edisgo_obj.topology.lines_df.index)
+    ]
+    lines_added = lines.iloc[
+        (
+            lines.equipment
+            == edisgo_obj.topology.lines_df.loc[lines.index, "type_info"]
+        ).values
+    ]["quantity"].to_frame()
+    lines_added_unique = lines_added.index.unique()
+    lines_added = (
+        lines_added.groupby(level=0).sum().loc[lines_added_unique, ["quantity"]]
+    )
+    # use the minimum of quantity and num_parallel, as sometimes lines are added
+    # and in a next reinforcement step removed again, e.g. when feeder is split
+    # at 2/3 and a new single standard line is added, or when parallel lines are
+    # replaced by a single line through change_line_type()
+    lines_added = pd.merge(
+        lines_added,
+        edisgo_obj.topology.lines_df.loc[:, ["num_parallel"]],
+        how="left",
+        left_index=True,
+        right_index=True,
+    )
+    lines_added["quantity_added"] = lines_added.loc[
+        :, ["quantity", "num_parallel"]
+    ].min(axis=1)
+    lines_added["length"] = edisgo_obj.topology.lines_df.loc[
+        lines_added.index, "length"
+    ]
+    return lines_added
 
 
 def line_expansion_costs(edisgo_obj, lines_names=None):

@@ -542,3 +542,12 @@ Changes
   :func:`~.io.powermodels_io.from_powermodels` logs a warning with the affected heat
   pumps, time steps and energy whenever a slack is used. Results of ``opf_version``
   1 and 3 with heat pumps change; rerun such calculations (openego/eDisGo#695)
+* Fixed two bookkeeping errors in :func:`~.flex_opt.costs.grid_expansion_costs`. A
+  line that first got parallel lines and was later replaced by a single line through
+  :meth:`~.network.topology.Topology.change_line_type` was costed for all earlier
+  parallel lines, although only one line was reported and is in the grid; lines are
+  now costed with the reported quantity. When a station that was reinforced before
+  was replaced by standard transformers, the new transformers reused the names of
+  removed ones and were not costed; new transformers now always get new names (and
+  no longer names like ``..._reinforced_reinforced_1``). Grid expansion costs of such
+  reinforcements change; rerun such calculations (openego/eDisGo#857)
