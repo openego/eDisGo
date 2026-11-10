@@ -347,6 +347,10 @@ class Results:
 
     @equipment_changes.setter
     def equipment_changes(self, df):
+        # reinforce_log rows logged before equipment_changes is reset are not part
+        # of the costs of the following equipment changes
+        if df.empty:
+            self._reinforce_log_start = len(self.reinforce_log)
         self._equipment_changes = df
 
     @property

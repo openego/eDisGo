@@ -13,6 +13,7 @@ from edisgo.flex_opt.costs import grid_expansion_costs, line_expansion_costs
 from edisgo.flex_opt.reinforce_grid import (
     _add_lines_changes_to_equipment_changes,
     _add_reinforcement_log_entries,
+    _add_transformer_changes_to_equipment_changes,
     _analyze_after_voltage_reinforcement,
     _separate_lv_grid_not_converged,
     catch_convergence_reinforce_grid,
@@ -432,6 +433,9 @@ class TestReinforceGrid:
             index=[node],
         )
 
+        # as in reinforce_grid, the changes are written to equipment_changes
+        # before they are logged
+        _add_lines_changes_to_equipment_changes(edisgo, dict.fromkeys(lines, 1), 1)
         with caplog.at_level("INFO", logger="edisgo.flex_opt.reinforce_grid"):
             _add_reinforcement_log_entries(
                 edisgo,
@@ -487,6 +491,182 @@ class TestReinforceGrid:
                 costs.at[line, "costs_cable"],
             ]
         )
+        assert log.costs.sum() == pytest.approx(
+            grid_expansion_costs(edisgo).total_costs.sum()
+        )
+
+    def test_reinforce_log_costs_after_equipment_changes_reset(self):
+        # after equipment_changes is reset (e.g. after a base reinforcement), the
+        # costs of the following log rows add up to the grid expansion costs of
+        # the following changes only
+        edisgo = copy.deepcopy(self.edisgo)
+        edisgo.analyze()
+        line = edisgo.topology.mv_grid.lines_df.index[0]
+        issues = pd.DataFrame(
+            {
+                "max_rel_overload": [1.5],
+                "time_index": [edisgo.timeseries.timeindex[0]],
+            },
+            index=[line],
+        )
+        for run_id in (0, 1):
+            edisgo.results.equipment_changes = pd.DataFrame()
+            edisgo.topology.update_number_of_parallel_lines(
+                edisgo.topology.lines_df.loc[[line], "num_parallel"] + 1
+            )
+            _add_lines_changes_to_equipment_changes(edisgo, {line: 1}, 1)
+            _add_reinforcement_log_entries(
+                edisgo,
+                1,
+                "mv_line_overload",
+                "overloading",
+                issues,
+                {line: 1},
+                run_id=run_id,
+            )
+
+        log = edisgo.results.reinforce_log
+        assert log.loc[log.run_id == 1, "costs"].sum() == pytest.approx(
+            grid_expansion_costs(edisgo).total_costs.sum()
+        )
+
+    def test_reinforce_log_costs_without_generator_import(self):
+        # a line added to connect a new component (iteration step 0) and later
+        # reinforced is only charged for the reinforcement in the log, as in
+        # grid_expansion_costs with without_generator_import=True
+        edisgo = copy.deepcopy(self.edisgo)
+        edisgo.analyze()
+        line = edisgo.topology.mv_grid.lines_df.index[0]
+        edisgo.results._add_line_to_equipment_changes(
+            edisgo.topology.lines_df.loc[line]
+        )
+        issues = pd.DataFrame(
+            {
+                "max_rel_overload": [1.5],
+                "time_index": [edisgo.timeseries.timeindex[0]],
+            },
+            index=[line],
+        )
+        edisgo.topology.update_number_of_parallel_lines(
+            edisgo.topology.lines_df.loc[[line], "num_parallel"] + 1
+        )
+        _add_lines_changes_to_equipment_changes(edisgo, {line: 1}, 1)
+        _add_reinforcement_log_entries(
+            edisgo,
+            1,
+            "mv_line_overload",
+            "overloading",
+            issues,
+            {line: 1},
+            run_id=0,
+        )
+
+        costs = line_expansion_costs(edisgo, [line])
+        assert edisgo.results.reinforce_log.costs.sum() == pytest.approx(
+            costs.at[line, "costs_earthworks"] + costs.at[line, "costs_cable"]
+        )
+        assert edisgo.results.reinforce_log.costs.sum() == pytest.approx(
+            grid_expansion_costs(
+                edisgo, without_generator_import=True
+            ).total_costs.sum()
+        )
+
+    def test_reinforce_log_costs_after_line_type_change(self):
+        # parallel lines that are later replaced by a single line through
+        # change_line_type() are credited in the log, so that its costs still add
+        # up to grid_expansion_costs
+        edisgo = copy.deepcopy(self.edisgo)
+        edisgo.analyze()
+        line = "Line_10007"
+        standard_line = edisgo.config["grid_expansion_standard_equipment"][
+            "mv_line_20kv"
+        ]
+        issues = pd.DataFrame(
+            {
+                "max_rel_overload": [2.5],
+                "voltage_level": ["mv"],
+                "time_index": [edisgo.timeseries.timeindex[0]],
+            },
+            index=[line],
+        )
+        lines_changes = reinforce_measures.reinforce_lines_overloading(edisgo, issues)
+        assert lines_changes[line] == 2
+        _add_lines_changes_to_equipment_changes(edisgo, lines_changes, 1)
+        _add_reinforcement_log_entries(
+            edisgo,
+            1,
+            "mv_line_overload",
+            "overloading",
+            issues,
+            lines_changes,
+            run_id=0,
+        )
+        edisgo.topology.change_line_type([line], standard_line)
+        _add_lines_changes_to_equipment_changes(edisgo, {line: 1}, 2)
+        _add_reinforcement_log_entries(
+            edisgo,
+            2,
+            "mv_line_overload",
+            "overloading",
+            issues,
+            {line: 1},
+            run_id=0,
+        )
+
+        log = edisgo.results.reinforce_log
+        costs = line_expansion_costs(edisgo, [line])
+        assert log.costs.tolist() == pytest.approx(
+            [
+                costs.at[line, "costs_earthworks"] + 2 * costs.at[line, "costs_cable"],
+                -costs.at[line, "costs_cable"],
+            ]
+        )
+        assert log.costs.sum() == pytest.approx(
+            grid_expansion_costs(edisgo).total_costs.sum()
+        )
+
+    def test_reinforce_log_costs_after_station_replacement(self):
+        # a transformer that is added and later removed again, when the station
+        # is replaced by standard transformers, is credited in the log, so that
+        # its costs still add up to grid_expansion_costs
+        edisgo = copy.deepcopy(self.edisgo)
+        edisgo.analyze()
+        grid = edisgo.topology.get_lv_grid(1)
+        for step, s_missing in ((1, 0.05), (2, 2.0)):
+            issues = pd.DataFrame(
+                {
+                    "s_missing": [s_missing],
+                    "time_index": [edisgo.timeseries.timeindex[0]],
+                    "grid": [grid],
+                },
+                index=[grid.station_name],
+            )
+            transformer_changes = (
+                reinforce_measures.reinforce_mv_lv_station_overloading(edisgo, issues)
+            )
+            for mode in ("added", "removed"):
+                _add_transformer_changes_to_equipment_changes(
+                    edisgo, transformer_changes, step, mode
+                )
+            for mode in ("removed", "added"):
+                _add_reinforcement_log_entries(
+                    edisgo,
+                    step,
+                    "mv_lv_station_overload",
+                    "overloading",
+                    issues,
+                    transformer_changes[mode],
+                    run_id=0,
+                    removed=mode == "removed",
+                )
+
+        log = edisgo.results.reinforce_log
+        first_transformer = log.changed_component.iloc[0]
+        rows = log[log.changed_component == first_transformer]
+        assert rows.quantity.tolist() == [1, -1]
+        assert rows.costs.sum() == pytest.approx(0)
+        # the original transformer was never costed, so it is not credited
+        assert len(log[log.quantity == -1]) == 1
         assert log.costs.sum() == pytest.approx(
             grid_expansion_costs(edisgo).total_costs.sum()
         )
