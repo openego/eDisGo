@@ -542,3 +542,12 @@ Changes
   :func:`~.io.powermodels_io.from_powermodels` logs a warning with the affected heat
   pumps, time steps and energy whenever a slack is used. Results of ``opf_version``
   1 and 3 with heat pumps change; rerun such calculations (openego/eDisGo#695)
+* Fixed :meth:`~.network.topology.Topology.add_line`. With ``type_info`` it calculated
+  ``s_nom`` with the rated voltage of the line type instead of the nominal voltage of
+  the grid, unlike :meth:`~.network.topology.Topology.change_line_type`. This
+  affected MV lines whose type is rated for a different voltage than the grid, e.g.
+  a 10 kV cable in a 20 kV grid got half its capacity. Such lines are created when an
+  existing line is split to connect a new component. Further, ``add_line`` now
+  returns the existing line if one exists between the given buses in either
+  direction instead of adding a parallel duplicate. Grid expansion costs of grids
+  with such lines can change; rerun such calculations (openego/eDisGo#858)

@@ -429,7 +429,9 @@ class TestTopology:
         assert msg in caplog.text
         assert len_df_before + 2 == len(self.topology.lines_df)
         assert name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_BranchTee_LVGrid_1_10"
-        assert np.isclose(self.topology.lines_df.at[name, "s_nom"], 6.18342)
+        # s_nom is calculated with the grid voltage of 20 kV, not with the rated
+        # voltage of 10 kV of the cable type
+        assert np.isclose(self.topology.lines_df.at[name, "s_nom"], 12.36684)
         assert np.isclose(self.topology.lines_df.at[name, "r"], 0.164)
 
         # test no creation of new line when line between buses already exists
@@ -447,6 +449,17 @@ class TestTopology:
         assert (
             self.topology.lines_df.at[name, "x"] == self.topology.lines_df.at[line, "x"]
         )
+
+        # test no creation of new line when line exists in reverse direction
+        name = self.topology.add_line(
+            bus0=bus1,
+            bus1=bus0,
+            length=1,
+            kind="cable",
+            type_info="NA2XS2Y 3x1x185 RM/25",
+        )
+        assert len_df_before + 2 == len(self.topology.lines_df)
+        assert name == line
 
         # test error raising when given buses are not valid
         msg = "Specified bus Testbus is not valid as it is not defined in buses_df."
