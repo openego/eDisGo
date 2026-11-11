@@ -92,6 +92,21 @@ COLUMNS = {
 }
 
 
+def _calculate_line_parameters(line_data, v_nom, length, num_parallel):
+    """
+    Calculates r, x, b and s_nom of a line from its line type data.
+
+    s_nom is calculated with the nominal voltage `v_nom` of the grid, not with the
+    rated voltage of the line type.
+
+    """
+    r = calculate_line_resistance(line_data.R_per_km, length, num_parallel)
+    x = calculate_line_reactance(line_data.L_per_km, length, num_parallel)
+    b = calculate_line_susceptance(line_data.C_per_km, length, num_parallel)
+    s_nom = calculate_apparent_power(v_nom, line_data.I_max_th, num_parallel)
+    return r, x, b, s_nom
+
+
 class Topology:
     """
     Container for all grid topology data of a single MV grid.
@@ -1406,21 +1421,14 @@ class Topology:
                 f"Specified bus {bus1} is not valid as it is not defined in buses_df."
             )
 
-        # check if line between given buses already exists
-        bus0_bus1 = self.lines_df[
-            (self.lines_df.bus0 == bus0) & (self.lines_df.bus1 == bus1)
+        # check if line between given buses already exists (in either direction)
+        existing_lines = self.lines_df[
+            ((self.lines_df.bus0 == bus0) & (self.lines_df.bus1 == bus1))
+            | ((self.lines_df.bus0 == bus1) & (self.lines_df.bus1 == bus0))
         ]
-        bus1_bus0 = self.lines_df[
-            (self.lines_df.bus1 == bus0) & (self.lines_df.bus0 == bus1)
-        ]
-        if not bus0_bus1.empty and bus1_bus0.empty:
-            logger.debug("Line between bus0 {} and bus1 {} already exists.")
-            return pd.concat(
-                [
-                    bus1_bus0,
-                    bus0_bus1,
-                ]
-            ).index[0]
+        if not existing_lines.empty:
+            logger.debug(f"Line between bus0 {bus0} and bus1 {bus1} already exists.")
+            return existing_lines.index[0]
 
         # unpack optional parameters
         x = kwargs.get("x", None)
@@ -1439,16 +1447,12 @@ class Topology:
                     "line, x, r, b and s_nom are calculated and provided "
                     "parameters are overwritten."
                 )
+            v_nom = self.buses_df.at[bus0, "v_nom"]
             line_data = _get_line_data()
             if isinstance(line_data, pd.DataFrame) and len(line_data) > 1:
-                line_data = (
-                    line_data[line_data.U_n == self.buses_df.loc[bus0, "v_nom"]]
-                ).iloc[0, :]
-            x = calculate_line_reactance(line_data.L_per_km, length, num_parallel)
-            r = calculate_line_resistance(line_data.R_per_km, length, num_parallel)
-            b = calculate_line_susceptance(line_data.C_per_km, length, num_parallel)
-            s_nom = calculate_apparent_power(
-                line_data.U_n, line_data.I_max_th, num_parallel
+                line_data = (line_data[line_data.U_n == v_nom]).iloc[0, :]
+            r, x, b, s_nom = _calculate_line_parameters(
+                line_data, v_nom, length, num_parallel
             )
 
         # generate line name and check uniqueness
@@ -1755,12 +1759,11 @@ class Topology:
         """
         try:
             data_new_line = self.equipment_data["lv_cables"].loc[new_line_type]
+            grid_voltage = data_new_line.U_n
         except KeyError:
             try:
-                data_new_line = (
-                    self.equipment_data["mv_cables"].loc[new_line_type].copy()
-                )
-                # in case of MV cable adapt nominal voltage to MV voltage
+                data_new_line = self.equipment_data["mv_cables"].loc[new_line_type]
+                # in case of MV cable use MV grid voltage to calculate s_nom
                 grid_voltage = self.buses_df.at[
                     self.lines_df.at[lines[0], "bus0"], "v_nom"
                 ]
@@ -1770,11 +1773,9 @@ class Topology:
                         f"different nominal voltage (nominal voltage of new line type "
                         f"is {data_new_line.U_n} kV while nominal voltage of the medium"
                         f" voltage grid is {grid_voltage} kV). The nominal voltage of "
-                        f"the new line type is therefore set to the grids nominal "
-                        f"voltage."
+                        f"the grid is therefore used to calculate the line's nominal "
+                        f"apparent power."
                     )
-
-                    data_new_line.U_n = grid_voltage
             except KeyError:
                 raise KeyError(
                     "Given new line type is not in equipment data. Please "
@@ -1786,26 +1787,16 @@ class Topology:
         self._lines_df.loc[lines, "num_parallel"] = 1
         self._lines_df.loc[lines, "kind"] = "cable"
 
-        self._lines_df.loc[lines, "r"] = calculate_line_resistance(
-            data_new_line.R_per_km,
+        r, x, b, s_nom = _calculate_line_parameters(
+            data_new_line,
+            grid_voltage,
             self.lines_df.loc[lines, "length"],
             self._lines_df.loc[lines, "num_parallel"],
         )
-        self._lines_df.loc[lines, "x"] = calculate_line_reactance(
-            data_new_line.L_per_km,
-            self.lines_df.loc[lines, "length"],
-            self._lines_df.loc[lines, "num_parallel"],
-        )
-        self._lines_df.loc[lines, "b"] = calculate_line_susceptance(
-            data_new_line.C_per_km,
-            self.lines_df.loc[lines, "length"],
-            self._lines_df.loc[lines, "num_parallel"],
-        )
-        self._lines_df.loc[lines, "s_nom"] = calculate_apparent_power(
-            data_new_line.U_n,
-            data_new_line.I_max_th,
-            self._lines_df.loc[lines, "num_parallel"],
-        )
+        self._lines_df.loc[lines, "r"] = r
+        self._lines_df.loc[lines, "x"] = x
+        self._lines_df.loc[lines, "b"] = b
+        self._lines_df.loc[lines, "s_nom"] = s_nom
 
     def sort_buses(self):
         """
