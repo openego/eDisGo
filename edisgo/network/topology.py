@@ -1924,6 +1924,12 @@ class Topology:
         else:
             comp_name = self.add_storage_unit(bus=bus, **comp_data)
 
+        # the connection cable has to carry the apparent power at the
+        # configured power factor
+        apparent_power = (
+            power / edisgo_object.config["reactive_power_factor"][f"mv_{comp_type}"]
+        )
+
         # ===== voltage level 4: component is connected to MV station =====
         if voltage_level == 4:
             # add line
@@ -1941,7 +1947,7 @@ class Topology:
             line_type, num_parallel = select_cable(
                 edisgo_obj=edisgo_object,
                 level="mv",
-                apparent_power=power,
+                apparent_power=apparent_power,
                 length=line_length,
                 component_type=comp_type,
             )
@@ -1996,7 +2002,7 @@ class Topology:
                         bus=self.buses_df.loc[bus, :],
                         target_obj=dist_min_obj,
                         comp_type=comp_type,
-                        power=power,
+                        apparent_power=apparent_power,
                     )
 
                     if target_obj_result is not None:
@@ -2077,7 +2083,8 @@ class Topology:
         one load is restricted by the parameter
         `allowed_number_of_comp_per_bus`. If every possible load
         already has more than the allowed number then the new component
-        is directly connected to the MV/LV substation.
+        is connected to the MV/LV substation (via a new bus and line in case
+        geometry data is available, otherwise directly at the substation).
 
         Parameters
         ----------
@@ -2280,9 +2287,15 @@ class Topology:
                     "No valid connection target found for new component. "
                     "Connected to LV station."
                 )
-                comp_bus = self._connect_to_lv_bus(
-                    edisgo_object, lv_grid.station.index[0], comp_type, comp_data
-                )
+                # without geom no new bus can be created, wherefore the component
+                # is then connected directly to the LV station (same as in voltage
+                # level 6)
+                if not comp_data.get("geom"):
+                    comp_bus = lv_grid.station.index[0]
+                else:
+                    comp_bus = self._connect_to_lv_bus(
+                        edisgo_object, lv_grid.station.index[0], comp_type, comp_data
+                    )
                 comp_data.pop("geom", None)
                 comp_data.pop("p")
                 comp_name = add_func(bus=comp_bus, **comp_data)
@@ -2578,7 +2591,7 @@ class Topology:
         bus,
         target_obj,
         comp_type,
-        power,
+        apparent_power,
     ):
         """
         Connects given MV bus to given target object (MV line or bus).
@@ -2611,9 +2624,8 @@ class Topology:
             Type of added component. Can be 'generator', 'charging_point', 'heat_pump'
             or 'storage_unit'.
             Default: 'generator'.
-        power : float
-            Nominal power of the new component to be connected.
-
+        apparent_power : float
+            Apparent power in MVA the cable to the new component has to carry.
         Returns
         -------
         str
@@ -2732,7 +2744,7 @@ class Topology:
             line_type, num_parallel = select_cable(
                 edisgo_obj=edisgo_object,
                 level="mv",
-                apparent_power=power,
+                apparent_power=apparent_power,
                 length=line_length,
                 component_type=comp_type,
             )
@@ -2774,7 +2786,7 @@ class Topology:
             line_type, num_parallel = select_cable(
                 edisgo_obj=edisgo_object,
                 level="mv",
-                apparent_power=power,
+                apparent_power=apparent_power,
                 length=line_length,
                 component_type=comp_type,
             )
@@ -2865,11 +2877,18 @@ class Topology:
         # avoid very short lines by limiting line length to at least 1m
         line_length = max(line_length, 0.001)
 
+        # the connection cable has to carry the apparent power at the
+        # configured power factor
+        apparent_power = (
+            comp_data["p"]
+            / edisgo_object.config["reactive_power_factor"][f"lv_{comp_type}"]
+        )
+
         # get suitable line type
         line_type, num_parallel = select_cable(
             edisgo_obj=edisgo_object,
             level="lv",
-            apparent_power=comp_data["p"],
+            apparent_power=apparent_power,
             component_type=comp_type,
             length=line_length,
         )
