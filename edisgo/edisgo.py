@@ -64,6 +64,7 @@ from edisgo.opf.results.opf_result_class import OPFResults
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
+from edisgo.tools.integrity import IntegrityCollector
 from edisgo.tools.spatial_complexity_reduction import (
     apply_reduced_results_to_full_grid,
     spatial_complexity_reduction,
@@ -74,7 +75,7 @@ from edisgo.tools.tools import (
     get_path_length_to_station,
     reduce_timeseries_data_to_given_timeindex,
 )
-from edisgo.tools.integrity import IntegrityCollector
+
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
 
@@ -3680,7 +3681,6 @@ class EDisGo:
             flexible_storage_units=flexible_storage_units,
         )
 
-    #def check_integrity(self):
     def check_integrity(self, errors="warn"):
         """
         Method to check the integrity of the EDisGo object.
@@ -3699,6 +3699,19 @@ class EDisGo:
         :class:`~.network.overlying_grid.OverlyingGrid` and :class:`~.network.dsm.DSM`
         contains all time steps in
         :attr:`edisgo.network.timeseries.TimeSeries.timeindex`.
+
+         Parameters
+        ----------
+        errors : str
+            How found issues are handled. 'warn' (default) logs each issue as a
+            warning. 'raise' collects all issues and raises one ValueError
+            listing all of them at the end.
+
+        Raises
+        ------
+        ValueError
+            If `errors` is 'raise' and an issue was found, or if `errors` is
+            neither 'warn' nor 'raise'.
 
         """
         collector = IntegrityCollector(errors)
@@ -3757,7 +3770,6 @@ class EDisGo:
             exceeding = comps_complete[
                 (active_power[comps_complete].max() > comps.loc[comps_complete, attr])
             ]
-
 
             if len(exceeding) > 1e-6:
                 message = (
@@ -3828,11 +3840,11 @@ class EDisGo:
                     " Demand can not be covered if no sufficient"
                     " heat storage capacities are available."
                 )
-                report_issue(message)
+                logger.warning(message)
 
         collector.raise_if_errors()
 
-        logging.info("Integrity check finished. Please pay attention to warnings.")
+        logging.info("Integrity check finished.")
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"

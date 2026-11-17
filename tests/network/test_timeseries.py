@@ -2469,7 +2469,9 @@ class TestTimeSeries:
             index=ts.timeindex,
         )
 
-        with pytest.raises(ValueError, match="There are null values in loads_active_power"):
+        with pytest.raises(
+            ValueError, match="There are null values in loads_active_power"
+        ):
             ts.check_integrity(errors="raise")
 
     def test_integrity_check_raise_empty_timeindex(self):

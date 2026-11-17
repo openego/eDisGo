@@ -23,8 +23,8 @@ import pandas as pd
 from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
-from edisgo.tools.tools import align_series_to_timeindex
 from edisgo.tools.integrity import IntegrityCollector
+from edisgo.tools.tools import align_series_to_timeindex
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -912,9 +912,22 @@ class Electromobility:
         """
         Method to check the integrity of the Electromobility object.
 
-        Raises an error in case any of the checks fails.
-
         Currently only checks integrity of flexibility bands.
+
+                Parameters
+        ----------
+        errors : str
+            How found issues are handled. 'warn' (default) logs each issue as a
+            warning. 'raise' collects issues and raises one ValueError at the end.
+        collector : IntegrityCollector or None
+            Shared collector used when checking integrity across components.
+
+        Raises
+        ------
+        ValueError
+            If flexibility bands are inconsistent, regardless of `errors`.
+            Also raised if `errors` is invalid, or if collected issues are
+            found when `errors` is 'raise'.
 
         """
         own_collector = collector is None
@@ -948,7 +961,7 @@ class Electromobility:
                 f"following charging points: {list(tmp[tmp].index)}. The maximum "
                 f"exceedance is {max_exceedance}. Please check."
             )
-            report_issue(message)
+            raise ValueError(message)
 
         diff = (
             self.flexibility_bands["upper_energy"].diff()
@@ -962,7 +975,7 @@ class Electromobility:
                 f"following charging points: {list(tmp[tmp].index)}. The maximum "
                 f"exceedance is {max_exceedance}. Please check."
             )
-            report_issue(message)
+            raise ValueError(message)
 
         diff = (
             self.flexibility_bands["lower_energy"].diff()
@@ -976,7 +989,7 @@ class Electromobility:
                 f"following charging points: {list(tmp[tmp].index)}. The maximum "
                 f"exceedance is {max_exceedance}. Please check."
             )
-            report_issue(message)
+            raise ValueError(message)
 
         if own_collector:
             collector.raise_if_errors()

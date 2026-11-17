@@ -5,6 +5,14 @@ Release date: not yet released
 
 Changes
 -------
+* Added an ``errors`` parameter to ``check_integrity`` methods
+  (openego/eDisGo#381). By default, ``errors="warn"`` logs integrity issues
+  as warnings. With ``errors="raise"``, issues are collected across components
+  and reported together in a ``ValueError`` after the integrity checks.
+  Informational warnings remain non-fatal. Electromobility flexibility-band
+  inconsistencies continue to raise ``ValueError`` regardless of the selected
+  mode, preserving the previous validation behaviour.
+
 
 * Time series that eDisGo writes or reads now follow the time index
   (:attr:`~.network.timeseries.TimeSeries.timeindex`), also if the input data span a

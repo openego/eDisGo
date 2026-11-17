@@ -626,6 +626,21 @@ class HeatPump:
 
         Checks for duplicated and missing labels as well as implausible values.
 
+                Parameters
+        ----------
+        errors : str
+            How found issues are handled. 'warn' (default) logs each issue as a
+            warning. 'raise' collects all issues and raises one ValueError
+            listing all of them at the end.
+        collector : IntegrityCollector or None
+            Shared collector used when checking integrity across components.
+
+        Raises
+        ------
+        ValueError
+            If `errors` is 'raise' and an issue was found, or if `errors` is
+            neither 'warn' nor 'raise'.
+
         """
         own_collector = collector is None
 

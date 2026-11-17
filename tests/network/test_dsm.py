@@ -212,7 +212,9 @@ class TestDSM:
             "DSM timeseries e_min contains values larger than zero, which is not "
             "allowed." in caplog.text
         )
-        with pytest.raises(ValueError, match="DSM timeseries contain the following duplicates"):
+        with pytest.raises(
+            ValueError, match="DSM timeseries contain the following duplicates"
+        ):
             self.dsm.check_integrity(errors="raise")
         caplog.clear()
         # check for empty DSM class

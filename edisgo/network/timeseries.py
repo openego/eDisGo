@@ -23,13 +23,13 @@ import pandas as pd
 
 from edisgo.flex_opt import q_control
 from edisgo.io import timeseries_import
+from edisgo.tools.integrity import IntegrityCollector
 from edisgo.tools.tools import (
     assign_voltage_level_to_component,
     check_timeindex_coverage,
     resample,
     split_into_contiguous_runs,
 )
-from edisgo.tools.integrity import IntegrityCollector
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -2190,22 +2190,37 @@ class TimeSeries:
     def check_integrity(self, errors="warn", collector=None):
         """
         Check for NaN, duplicated indices or columns and if time series is empty.
+                Parameters
+        ----------
+        errors : str
+            How found issues are handled. 'warn' (default) logs each issue as a
+            warning. 'raise' collects all issues and raises one ValueError
+            listing all of them at the end.
+        collector : IntegrityCollector or None
+            Shared collector used when checking integrity across components.
+
+        Raises
+        ------
+        ValueError
+            If `errors` is 'raise' and an issue was found, or if `errors` is
+            neither 'warn' nor 'raise'.
         """
         own_collector = collector is None
         if own_collector:
             collector = IntegrityCollector(errors)
+
         def report_issue(message):
             collector.report(message, logger)
 
         if len(self.timeindex) == 0:
-            message = ("No time index set. Empty time series will be returned.")
+            message = "No time index set. Empty time series will be returned."
             report_issue(message)
         else:
             for attr in self._attributes:
                 df = getattr(self, attr)
 
                 if df.isnull().any().any():
-                    message = (f"There are null values in {attr}")
+                    message = f"There are null values in {attr}"
                     report_issue(message)
 
                 if any(df.index.duplicated()):

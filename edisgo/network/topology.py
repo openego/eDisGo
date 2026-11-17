@@ -37,7 +37,6 @@ from edisgo.tools.tools import (
     select_cable,
 )
 
-
 if "READTHEDOCS" not in os.environ:
     from shapely.errors import ShapelyDeprecationWarning
     from shapely.geometry import LineString, Point
@@ -3124,14 +3123,29 @@ class Topology:
 
         # Check data integrity
         self.check_integrity()
- # add error parameter to the fuction
-    def check_integrity(self, errors ="warn", collector=None):
+
+    def check_integrity(self, errors="warn", collector=None):
         """
         Check data integrity.
 
         Checks for duplicated labels and isolated components. Further checks for very
         small impedances that can cause stability problems in the power flow calculation
         and large line lengths that might be implausible.
+
+         Parameters
+        ----------
+        errors : str
+            How found issues are handled. 'warn' (default) logs each issue as a
+            warning. 'raise' collects all issues and raises one ValueError
+            listing all of them at the end.
+        collector : IntegrityCollector or None
+            Shared collector used when checking integrity across components.
+
+        Raises
+        ------
+        ValueError
+            If `errors` is 'raise' and an issue was found, or if `errors` is
+            neither 'warn' nor 'raise'.
 
         """
         own_collector = collector is None
@@ -3222,9 +3236,7 @@ class Topology:
         all_buses = np.unique(np.concatenate(buses, axis=None))
         missing = self.buses_df.index[~self.buses_df.index.isin(all_buses)]
         if len(missing) > 0:
-            message = (
-                f"The following buses are isolated: {', '.join(missing.values)}."
-            )
+            message = f"The following buses are isolated: {', '.join(missing.values)}."
 
             report_issue(message)
         # check for subgraphs
@@ -3233,7 +3245,7 @@ class Topology:
             for c in nx.connected_components(self.to_graph())
         )
         if len(subgraphs) > 1:
-            message = ("The network has isolated nodes or edges.")
+            message = "The network has isolated nodes or edges."
             report_issue(message)
         # check impedance
         for branch_component in ["lines", "transformers"]:
@@ -3251,7 +3263,7 @@ class Topology:
                     f"{z[z < 1e-6].index.values}. This might cause problems in the "
                     f"power flow or optimisation."
                 )
-                report_issue(message)
+                logger.warning(message)
 
         # check line length
         if (self.lines_df.length > 10.0).any():
@@ -3262,7 +3274,7 @@ class Topology:
                 f"component that is outside the grid district or whose coordinates "
                 f"are in a different reference system."
             )
-            report_issue(message)
+            logger.warning(message)
         if (self.lines_df.length <= 0.001).any():
             min_length = min(self.lines_df.length)
             message = (
@@ -3270,14 +3282,13 @@ class Topology:
                 f"{min_length} km). This might cause problems in the power flow or "
                 f"optimisation."
             )
-            report_issue(message)
+            logger.warning(message)
 
         # check for meshed grid
-        self.find_meshes(errors=errors, errors_found=collector.messages)
+        self.find_meshes()
 
         if own_collector:
             collector.raise_if_errors()
-
 
     def assign_feeders(self, mode: str = "grid_feeder"):
         """
@@ -3348,7 +3359,7 @@ class Topology:
     def __repr__(self):
         return f"Network topology {self.id}"
 
-    def find_meshes(edisgo_obj, errors="warn", errors_found=None) -> list[list[int]] | None:
+    def find_meshes(edisgo_obj) -> list[list[int]] | None:
         """
         Find all meshes in the grid.
 
@@ -3366,20 +3377,12 @@ class Topology:
         """
         meshes = nx.cycle_basis(edisgo_obj.to_graph())
         if meshes:
-            message = (
+            logger.warning(
                 "Grid contains mesh(es). Be aware, that the grid expansion methodology "
                 "is currently not able to handle meshes. Further, the optimisation of "
                 "flexibility dispatch is not exact in case of meshed grids, but can "
                 "still be used."
             )
-            if errors == "raise":
-                if errors_found is not None:
-                    errors_found.append(message)
-                else:
-                    raise ValueError(message)
-            else:
-                logger.warning(message)
-
             return meshes
         else:
             return None

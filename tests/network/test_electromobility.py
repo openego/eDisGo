@@ -808,10 +808,8 @@ class TestElectromobility:
             "Lower energy band is higher than upper energy band for the following "
             "charging points: ['CP2']. The maximum exceedance is 1.0. Please check."
         )
-        with caplog.at_level(logging.WARNING):
+        with pytest.raises(ValueError, match=msg):
             self.edisgo_obj.electromobility.check_integrity(errors="warn")
-
-        assert "Lower energy band is higher than upper energy band" in caplog.text
 
         with pytest.raises(ValueError, match=msg):
             self.edisgo_obj.electromobility.check_integrity(errors="raise")
