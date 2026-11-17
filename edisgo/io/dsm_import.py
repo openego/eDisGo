@@ -54,14 +54,13 @@ def oedb(
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
-        Specifies time steps for which to return data. Leap years can currently
-        not be handled. In case the given timeindex contains a leap year, the data will
-        be indexed using the default year (2035 in case of the 'eGon2035' and to 2045
-        in case of the 'eGon100RE' scenario) and returned for the whole year.
+        Specifies time steps for which to return data.
         If no timeindex is provided, the timeindex set in
-        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
-        If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
-        is indexed using the default year and returned for the whole year.
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used. If that is
+        not set either, the time index to use is determined by
+        :func:`~.io.timeseries_import._timeindex_helper_func`, setting
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` to the configured
+        reference year (see :func:`~.tools.tools.get_reference_year`).
 
     Returns
     --------
@@ -73,6 +72,8 @@ def oedb(
         associated with as in index of :attr:`~.network.topology.Topology.loads_df`.
 
     """
+    tools.validate_scenario(scenario)
+
     # get CTS and industrial DSM profiles
     dsm_cts = get_profile_cts(edisgo_obj, scenario, engine)
     ind_loads = edisgo_obj.topology.loads_df[
@@ -91,12 +92,7 @@ def oedb(
         .set_index("building_id")
         .iloc[:, 0]
     )
-    timeindex, timeindex_full = _timeindex_helper_func(
-        edisgo_obj,
-        timeindex,
-        default_year=tools.get_year_based_on_scenario(scenario),
-        allow_leap_year=False,
-    )
+    timeindex, timeindex_full = _timeindex_helper_func(edisgo_obj, timeindex)
     dsm_ind_cts = {}
     for dsm_profile in ["e_min", "e_max", "p_min", "p_max"]:
         dsm_ind[dsm_profile].rename(columns=rename_series, inplace=True)

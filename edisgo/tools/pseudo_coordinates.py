@@ -288,7 +288,7 @@ def make_pseudo_coordinates(edisgo_obj: EDisGo, mv_coordinates: bool = False):
         G = make_pseudo_coordinates_graph(
             G, edisgo_obj.config["grid_connection"]["branch_detour_factor"]
         )
-        for node in G.nodes():
-            x, y = G.nodes[node]["pos"]
-            edisgo_obj.topology.buses_df.loc[node, "x"] = x
-            edisgo_obj.topology.buses_df.loc[node, "y"] = y
+        nodes = list(G.nodes())
+        coordinates = [G.nodes[node]["pos"] for node in nodes]
+        edisgo_obj.topology.buses_df.loc[nodes, "x"] = [x for x, _ in coordinates]
+        edisgo_obj.topology.buses_df.loc[nodes, "y"] = [y for _, y in coordinates]

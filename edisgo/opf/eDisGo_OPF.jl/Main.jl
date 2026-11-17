@@ -2,12 +2,13 @@
 # subprocess by the Python side (`EDisGo.pm_optimize` / `edisgo/opf/powermodels_opf.py`).
 #
 # It activates the package environment, reads the serialised grid + flexibility data
-# as a single JSON line from stdin, and takes five positional arguments:
+# as a single JSON line from stdin, and takes six positional arguments:
 #   ARGS[1] ding0_grid    grid id / name (used for the SOC-violation file name)
 #   ARGS[2] results_path  directory for SOC-violation output
 #   ARGS[3] method        "soc" (convex, Gurobi) or "nc" (non-convex, Ipopt)
 #   ARGS[4] silence_moi   "True"/"False" — silence the solver
 #   ARGS[5] warm_start    "True"/"False" — polish a tight SOC solution with Ipopt
+#   ARGS[6] threads       number of threads Gurobi may use ("0": all cores)
 # The optimised network (operation schedules of all flexibilities, solve status and
 # time) is printed back to stdout as JSON.
 cd(dirname(@__FILE__))
@@ -40,6 +41,7 @@ results_path = ARGS[2]
 method = ARGS[3]
 silence_moi = ARGS[4].=="True"
 warm_start = ARGS[5].=="True"
+threads = parse(Int, ARGS[6])
 
 # Set solver attributes
 const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
@@ -57,7 +59,7 @@ SOC solutions are written to `results_path`.
 """
 function optimize_edisgo()
   # read in data and create multinetwork
-  gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "FeasibilityTol"=>1e-4, "BarQCPConvTol"=>1e-4, "BarConvTol"=>1e-4, "BarHomogeneous"=>1)
+  gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "FeasibilityTol"=>1e-4, "BarQCPConvTol"=>1e-4, "BarConvTol"=>1e-4, "BarHomogeneous"=>1, "Threads"=>threads)
   data_edisgo = eDisGo_OPF.parse_json(json_str)
   data_edisgo_mn = PowerModels.make_multinetwork(data_edisgo)
 

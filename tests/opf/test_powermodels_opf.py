@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -218,6 +220,47 @@ class TestPowerModelsOPF:
             )
 
     @pytest.mark.runonlinux
+    @pytest.mark.parametrize("opf_version", [1, 3])
+    def test_pm_optimize_heat_balance_slacks_unused(self, opf_version):
+        # The heat pumps and heat storage units of the fixture can cover the heat
+        # demand, so the heat balance slacks stay unused and the heat demand is
+        # covered by power drawn from the grid.
+        edisgo = copy.deepcopy(self.edisgo)
+        pm_optimize(
+            edisgo,
+            opf_version=opf_version,
+            silence_moi=True,
+            method="nc",
+            flexible_hps=edisgo.heat_pump.thermal_storage_units_df.index.values,
+        )
+        assert edisgo.opf_results.status == "LOCALLY_SOLVED"
+        hp_slack = edisgo.opf_results.grid_slacks_t.hp_operation_slack
+        hs_slack = edisgo.opf_results.heat_storage_t.p_slack
+        assert not hp_slack.empty
+        assert (hp_slack.abs() < 1e-4).all().all()
+        assert (hs_slack.abs() < 1e-4).all().all()
+
+    @pytest.mark.runonlinux
+    def test_pm_optimize_heat_balance_slacks_warning(self, caplog):
+        # A heat demand far above what heat pump and heat storage can supply is
+        # covered by the heat pump operation slack, and a warning names the heat
+        # pump.
+        edisgo = copy.deepcopy(self.edisgo)
+        hp = edisgo.heat_pump.thermal_storage_units_df.index[0]
+        edisgo.heat_pump.heat_demand_df[hp] *= 100
+        with caplog.at_level("WARNING"):
+            pm_optimize(
+                edisgo,
+                silence_moi=True,
+                method="nc",
+                flexible_hps=edisgo.heat_pump.thermal_storage_units_df.index.values,
+            )
+        assert edisgo.opf_results.status == "LOCALLY_SOLVED"
+        assert edisgo.opf_results.grid_slacks_t.hp_operation_slack[hp].max() > 1e-4
+        assert "heat pump operation slack 'phps2'" in caplog.text
+        assert f"  {hp}: " in caplog.text
+
+    @pytest.mark.runonlinux
     def test_pm_optimize(self):
         # OPF with all flexibilities but without overlying grid constraints
         pm_optimize(
@@ -412,13 +455,13 @@ class TestPmOptimizeIntervalSplit:
     @pytest.fixture
     def edisgo_obj(self):
         e = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        e.set_timeindex(pd.date_range("2035-01-01", periods=24, freq="h"))
+        e.set_timeindex(pd.date_range("2011-01-01", periods=24, freq="h"))
         return e
 
     def test_single_interval_calls_once_with_freq(self, edisgo_obj, monkeypatch):
         import edisgo.opf.powermodels_opf as pmo
 
-        ti = pd.DatetimeIndex(pd.date_range("2035-01-01", periods=24, freq="h").values)
+        ti = pd.DatetimeIndex(pd.date_range("2011-01-01", periods=24, freq="h").values)
         assert ti.freq is None
         edisgo_obj.set_timeindex(ti)
         seen = []
@@ -433,8 +476,8 @@ class TestPmOptimizeIntervalSplit:
     def test_two_intervals_run_separately_and_restore(self, edisgo_obj, monkeypatch):
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         seen = []
@@ -456,8 +499,8 @@ class TestPmOptimizeIntervalSplit:
     def test_overlying_grid_state_restored(self, edisgo_obj, monkeypatch):
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         edisgo_obj.overlying_grid.storage_units_soc = pd.Series(1.0, index=full)
@@ -479,8 +522,8 @@ class TestPmOptimizeIntervalSplit:
     def test_reactive_power_restored(self, edisgo_obj, monkeypatch):
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         gen = edisgo_obj.topology.generators_df.index[0]
@@ -510,8 +553,8 @@ class TestPmOptimizeIntervalSplit:
 
         from edisgo.flex_opt.exceptions import InfeasibleModelError
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
 
@@ -540,8 +583,8 @@ class TestPmOptimizeIntervalSplit:
         """
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         # distinguishable values per interval: 1.0 in week 1, 9.0 in week 2
@@ -582,8 +625,8 @@ class TestPmOptimizeIntervalSplit:
         """DSM and heat-pump inputs are narrowed per interval and restored."""
         import edisgo.opf.powermodels_opf as pmo
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         full = a.union(b)
         edisgo_obj.set_timeindex(full)
         values = [1.0] * len(a) + [9.0] * len(b)
@@ -613,6 +656,46 @@ class TestPmOptimizeIntervalSplit:
         # restored to the full reduced index
         assert edisgo_obj.dsm.p_max.index.equals(full)
         assert edisgo_obj.heat_pump.cop_df.index.equals(full)
+
+
+class TestJuliaSubprocessArguments:
+    """Arguments _pm_optimize_single hands to Main.jl, with the Julia process
+    stubbed."""
+
+    @pytest.fixture
+    def julia_args(self, monkeypatch):
+        import io
+
+        import edisgo.opf.powermodels_opf as pmo
+
+        calls = []
+
+        class FakeProcess:
+            def __init__(self, args, **kwargs):
+                calls.append(args)
+                self.stdin = io.StringIO()
+                self.stdout = io.StringIO("")
+
+            def poll(self):
+                return 1
+
+        monkeypatch.setattr(pmo.subprocess, "Popen", FakeProcess)
+        return calls
+
+    @pytest.fixture
+    def edisgo_obj(self, monkeypatch):
+        e = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        e.set_timeindex(pd.date_range("2035-01-01", periods=4, freq="h"))
+        monkeypatch.setattr(e, "to_powermodels", lambda **kw: ({"name": "grid"}, {}))
+        return e
+
+    @pytest.mark.parametrize("kwargs, expected", [({}, "8"), ({"threads": 4}, "4")])
+    def test_threads_passed_to_julia(self, edisgo_obj, julia_args, kwargs, expected):
+        from edisgo.flex_opt.exceptions import InfeasibleModelError
+
+        with pytest.raises(InfeasibleModelError):
+            edisgo_obj.pm_optimize(**kwargs)
+        assert julia_args[0][-1] == expected
 
 
 class TestHeatStorageStandingLoss:
