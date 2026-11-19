@@ -64,6 +64,7 @@ from edisgo.opf.results.opf_result_class import OPFResults
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
+from edisgo.tools.integrity import IntegrityCollector
 from edisgo.tools.spatial_complexity_reduction import (
     apply_reduced_results_to_full_grid,
     spatial_complexity_reduction,
@@ -3666,7 +3667,7 @@ class EDisGo:
             flexible_storage_units=flexible_storage_units,
         )
 
-    def check_integrity(self):
+    def check_integrity(self, errors="warn"):
         """
         Method to check the integrity of the EDisGo object.
 
@@ -3685,12 +3686,30 @@ class EDisGo:
         contains all time steps in
         :attr:`edisgo.network.timeseries.TimeSeries.timeindex`.
 
+         Parameters
+        ----------
+        errors : str
+            How found issues are handled. 'warn' (default) logs each issue as a
+            warning. 'raise' collects all issues and raises one ValueError
+            listing all of them at the end.
+
+        Raises
+        ------
+        ValueError
+            If `errors` is 'raise' and an issue was found, or if `errors` is
+            neither 'warn' nor 'raise'.
+
         """
-        self.topology.check_integrity()
-        self.timeseries.check_integrity()
-        self.electromobility.check_integrity()
-        self.dsm.check_integrity()
-        self.heat_pump.check_integrity()
+        collector = IntegrityCollector(errors)
+
+        def report_issue(message):
+            collector.report(message, logger)
+
+        self.topology.check_integrity(errors=errors, collector=collector)
+        self.timeseries.check_integrity(errors=errors, collector=collector)
+        self.electromobility.check_integrity(errors=errors, collector=collector)
+        self.dsm.check_integrity(errors=errors, collector=collector)
+        self.heat_pump.check_integrity(errors=errors, collector=collector)
 
         # check consistency of topology and timeseries
         comp_types = ["generators", "loads", "storage_units"]
@@ -3705,19 +3724,25 @@ class EDisGo:
                 # check whether all components in topology have an entry in the
                 # respective active and reactive power timeseries
                 missing = comps.index[~comps.index.isin(comp_ts.columns)]
+
                 if len(missing) > 0:
-                    logger.warning(
+                    message = (
                         f"The following {comp_type} are missing in {comp_ts_name}: "
                         f"{missing.values}"
                     )
 
+                    report_issue(message)
+
                 # check whether all elements in timeseries have an entry in the topology
                 missing_ts = comp_ts.columns[~comp_ts.columns.isin(comps.index)]
+
                 if len(missing_ts) > 0:
-                    logger.warning(
+                    message = (
                         f"The following {comp_type} have entries in {comp_ts_name}, but"
                         f" not in {comp_type}_df: {missing_ts.values}"
                     )
+
+                    report_issue(message)
 
             # check if the active powers inside the timeseries exceed the given nominal
             # or peak power of the component
@@ -3733,10 +3758,12 @@ class EDisGo:
             ]
 
             if len(exceeding) > 1e-6:
-                logger.warning(
+                message = (
                     f"Values of active power in the timeseries object exceed {attr} for"
                     f" the following {comp_type}: {exceeding.values}"
                 )
+
+                report_issue(message)
 
         def _check_timeindex(check_df, param_name):
             if not check_df.empty:
@@ -3744,11 +3771,13 @@ class EDisGo:
                     _ for _ in self.timeseries.timeindex if _ not in check_df.index
                 ]
                 if len(missing_indices) > 0:
-                    logger.warning(
+                    message = (
                         f"There are time steps in timeindex of TimeSeries object that "
                         f"are not in the index of {param_name}. This may lead "
                         f"to problems."
                     )
+
+                    report_issue(message)
 
         # check if time index of other time series data contains all time steps
         # in TimeSeries.timeindex
@@ -3791,14 +3820,17 @@ class EDisGo:
                 heat_demand[hp_p_nom.index] > hp_cop * hp_p_nom.squeeze()
             ).any()
             if comparison.any():
-                logger.warning(
+                message = (
                     "Heat demand is higher than rated heatpump power"
                     f" of heatpumps: {comparison.index[comparison.values].values}."
                     " Demand can not be covered if no sufficient"
                     " heat storage capacities are available."
                 )
+                logger.warning(message)
 
-        logging.info("Integrity check finished. Please pay attention to warnings.")
+        collector.raise_if_errors()
+
+        logging.info("Integrity check finished.")
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"

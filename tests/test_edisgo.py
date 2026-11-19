@@ -2246,6 +2246,21 @@ class TestEDisGo:
         assert len(set(busmap_df["new_bus"].to_list())) == 32
         assert len(set(linemap_df["new_line_name"].to_list())) == 21
 
+    def test_invalid_integrity_mode(self):
+        with pytest.raises(ValueError, match="errors must be"):
+            self.edisgo.check_integrity(errors="invalid")
+
+    def test_integrity_raise_missing_timeseries(self):
+
+        with pytest.raises(ValueError) as exc_info:
+            self.edisgo.check_integrity(errors="raise")
+
+        message = str(exc_info.value)
+
+        assert "generators_active_power" in message
+        assert "generators_reactive_power" in message
+        assert "No time index set" in message
+
     def test_check_integrity(self, caplog):
         self.edisgo.check_integrity()
         assert (

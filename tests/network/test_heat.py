@@ -515,3 +515,8 @@ class TestHeatPump:
             "HeatPump timeseries cop_df is missing the following entries:"
             in caplog.text
         )
+        with pytest.raises(
+            ValueError,
+            match="HeatPump timeseries heat_demand_df contains the following duplicates",
+        ):
+            heatpump.check_integrity(errors="raise")
