@@ -1,5 +1,7 @@
 import logging
 
+from contextlib import closing
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import numpy as np
@@ -7,6 +9,8 @@ import pandas as pd
 import pytest
 
 from shapely.geometry import Point
+from sqlalchemy import column, table
+from sqlalchemy.orm import Session
 
 from edisgo import EDisGo
 from edisgo.io import generators_import
@@ -683,6 +687,66 @@ class TestGeneratorsImport:
 
 class TestGeneratorsImportOEDB:
     """Test generator imports that require realistic legacy or eGon grids."""
+
+    @pytest.mark.parametrize("query_limit", [None, 2], ids=["unlimited", "limited"])
+    def test_query_generator_data_oedb_legacy_sorting_offline(
+        self, monkeypatch, query_limit
+    ):
+        """Only bounded queries may introduce ordering into legacy imports."""
+        columns = (
+            "id",
+            "subst_id",
+            "la_id",
+            "capacity",
+            "voltage_level",
+            "fuel",
+            "geom",
+            "mvlv_subst_id",
+            "electrical_capacity",
+            "generation_type",
+            "generation_subtype",
+            "w_id",
+            "rea_geom_new",
+            "preversion",
+            "version",
+            "scenario",
+            "shutdown",
+        )
+        tables = {
+            name: table(name, *(column(name) for name in columns)).c
+            for name in (
+                "ego_dp_supply_conv_powerplant",
+                "ego_dp_supply_res_powerplant",
+            )
+        }
+        monkeypatch.setattr(
+            generators_import, "legacy_oep_table", lambda schema, name: tables[name]
+        )
+        monkeypatch.setattr(
+            generators_import, "session_scope", lambda: closing(Session())
+        )
+        read_sql = Mock(return_value=pd.DataFrame())
+        monkeypatch.setattr(generators_import.pd, "read_sql_query", read_sql)
+        edisgo = SimpleNamespace(
+            config={"data_source": {"oedb_data_source": "model_draft"}},
+            topology=SimpleNamespace(
+                grid_district={"srid": 4326}, mv_grid=SimpleNamespace(id=1)
+            ),
+        )
+
+        generators_import._query_generator_data_oedb_legacy(
+            edisgo, "nep2035", query_limit=query_limit
+        )
+
+        assert read_sql.call_count == 3  # conventional MV, renewable MV and LV
+        for call in read_sql.call_args_list:
+            sql = str(call.args[0].compile(compile_kwargs={"literal_binds": True}))
+            if query_limit is None:
+                assert "ORDER BY" not in sql
+                assert "LIMIT" not in sql
+            else:
+                assert "ORDER BY" in sql
+                assert f"LIMIT {query_limit}" in sql
 
     @pytest.mark.parametrize(
         "supplied_engine", [None, object()], ids=["no-engine", "supplied-engine"]

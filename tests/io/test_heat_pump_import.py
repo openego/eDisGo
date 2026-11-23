@@ -288,9 +288,14 @@ class TestHeatPumpImport:
         resistive_heaters_central = self.setup_resistive_heater_data_dh()
         resistive_heaters_central.at[1, "p_set"] = 0.1
         datasets = (hp_individual, hp_central, resistive_heaters_central)
+        # A database join can return the same building twice. Keep the first
+        # record, including its weather-cell assignment, in real production code.
+        duplicate = hp_individual.iloc[[0]].copy()
+        duplicate["weather_cell_id"] = 99999
+        raw_individual = pd.concat([hp_individual, duplicate], ignore_index=True)
         crs = self.edisgo.topology.grid_district["srid"]
         query_results = (
-            hp_individual.copy(deep=True),
+            raw_individual,
             _central_query_data(hp_central, crs),
             _central_query_data(resistive_heaters_central, crs),
         )
@@ -336,6 +341,18 @@ class TestHeatPumpImport:
             else:
                 query_mock.assert_not_called()
         if expected_counts[0]:
+            individual = hp_df[hp_df.sector == "individual_heating"]
+            assert individual.building_id.is_unique
+            expected_weather_cells = hp_individual.set_index(
+                "building_id"
+            ).weather_cell_id
+            actual_weather_cells = individual.set_index("building_id").weather_cell_id
+            pd.testing.assert_series_equal(
+                actual_weather_cells.sort_index(),
+                expected_weather_cells.sort_index(),
+                check_dtype=False,
+                check_index_type=False,
+            )
             capacity_mock.assert_called_once_with(
                 edisgo_object=self.edisgo, scenario="eGon2035", engine=None
             )

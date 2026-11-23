@@ -1,4 +1,8 @@
+import importlib.util
 import os
+import re
+
+from pathlib import Path
 
 # Set matplotlib backend to non-interactive for tests (prevents TclError on Windows CI)
 import matplotlib
@@ -10,7 +14,7 @@ from sqlalchemy.engine import Engine
 
 matplotlib.use("Agg")
 
-from edisgo.io.db import default_config_path, engine
+from edisgo.io.db import engine
 
 
 def pytest_configure(config):
@@ -37,20 +41,20 @@ def pytest_configure(config):
         os.path.realpath(os.path.dirname(__file__)), "data/tracbev_example_scenario"
     )
 
-    pytest.egon_data_config_yml = default_config_path()
-
     config.addinivalue_line("markers", "slow: mark test as slow to run")
-    config.addinivalue_line("markers", "local: mark test as local to run")
     config.addinivalue_line("markers", "runonlinux: mark test to run only on linux")
     config.addinivalue_line(
         "markers", "oep: mark test as intentionally accessing the live OEP"
     )
 
-    if config.getoption("--runlocal"):
-        pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=True)
-
 
 def pytest_addoption(parser):
+    parser.addoption(
+        "--runoep",
+        action="store_true",
+        default=False,
+        help="allow tests that access the live OEP",
+    )
     parser.addoption(
         "--runslow", action="store_true", default=False, help="run slow tests"
     )
@@ -60,25 +64,19 @@ def pytest_addoption(parser):
         default=False,
         help="run tests that only work on linux",
     )
-    parser.addoption(
-        "--runlocal",
-        action="store_true",
-        default=False,
-        help="run tests that only work locally",
-    )
 
 
 def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--runoep"):
+        skip_oep = pytest.mark.skip(reason="need --runoep option to run live OEP tests")
+        for item in items:
+            if item.get_closest_marker("oep") is not None:
+                item.add_marker(skip_oep)
     if not config.getoption("--runslow"):
         skip_slow = pytest.mark.skip(reason="need --runslow option to run")
         for item in items:
             if "slow" in item.keywords:
                 item.add_marker(skip_slow)
-    if not config.getoption("--runlocal"):
-        skip_local = pytest.mark.skip(reason="need --runlocal option to run")
-        for item in items:
-            if "local" in item.keywords:
-                item.add_marker(skip_local)
     if not config.getoption("--runonlinux"):
         skip_windows = pytest.mark.skip(reason="need --runonlinux option to run")
         for item in items:
@@ -95,7 +93,7 @@ def _is_oep_connection(dialect, connect_params):
 
 @pytest.fixture
 def oep_engine(request):
-    """Create an OEP engine only for a test that explicitly requests it."""
+    """Require a token before creating an explicitly requested OEP engine."""
 
     if request.node.get_closest_marker("oep") is None:
         pytest.fail(
@@ -104,6 +102,8 @@ def oep_engine(request):
             pytrace=False,
         )
 
+    _require_oep_test_token()
+
     # OEP tests assert against live OEP data. Force the OEP instead of
     # auto-selecting a potentially different local eGon database.
     db_engine = engine(ssh=False)
@@ -111,6 +111,31 @@ def oep_engine(request):
     yield db_engine
 
     db_engine.dispose()
+
+
+def _require_oep_test_token():
+    """Check the same token sources and precedence as edisgo.io.db.engine."""
+    if "OEP_TOKEN" in os.environ:
+        token = os.environ["OEP_TOKEN"]
+    else:
+        spec = importlib.util.find_spec("edisgo")
+        token_path = Path(spec.origin).resolve().parent / "config" / "OEP_TOKEN.txt"
+        try:
+            token = token_path.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeError):
+            pytest.fail(
+                "The oep_engine fixture requires an OEP token. Set OEP_TOKEN or "
+                "provide a readable edisgo/config/OEP_TOKEN.txt file.",
+                pytrace=False,
+            )
+
+    if re.fullmatch(r"[a-f0-9]{40}", token) is None:
+        pytest.fail(
+            "Invalid OEP token for the oep_engine fixture: expected exactly 40 "
+            "lowercase hexadecimal characters. OEP_TOKEN takes precedence over "
+            "the token file, even when empty. The token value is not displayed.",
+            pytrace=False,
+        )
 
 
 @pytest.fixture(autouse=True)

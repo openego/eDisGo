@@ -1,5 +1,6 @@
 from unittest.mock import Mock
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -9,7 +10,11 @@ from edisgo.io import dsm_import
 
 @pytest.fixture
 def mock_dsm_oedb_retrieval(monkeypatch):
-    """Replace external DSM retrieval with small local profiles."""
+    """Replace external DSM retrieval with local profiles.
+
+    The returned ``profile_values`` entry accepts scalars or hourly arrays for
+    each profile and sector, allowing tests to customize the synthetic inputs.
+    """
 
     profile_values = {
         "e_min": -0.4,
@@ -17,15 +22,18 @@ def mock_dsm_oedb_retrieval(monkeypatch):
         "p_min": -0.2,
         "p_max": 0.2,
     }
+    sector_values = {
+        "cts": profile_values.copy(),
+        "industrial": profile_values.copy(),
+    }
 
-    def _create_profiles(columns):
+    def _create_profiles(columns, values):
         return {
             profile: pd.DataFrame(
-                value,
+                {column: value for column in columns},
                 index=range(8760),
-                columns=columns,
             )
-            for profile, value in profile_values.items()
+            for profile, value in values.items()
         }
 
     def _get_cts_profiles(edisgo_obj, scenario, engine):
@@ -33,10 +41,10 @@ def mock_dsm_oedb_retrieval(monkeypatch):
             (edisgo_obj.topology.loads_df.type == "conventional_load")
             & (edisgo_obj.topology.loads_df.sector == "cts")
         ]
-        return _create_profiles(cts_loads.index)
+        return _create_profiles(cts_loads.index, sector_values["cts"])
 
     def _get_industrial_profiles(load_ids, scenario, engine):
-        return _create_profiles(load_ids)
+        return _create_profiles(load_ids, sector_values["industrial"])
 
     cts_mock = Mock(side_effect=_get_cts_profiles)
     industrial_mock = Mock(side_effect=_get_industrial_profiles)
@@ -49,6 +57,7 @@ def mock_dsm_oedb_retrieval(monkeypatch):
     )
 
     return {
+        "profile_values": sector_values,
         "cts": cts_mock,
         "industrial": industrial_mock,
     }
@@ -109,6 +118,47 @@ class TestDSMImport:
 
         assert mocks["cts"].call_count == 2
         assert mocks["industrial"].call_count == 2
+
+    def test_oedb_partial_timeindex_offline(self, mock_dsm_oedb_retrieval):
+        """Slice all four DSM profiles and preserve CTS/industrial load mapping."""
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        names = edisgo_object.topology.loads_df.query(
+            "type == 'conventional_load' and sector == 'cts'"
+        ).index[:2]
+        cts_load, industrial_load = names
+        edisgo_object.topology.loads_df = edisgo_object.topology.loads_df.loc[
+            names
+        ].copy()
+        edisgo_object.topology.loads_df.at[industrial_load, "sector"] = "industrial"
+        edisgo_object.topology.loads_df.at[industrial_load, "building_id"] = 1
+
+        # Annual values vary by hour; industrial values differ from CTS values.
+        hourly_factor = 1 + np.arange(8760, dtype=float) / 10000
+        values = mock_dsm_oedb_retrieval["profile_values"]
+        for profile, base_value in values["cts"].items():
+            values["cts"][profile] = base_value * hourly_factor
+            values["industrial"][profile] = 2 * base_value * hourly_factor
+        requested_timeindex = pd.date_range("2035-02-01 12:00", periods=3, freq="h")
+
+        result = dsm_import.oedb(
+            edisgo_object, "eGon2035", engine=None, timeindex=requested_timeindex
+        )
+
+        expected_values = {
+            "p_min": [-0.21512, -0.21514, -0.21516],
+            "p_max": [0.21512, 0.21514, 0.21516],
+            "e_min": [-0.43024, -0.43028, -0.43032],
+            "e_max": [0.43024, 0.43028, 0.43032],
+        }
+        assert set(result) == set(expected_values)
+        for profile, cts_values in expected_values.items():
+            expected = pd.DataFrame(
+                {cts_load: cts_values, industrial_load: np.array(cts_values) * 2},
+                index=requested_timeindex,
+            )
+            pd.testing.assert_frame_equal(result[profile], expected, check_like=True)
 
     def test_pivot_helper(self):
         """Test transformation of nested database arrays into time series."""

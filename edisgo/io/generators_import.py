@@ -55,7 +55,11 @@ def _query_generator_data_oedb_legacy(
     engine=None,
     query_limit=None,
 ):
-    """Query raw legacy generator data (conventional power in MW, renewable in kW)."""
+    """Query raw legacy generator data (conventional power in MW, renewable in kW).
+
+    Only limited queries sort by ID; unrestricted production queries retain the
+    original unspecified row order.
+    """
 
     srid = edisgo_object.topology.grid_district["srid"]
     scenario_mapping = {
@@ -112,10 +116,9 @@ def _query_generator_data_oedb_legacy(
             .filter(orm_conv_generators.subst_id == edisgo_object.topology.mv_grid.id)
             .filter(orm_conv_generators.voltage_level.in_([4, 5]))
             .filter(orm_conv_generators_version)
-            .order_by(orm_conv_generators.id)
         )
         if query_limit is not None:
-            query = query.limit(query_limit)
+            query = query.order_by(orm_conv_generators.id).limit(query_limit)
         return pd.read_sql_query(query.statement, session.bind, index_col="id")
 
     def _import_res_generators(session):
@@ -145,9 +148,11 @@ def _query_generator_data_oedb_legacy(
         def _read_for_voltage_levels(voltage_levels):
             filtered_query = query.filter(
                 orm_re_generators.voltage_level.in_(voltage_levels)
-            ).order_by(orm_re_generators.id)
+            )
             if query_limit is not None:
-                filtered_query = filtered_query.limit(query_limit)
+                filtered_query = filtered_query.order_by(orm_re_generators.id).limit(
+                    query_limit
+                )
             return pd.read_sql_query(
                 filtered_query.statement,
                 session.bind,

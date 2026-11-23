@@ -1279,60 +1279,27 @@ def _query_cts_profiles_per_grid_data(bus_id, scenario, sector, engine):
 
 
 def _query_residential_electricity_profile_data(
-    building_ids: list[int], scenario: str, engine: Engine
-) -> pd.DataFrame:
+    building_ids: list[int], engine: Engine
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Query and normalize the OEP inputs for residential electricity profiles.
+    Query building mappings and raw residential electricity-profile arrays.
 
     Parameters
     ----------
     building_ids : list(int)
         List of building IDs to retrieve electricity demand profiles for.
-    scenario : str
-        Scenario for which to retrieve demand data. Possible options
-        are 'eGon2021', 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
 
     Returns
     --------
     tuple(:pandas:`pandas.DataFrame<DataFrame>`)
-        Scaling factors, building-to-profile assignments, and normalized hourly
-        profiles.
+        Building-to-census mapping (``building_id``, ``zensus_id``), building-to-
+        profile assignments (``building_id``, ``cell_id``, ``profile_id``), and
+        raw hourly Wh arrays in ``load_in_wh`` indexed by profile ``type``.
+        Scenario factors and profile processing are handled by the caller.
 
     """
-
-    def _get_scaling_factors_of_zensus_cells(zensus_ids):
-        """
-        Get profile scaling factors per zensus cell for specified scenario.
-
-        Parameters
-        ----------
-        zensus_ids : list(int)
-            List of zensus cell IDs to get scaling factors for.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            Dataframe with zensus cell ID in index and respective scaling factor in
-            column factor.
-
-        """
-        if scenario == "eGon2021":
-            return pd.DataFrame(index=zensus_ids, data={"factor": 1.0})
-        else:
-            with session_scope_egon_data(engine) as session:
-                if scenario == "eGon2035":
-                    query = session.query(
-                        hh_profile.cell_id,
-                        hh_profile.factor_2035.label("factor"),
-                    ).filter(hh_profile.cell_id.in_(zensus_ids))
-                else:
-                    query = session.query(
-                        hh_profile.cell_id,
-                        hh_profile.factor_2050.label("factor"),
-                    ).filter(hh_profile.cell_id.in_(zensus_ids))
-            return pd.read_sql(query.statement, engine, index_col="cell_id")
 
     def _get_profile_ids_of_buildings(building_ids):
         """
@@ -1364,7 +1331,7 @@ def _query_residential_electricity_profile_data(
 
     def _get_profiles(profile_ids):
         """
-        Get hourly household electricity demand profiles for specified profile IDs.
+        Get raw household electricity demand arrays for specified profile IDs.
 
         Parameters
         ----------
@@ -1374,30 +1341,22 @@ def _query_residential_electricity_profile_data(
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-             Hourly household demand profiles with profile ID as column name and index
-             containing hour of the year (from 0 to 8759).
+            Hourly Wh arrays in ``load_in_wh``, indexed by profile ``type``.
 
         """
         with session_scope_egon_data(engine) as session:
             query = session.query(
                 iee_household_load_profiles.load_in_wh, iee_household_load_profiles.type
             ).filter(iee_household_load_profiles.type.in_(profile_ids))
-        df = pd.read_sql(query.statement, engine, index_col="type")
-
-        # convert array to dataframe
-        df_converted = pd.DataFrame.from_records(df["load_in_wh"], index=df.index).T
-
-        return df_converted
+        return pd.read_sql(query.statement, engine, index_col="type")
 
     config = Config()
     (
-        hh_profile,
         egon_household_electricity_profile_of_buildings,
         iee_household_load_profiles,
     ) = config.import_tables_from_oep(
         engine,
         [
-            "egon_household_electricity_profile_in_census_cell",
             "egon_household_electricity_profile_of_buildings",
             "iee_household_load_profiles",
         ],
@@ -1406,20 +1365,47 @@ def _query_residential_electricity_profile_data(
 
     # get zensus cells of buildings
     zensus_ids_buildings = _get_zensus_cells_of_buildings(building_ids, engine)
-    zensus_ids = zensus_ids_buildings.zensus_id.unique()
-
-    # get profile scaling factors per zensus cell
-    scaling_factors_zensus_cells = _get_scaling_factors_of_zensus_cells(zensus_ids)
-
     # get profile IDs and hourly profiles
     profile_ids_buildings = _get_profile_ids_of_buildings(building_ids)
     if profile_ids_buildings.empty:
-        return scaling_factors_zensus_cells, profile_ids_buildings, pd.DataFrame()
+        return zensus_ids_buildings, profile_ids_buildings, pd.DataFrame()
 
     profile_ids = profile_ids_buildings.profile_id.unique()
     profiles_df = _get_profiles(profile_ids)
 
-    return scaling_factors_zensus_cells, profile_ids_buildings, profiles_df
+    return zensus_ids_buildings, profile_ids_buildings, profiles_df
+
+
+def _query_residential_electricity_scaling_factors(zensus_ids, scenario, engine):
+    """Retrieve future-scenario residential scaling factors from the OEP.
+
+    Parameters
+    ----------
+    zensus_ids : list(int)
+        Census cell IDs to retrieve factors for.
+    scenario : str
+        Future scenario: ``eGon2035`` selects ``factor_2035``; ``eGon100RE``
+        selects ``factor_2050``. The baseline ``eGon2021`` is handled by the
+        caller and does not require this query.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Scaling factors in column ``factor``, indexed by ``cell_id``.
+    """
+    (hh_profile,) = Config().import_tables_from_oep(
+        engine, ["egon_household_electricity_profile_in_census_cell"], "demand"
+    )
+    factor_column = (
+        hh_profile.factor_2035 if scenario == "eGon2035" else hh_profile.factor_2050
+    )
+    with session_scope_egon_data(engine) as session:
+        query = session.query(hh_profile.cell_id, factor_column.label("factor")).filter(
+            hh_profile.cell_id.in_(zensus_ids)
+        )
+    return pd.read_sql(query.statement, engine, index_col="cell_id")
 
 
 def get_residential_electricity_profiles_per_building(
@@ -1444,22 +1430,35 @@ def get_residential_electricity_profiles_per_building(
     """
 
     (
-        scaling_factors_zensus_cells,
+        zensus_ids_buildings,
         profile_ids_buildings,
-        profiles_df,
+        raw_profiles,
     ) = _query_residential_electricity_profile_data(
         building_ids,
-        scenario,
         engine,
     )
 
-    # merge profile scaling factors into the building-to-profile mapping
-    profile_ids_buildings = profile_ids_buildings.join(
-        scaling_factors_zensus_cells, on="cell_id"
-    )
     if profile_ids_buildings.empty:
         logger.info("No residential electricity demand.")
         return pd.DataFrame()
+
+    zensus_ids = zensus_ids_buildings.zensus_id.unique().tolist()
+    if scenario == "eGon2021":
+        # Baseline demand is unscaled; no factor table needs to be queried.
+        scaling_factors_zensus_cells = pd.DataFrame(
+            index=zensus_ids, data={"factor": 1.0}
+        )
+    else:
+        scaling_factors_zensus_cells = _query_residential_electricity_scaling_factors(
+            zensus_ids, scenario, engine
+        )
+
+    profile_ids_buildings = profile_ids_buildings.join(
+        scaling_factors_zensus_cells, on="cell_id"
+    )
+    profiles_df = pd.DataFrame.from_records(
+        raw_profiles["load_in_wh"], index=raw_profiles.index
+    ).T
 
     # calculate demand profile per building
     #
@@ -1609,7 +1608,14 @@ def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Hourly profiles in MW with site or OSM IDs as columns.
+        Annual hourly profiles in MW with site or OSM IDs as columns and hour
+        of the year (0 to 8759) as index. Each input profile must contain exactly
+        8760 values; leap-year profiles are not supported.
+
+    Raises
+    ------
+    ValueError
+        If an input profile does not contain exactly 8760 values.
     """
 
     profiles_sites, profiles_areas = _query_industrial_electricity_profile_data(
@@ -1621,9 +1627,7 @@ def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
     # concat profiles
     profiles_df = pd.concat([profiles_sites, profiles_areas])
     # add time step column
-    profiles_df["time_step"] = profiles_df.p_set.apply(
-        lambda profile: np.arange(len(profile))
-    )
+    profiles_df["time_step"] = len(profiles_df) * [np.arange(0, 8760)]
     # un-nest p_set and pivot so that time_step becomes index and site_id the
     # name of the columns
     return (

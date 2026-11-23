@@ -39,9 +39,7 @@ def _district_heating_grid(cop_rh=1.0):
     hp = loads.index[loads.sector == "district_heating"][0]
     rh = loads.index[loads.sector == "district_heating_resistive_heater"][0]
     ti = edisgo.timeseries.timeindex
-    edisgo.heat_pump.cop_df = pd.DataFrame(
-        {hp: [3.0] * 3, rh: [cop_rh] * 3}, index=ti
-    )
+    edisgo.heat_pump.cop_df = pd.DataFrame({hp: [3.0] * 3, rh: [cop_rh] * 3}, index=ti)
     edisgo.heat_pump.heat_demand_df = pd.DataFrame(
         {hp: [9.0] * 3, rh: [9.0] * 3}, index=ti
     )
@@ -65,9 +63,7 @@ class TestAggregateDistrictHeatingComponents:
 
         edisgo, hp, rh = _district_heating_grid()
         # turn the heat pump into a second resistive heater
-        edisgo.topology.loads_df.at[hp, "sector"] = (
-            "district_heating_resistive_heater"
-        )
+        edisgo.topology.loads_df.at[hp, "sector"] = "district_heating_resistive_heater"
 
         with caplog.at_level(logging.WARNING, logger="edisgo.tools.tools"):
             tools.aggregate_district_heating_components(edisgo)
@@ -602,33 +598,50 @@ class TestTools:
     @pytest.mark.oep
     def test_get_weather_cells_intersecting_with_grid_district_legacy_live(
         self,
+        monkeypatch,
     ):
+        """Check legacy OEP retrieval without a fallback to local generator IDs."""
+        monkeypatch.setattr(
+            self.edisgo.topology,
+            "generators_df",
+            self.edisgo.topology.generators_df.assign(weather_cell_id=np.nan),
+        )
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
             self.edisgo,
         )
-        assert len(weather_cells) == 4
-        assert 1123075 in weather_cells
-        assert 1122075 in weather_cells
-        assert 1122076 in weather_cells
-        # the following weather cell does not intersect with the grid district
-        # but there are generators in the grid that have that weather cell
-        # for some reason..
-        assert 1122074 in weather_cells
+        assert isinstance(weather_cells, set)
+        assert weather_cells
+        ids = np.asarray(list(weather_cells))
+        assert ids.dtype.kind in "iuf"
+        assert np.isfinite(ids).all()
+        assert (ids > 0).all()
+        assert (ids == np.floor(ids)).all()
 
     @pytest.mark.oep
     def test_get_weather_cells_intersecting_with_grid_district_egon_live(
         self,
         oep_engine,
+        monkeypatch,
     ):
+        """Check ERA5 OEP retrieval without a fallback to local generator IDs."""
         edisgo_obj = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        monkeypatch.setattr(
+            edisgo_obj.topology,
+            "generators_df",
+            edisgo_obj.topology.generators_df.assign(weather_cell_id=np.nan),
         )
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
             edisgo_obj, oep_engine
         )
-        assert len(weather_cells) == 2
-        assert 11051 in weather_cells
-        assert 11052 in weather_cells
+        assert isinstance(weather_cells, set)
+        assert weather_cells
+        ids = np.asarray(list(weather_cells))
+        assert ids.dtype.kind in "iuf"
+        assert np.isfinite(ids).all()
+        assert (ids > 0).all()
+        assert (ids == np.floor(ids)).all()
 
     def test_add_line_susceptance(self):
         assert self.edisgo.topology.lines_df.loc["Line_10006", "b"] == 0

@@ -45,30 +45,68 @@ Code standards
 Running the tests
 -----------------
 
-Tests use ``pytest``. The regular test suite runs offline. Tests that access the
-live Open Energy Platform (OEP) are marked with ``oep``; exclude them unless you
-want to check the OEP queries:
+Tests use ``pytest``. Tests that access the live Open Energy Platform (OEP) are
+marked with ``oep`` and skipped before fixture setup unless ``--runoep`` is
+supplied. To run the regular suite:
 
 .. code-block:: bash
 
-    python -m pytest tests/ -m "not oep"
+    python -m pytest tests/
 
-Live OEP tests need an OEP token, see :ref:`OEP token <oep-token>` in the data
-sources guide. Some tests are slow or only run on Linux; enable them with the
-corresponding flags:
+No ``-m "not oep"`` filter is needed for regular runs: OEP tests are already
+skipped unless ``--runoep`` is supplied. The optional filter reports them as
+deselected instead of skipped. Some regular tests are slow or only run on Linux;
+enable them with the corresponding flags (use ``--runonlinux`` only on Linux):
 
 .. code-block:: bash
 
-    python -m pytest tests/ -m "not oep" --runslow --runonlinux
+    python -m pytest tests/ --runslow --runonlinux
 
 For faster runs you can parallelise with ``-n`` (locally use a small number of
 workers):
 
 .. code-block:: bash
 
-    python -m pytest tests/ -m "not oep" -n 3 --runslow --html=report.html
+    python -m pytest tests/ -n 3 --runslow --html=report.html
 
 See ``tests/README.md`` for the test markers and how to write live OEP tests.
+
+Run live tests separately, without parallel pytest workers or automatic retries:
+
+.. code-block:: bash
+
+    python -m pytest tests/ --runoep --runslow -m oep
+
+Include ``--runonlinux`` on Linux for the full platform-appropriate selection.
+``--runoep`` permits live tests; ``-m oep`` selects only those tests. Selecting
+``-m oep`` or supplying ``--runslow`` alone does not enable OEP tests.
+
+Live OEP tests need an OEP token, see :ref:`OEP token <oep-token>` in the data
+sources guide. The ``oep_engine`` fixture checks token presence and the expected
+format (40 lowercase hexadecimal characters) before creating the engine. It reads
+``OEP_TOKEN`` when set, otherwise the package's ``edisgo/config/OEP_TOKEN.txt``.
+A set environment variable overrides the file, including when its value is empty
+or malformed. The token value is never included in the fixture's error message.
+
+Legacy ``session_scope()`` connections also use eDisGo's token-aware OEP engine.
+They do not request the test fixture and therefore bypass its precheck. Notebook
+tests create their engines in a separate kernel and also bypass the fixture.
+Do not commit tokens in source files, notebooks or configuration.
+
+CI runs all regular matrix entries, including coverage, with ``-m "not oep"`` and
+without the OEP token. A dedicated Linux/Python 3.12 job runs live tests on each
+push except those triggered by ``dependabot[bot]``, which skip only the OEP job.
+It uses ``--runoep --runslow --runonlinux -m oep`` and checks the ``OEP_TOKEN``
+repository secret before setup and has a 140-minute job timeout. A shared
+concurrency group queues these jobs across branches in the repository. New pushes
+to the same branch still cancel outdated workflow runs. Coveralls receives
+non-OEP coverage independently of the live job. The job timeout is not a
+database/request timeout.
+
+Excluding OEP tests does not prohibit all network access. The plotting notebook
+test uses the checked-out grid in ``tests/data/ding0_test_network_1`` without
+downloading it. Standalone notebook use retains a GitHub download fallback when
+the repository data is unavailable.
 
 Building the documentation
 --------------------------

@@ -11,8 +11,13 @@ regular and live tests are in [`tests/README.md`](../../README.md).
 
 ## Testing approach
 
-- Tests that intentionally access the live OEP are marked with `pytest.mark.oep` and
-  use the lazy `oep_engine` fixture.
+- Tests that intentionally access the live OEP are marked with `pytest.mark.oep`.
+  Tests requiring an explicit engine use the lazy `oep_engine` fixture; legacy
+  connection paths can use `session_scope()` instead.
+- OEP tests are skipped before fixture setup unless `--runoep` is supplied.
+  Local regular runs therefore need no `-m "not oep"` filter; it is optional and
+  reports OEP tests as deselected instead of skipped.
+  The CI OEP job supplies `--runoep` automatically; its push trigger is unchanged.
 - Regular tests run without an OEP token and are guarded against unmarked OEP access.
 - Offline tests keep the production logic real and mock only the external retrieval or
   query boundary.
@@ -20,9 +25,9 @@ regular and live tests are in [`tests/README.md`](../../README.md).
 - Functions containing both a query and transformation are split into a small live
   contract test and a detailed offline transformation test.
 - Test names use `_live` and `_offline` where both variants exist.
-- Three regular CI matrix entries run only tests without the `oep` marker and have
-  no OEP token. A fourth coverage entry runs the complete suite, including the
-  retained live contracts, and uploads the combined result to Coveralls.
+- All four CI matrix entries, including coverage, select `not oep` without an OEP
+  token. A dedicated job runs the retained live tests, serialized across branches.
+  Coveralls reports the non-OEP suite only.
 
 The usual offline call chain is:
 
@@ -58,13 +63,25 @@ function afterwards.
 
 - Registered the `oep` marker.
 - Replaced the global OEP engine with a lazy `oep_engine` fixture.
+- The fixture checks the token before engine creation, using `OEP_TOKEN` first and
+  otherwise the package token file. Missing, unreadable or malformed tokens fail
+  without displaying their values. Legacy sessions use eDisGo's token-aware OEP
+  engine but bypass this fixture, as do notebook kernels. CI separately checks
+  token presence before setup.
 - Added a runtime guard that reports unmarked tests attempting live OEP access.
-- Configured the three basic Linux and Windows matrix entries to run without live
-  OEP access.
-- Kept one Python 3.12 coverage entry in the matrix that runs all tests, has the OEP
-  token and a 140-minute timeout, and uploads the result to Coveralls.
-- Removed the former workflow queue and the redundant dedicated OEP job; only the
-  coverage matrix entry executes live OEP tests in each workflow.
+- Configured all basic and coverage matrix entries to exclude live OEP tests.
+- Kept the Python 3.12 coverage entry and its 140-minute timeout; it uploads
+  non-OEP coverage without depending on the live job.
+- Added a dedicated Linux/Python 3.12 OEP job with a 140-minute timeout, a shared
+  cross-branch concurrency queue and an early check for a nonempty OEP token.
+  It runs the live suite serially without automatic retries. Push triggers are
+  unchanged; superseded runs on the same branch are still canceled.
+- The dedicated OEP job skips runs triggered by `dependabot[bot]`; all four regular
+  matrix entries remain enabled. Other actors still require the configured token.
+- Added `--runoep` opt-in in `tests/conftest.py`. `-m oep` selects marked tests,
+  but does not enable them without the flag; slow live tests also need `--runslow`.
+- Database/request timeouts are not added. The ordinary suite is OEP-free, not
+  completely network-free.
 
 ### `test_edisgo.py`
 
@@ -83,8 +100,14 @@ function afterwards.
 
 - Converted heat- and electricity-demand orchestration tests to use one shared mock
   fixture with minimal synthetic profiles.
+- Added a three-hour heat-demand test in February with time-varying annual inputs.
+  It checks exact timestamps and values, residential-plus-CTS aggregation and the
+  mapping of individual and district-heating demand to heat pumps.
 - Split feed-in, COP and district-heating imports into live contract and offline
   transformation tests.
+- The ERA5 feed-in live test calls `_query_feedin_oedb` directly for one weather
+  cell, avoiding a repeated spatial lookup. It checks required cell/carrier pairs,
+  unique keys and finite annual arrays; reshaping and time slicing remain offline.
 - Extracted the existing SQL code into the private query helpers
   `_query_feedin_oedb`, `_query_feedin_oedb_legacy`, `_query_cop_oedb` and
   `_query_district_heating_heat_demand_profiles`.
@@ -96,6 +119,15 @@ function afterwards.
   CTS queries from offline disaggregation and heat-scaling checks.
 - Split industrial and residential electricity profiles into small live query
   contracts and offline aggregation/scaling tests.
+- Restored the original 8760-hour requirement for industrial electricity profiles.
+  The offline test uses two synthetic annual arrays and checks every hourly value;
+  additional cases reject short and 8784-hour leap-year inputs. Supporting arbitrary
+  profile lengths is not part of the OEP decoupling.
+- Residential electricity queries now return raw profile arrays and mappings;
+  the public importer expands the arrays, aggregates profiles, selects scenario
+  factors and applies scaling/unit conversion. `eGon2021` sets factor 1.0 without
+  a factor query. Three offline scenario cases check exact results and factor-query
+  calls; the live contract checks raw inputs and both future factor columns.
 - Split residential heat profiles into a live input-schema contract and an offline
   profile-construction test using two synthetic days.
 
@@ -103,6 +135,9 @@ function afterwards.
 
 - Converted `dsm_import.oedb` orchestration to an offline test with mocked CTS and
   industrial retrieval.
+- Added a three-hour February selection for all four DSM profiles. Distinct,
+  time-varying CTS and industrial inputs check the selected hours, values and
+  industrial-building-to-load renaming. Production time selection is not mocked.
 - Added offline coverage for array pivoting, CTS distribution and empty industrial-ID
   input.
 - Extracted CTS distribution into the private helper
@@ -153,8 +188,11 @@ function afterwards.
   all location fallbacks and empty input. Before decoupling, the live import test
   exercised spatial processing indirectly but asserted component counts,
   capacities and grid integration rather than each spatial result.
-- Building deduplication still resides in the individual query helper and remains
-  outstanding for the heat-pump review point.
+- Moved building deduplication out of the query helper into `oedb`, before
+  capacity validation and grid integration. The offline import test now supplies
+  a duplicate building with a different weather-cell ID
+  and checks that only the first record is retained, without double-counting
+  capacity or changing its weather-cell assignment.
 - Separated retrieval of the scenario heat-parameter record from extraction of the
   resistive-heater efficiency dictionary and tested that extraction offline.
 - Added two live query contracts: at most two records per heat-pump technology and
@@ -190,11 +228,19 @@ function afterwards.
 - Retained the real public import, generator updates, target-capacity scaling and both
   worst-case and technology-based time-series assignment paths.
 - Added one bounded live contract that returns at most two rows from each legacy query.
+- Legacy queries sort by ID only when a result limit is requested. Unrestricted
+  production imports retain their earlier query behaviour without explicit sorting;
+  the pre-existing eGon sorting is unchanged. Offline SQL checks cover all three
+  legacy queries with and without a limit.
 
 ### `test_tools.py`
 
 - Retained separate live contracts for the legacy COSMO-CLM and eGon ERA5
   weather-cell queries.
+- Both live tests temporarily clear generator weather-cell assignments so local
+  IDs cannot hide an empty database result. They require a nonempty set of finite,
+  positive integer-valued IDs instead of fixed counts or snapshot IDs. The local/
+  database ID union remains covered by the existing offline test.
 - The eGon ERA5 contract uses the lazy `oep_engine` fixture. The legacy COSMO-CLM
   contract does not request an engine and uses the legacy `session_scope()`
   connection instead. Both retain the `oep` marker; their names identify the data
@@ -220,10 +266,14 @@ function afterwards.
 
 ### `test_examples.py`
 
+- The plotting notebook uses the checked-out `ding0_test_network_1` grid when run
+  from the repository root or `examples` directory. Its test sets the kernel's
+  working directory explicitly; fast regression checks verify both local paths
+  without downloading. Standalone notebook use retains the GitHub fallback.
 - Retained the simple and electromobility notebooks as slow live end-to-end smoke
   tests so the documented OEP workflows remain covered.
-- Excluded both notebooks from the three basic matrix entries and retained them in
-  the full coverage entry with finite notebook and job timeouts.
+- Excluded both notebooks from all four regular matrix entries and retained them
+  in the dedicated OEP job with finite notebook and job timeouts.
 - Notebook completion without a cell exception is the assertion; the electromobility
   input is local, while its renewable feed-in setup still uses the live OEP.
 

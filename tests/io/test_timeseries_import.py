@@ -19,6 +19,7 @@ def mock_oep_demand_retrieval(monkeypatch):
     Replace OEP heat and electricity demand retrieval with local profiles.
     This is a shared fixture. Hence a dispatcher as an internal helper is
     required.
+    The returned ``profiles`` entry lets tests customize the synthetic inputs.
     """
 
     profiles = {
@@ -101,6 +102,7 @@ def mock_oep_demand_retrieval(monkeypatch):
     )
 
     return {
+        "profiles": profiles,
         "residential_heat": residential_heat_mock,
         "district_heating": district_heating_mock,
         "residential_electricity": residential_electricity_mock,
@@ -228,18 +230,28 @@ class TestTimeseriesImport:
         query_mock.assert_called_once_with(edisgo, {1122074})
 
     @pytest.mark.oep
-    def test_feedin_oedb_live(self, oep_engine):
-        edisgo_object = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+    def test_query_feedin_oedb_live(self, oep_engine):
+        """Check raw wind/solar profiles for one explicitly requested ERA5 cell."""
+        requested_cells = {11051}
+        database_data = timeseries_import._query_feedin_oedb(
+            oep_engine, requested_cells
         )
-        timeindex = pd.date_range("1/2/2018", periods=6, freq="H")
-        edisgo_object.set_timeindex(timeindex)
-        feedin_df = timeseries_import.feedin_oedb(
-            edisgo_object,
-            engine=oep_engine,
+
+        assert not database_data.empty
+        assert {"weather_cell_id", "carrier", "feedin"}.issubset(database_data.columns)
+        required_profiles = {
+            (cell, carrier)
+            for cell in requested_cells
+            for carrier in ("pv", "wind_onshore")
+        }
+        assert set(zip(database_data.weather_cell_id, database_data.carrier)) == (
+            required_profiles
         )
-        assert feedin_df.shape == (6, 4)
-        assert_index_equal(feedin_df.index, timeindex)
+        assert not database_data.duplicated(["weather_cell_id", "carrier"]).any()
+        for profile in database_data.feedin:
+            values = np.asarray(profile, dtype=float)
+            assert values.shape == (8760,)
+            assert np.isfinite(values).all()
 
     def test_feedin_oedb_offline(self, monkeypatch):
         """Test feed-in reshaping and slicing with synthetic query data."""
@@ -445,6 +457,44 @@ class TestTimeseriesImport:
         assert mocks["residential_heat"].call_count == 2
         assert mocks["district_heating"].call_count == 2
         assert mocks["cts"].call_count == 2
+
+    def test_heat_demand_oedb_partial_timeindex_offline(
+        self, mock_oep_demand_retrieval
+    ):
+        """Select the requested hours from annual, time-varying heat profiles."""
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        edisgo_object.topology.loads_df = pd.concat(
+            [edisgo_object.topology.loads_df, self.setup_egon_heat_pump_data()]
+        )
+        # The first requested hour is hour 756 of the year, not hour zero.
+        hour = np.arange(8760, dtype=float) / 10000
+        profiles = mock_oep_demand_retrieval["profiles"]
+        profiles["residential_heat"][431821] = 0.1 + hour
+        profiles["residential_heat"][430859] = 0.2 + 2 * hour
+        profiles["cts_heat"][431821] = 0.3 + 3 * hour
+        profiles["district_heating"][5] = 0.4 + 5 * hour
+        requested_timeindex = pd.date_range("2035-02-01 12:00", periods=3, freq="h")
+
+        result = timeseries_import.heat_demand_oedb(
+            edisgo_object, "eGon2035", engine=None, timeindex=requested_timeindex
+        )
+
+        expected = pd.DataFrame(
+            {
+                # Residential and CTS demand are added for this building.
+                "HP_442081": [0.7024, 0.7028, 0.7032],
+                "HP_448156": [0.3512, 0.3514, 0.3516],
+                "Heat_Pump_LVGrid_1163850014_district_heating_6": [
+                    0.778,
+                    0.7785,
+                    0.779,
+                ],
+            },
+            index=requested_timeindex,
+        )
+        pd.testing.assert_frame_equal(result, expected, check_like=True)
 
     def test_heat_demand_oedb_without_residential_heat_demand(
         self, mock_oep_demand_retrieval
@@ -812,28 +862,50 @@ class TestTimeseriesImport:
     def test_query_residential_electricity_profile_data_live(self, oep_engine):
         """Check the live schemas needed for residential electricity profiles."""
 
-        scaling_factors, profile_ids, profiles = (
+        census_cells, profile_ids, profiles = (
             timeseries_import._query_residential_electricity_profile_data(
                 [-1, 442081],
-                "eGon2035",
                 oep_engine,
             )
         )
 
-        assert scaling_factors.columns.tolist() == ["factor"]
-        assert not scaling_factors.empty
+        assert census_cells.columns.tolist() == ["building_id", "zensus_id"]
+        assert not census_cells.empty
         assert profile_ids.columns.tolist() == [
             "building_id",
             "cell_id",
             "profile_id",
         ]
         assert not profile_ids.empty
-        assert profiles.shape[0] == 8760
+        assert profiles.columns.tolist() == ["load_in_wh"]
+        assert profiles.index.name == "type"
         assert not profiles.empty
+        assert profiles.load_in_wh.map(len).eq(8760).all()
 
+        for scenario in ("eGon2035", "eGon100RE"):
+            scaling_factors = (
+                timeseries_import._query_residential_electricity_scaling_factors(
+                    census_cells.zensus_id.unique().tolist(), scenario, oep_engine
+                )
+            )
+            assert scaling_factors.columns.tolist() == ["factor"]
+            assert scaling_factors.index.name == "cell_id"
+            assert not scaling_factors.empty
+
+    @pytest.mark.parametrize(
+        "scenario, expected_101, expected_102",
+        [
+            ("eGon2021", [1.5, 3.0, 4.5], [0.5, 1.0, 1.5]),
+            ("eGon2035", [3.0, 6.0, 9.0], [0.25, 0.5, 0.75]),
+            ("eGon100RE", [3.0, 6.0, 9.0], [0.25, 0.5, 0.75]),
+        ],
+    )
     def test_get_residential_electricity_profiles_per_building_offline(
         self,
         monkeypatch,
+        scenario,
+        expected_101,
+        expected_102,
     ):
         """Test mapping, aggregation and scaling with synthetic query data."""
 
@@ -841,6 +913,7 @@ class TestTimeseriesImport:
             {"factor": [2.0, 0.5]},
             index=pd.Index([10, 20], name="cell_id"),
         )
+        census_cells = pd.DataFrame({"building_id": [101, 102], "zensus_id": [10, 20]})
         profile_ids = pd.DataFrame(
             {
                 "building_id": [101, 101, 102],
@@ -850,30 +923,41 @@ class TestTimeseriesImport:
         )
         database_profiles = pd.DataFrame(
             {
-                "p1": [1_000_000.0, 2_000_000.0, 3_000_000.0],
-                "p2": [500_000.0, 1_000_000.0, 1_500_000.0],
-            }
+                "load_in_wh": [
+                    [1_000_000.0, 2_000_000.0, 3_000_000.0],
+                    [500_000.0, 1_000_000.0, 1_500_000.0],
+                ],
+            },
+            index=pd.Index(["p1", "p2"], name="type"),
         )
-        query_mock = Mock(
-            return_value=(scaling_factors, profile_ids, database_profiles)
-        )
+        query_mock = Mock(return_value=(census_cells, profile_ids, database_profiles))
         monkeypatch.setattr(
             timeseries_import,
             "_query_residential_electricity_profile_data",
             query_mock,
         )
+        factors_mock = Mock(return_value=scaling_factors)
+        monkeypatch.setattr(
+            timeseries_import,
+            "_query_residential_electricity_scaling_factors",
+            factors_mock,
+        )
 
         profiles = timeseries_import.get_residential_electricity_profiles_per_building(
             [-1, 101, 102],
-            "eGon2035",
+            scenario,
             engine=None,
         )
 
         assert profiles.shape == (3, 2)
         assert profiles.columns.tolist() == [101, 102]
-        assert profiles[101].tolist() == [3.0, 6.0, 9.0]
-        assert profiles[102].tolist() == [0.25, 0.5, 0.75]
-        query_mock.assert_called_once_with([-1, 101, 102], "eGon2035", None)
+        assert profiles[101].tolist() == expected_101
+        assert profiles[102].tolist() == expected_102
+        query_mock.assert_called_once_with([-1, 101, 102], None)
+        if scenario == "eGon2021":
+            factors_mock.assert_not_called()
+        else:
+            factors_mock.assert_called_once_with([10, 20], scenario, None)
 
     @pytest.mark.oep
     def test_query_industrial_electricity_profile_data_live(self, oep_engine):
@@ -894,10 +978,12 @@ class TestTimeseriesImport:
         self,
         monkeypatch,
     ):
-        """Test merging and expanding industrial profiles with synthetic data."""
+        """Test merging and expanding full-year synthetic industrial profiles."""
 
-        sites = pd.DataFrame({"site_id": [1], "p_set": [[1.0, 2.0, 3.0]]})
-        areas = pd.DataFrame({"site_id": [541658], "p_set": [[4.0, 5.0, 6.0]]})
+        site_profile = 1.0 + np.arange(8760, dtype=float) / 1000
+        area_profile = 4.0 + np.arange(8760, dtype=float) / 1000
+        sites = pd.DataFrame({"site_id": [1], "p_set": [site_profile.tolist()]})
+        areas = pd.DataFrame({"site_id": [541658], "p_set": [area_profile.tolist()]})
         query_mock = Mock(return_value=(sites, areas))
         monkeypatch.setattr(
             timeseries_import,
@@ -911,8 +997,28 @@ class TestTimeseriesImport:
             engine=None,
         )
 
-        assert profiles.shape == (3, 2)
+        assert profiles.shape == (8760, 2)
         assert profiles.columns.tolist() == [1, 541658]
-        assert profiles[1].tolist() == [1.0, 2.0, 3.0]
-        assert profiles[541658].tolist() == [4.0, 5.0, 6.0]
+        np.testing.assert_array_equal(profiles.index, np.arange(8760))
+        np.testing.assert_array_equal(profiles[1], site_profile)
+        np.testing.assert_array_equal(profiles[541658], area_profile)
         query_mock.assert_called_once_with([1, 541658], "eGon2035", None)
+
+    @pytest.mark.parametrize("profile_length", [3, 8784], ids=["short", "leap-year"])
+    def test_get_industrial_electricity_profiles_rejects_nonannual_data_offline(
+        self, monkeypatch, profile_length
+    ):
+        """Keep the original 8760-hour requirement outside the query mock."""
+        sites = pd.DataFrame({"site_id": [1], "p_set": [[1.0] * profile_length]})
+        areas = pd.DataFrame(columns=["site_id", "p_set"])
+        query_mock = Mock(return_value=(sites, areas))
+        monkeypatch.setattr(
+            timeseries_import, "_query_industrial_electricity_profile_data", query_mock
+        )
+
+        with pytest.raises(ValueError, match="matching element counts"):
+            timeseries_import.get_industrial_electricity_profiles_per_site(
+                [1], "eGon2035", engine=None
+            )
+
+        query_mock.assert_called_once_with([1], "eGon2035", None)

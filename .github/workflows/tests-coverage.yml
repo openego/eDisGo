@@ -1,5 +1,5 @@
-# Tests the package, measures coverage and submits it to Coveralls.
-# Coverage is submitted only when the complete pytest run succeeds.
+# Runs regular tests with offline coverage and live OEP tests in a separate job.
+# Coverage is submitted only when the selected non-OEP tests succeed.
 name: "Tests & Coverage"
 
 # Cancel an outdated workflow when a newer commit is pushed to the same branch.
@@ -86,25 +86,67 @@ jobs:
           # This step uses PowerShell, where "\" is not a line continuation.
           python -m pytest --runslow -m "not oep" --disable-warnings --color=yes -v
 
-      - name: Run all tests with coverage and submit to Coveralls
+      - name: Run regular tests with coverage and submit to Coveralls
         if: matrix.name-suffix == 'coverage'
         run: |
           python -m pip install \
             "pytest<9.2.0" \
             "nbclient<0.12.0" \
-            "pytest-rerunfailures<17.0.0" \
             coveralls
           coverage run --source=edisgo -m pytest \
             --runslow \
             --runonlinux \
+            -m "not oep" \
             --disable-warnings \
             --color=yes \
-            -v \
-            --reruns 2 \
-            --reruns-delay 15 \
-            --only-rerun "Connection(Error|Exception)|Timeout"
+            -v
           coveralls
         env:
-          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
+
+  oep:
+    if: github.actor != 'dependabot[bot]'
+    name: "Live OEP tests at py3.12 on Linux"
+    runs-on: ubuntu-latest
+    timeout-minutes: 140
+    # Serialize live OEP access across branches in this repository. Superseded
+    # commits on the same branch are still canceled by workflow concurrency.
+    concurrency:
+      group: edisgo-live-oep
+      cancel-in-progress: false
+      queue: max
+
+    steps:
+      - name: Require OEP token
+        shell: bash
+        env:
+          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
+        run: |
+          if [[ -z "${OEP_TOKEN//[[:space:]]/}" ]]; then
+            echo "::error::OEP_TOKEN is missing or empty. Configure the OEP_TOKEN repository secret to run live OEP tests."
+            exit 1
+          fi
+
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          python -m pip install -e "."
+          python -m pip install "pytest<9.2.0" "nbclient<0.12.0"
+
+      # No parallel pytest workers or automatic retries: the live contracts
+      # and OEP-dependent notebooks run one at a time.
+      - name: Run live OEP tests
+        run: |
+          python -m pytest --runoep --runslow --runonlinux -m "oep" \
+            --disable-warnings --color=yes -v
+        env:
+          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}

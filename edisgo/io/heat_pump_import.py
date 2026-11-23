@@ -35,15 +35,16 @@ def _query_individual_heat_pumps_oedb(
     edisgo_object, scenario, engine, query_limit=None
 ):
     """
-    Get heat pumps for individual heating per building from oedb.
+    Get raw individual heat-pump records and their weather-cell IDs from oedb.
 
-    Weather cell ID is as well added in this function.
+    Joined building mappings can produce multiple records per building. The
+    importer removes these duplicates outside the database query boundary.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing installed heat pump capacity for all individual heat
-        pumps in the grid per building.
+        Dataframe containing individual heat-pump capacities and building/weather
+        cell IDs. Building IDs may occur more than once.
         For more information see parameter `hp_individual` in
         :func:`~.io.heat_pump_import._grid_integration`.
 
@@ -89,12 +90,7 @@ def _query_individual_heat_pumps_oedb(
         if query_limit is not None:
             query = query.limit(query_limit)
 
-        df = pd.read_sql(query.statement, engine, index_col=None)
-
-        # drop duplicated building IDs that exist because
-        # egon_map_zensus_mvgd_buildings can contain several entries per building,
-        # e.g. for CTS and residential
-        return df.drop_duplicates(subset=["building_id"])
+        return pd.read_sql(query.statement, engine, index_col=None)
 
 
 def _query_central_heat_sources_oedb(
@@ -423,6 +419,8 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         hp_individual = _query_individual_heat_pumps_oedb(
             edisgo_object=edisgo_object, scenario=scenario, engine=engine
         )
+        # Joins can duplicate buildings; keep the first record before summing capacity.
+        hp_individual = hp_individual.drop_duplicates(subset=["building_id"])
         hp_individual_cap = _query_individual_heat_pump_capacity_oedb(
             edisgo_object=edisgo_object, scenario=scenario, engine=engine
         )
