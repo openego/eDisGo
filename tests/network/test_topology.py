@@ -1794,6 +1794,100 @@ class TestTopologyWithEdisgoObject:
         # check new storage
         assert self.edisgo.topology.storage_units_df.at[comp_name, "p_nom"] == 0.03
 
+    @pytest.mark.parametrize("voltage_level", [4, 5, 6])
+    def test_connection_cable_carries_apparent_power(self, voltage_level):
+        """
+        Tests that the cable to a newly connected generator is sized for its
+        apparent power at the configured power factor and not only for its active
+        power. The active power is chosen just below the rating of the smallest
+        suitable cable and the location close to the target, so that the voltage
+        criterion does not apply.
+
+        """
+        topology = self.edisgo.topology
+        if voltage_level == 4:
+            # smallest 20 kV cable: 11.05 MVA
+            p_nom = 10.5
+            station = topology.mv_grid.station.iloc[0]
+            geom = Point(station.x + 0.0005, station.y)
+        elif voltage_level == 5:
+            # just beside the middle of MV line Line_10014, so that it is split
+            p_nom = 10.5
+            buses = topology.buses_df.loc[
+                topology.lines_df.loc["Line_10014", ["bus0", "bus1"]]
+            ]
+            geom = Point(buses.x.mean() + 1e-4, buses.y.mean() + 1e-4)
+        else:
+            # smallest LV cable NAYY 4x1x35: 0.0852 MVA
+            p_nom = 0.084
+            station = topology.get_lv_grid(3).station.iloc[0]
+            geom = Point(station.x + 0.0001, station.y)
+        test_gen = {
+            "generator_id": 34567,
+            "p_nom": p_nom,
+            "geom": geom,
+            "generator_type": "solar",
+            "subtype": "ground_mounted",
+            "weather_cell_id": topology.generators_df.at[
+                "GeneratorFluctuating_2", "weather_cell_id"
+            ],
+            "voltage_level": voltage_level,
+        }
+        lines_before = topology.lines_df.index
+
+        if voltage_level == 6:
+            test_gen["mvlv_subst_id"] = 3
+            comp_name = topology.connect_to_lv(self.edisgo, test_gen)
+            power_factor = self.edisgo.config["reactive_power_factor"]["lv_generator"]
+        else:
+            comp_name = topology.connect_to_mv(self.edisgo, test_gen)
+            power_factor = self.edisgo.config["reactive_power_factor"]["mv_generator"]
+
+        # check that new cable can carry the apparent power
+        bus = topology.generators_df.at[comp_name, "bus"]
+        new_lines = topology.lines_df.drop(lines_before, errors="ignore")
+        new_cable = new_lines[(new_lines.bus0 == bus) | (new_lines.bus1 == bus)]
+        assert len(new_cable) == 1
+        assert new_cable.s_nom.iloc[0] >= p_nom / power_factor
+
+    def test_connect_to_lv_without_geom(self):
+        """
+        Tests that components without geometry in voltage level 7 are connected
+        directly to the LV station once all suitable buses are full.
+
+        """
+        topology = self.edisgo.topology
+        station_bus = topology.get_lv_grid(3).station.index[0]
+        num_buses_before = len(topology.buses_df)
+        num_lines_before = len(topology.lines_df)
+
+        comp_names = []
+        for i in range(8):
+            test_gen = {
+                "generator_id": 45670 + i,
+                "p_nom": 0.01,
+                "generator_type": "solar",
+                "subtype": "roof",
+                "weather_cell_id": topology.generators_df.at[
+                    "GeneratorFluctuating_2", "weather_cell_id"
+                ],
+                "voltage_level": 7,
+                "mvlv_subst_id": 3,
+            }
+            comp_names.append(
+                topology.connect_to_lv(
+                    self.edisgo, test_gen, allowed_number_of_comp_per_bus=0
+                )
+            )
+
+        # check that all suitable buses are full and further generators are
+        # connected to the station
+        buses = topology.generators_df.loc[comp_names, "bus"]
+        assert (buses == station_bus).any()
+        # check that no new buses and lines were added
+        assert num_buses_before == len(topology.buses_df)
+        assert num_lines_before == len(topology.lines_df)
+
     def test_check_integrity(self, caplog):
         """Test of validation of grids."""
         comps_dict = {
