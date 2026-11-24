@@ -379,3 +379,203 @@ def transformer_expansion_costs(edisgo_obj, transformer_names=None):
         ]
     )
     return costs_df
+
+
+def grid_expansion_costs_from_diff(edisgo_obj):
+    """
+    Returns grid expansion costs based on a comparison of the original grid topology
+    and the current grid topology.
+
+    The original grid topology is stored in :class:`~.EDisGo`
+
+    Parameters
+    ----------
+
+    Returns
+    --------
+    `pandas.DataFrame<DataFrame>`
+
+    """
+    edisgo_grid_orig = edisgo_obj.topology.original_grid_topology
+
+    buses_orig = edisgo_grid_orig.topology.buses_df.copy()
+    lines_orig = edisgo_grid_orig.topology.lines_df.copy()
+
+    buses = edisgo_obj.topology.buses_df.copy()
+    lines = edisgo_obj.topology.lines_df.copy()
+
+    # get lines that are in grid now but not in original grid - these were either
+    # added or changed
+    new_or_changed_or_split_lines = [_ for _ in lines.index if
+                                     _ not in lines_orig.index]
+    # get lines that were in original grid but not in grid now - these were split or
+    # connected to other bus (when splitting LV grid lines where feeder is split are
+    # renamed) or removed when component was deleted, e.g. generator decommissioned
+    removed_lines = [_ for _ in lines_orig.index if _ not in lines.index]
+    # get lines that are in both grids to check, whether they changed
+    lines_in_both_grids = [_ for _ in lines_orig.index if _ in lines.index]
+
+    # get new buses
+    new_buses = [_ for _ in buses.index if _ not in buses_orig.index]
+    # get removed buses - exist when generators were decommisioned or lines aggregated
+    removed_buses = [_ for _ in buses_orig.index if _ not in buses.index]
+
+    # track lines changes
+    lines_changed = pd.DataFrame()
+
+    # check lines in both grids whether they changed - check line type and length and
+    # add to lines_changed if either changed
+    lines_tmp = lines.loc[lines_in_both_grids, :]
+    lines_changed_length = lines_tmp[
+        lines_orig.loc[lines_in_both_grids, "length"] != lines.loc[
+            lines_in_both_grids, "length"]]
+    if not lines_changed_length.empty:
+        lines_changed = pd.concat([lines_changed, lines_changed_length], axis=0)
+    lines_changed_type = lines_tmp[
+        lines_orig.loc[lines_in_both_grids, "type_info"] != lines.loc[
+            lines_in_both_grids, "type_info"]]
+    if not lines_changed_type.empty:
+        lines_changed = pd.concat([lines_changed, lines_changed_type], axis=0)
+
+    # check removed lines
+    for removed_line in removed_lines.copy():
+        # check whether any of its buses were also removed
+        if (lines_orig.at[removed_line, "bus0"] in removed_buses) or (
+                lines_orig.at[removed_line, "bus1"] in removed_buses):
+            # drop from removed lines
+            removed_lines.remove(removed_line)
+
+    # remaining lines in removed_lines list should be lines that were split
+    # match each line in removed_lines with lines in new_or_changed_or_split_lines -
+    # important because these may not lead to additional costs
+    for removed_line in removed_lines:
+        # find path between original buses in new grid - all lines on that path
+        line_bus0 = lines_orig.at[removed_line, "bus0"]
+        line_bus1 = lines_orig.at[removed_line, "bus1"]
+        if buses.at[line_bus0, "v_nom"] > 1.0:
+            graph = edisgo_obj.topology.mv_grid.graph
+        else:
+            # check if buses are in same LV grid or not (could happen when grid is
+            # split)
+            if int(buses.at[line_bus0, "lv_grid_id"]) == int(
+                    buses.at[line_bus1, "lv_grid_id"]):
+                graph = edisgo_obj.topology.get_lv_grid(
+                    int(buses.at[line_bus0, "lv_grid_id"])).graph
+            else:
+                graph = edisgo_obj.topology.to_graph()
+        path = nx.shortest_path(graph, line_bus0, line_bus1)
+        # get lines in path
+        lines_in_path = lines[lines.bus0.isin(path) & lines.bus1.isin(path)]
+        # drop these lines from new_or_changed_or_split_lines
+        for l in lines_in_path.index:
+            try:
+                new_or_changed_or_split_lines.remove(l)
+            except:
+                logger.debug(f"Line {l} is in path but could not be removed.")
+        # check whether line type changed or number of parallel lines and add
+        # to lines_changed
+        lines_changed_type = lines_in_path[
+            lines_in_path.type_info != lines_orig.at[removed_line, "type_info"]]
+        if not lines_changed_type.empty:
+            # add to lines_changed dataframe
+            lines_changed = pd.concat([lines_changed, lines_changed_type], axis=0)
+            # drop from lines_in_path
+            lines_in_path.drop(index=lines_changed_type.index, inplace=True)
+        # for num parallel changes only consider additional line in costs
+        lines_changed_num_parallel = lines_in_path[
+            lines_in_path.num_parallel != lines_orig.at[removed_line, "num_parallel"]]
+        if not lines_changed_num_parallel.empty:
+            # reduce num_parallel by number of parallel lines in original grid
+            lines_changed_num_parallel["num_parallel"] = lines_changed_num_parallel[
+                                                       "num_parallel"] - lines_orig.at[
+                                                       removed_line, "num_parallel"]
+            lines_changed = pd.concat(
+                [lines_changed, lines_changed_num_parallel], axis=0
+            )
+
+    # get new buses where new component is directly connected - these are most likely
+    # not new branch tees where line was split
+    buses_components_orig = pd.concat(
+        [edisgo_grid_orig.topology.loads_df.loc[:, ["bus"]],
+         edisgo_grid_orig.topology.generators_df.loc[:, ["bus"]],
+         edisgo_grid_orig.topology.storage_units_df.loc[:, ["bus"]]]
+    )
+    buses_components = pd.concat(
+        [edisgo_obj.topology.loads_df.loc[:, ["bus"]],
+         edisgo_obj.topology.generators_df.loc[:, ["bus"]],
+         edisgo_obj.topology.storage_units_df.loc[:, ["bus"]]]
+    )
+    buses_components_new = list(set([_ for _ in buses_components.bus if
+                                     _ not in buses_components_orig.bus and _ in
+                                     new_buses]))
+    new_or_changed_or_split_lines_df = lines.loc[new_or_changed_or_split_lines, :]
+    added_lines = new_or_changed_or_split_lines_df[
+        (new_or_changed_or_split_lines_df.bus0.isin(buses_components_new)) | (
+            new_or_changed_or_split_lines_df.bus1.isin(buses_components_new))]
+    lines_changed = pd.concat([lines_changed, added_lines], axis=0)
+
+    # remove from new_or_changed_or_split_lines
+    for l in new_or_changed_or_split_lines_df.index:
+        new_or_changed_or_split_lines.remove(l)
+
+    if not len(new_or_changed_or_split_lines) == 0:
+        logger.warning(
+            f"new_or_changed_or_split_lines is not empty: "
+            f"{new_or_changed_or_split_lines}"
+        )
+
+    # determine line costs
+    lines_changed.drop_duplicates(keep="last", inplace=True, subset=["bus0", "bus1"])
+    line_costs = line_expansion_costs(edisgo_obj, lines_names=lines_changed.index)
+    costs_df = pd.DataFrame(
+        {
+            "type": lines_changed.type_info,
+            "total_costs": (line_costs.costs_earthworks +
+                            line_costs.costs_cable * lines_changed.num_parallel),
+            "length": lines_changed.num_parallel * lines_changed.length,
+            "quantity": lines_changed.num_parallel,
+            "voltage_level": line_costs.voltage_level,
+        },
+        index=lines_changed.index
+    )
+
+    # add costs for transformers
+    transformers_orig = pd.concat(
+        [edisgo_grid_orig.topology.transformers_df.copy(),
+         edisgo_grid_orig.topology.transformers_hvmv_df.copy()]
+    )
+    transformers = pd.concat(
+        [edisgo_obj.topology.transformers_df.copy(),
+         edisgo_obj.topology.transformers_hvmv_df.copy()]
+    )
+    new_transformers = [_ for _ in transformers.index if
+                        _ not in transformers_orig.index]
+    transformers_in_both_grids = [_ for _ in transformers_orig.index if
+                                  _ in transformers.index]
+    transformers_changed = transformers.loc[new_transformers, :]
+    # check transformers in both grids whether they changed - check type_info
+    # and add to transformers_changed if type changed
+    transformers_tmp = transformers.loc[transformers_in_both_grids, :]
+    transformers_changed_type = transformers_tmp[
+        transformers_orig.loc[transformers_in_both_grids, "type_info"] !=
+        transformers.loc[
+            transformers_in_both_grids, "type_info"]]
+    if not transformers_changed_type.empty:
+        transformers_changed = pd.concat(
+            [transformers_changed, transformers_changed_type], axis=0)
+    transformer_costs = transformer_expansion_costs(
+        edisgo_obj, transformers_changed.index
+    )
+    transformer_costs_df = pd.DataFrame(
+        {
+            "type": transformers_changed.type_info,
+            "total_costs": transformer_costs.costs,
+            "length": 0.0,
+            "quantity": 1,
+            "voltage_level": transformer_costs.voltage_level,
+        },
+        index=transformers_changed.index
+    )
+    costs_df = pd.concat([costs_df, transformer_costs_df])
+
+    return lines_changed, transformers_changed, costs_df

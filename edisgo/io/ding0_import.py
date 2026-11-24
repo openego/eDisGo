@@ -150,3 +150,6 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
 
     # check data integrity
     edisgo_obj.topology.check_integrity()
+
+    # write topology to Topology.original_grid_topology to save original grid topology
+    edisgo_obj.topology.original_grid_topology = edisgo_obj.topology
