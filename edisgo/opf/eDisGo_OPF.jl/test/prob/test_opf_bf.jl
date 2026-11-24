@@ -48,11 +48,16 @@ function opf_small_model(model_type::Type=eDisGo_OPF.NCBFPowerModelEdisgo;
                                        overlying_grid=overlying_grid, num_steps=num_steps)
 end
 
-"Solve the multi-network form of `small_network` with Ipopt via `solve_mn_opf_bf_flex`."
+"""
+Solve the multi-network form of `small_network` with Ipopt via `solve_mn_opf_bf_flex`.
+`setup!` may change the single-network data before it is split into time steps.
+"""
 function opf_solve_small(model_type::Type=eDisGo_OPF.NCBFPowerModelEdisgo;
-                         opf_version::Int=2, kwargs...)
-    data = TestUtils.multinetwork(TestUtils.small_network(
-        opf_version=opf_version, overlying_grid=opf_has_og(opf_version)))
+                         opf_version::Int=2, setup!::Function=identity, kwargs...)
+    d = TestUtils.small_network(opf_version=opf_version,
+                                overlying_grid=opf_has_og(opf_version))
+    setup!(d)
+    data = TestUtils.multinetwork(d)
     result, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data, model_type, OPF_IPOPT; kwargs...)
     return result, pm, data
 end
@@ -206,6 +211,10 @@ function opf_check_plausible(sol, data, v::Int; exact_current::Bool=true)
         hp, hs = s["heatpumps"]["1"], s["heat_storage"]["1"]
         @test d["heatpumps"]["1"]["cop"] * (hp["php"] + hp["phps2"]) ≈
               d["heatpumps"]["1"]["pd"] + hs["phss"] - hs["phs"] atol = tol
+        # Heat pump and heat storage can cover the heat demand of the fixture, so
+        # the heat balance slacks stay unused in every version.
+        @test hp["phps2"] ≈ 0.0 atol = tol
+        @test hs["phss"] ≈ 0.0 atol = tol
         if v in (2, 4)
             pgc = s["gen_nd"]["1"]["pgc"]
             @test -tol <= pgc <= d["gen_nd"]["1"]["pg"] + tol
@@ -289,6 +298,46 @@ end
             hp = data["nw"][n]["heatpumps"]["1"]
             php = nw["heatpumps"]["1"]["php"] + nw["heatpumps"]["1"]["phps2"]
             @test hp["cop"] * php ≈ hp["pd"] atol = 1e-6
+        end
+    end
+
+    @testset "curtailment request" begin
+        # The "curt" requirement of `small_network` is HV requirement "1"; its
+        # non-dispatchable generator overloads the feeder with 10 MW feed-in.
+        request!(p) = d -> (d["time_series"]["HV_requirements"]["1"]["P"] = p)
+        overload!(d) = (d["time_series"]["gen_nd"]["1"]["pg"] = [10.0, 10.0];
+                        d["time_series"]["gen_nd"]["1"]["qg"] = [-4.8, -4.8])
+        total_pgc(r, n) = sum(g["pgc"] for g in values(r["solution"]["nw"][n]["gen_nd"]))
+        slack_pg(r, n) = sum(g["pgs"] for g in values(r["solution"]["nw"][n]["gen_slack"]))
+
+        # Version 3 curtails the requested amount, and the curtailed feed-in is
+        # replaced by power from the slack.
+        r0, _, _ = opf_solve_small(opf_version=3, setup! = request!([0.0, 0.0]))
+        r, _, _ = opf_solve_small(opf_version=3, setup! = request!([0.1, 0.4]))
+        for res in (r0, r)
+            @test res["termination_status"] == MOI.LOCALLY_SOLVED
+        end
+        for (n, p) in (("1", 0.1), ("2", 0.4))
+            @test total_pgc(r0, n) <= 1e-6
+            @test total_pgc(r, n) <= p + 1e-6
+            @test total_pgc(r, n) ≈ p atol = 0.01
+            @test slack_pg(r, n) - slack_pg(r0, n) ≈ total_pgc(r, n) atol = 0.01
+        end
+
+        # It curtails no more than requested, even where curtailment would relieve
+        # the overloaded feeder (request 0 in step 1, 0.4 in step 2).
+        r, _, _ = opf_solve_small(opf_version=3,
+                                  setup! = d -> (overload!(d); request!([0.0, 0.4])(d)))
+        @test r["termination_status"] == MOI.LOCALLY_SOLVED
+        @test total_pgc(r, "1") <= 1e-6
+        @test total_pgc(r, "2") <= 0.4 + 1e-6
+        @test total_pgc(r, "2") ≈ 0.4 atol = 0.01
+
+        # Version 4 curtails beyond the request where the grid limits need it.
+        r, _, _ = opf_solve_small(opf_version=4, setup! = overload!)
+        @test r["termination_status"] == MOI.LOCALLY_SOLVED
+        for n in ("1", "2")
+            @test total_pgc(r, n) > 1.0
         end
     end
 
@@ -379,19 +428,25 @@ end
         end
         @test !haskey(PowerModels.var(opf_small_model(opf_version=1), 1), :pgc)
 
-        # BUG: version 3 creates `pgc` for the "curt" HV requirement, but neither
-        # the power balance (curtailment slacks only for 2 and 4, form/bf.jl:213)
-        # nor the objective use it. The requirement is met by a curtailment that
-        # never reaches the grid, while the Python side (`from_powermodels`)
-        # subtracts exactly this `pgc` from the generator feed-in.
+        # Version 3 curtails only for the "curt" HV requirement, in the P/Q balance
+        # as in 2 and 4. It has no cost; the lower bound of the requirement's slack
+        # caps the sum at the request.
         pm = opf_small_model(opf_version=3)
         for n in 1:2
             pgc = PowerModels.var(pm, n, :pgc)[1]
             @test JuMP.upper_bound(pgc) ≈ 0.6
-            @test opf_count_with(pm, n, "pgc", "1") == 1           # HV constraint only
-            @test_broken opf_count_with(pm, n, "pgc", "1") == 3    # plus P/Q balance
+            @test opf_count_with(pm, n, "pgc", "1") == 3    # HV constraint + P/Q balance
             @test JuMP.coefficient(JuMP.objective_function(pm.model).aff, pgc) == 0.0
         end
+
+        # Without a "curt" requirement version 3 does not curtail at all.
+        d = TestUtils.small_network(opf_version=3, overlying_grid=true)
+        @assert d["HV_requirements"]["1"]["name"] == "curt"
+        delete!(d["HV_requirements"], "1")
+        delete!(d["time_series"]["HV_requirements"], "1")
+        pm = eDisGo_OPF.instantiate_model(TestUtils.multinetwork(d),
+            eDisGo_OPF.NCBFPowerModelEdisgo, eDisGo_OPF.build_mn_opf_bf_flex)
+        @test !haskey(PowerModels.var(pm, 1), :pgc)
     end
 
     @testset "overlying grid requirements" begin

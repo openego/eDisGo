@@ -10,6 +10,7 @@ import glob
 import logging
 import os
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -31,6 +32,7 @@ from edisgo.run.tasks.spatial import task_spatial_reduce, task_spatial_restore
 from edisgo.run.tasks.timeseries import (
     _selection_params,
     task_manual_ts,
+    task_oedb_ts,
     task_select_critical_timesteps,
     task_set_timeindex,
 )
@@ -117,14 +119,9 @@ class TestImportFlex:
 class TestBuildFlexibilityBands:
     def test_build_flexibility_bands_scopes_to_timeindex(self):
         """
-        Regression test for eDisGo#703: task_build_flexibility_bands used to
-        need an explicit reduce_timeseries_data_to_given_timeindex call after
-        get_flexibility_bands to trim/year-align the bands to the active
-        timeindex; get_flexibility_bands now does this itself, so the task
-        (which no longer makes that call) must still produce bands matching
-        edisgo.timeseries.timeindex exactly - including across the year
-        mismatch between SimBEV's own calendar (2011 in this fixture) and
-        the scenario timeindex (2035 here).
+        task_build_flexibility_bands produces bands matching
+        edisgo.timeseries.timeindex exactly, also for a time index shorter than
+        SimBEV's simulated range and set in another year than the reference year.
         """
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         electromobility_import.import_electromobility_from_dir(
@@ -135,8 +132,8 @@ class TestBuildFlexibilityBands:
         electromobility_import.distribute_charging_demand(edisgo)
         electromobility_import.integrate_charging_parks(edisgo)
 
-        short_timeindex = pd.date_range("2035-01-15", periods=24, freq="h")
-        edisgo.set_timeindex(short_timeindex)
+        edisgo.set_timeindex(pd.date_range("2035-01-15", periods=24, freq="h"))
+        short_timeindex = pd.date_range("2011-01-15", periods=24, freq="h")
 
         ctx = RunContext(flags={"has_electromobility": True})
         result = task_build_flexibility_bands(edisgo, ctx)
@@ -184,15 +181,13 @@ class TestImportOverlyingGridData:
 
     def test_etrago_dispatchable_ts_aligned_to_timeindex(self):
         """
-        eTraGo data is indexed in its weather year (2011), the EDisGo object in
-        the scenario year. The dispatchable generator time series must be
-        shifted onto the EDisGo time index like all other overlying-grid data
-        (regression: it was passed on unaligned, which left the dispatchable
-        generators without time series and the OPF failed on NaN).
+        The dispatchable generator time series from eTraGo are aligned to the
+        EDisGo time index like all other overlying-grid data, so that the
+        dispatchable generators get time series without NaN.
         """
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        timeindex = pd.date_range("2035-01-15", periods=3, freq="h")
-        edisgo.set_timeindex(timeindex)
+        edisgo.set_timeindex(pd.date_range("2035-01-15", periods=3, freq="h"))
+        timeindex = pd.date_range("2011-01-15", periods=3, freq="h")
         etrago_index = pd.date_range("2011-01-01", periods=8760, freq="h")
         disp_ts = pd.DataFrame({"gas": 0.5}, index=etrago_index)
         ctx = self._ctx(
@@ -215,6 +210,32 @@ class TestImportOverlyingGridData:
         result = task_import_overlying_grid_data(edisgo_obj, ctx)
         assert result is edisgo_obj
         assert "path" in caplog.text.lower()
+
+    def test_etrago_dispatchable_generators_ts_is_aligned(self, edisgo_obj, caplog):
+        """
+        dispatchable_generators_active_power and renewables_potential from
+        eTraGo are both aligned to edisgo.timeseries.timeindex by
+        OverlyingGrid.from_etrago before the task applies them, so the
+        resulting active power series are not empty.
+        """
+        disp_ts = pd.DataFrame(
+            {"other": [1.0, 1.0, 1.0]},
+            index=pd.date_range("2035-01-01", periods=3, freq="h"),
+        )
+        ctx = self._ctx(
+            {"enabled": True, "source": "etrago"},
+            overlying_grid_data={"dispatchable_generators_active_power": disp_ts},
+        )
+
+        with caplog.at_level("WARNING"):
+            result = task_import_overlying_grid_data(edisgo_obj, ctx)
+
+        assert "2035" in caplog.text
+        assert not result.timeseries.generators_active_power.empty
+        pd.testing.assert_index_equal(
+            result.timeseries.generators_active_power.index,
+            edisgo_obj.timeseries.timeindex,
+        )
 
 
 def _grid_with_district_heating():
@@ -643,6 +664,35 @@ class TestSetTimeindex:
         ]
 
 
+class TestOedbTs:
+    """
+    fluctuating/conventional_loads are disabled below to keep these tests
+    DB-free, in line with this module's convention (see module docstring).
+    Only the scenario validation and time-index resolution are exercised;
+    the actual oedb import is covered separately in
+    tests/io/test_timeseries_import.py.
+    """
+
+    def test_reference_year_independent_of_scenario(self, edisgo_obj):
+        # without timeindex, the time index is set to the reference year for
+        # every scenario
+        edisgo_obj.set_timeindex(pd.DatetimeIndex([]))
+        ctx = RunContext(scenario="eGon100RE")
+        result = task_oedb_ts(
+            edisgo_obj, ctx, fluctuating=None, conventional_loads=None
+        )
+        assert not result.timeseries.timeindex.empty
+        assert result.timeseries.timeindex[0].year == 2011
+
+    def test_without_scenario(self, edisgo_obj):
+        # no scenario is needed if no data is loaded from the oedb
+        edisgo_obj.set_timeindex(pd.DatetimeIndex([]))
+        result = task_oedb_ts(
+            edisgo_obj, RunContext(), fluctuating=None, conventional_loads=None
+        )
+        assert result.timeseries.timeindex[0].year == 2011
+
+
 class TestSelectCriticalTimesteps:
     def test_without_active_power_raises(self, edisgo_obj):
         with pytest.raises(ValueError, match="active-power time series"):
@@ -771,6 +821,7 @@ class TestOptimizeTaskDelegation:
         # shortcut expanded to explicit name lists (empty ok if grid lacks type)
         assert "flexible_hps" in captured and "flexible_storage_units" in captured
         assert isinstance(captured["flexible_hps"], list)
+        assert captured["threads"] == 8
 
     def test_flexible_defaults_to_config_flexibilities(self, edisgo_obj):
         """
@@ -860,6 +911,158 @@ class TestSpatialRestoreCarriesOPFResults:
         assert result.opf_results.status == "OPTIMAL"
 
 
+@pytest.mark.parametrize("aggregation_mode", [False, True])
+def test_curtailment_reaches_the_full_grid(aggregation_mode):
+    """
+    spatial_reduce -> optimize -> spatial_restore with the real reduction and
+    write-back; only pm_optimize is replaced by what from_powermodels does
+    with opf_version 3 and 4: it curtails the solar and wind feed-in of the
+    reduced grid, here by a different fraction per generator and time step.
+
+    The full grid must then satisfy what the OPF result means physically:
+    every reduced generator's dispatch equals the sum of its full-grid
+    members, so the feed-in towards the overlying grid is the one the OPF
+    found; each member is curtailed by its representative's fraction, so no
+    generator feeds in less than 0 or more than its uncurtailed feed-in;
+    reactive power follows the curtailed active power at an unchanged Q/P
+    ratio; and generators the OPF did not curtail keep their series.
+    """
+    edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+    edisgo.set_time_series_worst_case_analysis()
+    # worst-case feed-in is proportional to p_nom; scale it per generator so
+    # that a split by p_nom differs from the split by feed-in
+    edisgo.timeseries._generators_active_power *= np.random.default_rng(1).uniform(
+        0.5, 1.0, edisgo.timeseries.generators_active_power.shape
+    )
+    edisgo.set_time_series_reactive_power_control()
+    p_before = edisgo.timeseries.generators_active_power.copy()
+    q_before = edisgo.timeseries.generators_reactive_power.copy()
+    gens_df = edisgo.topology.generators_df
+    renewable = gens_df.index[gens_df.type.isin(["solar", "wind"])]
+    others = gens_df.index.difference(renewable)
+
+    ctx = RunContext(
+        raw_config={
+            "spatial_reduction": {
+                "enabled": True,
+                "mode": "kmeansdijkstra",
+                "cluster_area": "feeder",
+                "reduction_factor": 0.1,
+                "aggregation_mode": aggregation_mode,
+            }
+        }
+    )
+    reduced = task_spatial_reduce(edisgo, ctx)
+    red_gens = reduced.topology.generators_df
+    red_renewable = red_gens.index[red_gens.type.isin(["solar", "wind"])]
+    fraction = pd.DataFrame(
+        np.random.default_rng(0).uniform(
+            0.0, 1.0, (len(reduced.timeseries.timeindex), len(red_renewable))
+        ),
+        index=reduced.timeseries.timeindex,
+        columns=red_renewable,
+    )
+
+    def fake_pm_optimize(**kw):
+        reduced.timeseries._generators_active_power.loc[:, red_renewable] *= fraction
+
+    reduced.pm_optimize = fake_pm_optimize
+    task_optimize(reduced, ctx, flexible=[], opf_version=3)
+    dispatch = reduced.timeseries.generators_active_power.copy()
+    members = {
+        name: old if isinstance(old, list) else [name]
+        for name, old in red_gens.get(
+            "old_name", pd.Series(None, index=red_gens.index, dtype=object)
+        ).items()
+    }
+    full = task_spatial_restore(reduced, ctx)
+
+    p = full.timeseries.generators_active_power
+    q = full.timeseries.generators_reactive_power
+    assert set(p.columns) == set(gens_df.index)
+    # the dispatch of every reduced generator reaches the full grid in total
+    for name, group in members.items():
+        assert np.allclose(p[group].sum(axis=1), dispatch[name]), name
+        # split in proportion to the members' uncurtailed feed-in
+        fraction_of_group = dispatch[name] / p_before[group].sum(axis=1)
+        expected = p_before[group].mul(fraction_of_group, axis=0).fillna(0.0)
+        assert np.allclose(p[group], expected), name
+    assert np.allclose(p[renewable].sum(axis=1), dispatch[red_renewable].sum(axis=1))
+    # each generator stays between 0 and its uncurtailed feed-in
+    assert (p >= -1e-9).all().all()
+    assert (p <= p_before + 1e-9).all().all()
+    # reactive power is scaled with the curtailed active power
+    feeds_in = p_before.abs() > 1e-9
+    ratio_before = (q_before / p_before)[feeds_in]
+    ratio_after = (q / p.where(p.abs() > 1e-9))[feeds_in]
+    curtailed_to_zero = p.abs() <= 1e-9
+    assert np.allclose(
+        ratio_after[~curtailed_to_zero].stack(),
+        ratio_before[~curtailed_to_zero].stack(),
+    )
+    assert np.allclose(q[curtailed_to_zero].stack(), 0.0)
+    # generators the OPF does not curtail keep their series
+    assert np.allclose(p[others], p_before[others])
+    assert np.allclose(q[others], q_before[others])
+
+
+@pytest.mark.runonlinux
+def test_opf_without_curtailment_request_keeps_the_feed_in():
+    """
+    spatial_reduce -> optimize -> spatial_restore with the real OPF
+    (``opf_version`` 3) on the test grid, reduced to a tenth of its buses
+    with merged generators. The overlying grid requests no curtailment, and
+    the OPF may curtail less than requested but never more, so the full grid
+    must come out of the write-back with the feed-in it went in with.
+
+    The solver stops slightly short of zero curtailment (about 1e-4 MW in
+    total, with or without spatial reduction), hence the absolute tolerance
+    of 1 kW per generator. ``method="nc"`` solves with Ipopt, which needs no
+    license, so the test also runs in CI.
+    """
+    edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+    edisgo.set_time_series_worst_case_analysis()
+    ti = edisgo.timeseries.timeindex
+    for attr in [
+        "renewables_curtailment",
+        "storage_units_active_power",
+        "electromobility_active_power",
+        "heat_pump_decentral_active_power",
+        "heat_pump_central_active_power",
+        "dsm_active_power",
+    ]:
+        setattr(edisgo.overlying_grid, attr, pd.Series(0.0, index=ti))
+    p_before = edisgo.timeseries.generators_active_power.copy()
+    q_before = edisgo.timeseries.generators_reactive_power.copy()
+
+    ctx = RunContext(
+        raw_config={
+            "spatial_reduction": {
+                "enabled": True,
+                "mode": "kmeansdijkstra",
+                "cluster_area": "feeder",
+                "reduction_factor": 0.1,
+                "aggregation_mode": True,
+            }
+        }
+    )
+    reduced = task_spatial_reduce(edisgo, ctx)
+    reduced = task_optimize(reduced, ctx, flexible=[], opf_version=3, method="nc")
+    full = task_spatial_restore(reduced, ctx)
+
+    # opf_version 3 ran, with the curtailment requirement
+    assert "curt" in full.opf_results.hv_requirement_slacks_t.columns
+    p = full.timeseries.generators_active_power
+    q = full.timeseries.generators_reactive_power
+    assert set(p.columns) == set(p_before.columns)
+    pd.testing.assert_frame_equal(
+        p[p_before.columns], p_before, check_exact=False, atol=1e-3
+    )
+    pd.testing.assert_frame_equal(
+        q[q_before.columns], q_before, check_exact=False, atol=1e-3
+    )
+
+
 def test_all_bundled_presets_validate():
     """
     Every bundled preset must pass the (metadata-driven) validator — this
@@ -878,3 +1081,17 @@ def test_spatial_reduce_with_null_block_is_a_noop():
     sentinel = object()
     ctx = RunContext(raw_config={"spatial_reduction": None})
     assert task_spatial_reduce(sentinel, ctx) is sentinel
+
+
+def test_spatial_reduce_forwards_threads(edisgo_obj):
+    """``threads`` of the spatial_reduction block reaches
+    EDisGo.spatial_complexity_reduction."""
+    captured = {}
+
+    def fake_reduction(**kw):
+        captured.update(kw)
+
+    edisgo_obj.spatial_complexity_reduction = fake_reduction
+    ctx = RunContext(raw_config={"spatial_reduction": {"enabled": True, "threads": 4}})
+    task_spatial_reduce(edisgo_obj, ctx)
+    assert captured["threads"] == 4

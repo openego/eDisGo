@@ -824,26 +824,22 @@ end
         @test bf_coef(cstr_q, PowerModels.var(pm, 1, :pgc, 1)) ≈ -0.15
     end
 
-    @testset "opf_version 3 ignores curtailment" begin
-        # Version 3 creates the curtailment `pgc` and counts it towards the "curt"
-        # requirement of the overlying grid, but the balance takes the branch of
-        # version 1 and leaves `pgc` out: curtailment that serves the overlying
-        # grid does not reduce the feed-in the grid has to carry.
+    @testset "opf_version 3 curtails in the balance" begin
+        # Version 3 curtails non-dispatchable generation for the "curt" requirement
+        # of the overlying grid. The curtailment enters the balance as in versions
+        # 2 and 4, so the grid carries the curtailed feed-in.
         pm = bf_small_model(bf_all_variables!; opf_version=3, overlying_grid=true)
         pgc = PowerModels.var(pm, 1, :pgc, 1)
         bf_power_balance(pm)
         cstr_p, cstr_q = bf_eq_constraints(pm.model)
-        @test bf_coef(cstr_p, pgc) == 0.0
-        @test bf_coef(cstr_q, pgc) == 0.0
+        @test bf_coef(cstr_p, pgc) == -1.0
+        @test bf_coef(cstr_q, pgc) ≈ -0.15
 
         i_curt = only(i for (i, req) in PowerModels.ref(pm, 1, :HV_requirements)
                       if req["name"] == "curt")
         eDisGo_OPF.constraint_HV_requirements(pm, i_curt, 1)
         c_hv = bf_eq_constraints(pm.model)[end]
         @test bf_coef(c_hv, pgc) == 1.0
-
-        # Intended: curtailment enters the balance as in versions 2 and 4.
-        @test_broken bf_coef(cstr_p, pgc) == -1.0
     end
 
     @testset "duals" begin

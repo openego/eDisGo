@@ -8,14 +8,15 @@ _comment: |
   - spatial_reduce (before optimize): deepcopies and stashes the full grid on
     ctx, then spatially reduces the working object so `optimize` runs on a
     smaller grid.
-  - spatial_restore (after optimize): writes the optimized flexible-component
-    dispatch back onto the stashed full grid (by name, or disaggregated onto
+  - spatial_restore (after optimize): writes the optimized dispatch (flexible
+    components and generators, whose feed-in opf_version 3 and 4 curtail)
+    back onto the stashed full grid (by name, or disaggregated onto
     `old_name` members if aggregation_mode is true), recomputes reactive power
-    for those components, and makes the full grid active again for `reinforce`.
+    of all components, and makes the full grid active again for `reinforce`.
   Both are no-ops when `spatial_reduction.enabled` is false, so `reinforce`
   then runs on the same grid `optimize` used. `reactive_power` runs before
-  the bracket on the full grid; spatial_restore recomputes it only for the
-  optimized components.
+  the bracket on the full grid; spatial_restore recomputes it from the
+  restored active power with the default reactive power control.
   Reinforcement always runs on the full topology, regardless of the flag.
 
 _workflow:

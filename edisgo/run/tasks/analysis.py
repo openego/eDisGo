@@ -284,6 +284,7 @@ def task_optimize(
     method="soc",
     warm_start=False,
     s_base=1,
+    threads=8,
 ):
     """
     Run a powermodels optimal-power-flow (OPF) over flexibilities.
@@ -332,13 +333,16 @@ def task_optimize(
     flexible_storage_units : list of str, optional
         Explicit list of flexible storage-unit names.
     opf_version : int, optional
-        Powermodels OPF formulation version (1 or 2, default 2).
+        Powermodels OPF formulation version, 1 to 4 (default 2), see
+        :func:`~.opf.powermodels_opf.pm_optimize`.
     method : str, optional
         OPF relaxation method, e.g. ``"soc"`` (second-order cone).
     warm_start : bool, optional
         Reuse a previous solution as the starting point.
     s_base : float, optional
         Per-unit base power for normalization.
+    threads : int, optional
+        Number of threads Gurobi may use (default 8, 0 for all cores).
 
     Returns
     -------
@@ -392,5 +396,6 @@ def task_optimize(
         method=method,
         warm_start=warm_start,
         s_base=s_base,
+        threads=threads,
     )
     return edisgo
