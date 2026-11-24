@@ -96,7 +96,9 @@ class TestCosts:
         assert costs.loc["Line_10019", "quantity"] == 1
         assert costs.loc["Line_10019", "type"] == "48-AL1/8-ST1A"
         assert costs.loc["Line_10019", "voltage_level"] == "mv"
-        assert np.isclose(costs.loc["Line_50000002", "total_costs"], 2.34)
+        # summed quantity in equipment_changes is 3, but only one line is in the
+        # grid, so earthworks plus one cable are costed (1.53 + 1 * 0.27)
+        assert np.isclose(costs.loc["Line_50000002", "total_costs"], 1.80)
         assert np.isclose(costs.loc["Line_50000002", "length"], 0.03)
         assert costs.loc["Line_50000002", "quantity"] == 1
         assert costs.loc["Line_50000002", "type"] == "NAYY 4x1x35"

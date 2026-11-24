@@ -22,6 +22,7 @@ import pandas as pd
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import exceptions, reinforce_measures
 from edisgo.flex_opt.costs import (
+    _added_line_quantities,
     grid_expansion_costs,
     line_expansion_costs,
     transformer_expansion_costs,
@@ -278,21 +279,19 @@ def reinforce_grid(
             _add_transformer_changes_to_equipment_changes(
                 edisgo, transformer_changes, iteration_step, "removed"
             )
-            # removed transformers are not logged here: they carry no cost of
-            # their own (grid_expansion_costs() never costs "removed" rows
-            # either, see costs.py) and, for the "replace with standard
-            # transformers" case, are already gone from the topology by this
-            # point, so a cost lookup for them would raise a KeyError
-            _add_reinforcement_log_entries(
-                edisgo,
-                iteration_step,
-                "hv_mv_station_overload",
-                "overloading",
-                overloaded_mv_station,
-                transformer_changes["added"],
-                run_id=run_id,
-                log_reinforcement=log_reinforcement,
-            )
+            # removed transformers are credited if they were costed before
+            for change in ("removed", "added"):
+                _add_reinforcement_log_entries(
+                    edisgo,
+                    iteration_step,
+                    "hv_mv_station_overload",
+                    "overloading",
+                    overloaded_mv_station,
+                    transformer_changes[change],
+                    run_id=run_id,
+                    removed=change == "removed",
+                    log_reinforcement=log_reinforcement,
+                )
 
         if not overloaded_lv_stations.empty:
             # reinforce distribution substations
@@ -308,18 +307,19 @@ def reinforce_grid(
             _add_transformer_changes_to_equipment_changes(
                 edisgo, transformer_changes, iteration_step, "removed"
             )
-            # removed transformers are not logged here, see comment on the
-            # hv_mv_station_overload case above
-            _add_reinforcement_log_entries(
-                edisgo,
-                iteration_step,
-                "mv_lv_station_overload",
-                "overloading",
-                overloaded_lv_stations,
-                transformer_changes["added"],
-                run_id=run_id,
-                log_reinforcement=log_reinforcement,
-            )
+            # removed transformers are credited if they were costed before
+            for change in ("removed", "added"):
+                _add_reinforcement_log_entries(
+                    edisgo,
+                    iteration_step,
+                    "mv_lv_station_overload",
+                    "overloading",
+                    overloaded_lv_stations,
+                    transformer_changes[change],
+                    run_id=run_id,
+                    removed=change == "removed",
+                    log_reinforcement=log_reinforcement,
+                )
 
         if not crit_lines.empty:
             # reinforce lines
@@ -705,21 +705,19 @@ def reinforce_grid(
             _add_transformer_changes_to_equipment_changes(
                 edisgo, transformer_changes, iteration_step, "removed"
             )
-            # removed transformers are not logged here: they carry no cost of
-            # their own (grid_expansion_costs() never costs "removed" rows
-            # either, see costs.py) and, for the "replace with standard
-            # transformers" case, are already gone from the topology by this
-            # point, so a cost lookup for them would raise a KeyError
-            _add_reinforcement_log_entries(
-                edisgo,
-                iteration_step,
-                "hv_mv_station_overload",
-                "overloading",
-                overloaded_mv_station,
-                transformer_changes["added"],
-                run_id=run_id,
-                log_reinforcement=log_reinforcement,
-            )
+            # removed transformers are credited if they were costed before
+            for change in ("removed", "added"):
+                _add_reinforcement_log_entries(
+                    edisgo,
+                    iteration_step,
+                    "hv_mv_station_overload",
+                    "overloading",
+                    overloaded_mv_station,
+                    transformer_changes[change],
+                    run_id=run_id,
+                    removed=change == "removed",
+                    log_reinforcement=log_reinforcement,
+                )
 
         if not overloaded_lv_stations.empty:
             # reinforce substations
@@ -735,18 +733,19 @@ def reinforce_grid(
             _add_transformer_changes_to_equipment_changes(
                 edisgo, transformer_changes, iteration_step, "removed"
             )
-            # removed transformers are not logged here, see comment on the
-            # hv_mv_station_overload case above
-            _add_reinforcement_log_entries(
-                edisgo,
-                iteration_step,
-                "mv_lv_station_overload",
-                "overloading",
-                overloaded_lv_stations,
-                transformer_changes["added"],
-                run_id=run_id,
-                log_reinforcement=log_reinforcement,
-            )
+            # removed transformers are credited if they were costed before
+            for change in ("removed", "added"):
+                _add_reinforcement_log_entries(
+                    edisgo,
+                    iteration_step,
+                    "mv_lv_station_overload",
+                    "overloading",
+                    overloaded_lv_stations,
+                    transformer_changes[change],
+                    run_id=run_id,
+                    removed=change == "removed",
+                    log_reinforcement=log_reinforcement,
+                )
 
         if not crit_lines.empty:
             # reinforce lines
@@ -1725,6 +1724,7 @@ def _add_reinforcement_log_entries(
     *,
     run_id: int,
     mapping: dict | None = None,
+    removed: bool = False,
     log_reinforcement: bool = True,
 ) -> None:
     """
@@ -1774,27 +1774,45 @@ def _add_reinforcement_log_entries(
     `enhanced_reinforce_grid` or `catch_convergence_reinforce_grid` calling it
     repeatedly), since `iteration_step` only counts within one such call.
 
+    'costs' are net costs, so that the costs in the log add up to
+    :func:`~.flex_opt.costs.grid_expansion_costs` with
+    `without_generator_import=True`: the costs of a changed
+    component after the measure minus the costs already logged for it since
+    `equipment_changes` was last reset. The changes must therefore be written to
+    `equipment_changes` before they are logged. A measure that undoes an earlier
+    one gets negative costs. If `removed` is True, `changes` holds removed
+    transformers, which get a row with quantity -1 if they were logged before.
+
     If `log_reinforcement` is False, this function is a no-op: no row is
     appended and no logging happens.
     """
     if not log_reinforcement or not changes:
         return
 
+    existing_log = edisgo.results.reinforce_log.iloc[
+        getattr(edisgo.results, "_reinforce_log_start", 0) :
+    ]
+    costs_already_logged = (
+        pd.Series(dtype=float)
+        if existing_log.empty
+        else existing_log.groupby("changed_component")["costs"].sum()
+    )
+
+    if removed:
+        # removed transformers that were never logged (e.g. the original ones)
+        # carry no costs to credit
+        changes = {
+            key: [name for name in value if costs_already_logged.get(name, 0.0) != 0]
+            for key, value in changes.items()
+        }
+        changes = {key: value for key, value in changes.items() if value}
+        if not changes:
+            return
+
     # only used to look up s_nom_after for added transformers, which - unlike
     # removed ones - are still present in the topology at this point
     all_transformers = pd.concat(
         [edisgo.topology.transformers_hvmv_df, edisgo.topology.transformers_df]
-    )
-
-    # a line reinforced several times (e.g. one more parallel standard line per
-    # iteration, or again in a later call of reinforce_grid) is logged each time,
-    # but earthworks are only incurred once per line - grid_expansion_costs()
-    # reflects this by summing quantity per line over all equipment changes before
-    # costing; replicate that here by only charging earthworks on a line's first
-    # appearance in the log, whatever its run_id
-    existing_log = edisgo.results.reinforce_log
-    lines_already_costed = (
-        set() if existing_log.empty else set(existing_log["changed_component"])
     )
 
     # resolve criterion_component/changed_components_quantities for every
@@ -1810,7 +1828,9 @@ def _add_reinforcement_log_entries(
             # grouping label (str(grid)) that does not match `issues`'
             # index directly; mapping then resolves the actual triggering
             # station from one of the changed transformers.
-            changed_components_quantities = [(name, 1) for name in value]
+            changed_components_quantities = [
+                (name, -1 if removed else 1) for name in value
+            ]
             criterion_component = (
                 mapping[changed_components_quantities[0][0]]
                 if mapping is not None
@@ -1863,9 +1883,21 @@ def _add_reinforcement_log_entries(
     line_costs_all = (
         line_expansion_costs(edisgo, changed_lines) if changed_lines else None
     )
+    # number of cables per line that grid_expansion_costs() costs after this
+    # measure, without lines added to connect new components (iteration step 0)
+    equipment_changes = edisgo.results.equipment_changes
+    line_quantities_all = (
+        _added_line_quantities(
+            edisgo, equipment_changes.loc[equipment_changes.iteration_step > 0]
+        )
+        if changed_lines
+        else None
+    )
+    # removed transformers are no longer in the topology, their costs are taken
+    # from the log instead
     transformer_costs_all = (
         transformer_expansion_costs(edisgo, changed_transformers)
-        if changed_transformers
+        if changed_transformers and not removed
         else None
     )
 
@@ -1940,16 +1972,14 @@ def _add_reinforcement_log_entries(
             if is_line:
                 equipment = edisgo.topology.lines_df.at[changed_component, "type_info"]
                 voltage_level = line_costs_all.at[changed_component, "voltage_level"]
-                costs_earthworks = (
-                    0.0
-                    if changed_component in lines_already_costed
-                    else line_costs_all.at[changed_component, "costs_earthworks"]
+                costs_after = (
+                    line_costs_all.at[changed_component, "costs_earthworks"]
+                    + line_costs_all.at[changed_component, "costs_cable"]
+                    * line_quantities_all.at[changed_component, "quantity_added"]
+                    if changed_component in line_quantities_all.index
+                    else 0.0
                 )
-                lines_already_costed.add(changed_component)
-                costs = (
-                    costs_earthworks
-                    + line_costs_all.at[changed_component, "costs_cable"] * quantity
-                )
+                costs = costs_after - costs_already_logged.get(changed_component, 0.0)
                 length_km = (
                     quantity * edisgo.topology.lines_df.at[changed_component, "length"]
                 )
@@ -1958,6 +1988,16 @@ def _add_reinforcement_log_entries(
                 ]
                 s_nom_after = edisgo.topology.lines_df.at[changed_component, "s_nom"]
                 group_length += length_km
+            elif removed:
+                equipment = changed_component
+                voltage_level = existing_log.loc[
+                    existing_log["changed_component"] == changed_component,
+                    "voltage_level",
+                ].iloc[-1]
+                costs = -costs_already_logged[changed_component]
+                length_km = np.nan
+                num_parallel_after = np.nan
+                s_nom_after = np.nan
             else:
                 equipment = changed_component
                 voltage_level = transformer_costs_all.at[

@@ -785,7 +785,10 @@ class TestEDisGo:
             copy_grid=True,
         )
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 134
+        # the HV/MV station and the station of LVGrid_3 are replaced after they got
+        # one more transformer; their new transformers no longer reuse the names of
+        # removed ones and are all costed (#857)
+        assert len(results.grid_expansion_costs) == 136
         # house connections are not reinforced due to voltage issues, so there are
         # no equipment changes for them here
         assert len(results.equipment_changes) == 230
@@ -799,8 +802,10 @@ class TestEDisGo:
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
         # the LV worst cases only reinforce the LV grids and the MV/LV stations, also
-        # after the first reinforcement did not converge
-        assert len(results.grid_expansion_costs) == 133
+        # after the first reinforcement did not converge; new transformers of
+        # replaced stations no longer reuse the names of removed ones and are all
+        # costed (#857)
+        assert len(results.grid_expansion_costs) == 136
         # house connections are not reinforced due to voltage issues, so there are
         # no equipment changes for them here
         assert len(results.equipment_changes) == 217
@@ -825,8 +830,10 @@ class TestEDisGo:
         results = edisgo_obj.results
 
         # the LV worst cases only reinforce the LV grids and the MV/LV stations, also
-        # after the first reinforcement did not converge
-        assert len(results.grid_expansion_costs) == 451
+        # after the first reinforcement did not converge; new transformers of
+        # replaced stations no longer reuse the names of removed ones and are all
+        # costed (#857)
+        assert len(results.grid_expansion_costs) == 456
         # counts the parallel standard lines to new stations after LV grid separation;
         # house connections are not reinforced due to voltage issues
         assert len(results.equipment_changes) == 816

@@ -197,6 +197,65 @@ class TestReinforceMeasures:
         assert trafo_new.s_nom == trafo_copy.S_nom
         assert trafo_new.type_info == "630 kVA"
 
+    def test_reinforce_station_twice_new_transformer_names(self):
+        # a station that got one more transformer and is later replaced by
+        # standard transformers does not reuse the name of a removed transformer
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        grid = self.edisgo.topology.get_lv_grid(1)
+        station = grid.station_name
+        for s_missing in (0.05, 2.0):
+            crit_lv_stations = pd.DataFrame(
+                {
+                    "s_missing": [s_missing],
+                    "time_index": [self.timesteps[1]],
+                    "grid": [grid],
+                },
+                index=[station],
+            )
+            existing = set(grid.transformers_df.index)
+            transformer_changes = (
+                reinforce_measures.reinforce_mv_lv_station_overloading(
+                    self.edisgo, crit_lv_stations
+                )
+            )
+            assert not set(transformer_changes["added"][station]) & existing
+
+        assert (
+            "LVStation_1_transformer_reinforced_2"
+            in (transformer_changes["removed"][station])
+        )
+        assert transformer_changes["added"][station][0] == (
+            "LVStation_1_transformer_reinforced_3"
+        )
+
+    def test_reinforce_mv_lv_station_voltage_issues_after_replacement(self):
+        # the name of a transformer added to a station with only reinforced
+        # transformers continues their counter
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+        grid = self.edisgo.topology.get_lv_grid(1)
+        crit_lv_stations = pd.DataFrame(
+            {"s_missing": [2.0], "time_index": [self.timesteps[1]], "grid": [grid]},
+            index=[grid.station_name],
+        )
+        transformer_changes = reinforce_measures.reinforce_mv_lv_station_overloading(
+            self.edisgo, crit_lv_stations
+        )
+        number_transformers = len(transformer_changes["added"][grid.station_name])
+        crit_stations = pd.DataFrame(
+            {
+                "abs_max_voltage_dev": [0.03],
+                "time_index": [self.timesteps[0]],
+                "lv_grid_id": 1.0,
+            },
+            index=["Bus_secondary_LVStation_1"],
+        )
+        trafo_changes = reinforce_measures.reinforce_mv_lv_station_voltage_issues(
+            self.edisgo, crit_stations
+        )
+        assert trafo_changes["added"]["LVGrid_1"] == [
+            f"LVStation_1_transformer_reinforced_{number_transformers + 1}"
+        ]
+
     def test_reinforce_lines_voltage_issues(self):
         # MV:
         # * check where node_2_3 is an LV station => problem at

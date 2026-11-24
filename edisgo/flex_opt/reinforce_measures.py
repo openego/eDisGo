@@ -125,6 +125,51 @@ def reinforce_hv_mv_station_overloading(edisgo_obj, critical_stations):
     return transformers_changes
 
 
+def _new_transformer_names(edisgo_obj, transformer_name, number, first_index):
+    """
+    Returns names for new transformers that are not used yet.
+
+    The names are built from the name of a transformer of the same station in
+    the form '<station>_transformer_reinforced_<i>'. The counter starts at
+    `first_index` and continues after the highest counter in the topology, so
+    that new transformers never get the name of a removed one (removed
+    transformers always have a lower counter than the ones replacing them).
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    transformer_name : str
+        Name of a transformer of the station, e.g. 'LVStation_1_transformer_1'
+        or 'LVStation_1_transformer_reinforced_2'.
+    number : int
+        Number of names to return.
+    first_index : int
+        Counter of the first name, if no higher counter is used yet.
+
+    Returns
+    -------
+    list(str)
+        Names of the new transformers.
+
+    """
+    name = transformer_name.split("_")[:-1]
+    if name and name[-1] == "reinforced":
+        name = name[:-1]
+    prefix = "_".join(name + ["reinforced", ""])
+
+    used_names = [
+        *edisgo_obj.topology.transformers_hvmv_df.index,
+        *edisgo_obj.topology.transformers_df.index,
+    ]
+    used_indices = [
+        int(used_name[len(prefix) :])
+        for used_name in used_names
+        if used_name.startswith(prefix) and used_name[len(prefix) :].isdigit()
+    ]
+    start = max([first_index, *(i + 1 for i in used_indices)])
+    return [f"{prefix}{i}" for i in range(start, start + number)]
+
+
 def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level):
     """
     Reinforce stations due to overloading issues.
@@ -220,18 +265,18 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
                     ].idxmin()
                 ]
             ]
-            name = new_transformers.index[0].split("_")
-            name.insert(-1, "reinforced")
-            name[-1] = len(grid.transformers_df) + 1
-            new_transformers.index = ["_".join([str(_) for _ in name])]
+            new_transformers.index = _new_transformer_names(
+                edisgo_obj,
+                new_transformers.index[0],
+                1,
+                first_index=len(grid.transformers_df) + 1,
+            )
 
             # add new transformer to list of added transformers
             transformers_changes["added"][station] = [new_transformers.index[0]]
         else:
             # get any transformer to get attributes for new transformer from
             duplicated_transformer = grid.transformers_df.iloc[[0]]
-            name = duplicated_transformer.index[0].split("_")
-            name.insert(-1, "reinforced")
             duplicated_transformer.s_nom = standard_transformer.S_nom
             duplicated_transformer.type_info = standard_transformer.name
             if voltage_level == "lv":
@@ -243,11 +288,12 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
                 (s_trafo_missing + s_max_per_trafo.sum()) / standard_transformer.S_nom
             )
 
-            index = []
-
-            for i in range(number_transformers):
-                name[-1] = i + 1
-                index.append("_".join([str(_) for _ in name]))
+            index = _new_transformer_names(
+                edisgo_obj,
+                duplicated_transformer.index[0],
+                number_transformers,
+                first_index=1,
+            )
 
             if number_transformers > 1:
                 new_transformers = duplicated_transformer.iloc[
@@ -358,10 +404,12 @@ def reinforce_mv_lv_station_voltage_issues(
         # get any transformer to get attributes for new transformer from
         duplicated_transformer = grid.transformers_df.iloc[[0]]
         # change transformer parameters
-        name = duplicated_transformer.index[0].split("_")
-        name.insert(-1, "reinforced")
-        name[-1] = len(grid.transformers_df) + 1
-        duplicated_transformer.index = ["_".join([str(_) for _ in name])]
+        duplicated_transformer.index = _new_transformer_names(
+            edisgo_obj,
+            duplicated_transformer.index[0],
+            1,
+            first_index=len(grid.transformers_df) + 1,
+        )
         duplicated_transformer.s_nom = standard_transformer.S_nom
         duplicated_transformer.r_pu = standard_transformer.r_pu
         duplicated_transformer.x_pu = standard_transformer.x_pu
