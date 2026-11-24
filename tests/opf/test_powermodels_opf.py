@@ -587,8 +587,8 @@ class TestPmOptimizeIntervalSplit:
 
         from edisgo.flex_opt.exceptions import InfeasibleModelError, OPFProcessError
 
-        a = pd.date_range("2035-01-01", periods=24, freq="h")
-        b = pd.date_range("2035-07-01", periods=24, freq="h")
+        a = pd.date_range("2011-01-01", periods=24, freq="h")
+        b = pd.date_range("2011-07-01", periods=24, freq="h")
         edisgo_obj.set_timeindex(a.union(b))
 
         def fake_single(e, **kw):
@@ -704,9 +704,11 @@ class TestJuliaSubprocessArguments:
                 calls.append(args)
                 self.stdin = io.StringIO()
                 self.stdout = io.StringIO("")
+                self.returncode = None
 
             def poll(self):
-                return 1
+                self.returncode = 1
+                return self.returncode
 
         monkeypatch.setattr(pmo.subprocess, "Popen", FakeProcess)
         return calls
@@ -720,9 +722,9 @@ class TestJuliaSubprocessArguments:
 
     @pytest.mark.parametrize("kwargs, expected", [({}, "8"), ({"threads": 4}, "4")])
     def test_threads_passed_to_julia(self, edisgo_obj, julia_args, kwargs, expected):
-        from edisgo.flex_opt.exceptions import InfeasibleModelError
+        from edisgo.flex_opt.exceptions import OPFProcessError
 
-        with pytest.raises(InfeasibleModelError):
+        with pytest.raises(OPFProcessError):
             edisgo_obj.pm_optimize(**kwargs)
         assert julia_args[0][-1] == expected
 
