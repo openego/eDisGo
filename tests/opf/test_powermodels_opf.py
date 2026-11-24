@@ -768,6 +768,9 @@ class TestJuliaProcessFailure:
 
         return run
 
+    @pytest.mark.skipif(
+        not hasattr(signal, "SIGKILL"), reason="SIGKILL does not exist on Windows"
+    )
     def test_killed_process(self, run_single):
         from edisgo.flex_opt.exceptions import OPFProcessError
 
