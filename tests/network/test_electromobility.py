@@ -802,7 +802,7 @@ class TestElectromobility:
             "the old index is not possible." in caplog.text
         )
 
-    def test_integrity_check(self):
+    def test_integrity_check(self, caplog):
         """
         Checks resampling function with set up flexibility bands.
 
@@ -823,7 +823,10 @@ class TestElectromobility:
             "charging points: ['CP2']. The maximum exceedance is 1.0. Please check."
         )
         with pytest.raises(ValueError, match=msg):
-            self.edisgo_obj.electromobility.check_integrity()
+            self.edisgo_obj.electromobility.check_integrity(errors="warn")
+
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo_obj.electromobility.check_integrity(errors="raise")
 
         # ######### check upper energy higher than charging power ############
         # reset previously modified value
@@ -837,7 +840,7 @@ class TestElectromobility:
             "Please check."
         )
         with pytest.raises(ValueError, match=msg):
-            self.edisgo_obj.electromobility.check_integrity()
+            self.edisgo_obj.electromobility.check_integrity(errors="raise")
 
         # ######### check lower energy higher than charging power ############
         # reset previously modified value
@@ -851,7 +854,7 @@ class TestElectromobility:
             "Please check."
         )
         with pytest.raises(ValueError, match=msg):
-            self.edisgo_obj.electromobility.check_integrity()
+            self.edisgo_obj.electromobility.check_integrity(errors="raise")
 
     def test_to_csv(self):
         """Test for method to_csv."""

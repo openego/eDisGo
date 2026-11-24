@@ -21,6 +21,7 @@ import pandas as pd
 
 from edisgo.io import heat_pump_import, timeseries_import
 from edisgo.tools import tools
+from edisgo.tools.integrity import IntegrityCollector
 
 logger = logging.getLogger(__name__)
 
@@ -619,13 +620,36 @@ class HeatPump:
                 freq_orig = (attr_index[1:] - attr_index[:-1]).min()
                 tools.resample(self, freq_orig, method, freq, attr_to_resample=[attr])
 
-    def check_integrity(self):
+    def check_integrity(self, errors="warn", collector=None):
         """
         Check data integrity.
 
         Checks for duplicated and missing labels as well as implausible values.
 
+                Parameters
+        ----------
+        errors : str
+            How found issues are handled. 'warn' (default) logs each issue as a
+            warning. 'raise' collects all issues and raises one ValueError
+            listing all of them at the end.
+        collector : IntegrityCollector or None
+            Shared collector used when checking integrity across components.
+
+        Raises
+        ------
+        ValueError
+            If `errors` is 'raise' and an issue was found, or if `errors` is
+            neither 'warn' nor 'raise'.
+
         """
+        own_collector = collector is None
+
+        if own_collector:
+            collector = IntegrityCollector(errors)
+
+        def report_issue(message):
+            collector.report(message, logger)
+
         check_dfs = ["heat_demand_df", "cop_df"]
         # check for duplicate columns
         for ts in check_dfs:
@@ -633,10 +657,11 @@ class HeatPump:
             duplicated_labels = df.columns[df.columns.duplicated()].values
 
             if len(duplicated_labels) > 0:
-                logger.warning(
+                message = (
                     f"HeatPump timeseries {ts} contains the following duplicates: "
                     f"{set(duplicated_labels)}."
                 )
+                report_issue(message)
 
         # check that all profiles exist for the same heat pumps
         columns = set(np.concatenate([getattr(self, _).columns for _ in check_dfs]))
@@ -644,7 +669,10 @@ class HeatPump:
             df = getattr(self, ts)
             missing_entries = [_ for _ in columns if _ not in df.columns]
             if len(missing_entries) > 0:
-                logger.warning(
+                message = (
                     f"HeatPump timeseries {ts} is missing the following "
                     f"entries: {missing_entries}."
                 )
+                report_issue(message)
+        if own_collector:
+            collector.raise_if_errors()
