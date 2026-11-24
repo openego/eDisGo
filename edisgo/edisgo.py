@@ -40,6 +40,7 @@ from edisgo.io import (
     generators_import,
     powermodels_io,
     pypsa_io,
+    simbench_import,
     timeseries_import,
 )
 from edisgo.io.db import engine as egon_engine
@@ -265,6 +266,43 @@ class EDisGo:
         """
         if path is not None:
             import_ding0_grid(path, self, legacy_ding0_grids)
+
+    def import_simbench_grid(
+        self,
+        path: str,
+        time_series: bool = True,
+        timeindex: pd.DatetimeIndex | None = None,
+    ) -> None:
+        """
+        Import a `SimBench <https://simbench.de>`_ grid from its csv files.
+
+        The SimBench grid must contain an MV grid. See
+        :func:`~.io.simbench_import.import_simbench_grid` for how SimBench
+        components are mapped to eDisGo.
+
+        Parameters
+        -----------
+        path : str
+            Path to the folder with the csv files of one SimBench grid, e.g. the
+            unzipped csv download of grid ``1-MVLV-rural-all-2-sw``.
+        time_series : bool
+            If True, the time index is set to the time steps of the SimBench
+            profiles and time series of all loads, generators and storage units
+            are set from them (see
+            :func:`~.io.simbench_import.simbench_time_series`). SimBench profiles
+            are given for 2016, they are therefore relabelled to the reference
+            year. Default: True.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Time steps in the reference year to set time series for, e.g. one
+            week, to keep memory use of large grids low. If None, all 35040
+            time steps of the year are used. Default: None.
+
+        """
+        simbench_import.import_simbench_grid(path, self)
+        if time_series:
+            ts = simbench_import.simbench_time_series(path, self, timeindex)
+            self.set_timeindex(ts["loads_p"].index)
+            self.set_time_series_manual(**ts)
 
     def set_timeindex(self, timeindex):
         """

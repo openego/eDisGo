@@ -1,0 +1,532 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Import of `SimBench <https://simbench.de>`_ grids.
+
+SimBench publishes its benchmark grids as a folder of semicolon separated csv
+files per grid, e.g. ``1-MVLV-rural-all-2-sw``. This module reads such a folder
+into an :class:`~.EDisGo` object. It covers grids that contain an MV grid
+(SimBench codes ``MV`` and ``MVLV``); LV grids then have their own LV grid ID.
+
+The csv folder of a single grid can be downloaded from simbench.de, or written
+with the `simbench <https://github.com/e2nIEE/simbench>`_ python package from its
+complete data set.
+
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+import networkx as nx
+import numpy as np
+import pandas as pd
+
+from edisgo.network.grids import MVGrid
+from edisgo.tools.tools import shift_to_reference_year
+
+if "READTHEDOCS" not in os.environ:
+    from shapely.geometry import MultiPoint
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
+
+logger = logging.getLogger(__name__)
+
+# SimBench voltage levels: 1 EHV, 2 EHV/HV, 3 HV, 4 HV/MV, 5 MV, 6 MV/LV, 7 LV
+MV_LEVEL = 5
+LV_LEVEL = 7
+
+GENERATOR_TYPES = {
+    "pv": "solar",
+    "wind": "wind",
+    "biomass": "biomass",
+    "hydro": "run_of_river",
+}
+
+LOAD_SECTORS = {"H": "residential", "G": "cts", "L": "agricultural"}
+
+
+def _read(path: str, table: str) -> pd.DataFrame:
+    """Read one SimBench csv table; missing tables are returned empty."""
+    file = os.path.join(path, f"{table}.csv")
+    if not os.path.isfile(file):
+        return pd.DataFrame()
+    return pd.read_csv(file, sep=";", low_memory=False)
+
+
+def _subnet_id(subnet: str) -> int:
+    """Integer grid ID from a SimBench subnet name, e.g. 'LV1.108' -> 1108."""
+    level, number = subnet.split(".")
+    return int(level.lstrip("MLV")) * 1000 + int(number)
+
+
+def _fuse_closed_switches(
+    nodes: pd.DataFrame, switches: pd.DataFrame
+) -> dict[str, str]:
+    """
+    Map every node to the node it is fused with via closed switches.
+
+    Of the nodes connected by closed switches, the first node that is not an
+    auxiliary node is kept, so that the remaining buses carry the names of the
+    SimBench busbars and nodes.
+
+    """
+    closed = switches[switches.cond == 1]
+    graph = nx.Graph()
+    graph.add_nodes_from(nodes.index)
+    graph.add_edges_from(zip(closed.nodeA, closed.nodeB))
+    mapping = {}
+    for component in nx.connected_components(graph):
+        component = sorted(component)
+        non_aux = [n for n in component if nodes.at[n, "type"] != "auxiliary"]
+        keep = non_aux[0] if non_aux else component[0]
+        mapping.update({n: keep for n in component})
+    return mapping
+
+
+def _close_switches_to_islands(
+    nodes: pd.DataFrame,
+    switches: pd.DataFrame,
+    lines: pd.DataFrame,
+    trafos: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Close open switches that are the only connection of a grid part.
+
+    SimBench may operate the busbars of an HV/MV substation separately, each fed
+    by its own HV/MV transformer. eDisGo models one MV station, so such grid parts
+    would be cut off from it. Open switches between buses that are not connected
+    otherwise are therefore closed. Ring splitting points stay open.
+
+    """
+    switches = switches.copy()
+    bus = _fuse_closed_switches(nodes, switches)
+    mvlv = trafos[trafos.voltLvl == MV_LEVEL + 1]
+    graph = nx.Graph()
+    graph.add_nodes_from(set(bus.values()))
+    graph.add_edges_from(zip(lines.nodeA.map(bus), lines.nodeB.map(bus)))
+    graph.add_edges_from(zip(mvlv.nodeHV.map(bus), mvlv.nodeLV.map(bus)))
+    for sw in switches[switches.cond == 0].itertuples():
+        a, b = bus[sw.nodeA], bus[sw.nodeB]
+        if not nx.has_path(graph, a, b):
+            switches.at[sw.Index, "cond"] = 1
+            graph.add_edge(a, b)
+    return switches
+
+
+def _ding0_names(
+    buses_df: pd.DataFrame,
+    transformers_hvmv_df: pd.DataFrame,
+    transformers_df: pd.DataFrame,
+    switches_df: pd.DataFrame,
+    mv_grid_id: int,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """
+    New names for station buses, transformers and open switch buses.
+
+    Parts of eDisGo, e.g. the grid reinforcement and the spatial complexity
+    reduction, derive information from the names ding0 gives these components.
+    They are therefore named as in ding0; all other buses keep their SimBench
+    names.
+
+    Returns
+    -------
+    tuple(dict, dict)
+        New bus names and new transformer names, each by old name.
+
+    """
+    bus_names = {
+        bus: f"Bus_MVStation_{mv_grid_id}" for bus in transformers_hvmv_df.bus1
+    }
+    trafo_names = {
+        trafo: f"MVStation_{mv_grid_id}_transformer_{i}"
+        for i, trafo in enumerate(transformers_hvmv_df.index, start=1)
+    }
+    lv_grid_ids = buses_df.loc[transformers_df.bus1, "lv_grid_id"].astype(int)
+    for lv_grid_id, trafos in transformers_df.groupby(lv_grid_ids.values):
+        station = f"BusBar_MVGrid_{mv_grid_id}_LVGrid_{lv_grid_id}"
+        bus_names.setdefault(trafos.bus0.iloc[0], f"{station}_MV")
+        bus_names[trafos.bus1.iloc[0]] = f"{station}_LV"
+        trafo_names.update(
+            {
+                trafo: f"LVStation_{lv_grid_id}_transformer_{i}"
+                for i, trafo in enumerate(trafos.index, start=1)
+            }
+        )
+    # ding0 names the open side of a switch after its closed side; if several
+    # switches share the closed side, the others keep their SimBench names
+    for switch in switches_df.drop_duplicates("bus_closed").itertuples():
+        bus_closed = bus_names.get(switch.bus_closed, switch.bus_closed)
+        bus_names[switch.bus_open] = f"virtual_{bus_closed}"
+    return bus_names, trafo_names
+
+
+def _load_type_and_sector(profile: str) -> tuple[str, str]:
+    """eDisGo load type and sector from the name of a SimBench load profile."""
+    if profile.startswith(("Air_", "Soil_")):
+        return "heat_pump", "individual_heating"
+    if profile.startswith("HLS_"):
+        return "charging_point", "home"
+    return "conventional_load", LOAD_SECTORS.get(profile[0], "other")
+
+
+def _generator_type(simbench_type: str) -> str:
+    """eDisGo generator type from the SimBench RES type, e.g. 'Wind_MV'."""
+    for key, value in GENERATOR_TYPES.items():
+        if simbench_type.lower().startswith(key):
+            return value
+    return "others"
+
+
+def _is_pv_with_battery(storage: pd.DataFrame) -> pd.Series:
+    """
+    Whether SimBench storage units are PV systems with a home battery.
+
+    SimBench gives for these ('PV_Storage', 'PV_Storage_MV') the power at the grid
+    connection of the PV system and its battery together, which is always feed-in.
+
+    """
+    return storage.type.str.startswith("PV_Storage")
+
+
+def _transformer_impedance(
+    trafos: pd.DataFrame, trafo_types: pd.DataFrame
+) -> pd.DataFrame:
+    """Add s_nom, r_pu and x_pu (on the transformer's own rating) to `trafos`."""
+    types = trafo_types.set_index("id").loc[trafos.type]
+    s_nom = types.sR.values
+    r_pu = types.pCu.values / (s_nom * 1e3)
+    z_pu = types.vmImp.values / 100
+    return trafos.assign(
+        s_nom=s_nom, r_pu=r_pu, x_pu=np.sqrt(z_pu**2 - r_pu**2), type_info=trafos.type
+    )
+
+
+def import_simbench_grid(path: str, edisgo_obj: EDisGo) -> None:
+    """
+    Import the network topology of a SimBench grid.
+
+    The grid must contain an MV grid, i.e. its SimBench code must be of the form
+    ``1-MV-<type>--<scenario>-sw`` or ``1-MVLV-<type>-<lv grid>-<scenario>-sw``.
+    It is mapped to eDisGo as follows:
+
+    * Buses connected via closed switches are fused into one bus. Open switches,
+      where SimBench splits MV rings, become eDisGo switch disconnectors. Open
+      switches that are the only connection of a grid part to the MV station,
+      e.g. between separately operated busbars, are closed, as eDisGo models one
+      MV station.
+    * The HV side of the HV/MV substation is left out; its transformers become
+      :attr:`~.network.topology.Topology.transformers_hvmv_df`.
+    * Each SimBench LV grid gets an LV grid ID built from its subnet name,
+      e.g. 'LV1.108' becomes 1108. The MV grid ID is built the same way.
+    * Station buses, transformers and the open side of switches are named as in
+      ding0 (e.g. 'BusBar_MVGrid_1101_LVGrid_1108_LV',
+      'LVStation_1108_transformer_1'), as parts of eDisGo rely on these names.
+      All other buses and all lines keep their SimBench names.
+    * Heat pump loads (profiles 'Air_*' and 'Soil_*') get type 'heat_pump',
+      home charging loads (profiles 'HLS_*') get type 'charging_point'. All other
+      loads, including LV grids that SimBench represents as one load at an MV
+      bus, are conventional loads.
+    * SimBench storage units of type 'PV_Storage' and 'PV_Storage_MV' are PV
+      systems with a home battery. Their SimBench time series is the feed-in of
+      PV system and battery together, so they become generators of type 'solar'
+      with subtype 'PV_Storage' or 'PV_Storage_MV'. Other SimBench storage units,
+      which only occur in HV and EHV grids, become storage units.
+
+    Conventional power plants, shunts, three-winding transformers and
+    measurements of SimBench are not imported.
+
+    Parameters
+    ----------
+    path : str
+        Path to the folder with the csv files of one SimBench grid.
+    edisgo_obj : :class:`~.EDisGo`
+
+    """
+    if not os.path.isfile(os.path.join(path, "Node.csv")):
+        raise FileNotFoundError(
+            f"No SimBench grid found in '{path}': the folder has no Node.csv."
+        )
+    nodes = _read(path, "Node").set_index("id")
+    coordinates = _read(path, "Coordinates").set_index("id")
+    switches = _read(path, "Switch")
+    trafos = _read(path, "Transformer")
+    trafo_types = _read(path, "TransformerType")
+
+    for table in ["PowerPlant", "Shunt", "Transformer3W"]:
+        if not _read(path, table).empty:
+            logger.warning(f"SimBench table {table} is not imported to eDisGo.")
+
+    hvmv_trafos = trafos[trafos.voltLvl == MV_LEVEL - 1]
+    if hvmv_trafos.empty:
+        raise ValueError(
+            "The SimBench grid has no HV/MV transformer. Only SimBench grids "
+            "containing an MV grid can be imported."
+        )
+
+    lines = _read(path, "Line")
+    switches = _close_switches_to_islands(nodes, switches, lines, trafos)
+    bus = _fuse_closed_switches(nodes, switches)
+
+    # buses: all fused MV and LV nodes
+    buses = nodes.loc[sorted(set(bus.values()))]
+    buses = buses[buses.voltLvl >= MV_LEVEL]
+    mv_subnet = buses[buses.voltLvl == MV_LEVEL].subnet.str.split("_").str[0]
+    mv_grid_id = _subnet_id(mv_subnet.mode()[0])
+    lv_subnet = buses.subnet.str.split("_").str[0]
+    buses_df = pd.DataFrame(
+        {
+            "v_nom": buses.vmR,
+            "x": coordinates.loc[buses.coordID, "x"].values,
+            "y": coordinates.loc[buses.coordID, "y"].values,
+            "mv_grid_id": mv_grid_id,
+            "lv_grid_id": lv_subnet.map(_subnet_id).where(buses.voltLvl == LV_LEVEL),
+            "in_building": False,
+        },
+        index=buses.index.rename("name"),
+    )
+
+    # lines; SimBench gives r and x in Ohm/km, b in uS/km and iMax in A
+    line_types = _read(path, "LineType").set_index("id").loc[lines.type]
+    length = lines.length.values
+    bus0 = lines.nodeA.map(bus).values
+    lines_df = pd.DataFrame(
+        {
+            "bus0": bus0,
+            "bus1": lines.nodeB.map(bus).values,
+            "length": length,
+            "x": line_types.x.values * length,
+            "r": line_types.r.values * length,
+            "b": line_types.b.values * 1e-6 * length,
+            "s_nom": np.sqrt(3)
+            * buses_df.loc[bus0, "v_nom"].values
+            * line_types.iMax.values
+            / 1e3,
+            "num_parallel": 1,
+            "type_info": lines.type.values,
+            "kind": np.where(line_types.type.values == "ohl", "line", "cable"),
+        },
+        index=pd.Index(lines.id.values, name="name"),
+    )
+
+    # transformers; bus0 is the upper voltage side
+    trafo_columns = ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"]
+    trafos = _transformer_impedance(trafos, trafo_types).assign(
+        bus0=trafos.nodeHV.map(bus), bus1=trafos.nodeLV.map(bus)
+    )
+    trafos = trafos.set_index(pd.Index(trafos.id.values, name="name"))
+    transformers_hvmv_df = trafos.loc[hvmv_trafos.id.values, trafo_columns]
+    transformers_df = trafos.loc[trafos.voltLvl == MV_LEVEL + 1, trafo_columns]
+
+    # open switches split rings; the branch is the line at the auxiliary node
+    open_switches = switches[switches.cond == 0]
+    switch_rows = {}
+    for sw in open_switches.itertuples():
+        a, b = bus[sw.nodeA], bus[sw.nodeB]
+        for bus_open, bus_closed in [(a, b), (b, a)]:
+            branch = lines_df.index[
+                (lines_df.bus0 == bus_open) | (lines_df.bus1 == bus_open)
+            ]
+            if nodes.at[bus_open, "type"] == "auxiliary" and len(branch) == 1:
+                switch_rows[sw.id] = [bus_open, bus_closed, branch[0]]
+                break
+        else:
+            logger.info(
+                f"Open SimBench switch {sw.id} is not imported, as it is not "
+                f"located at the end of a line. Its buses stay disconnected."
+            )
+    switches_df = pd.DataFrame.from_dict(
+        switch_rows,
+        orient="index",
+        columns=["bus_open", "bus_closed", "branch"],
+    ).rename_axis("name")
+    switches_df["type_info"] = "Switch Disconnector"
+
+    # loads
+    loads = _read(path, "Load")
+    type_sector = loads.profile.map(_load_type_and_sector)
+    loads_df = pd.DataFrame(
+        {
+            "bus": loads.node.map(bus).values,
+            "p_set": loads.pLoad.values,
+            "building_id": np.nan,
+            "type": type_sector.str[0].values,
+            "annual_consumption": np.nan,
+            "sector": type_sector.str[1].values,
+            "number_households": np.nan,
+        },
+        index=pd.Index(loads.id.values, name="name"),
+    )
+
+    # generators, including PV systems with a home battery
+    res = _read(path, "RES")
+    storage = _read(path, "Storage")
+    if storage.empty:
+        storage = pd.DataFrame(
+            {col: pd.Series(dtype=str) for col in ["id", "node", "type"]}
+            | {col: pd.Series(dtype=float) for col in ["sR", "eStore", "etaStore"]}
+        )
+    pv_battery = storage[_is_pv_with_battery(storage)]
+    storage = storage[~_is_pv_with_battery(storage)]
+    generators_df = pd.DataFrame(
+        {
+            "bus": np.concatenate([res.node.values, pv_battery.node.values]),
+            "p_nom": np.concatenate([res.pRES.values, pv_battery.sR.values]),
+            "type": np.concatenate(
+                [res.type.map(_generator_type).values, ["solar"] * len(pv_battery)]
+            ),
+            "control": "PQ",
+            "weather_cell_id": np.nan,
+            "subtype": np.concatenate([res.type.values, pv_battery.type.values]),
+            "source_id": np.nan,
+        },
+        index=pd.Index(
+            np.concatenate([res.id.values, pv_battery.id.values]), name="name"
+        ),
+    )
+    generators_df["bus"] = generators_df.bus.map(bus)
+
+    # storage units; SimBench gives one efficiency for charging and discharging
+    storage_units_df = pd.DataFrame(
+        {
+            "bus": storage.node.map(bus).values,
+            "control": "PQ",
+            "p_nom": storage.sR.values,
+            "max_hours": (storage.eStore / storage.sR).values,
+            "efficiency_store": storage.etaStore.values,
+            "efficiency_dispatch": storage.etaStore.values,
+        },
+        index=pd.Index(storage.id.values, name="name"),
+    )
+
+    bus_names, trafo_names = _ding0_names(
+        buses_df, transformers_hvmv_df, transformers_df, switches_df, mv_grid_id
+    )
+
+    def rename(df: pd.DataFrame, bus_columns: list[str]) -> pd.DataFrame:
+        df = df.rename(index=trafo_names)
+        for col in bus_columns:
+            df[col] = df[col].map(bus_names).fillna(df[col])
+        return df
+
+    topology = edisgo_obj.topology
+    topology.buses_df = buses_df.rename(index=bus_names)
+    topology.lines_df = rename(lines_df, ["bus0", "bus1"])
+    topology.transformers_df = rename(transformers_df, ["bus0", "bus1"])
+    topology.transformers_hvmv_df = rename(transformers_hvmv_df, ["bus1"])
+    topology.switches_df = rename(switches_df, ["bus_open", "bus_closed"])
+    topology.loads_df = rename(loads_df, ["bus"])
+    topology.generators_df = rename(generators_df, ["bus"])
+    topology.storage_units_df = rename(storage_units_df, ["bus"])
+    topology.grid_district = {
+        "population": np.nan,
+        "geom": MultiPoint(buses_df[["x", "y"]].values).convex_hull,
+        "srid": 4326,
+    }
+    topology.mv_grid = MVGrid(id=mv_grid_id, edisgo_obj=edisgo_obj)
+    topology.check_integrity()
+
+
+def simbench_time_series(
+    path: str, edisgo_obj: EDisGo, timeindex: pd.DatetimeIndex | None = None
+) -> dict[str, pd.DataFrame]:
+    """
+    Active and reactive power time series of all components from SimBench profiles.
+
+    SimBench profiles are relative values that are scaled with the rated power of
+    each component, as in the `simbench` python package: loads with `pLoad` and
+    `qLoad`, generators with `pRES` and `qRES`, storage units with `pStor` and
+    `qStor`. SimBench uses the load sign convention for storage units, eDisGo the
+    generator sign convention, so the sign of storage time series is flipped. Time
+    series of PV systems with a home battery are returned as generator time series
+    (see :func:`import_simbench_grid`).
+
+    SimBench profiles are 15-minute values for 2016. Their time labels are in
+    local time, so that the hour switched to daylight saving time is missing and
+    the hour switched back occurs twice. The rows are consecutive 15-minute steps;
+    they are therefore indexed as such, starting at the first label, and then
+    relabelled to the reference year (see
+    :func:`~.tools.tools.shift_to_reference_year`), which drops 29 February.
+
+    Parameters
+    ----------
+    path : str
+        Path to the folder with the csv files of one SimBench grid.
+    edisgo_obj : :class:`~.EDisGo`
+        eDisGo object the SimBench grid in `path` was imported to with
+        :func:`import_simbench_grid`.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+        Time steps in the reference year to return time series for. If None, all
+        time steps of the year are returned. Default: None.
+
+    Returns
+    -------
+    dict(str, :pandas:`pandas.DataFrame<DataFrame>`)
+        Time series in MW and MVA with keys as the parameters of
+        :attr:`~.EDisGo.set_time_series_manual`, e.g. 'loads_p'.
+
+    """
+
+    def scaled(
+        table: str,
+        p_col: str,
+        q_col: str,
+        suffix: tuple[str, str] = ("", ""),
+        sign: int = 1,
+        select: Callable[[pd.DataFrame], pd.Series] | None = None,
+    ) -> list[pd.DataFrame]:
+        elements = _read(path, table)
+        if select is not None and not elements.empty:
+            elements = elements[select(elements)]
+        if elements.empty:
+            return [pd.DataFrame(), pd.DataFrame()]
+        profiles = _read(path, f"{table}Profile")
+        start = pd.to_datetime(profiles.pop("time")[0], format="%d.%m.%Y %H:%M")
+        profiles.index = pd.date_range(start, periods=len(profiles), freq="15min")
+        profiles = shift_to_reference_year(edisgo_obj, profiles, f"{table}Profile")
+        if timeindex is not None:
+            profiles = profiles.loc[timeindex]
+        return [
+            sign
+            * profiles[elements.profile + sfx].set_axis(elements.id, axis=1)
+            * elements[col].values
+            for col, sfx in zip([p_col, q_col], suffix)
+        ]
+
+    loads = scaled("Load", "pLoad", "qLoad", suffix=("_pload", "_qload"))
+    res = scaled("RES", "pRES", "qRES")
+    pv_battery = scaled(
+        "Storage", "pStor", "qStor", sign=-1, select=_is_pv_with_battery
+    )
+    storage = scaled(
+        "Storage",
+        "pStor",
+        "qStor",
+        sign=-1,
+        select=lambda df: ~_is_pv_with_battery(df),
+    )
+    time_series = {
+        "loads": loads,
+        "generators": [pd.concat([r, b], axis=1) for r, b in zip(res, pv_battery)],
+        "storage_units": storage,
+    }
+    return {
+        f"{component}_{pq}": ts
+        for component, (p, q) in time_series.items()
+        for pq, ts in [("p", p), ("q", q)]
+        if not ts.empty
+    }

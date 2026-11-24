@@ -29,6 +29,12 @@ def pytest_configure(config):
         os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_3"
     )
 
+    # SimBench grid 1-MVLV-rural-1.108-2-sw (rural MV grid with one detailed LV
+    # grid, scenario 2034) with profiles cut to the first two days
+    pytest.simbench_test_network_path = os.path.join(
+        os.path.realpath(os.path.dirname(__file__)), "data/simbench_test_network"
+    )
+
     pytest.simbev_example_scenario_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/simbev_example_scenario"
     )

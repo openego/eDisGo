@@ -48,6 +48,33 @@ Where to get ding0 grids:
 * **Generate your own** — follow the
   `ding0 documentation <https://dingo.readthedocs.io/en/dev/usage_details.html#examples>`_.
 
+Grid topology and time series — SimBench
+----------------------------------------
+
+`SimBench <https://simbench.de>`_ is an open benchmark data set of synthetic German
+grids on all voltage levels, with one year of 15-minute profiles for every load,
+generator and storage unit and three scenarios (0: 2016, 1: 2024, 2: 2034). The
+scenarios 1 and 2 contain heat pumps, home charging points and PV systems with
+home battery.
+
+eDisGo imports SimBench grids that contain an MV grid, e.g. ``1-MV-rural--0-sw`` or
+``1-MVLV-urban-all-2-sw``, from the csv folder of one grid, together with their time
+series:
+
+.. code-block:: python
+
+    from edisgo import EDisGo
+
+    edisgo = EDisGo()
+    edisgo.import_simbench_grid("path/to/1-MVLV-rural-all-2-sw")
+
+The csv folder of a grid can be downloaded from the
+`SimBench website <https://simbench.de/de/datensaetze/>`_ or written with the
+`simbench <https://github.com/e2nIEE/simbench>`_ python package. See
+:meth:`~edisgo.edisgo.EDisGo.import_simbench_grid` for how SimBench components are
+mapped to eDisGo and the :doc:`../tutorials/simbench_example` notebook for an
+example analysis.
+
 Scenario & time-series data — OpenEnergy Platform / egon-data
 -------------------------------------------------------------
 
