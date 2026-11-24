@@ -425,6 +425,14 @@ Changes
   of ``src/`` drops below 100 %. Known defects of the package that are not fixed
   yet are marked with ``@test_broken`` and tracked in openego/eDisGo#810
   (openego/eDisGo#522)
+* Added property-based tests in ``tests/properties``. Instead of comparing results
+  with stored reference values, they check physical and functional properties
+  that must hold for any input, e.g. the power balance after the power flow, no
+  limit violations after reinforcement, conservation of power in the spatial
+  complexity reduction and unit consistency of the PowerModels export. Some use
+  ``hypothesis`` (new dev requirement); the number of examples is raised with the
+  environment variable ``HYPOTHESIS_PROFILE=deep``. Known bugs found by these tests
+  are marked as strict ``xfail`` with the reason in the marker
 * New option ``connect_to_load_bus`` (off by default) in
   :attr:`~.edisgo.EDisGo.integrate_component_based_on_geolocation` connects
   components in voltage level 7 to a close bus with a matching load, e.g. home
