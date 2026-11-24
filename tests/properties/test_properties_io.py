@@ -224,7 +224,11 @@ def _synthetic_pm_results(pm, edisgo, s_base, order_seed=0):
     nw = {}
     for t in steps:
         time = ts.timeindex[t - 1]
-        step = {"flexibilities": pm["flexibilities"], "opf_version": pm["opf_version"]}
+        step = {
+            "flexibilities": pm["flexibilities"],
+            "opf_version": pm["opf_version"],
+            "time_elapsed": pm["time_elapsed"],
+        }
         for comp, names in variables.items():
             step[comp] = {
                 key: {**copy.deepcopy(value), **{v: 0.0 for v in names}}
