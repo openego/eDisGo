@@ -23,6 +23,12 @@ Changes
   :func:`~.tools.tools.get_year_based_on_timeindex` are deprecated and will be
   removed in a future release. Use :func:`~.tools.tools.get_reference_year` to get
   the year time series are indexed in
+* The database imports of feed-in, electricity and heat demand, COP and DSM profiles
+  no longer raise a ``KeyError`` for a time index with a resolution finer than one
+  hour. Each hourly value is used for all time steps within that hour. Time series
+  of the overlying grid in another resolution than the time index are now resampled
+  with a warning instead of only keeping the time steps that are in the time index
+  (openego/eDisGo#824).
 * Time series that eDisGo writes or reads now follow the time index
   (:attr:`~.network.timeseries.TimeSeries.timeindex`), also if the input data span a
   longer period or the time index has gaps (openego/eDisGo#703):

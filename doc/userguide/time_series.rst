@@ -53,6 +53,22 @@ attribute of ``edisgo.overlying_grid``, or passed to
 :meth:`~edisgo.network.timeseries.TimeSeries.set_active_power_manual`, is stored as
 given and must already be indexed in the reference year.
 
+Resolution
+----------
+
+Time series from the database (feed-in, electricity and heat demand, COP and DSM
+profiles) are given in hourly resolution. In case the time index has a finer
+resolution, e.g. 15 minutes, each hourly value is used for all time steps within that
+hour.
+
+Time series of the overlying grid set via
+:meth:`~edisgo.network.overlying_grid.OverlyingGrid.from_etrago` or
+:meth:`~edisgo.network.overlying_grid.OverlyingGrid.from_csv` are resampled to the
+resolution of the time index with a warning. Power is averaged in case of a coarser
+time index and each value is used for all time steps within its time step in case of
+a finer time index. A state of charge is taken at the time steps of a coarser time
+index and interpolated in case of a finer time index.
+
 Active power
 ------------
 

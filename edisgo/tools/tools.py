@@ -196,14 +196,24 @@ def shift_to_reference_year(edisgo_obj, ts, name=""):
     return ts
 
 
-def align_series_to_timeindex(ts, timeindex, extra_step=False, name=None):
+def align_series_to_timeindex(ts, timeindex, extra_step=False, name=None, state=False):
     """
     Align a time series to a target time index, tolerating a year mismatch.
 
     In case the year of `ts` differs from the year of `timeindex`, the index of
     `ts` is relabelled to the year of `timeindex`, keeping each date, and time
-    steps on 29 February are dropped beforehand. `ts` is then reindexed onto
-    `timeindex`. Missing steps become ``NaN`` rather than raising a ``KeyError``.
+    steps on 29 February are dropped beforehand.
+
+    In case the resolution of `ts` differs from the resolution of `timeindex`,
+    `ts` is resampled to it. Power is given as mean value over a time step, so
+    it is averaged in case of a coarser `timeindex` and each value is used for
+    all time steps within its time step in case of a finer `timeindex`. A state,
+    e.g. a state of charge (see `state`), is given at a point in time, so it is
+    taken at the time steps of a coarser `timeindex` and interpolated in case of
+    a finer `timeindex`.
+
+    `ts` is then reindexed onto `timeindex`. Missing steps become ``NaN`` rather
+    than raising a ``KeyError``.
 
     Parameters
     ----------
@@ -214,14 +224,18 @@ def align_series_to_timeindex(ts, timeindex, extra_step=False, name=None):
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
         Target time index to align to.
     extra_step : bool, optional
-        If ``True``, append one trailing step to the target index (used for
-        state-of-charge series that carry an end-of-period value). The step
-        width is taken from ``timeindex.freq``, falling back to the spacing
-        of the first two entries; if neither is available (single-entry
-        index without freq) no extra step is added.
+        If ``True``, one trailing step is appended to the target index (e.g. the
+        state of charge at the end of the last time step). The step width is
+        taken from ``timeindex.freq``, falling back to the spacing of the first
+        two entries; if neither is available (single-entry index without freq)
+        no extra step is added.
     name : str or None, optional
-        Name of `ts`. If given, a warning is logged in case the years differ.
-        Default: None.
+        Name of `ts`. If given, a warning is logged in case the years or the
+        resolutions differ. Default: None.
+    state : bool, optional
+        If ``True``, `ts` is a state given at a point in time, e.g. a state of
+        charge, instead of power. This determines how `ts` is
+        resampled, see above. Default: False.
 
     Returns
     -------
@@ -247,10 +261,52 @@ def align_series_to_timeindex(ts, timeindex, extra_step=False, name=None):
         )
         if freq is not None:
             target = timeindex.union([timeindex[-1] + freq])
+    resolution_ts = _resolution(ts.index)
+    resolution = _resolution(timeindex)
+    if None not in (resolution_ts, resolution) and resolution_ts != resolution:
+        if name is not None:
+            logger.warning(
+                f"Time series {name} has a resolution of {resolution_ts}, "
+                f"resampling to {resolution} to match the target time index."
+            )
+        if resolution_ts > resolution:
+            if not state:
+                return ts.reindex(
+                    target,
+                    method="ffill",
+                    tolerance=resolution_ts - pd.Timedelta("1ns"),
+                )
+            ts = ts.reindex(ts.index.union(target)).interpolate(
+                method="time", limit_area="inside"
+            )
+        elif not state:
+            ts = ts.resample(resolution, origin=timeindex[0]).mean()
     return ts.reindex(target)
 
 
-def align_to_edisgo_timeindex(edisgo_obj, ts, name="", extra_step=False):
+def _resolution(index):
+    """
+    Returns the resolution of a time index, or None if it cannot be determined.
+
+    Without a frequency, the resolution is the smallest step width, in case it is
+    also the most common one. Single time steps picked by hand have no common step
+    width, so None is returned for them.
+
+    """
+    if index.freq is not None:
+        try:
+            return pd.Timedelta(index.freq)
+        except ValueError:
+            return None
+    step_widths = pd.Series(index[1:] - index[:-1]).value_counts()
+    if len(step_widths) == 0 or step_widths.iloc[0] < 2:
+        return None
+    if step_widths.index[0] != step_widths.index.min():
+        return None
+    return step_widths.index[0]
+
+
+def align_to_edisgo_timeindex(edisgo_obj, ts, name="", extra_step=False, state=False):
     """
     Align a time series to `edisgo_obj`'s time index, with a warning.
 
@@ -270,6 +326,9 @@ def align_to_edisgo_timeindex(edisgo_obj, ts, name="", extra_step=False):
     extra_step : bool, optional
         See parameter `extra_step` in :func:`align_series_to_timeindex`.
         Default: False.
+    state : bool, optional
+        See parameter `state` in :func:`align_series_to_timeindex`.
+        Default: False.
 
     Returns
     -------
@@ -280,7 +339,11 @@ def align_to_edisgo_timeindex(edisgo_obj, ts, name="", extra_step=False):
     if edisgo_obj.timeseries.timeindex.empty:
         return shift_to_reference_year(edisgo_obj, ts, name=name)
     return align_series_to_timeindex(
-        ts, edisgo_obj.timeseries.timeindex, extra_step=extra_step, name=name
+        ts,
+        edisgo_obj.timeseries.timeindex,
+        extra_step=extra_step,
+        name=name,
+        state=state,
     )
 
 
