@@ -216,7 +216,8 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     :func:`edisgo.run.run_edisgo`, via
     :meth:`~.network.overlying_grid.OverlyingGrid.from_etrago`. Sets
     overlying-grid attributes and dispatchable/fluctuating generator
-    time series from it.
+    time series from it, and the ``max_hours`` of all storage units from
+    ``storage_units_max_hours``.
 
     ``source: csv`` loads overlying-grid attributes from CSVs in
     ``overlying_grid.path`` (full directory path for ONE grid — same
@@ -280,6 +281,15 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
             )
             return edisgo
         edisgo.overlying_grid.from_etrago(edisgo, overlying_grid_data)
+        # the battery state of charge is given in p.u. of eTraGo's storage
+        # capacity, so the storage units take over eTraGo's max_hours
+        max_hours = overlying_grid_data.get("storage_units_max_hours")
+        if max_hours:
+            edisgo.topology.storage_units_df["max_hours"] = max_hours
+            ctx.logger.info(
+                f"task 'import_overlying_grid_data': storage units take over "
+                f"max_hours = {max_hours} from eTraGo."
+            )
     else:  # source == "csv"
         overlying_grid_path = overlying_grid_path or og_cfg.get("path")
         if overlying_grid_path is None:
