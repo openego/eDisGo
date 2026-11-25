@@ -2528,6 +2528,48 @@ class TestEDisGo:
         pd.testing.assert_index_equal(result.index, target_timeindex, check_names=False)
         assert list(result["heat_pump_1"]) == [2.0, 3.0, 4.0]
 
+    def test_reduce_timeseries_data_keeps_soc_after_each_interval(self):
+        """
+        With a time index of separate intervals, an overlying-grid state of charge
+        keeps its value after the last time step of each interval: the storage
+        units have to reach it at the end of that interval.
+        """
+        full = pd.date_range("2011-01-01", periods=10, freq="h")
+        self.edisgo.set_timeindex(full)
+        soc = pd.Series(
+            np.arange(11) / 10,
+            index=full.append(pd.DatetimeIndex([full[-1] + pd.Timedelta("1h")])),
+        )
+        self.edisgo.overlying_grid.storage_units_soc = soc
+        self.edisgo.overlying_grid.thermal_storage_units_decentral_soc = soc.to_frame(
+            "hp"
+        )
+
+        reduce_timeseries_data_to_given_timeindex(self.edisgo, full[[1, 2, 6, 7]])
+
+        # 03:00 and 08:00 are the states of charge after the two intervals
+        expected = soc.iloc[[1, 2, 3, 6, 7, 8]]
+        pd.testing.assert_series_equal(
+            self.edisgo.overlying_grid.storage_units_soc, expected
+        )
+        pd.testing.assert_frame_equal(
+            self.edisgo.overlying_grid.thermal_storage_units_decentral_soc,
+            expected.to_frame("hp"),
+        )
+
+    def test_reduce_timeseries_data_soc_without_value_after_the_end(self):
+        # where the data has no state of charge after the last time step, the
+        # reduced data ends with the last time step
+        full = pd.date_range("2011-01-01", periods=4, freq="h")
+        self.edisgo.set_timeindex(full)
+        self.edisgo.overlying_grid.storage_units_soc = pd.Series(
+            [0.1, 0.2, 0.3, 0.4], index=full
+        )
+
+        reduce_timeseries_data_to_given_timeindex(self.edisgo, full[2:])
+
+        assert list(self.edisgo.overlying_grid.storage_units_soc) == [0.3, 0.4]
+
     def test_check_integrity_warns_on_timeseries_year_mismatch(self, caplog):
         """
         Reading time series indexed in another year than TimeSeries.timeindex

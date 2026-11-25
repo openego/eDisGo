@@ -120,6 +120,14 @@ Changes
   heat pumps as the capacity allows with at least 1 MWh per MW. The storage of a
   district heating area goes to its heat pump as a whole. The OPF still treats
   thermal storage units as lossless and limits their power to the capacity per hour
+* :func:`~.tools.tools.reduce_timeseries_data_to_given_timeindex` keeps the
+  overlying grid's state of charge of batteries and thermal storage units after the
+  last time step of every interval of a time index with separate intervals, not
+  only after the last one. The OPF runs each interval on its own and takes that
+  value as the state of charge the storage units have to reach at its end. Without
+  it every interval but the last ended at the state of charge of its last time step,
+  one time step early, which the OPF could only meet with the battery and heat
+  balance slacks
 * Corrected the aggregated COP of a district heating area in
   :func:`~.tools.tools.aggregate_district_heating_components`. When the heat pump
   and the resistive heater of an area are merged, the COP of the combined component

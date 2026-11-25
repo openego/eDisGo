@@ -1577,6 +1577,14 @@ def reduce_timeseries_data_to_given_timeindex(
                 )
     # Overlying grid timeseries
     if overlying_grid:
+        # A state of charge also keeps its value after the last time step of each
+        # contiguous interval of the time index: the storage units have to reach
+        # it at the end of that interval (the OPF runs each interval separately).
+        # These end values are left out where the data has none, e.g. after the
+        # last time step of the year.
+        steps = pd.DatetimeIndex(timeindex)
+        last_steps = np.append(np.flatnonzero(steps[1:] - steps[:-1] != frequency), -1)
+        interval_ends = steps[last_steps] + frequency
         for attr in edisgo_obj.overlying_grid._attributes:
             if not getattr(edisgo_obj.overlying_grid, attr).empty:
                 if attr in [
@@ -1584,22 +1592,13 @@ def reduce_timeseries_data_to_given_timeindex(
                     "thermal_storage_units_decentral_soc",
                     "storage_units_soc",
                 ]:
-                    try:
-                        setattr(
-                            edisgo_obj.overlying_grid,
-                            attr,
-                            getattr(edisgo_obj.overlying_grid, attr).loc[
-                                pd.Index(timeindex).append(
-                                    pd.Index([timeindex[-1] + frequency])
-                                )
-                            ],
-                        )
-                    except KeyError:
-                        setattr(
-                            edisgo_obj.overlying_grid,
-                            attr,
-                            getattr(edisgo_obj.overlying_grid, attr).loc[timeindex],
-                        )
+                    soc = getattr(edisgo_obj.overlying_grid, attr)
+                    ends = interval_ends[interval_ends.isin(soc.index)]
+                    setattr(
+                        edisgo_obj.overlying_grid,
+                        attr,
+                        soc.loc[steps.append(ends).sort_values()],
+                    )
                 else:
                     setattr(
                         edisgo_obj.overlying_grid,
