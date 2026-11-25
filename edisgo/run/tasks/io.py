@@ -12,6 +12,10 @@ Input/output tasks — persisting results and ingesting external data.
 
 from __future__ import annotations
 
+import os
+
+import pandas as pd
+
 from edisgo.run.registry import register_task
 
 
@@ -226,7 +230,9 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     :meth:`~.network.overlying_grid.OverlyingGrid.from_csv`.
     ``dispatchable_generators_active_power.csv`` and
     ``renewables_potential.csv``, if present in that dir, are applied
-    as generator time series.
+    as generator time series, and ``storage_units_max_hours.csv`` (a
+    single value, as eGo exports it) as ``max_hours`` of all storage
+    units.
 
     Both ``OverlyingGrid`` methods above align the data they load onto
     ``edisgo.timeseries.timeindex`` themselves (see
@@ -281,15 +287,7 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
             )
             return edisgo
         edisgo.overlying_grid.from_etrago(edisgo, overlying_grid_data)
-        # the battery state of charge is given in p.u. of eTraGo's storage
-        # capacity, so the storage units take over eTraGo's max_hours
         max_hours = overlying_grid_data.get("storage_units_max_hours")
-        if max_hours:
-            edisgo.topology.storage_units_df["max_hours"] = max_hours
-            ctx.logger.info(
-                f"task 'import_overlying_grid_data': storage units take over "
-                f"max_hours = {max_hours} from eTraGo."
-            )
     else:  # source == "csv"
         overlying_grid_path = overlying_grid_path or og_cfg.get("path")
         if overlying_grid_path is None:
@@ -299,6 +297,23 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
             )
             return edisgo
         edisgo.overlying_grid.from_csv(overlying_grid_path, edisgo_obj=edisgo)
+        max_hours_file = os.path.join(
+            overlying_grid_path, "storage_units_max_hours.csv"
+        )
+        max_hours = (
+            pd.read_csv(max_hours_file, index_col=0).iloc[0, 0]
+            if os.path.isfile(max_hours_file)
+            else None
+        )
+
+    # the battery state of charge is given in p.u. of eTraGo's storage
+    # capacity, so the storage units take over eTraGo's max_hours
+    if max_hours:
+        edisgo.topology.storage_units_df["max_hours"] = max_hours
+        ctx.logger.info(
+            f"task 'import_overlying_grid_data': storage units take over "
+            f"max_hours = {max_hours} from eTraGo."
+        )
 
     # normalise the district-heating column labels (eTraGo/CSV data may carry
     # float or integer labels; downstream consumers expect the string of an
