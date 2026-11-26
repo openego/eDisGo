@@ -1319,22 +1319,22 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                         edisgo_obj.heat_pump.heat_demand_df[district_hp]
                         - feedin_district_heating[str(int(district))]
                     )
-                    # The remaining demand is bounded below by zero: in a time step
-                    # where the other heat sources deliver more than the network
-                    # needs, the power-to-heat unit is simply switched off. Without
-                    # the bound the negative heat demand is divided by the COP in
-                    # apply_heat_pump_operating_strategy and the unit turns into a
-                    # generator feeding the grid.
+                    # The remaining demand is negative in a time step where the
+                    # other heat sources deliver more than the network needs, e.g.
+                    # while a thermal storage of the area charges. It is kept, so
+                    # that the optimisation can put this heat into the thermal
+                    # storage of the unit. The operating strategy switches the unit
+                    # off in these time steps instead of turning it into a
+                    # generator.
                     if (remaining_demand < 0).any():
                         logger.warning(
                             f"Feed-in from other heat supply sources exceeds the heat "
                             f"demand of district heating grid {district} in "
                             f"{int((remaining_demand < 0).sum())} time step(s). The "
-                            f"remaining heat demand is set to zero in those steps."
+                            f"remaining heat demand is negative there, so a thermal "
+                            f"storage at {district_hp} has to take up that heat."
                         )
-                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
-                        remaining_demand.clip(lower=0)
-                    )
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = remaining_demand
                 else:
                     logger.info(
                         f"There are no other heat supply sources in district heating "

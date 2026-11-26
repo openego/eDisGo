@@ -96,3 +96,20 @@ class TestHeatPumpOperation:
         pd.testing.assert_index_equal(
             edisgo.timeseries._loads_reactive_power.index, timeindex
         )
+
+    def test_negative_heat_demand_switches_the_heat_pump_off(self):
+        """
+        A negative heat demand (heat from other sources that a thermal storage
+        takes up in district heating) gives no load instead of an injection.
+        """
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_path, timeindex=self.timeindex
+        )
+        edisgo.heat_pump.cop_df = self.cop
+        edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            data={"hp1": [-1.0, 2.0], "hp2": [3.0, 4.0]}, index=self.timeindex
+        )
+
+        operating_strategy(edisgo)
+
+        assert edisgo.timeseries.loads_active_power["hp1"].tolist() == [0.0, 1 / 3]
