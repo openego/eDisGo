@@ -56,10 +56,14 @@ def operating_strategy(
         # heat_demand_df and cop_df cover the time index at import time and
         # can cover more time steps if the time index was reduced afterwards.
         timeindex = edisgo_obj.timeseries.timeindex
+        # A negative heat demand, i.e. heat from other sources that a thermal
+        # storage takes up in district heating (see
+        # tools.aggregate_district_heating_components), switches the heat pump
+        # off instead of turning it into a generator.
         ts = (
             edisgo_obj.heat_pump.heat_demand_df.loc[timeindex, heat_pump_names]
             / edisgo_obj.heat_pump.cop_df.loc[timeindex, heat_pump_names]
-        )
+        ).clip(lower=0)
         edisgo_obj.timeseries.add_component_time_series(
             "loads_active_power",
             ts,
