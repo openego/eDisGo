@@ -2121,7 +2121,8 @@ def apply_reduced_results_to_full_grid(
         heat_demand = full_grid.heat_pump.heat_demand_df[members_flat]
         cop = full_grid.heat_pump.cop_df[members_flat]
         p_set = full_loads_df.p_set[members_flat]
-        envelope = (heat_demand / cop).clip(upper=p_set, axis="columns")
+        # a negative heat demand (see operating_strategy) draws no power
+        envelope = (heat_demand / cop).clip(lower=0, upper=p_set, axis="columns")
         _require_full_timeindex(envelope, "heat_pump.heat_demand_df/cop_df")
         _disaggregate(
             reduced_grid.timeseries.loads_active_power,
