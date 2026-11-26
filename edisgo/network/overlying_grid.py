@@ -115,7 +115,7 @@ class OverlyingGrid:
         )
 
         self.renewables_potential = kwargs.get(
-            "renewables_potential", pd.Series(dtype="float64")
+            "renewables_potential", pd.DataFrame(dtype="float64")
         )
 
     @property
