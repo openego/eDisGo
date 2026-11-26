@@ -93,14 +93,19 @@ They do not request the test fixture and therefore bypass its precheck. Notebook
 tests create their engines in a separate kernel and also bypass the fixture.
 Do not commit tokens in source files, notebooks or configuration.
 
-CI runs all regular matrix entries, including coverage, with ``-m "not oep"`` and
-without the OEP token. A dedicated Linux/Python 3.12 job runs live tests on each
-push except those triggered by ``dependabot[bot]``, which skip only the OEP job.
-It uses ``--runoep --runslow --runonlinux -m oep`` and checks the ``OEP_TOKEN``
-repository secret before setup and has a 140-minute job timeout. A shared
-concurrency group queues these jobs across branches in the repository. New pushes
-to the same branch still cancel outdated workflow runs. Coveralls receives
-non-OEP coverage independently of the live job. The job timeout is not a
+CI runs the three basic matrix entries with ``-m "not oep"`` and without the OEP
+token. The Linux/Python 3.12 coverage entry runs regular and live tests together
+using ``--runoep --runslow --runonlinux`` without a marker filter, then uploads
+the combined measurement to Coveralls. It checks the ``OEP_TOKEN`` repository
+secret before setup and has a 140-minute job timeout. There is no separate OEP
+or coverage-merging job. An OEP failure fails the coverage entry and prevents
+the upload; the basic entries remain independent.
+
+OEP-enabled coverage entries share a concurrency group across branches, which
+serializes the entire coverage entry, including setup and regular tests. Basic
+entries can still run in parallel. New pushes to the same branch still cancel
+outdated workflow runs. Dependabot executes only regular tests in all four
+entries, without an OEP token or Coveralls upload. The job timeout is not a
 database/request timeout.
 
 Excluding OEP tests does not prohibit all network access. The plotting notebook

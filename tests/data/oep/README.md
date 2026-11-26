@@ -17,7 +17,7 @@ regular and live tests are in [`tests/README.md`](../../README.md).
 - OEP tests are skipped before fixture setup unless `--runoep` is supplied.
   Local regular runs therefore need no `-m "not oep"` filter; it is optional and
   reports OEP tests as deselected instead of skipped.
-  The CI OEP job supplies `--runoep` automatically; its push trigger is unchanged.
+  The CI coverage entry supplies `--runoep` automatically; its push trigger is unchanged.
 - Regular tests run without an OEP token and are guarded against unmarked OEP access.
 - Offline tests keep the production logic real and mock only the external retrieval or
   query boundary.
@@ -25,9 +25,9 @@ regular and live tests are in [`tests/README.md`](../../README.md).
 - Functions containing both a query and transformation are split into a small live
   contract test and a detailed offline transformation test.
 - Test names use `_live` and `_offline` where both variants exist.
-- All four CI matrix entries, including coverage, select `not oep` without an OEP
-  token. A dedicated job runs the retained live tests, serialized across branches.
-  Coveralls reports the non-OEP suite only.
+- The three basic CI entries select `not oep` without an OEP token. The coverage
+  entry runs regular and live tests together and uploads their combined coverage
+  to Coveralls. Only OEP-enabled coverage entries are serialized across branches.
 
 The usual offline call chain is:
 
@@ -69,15 +69,19 @@ function afterwards.
   engine but bypass this fixture, as do notebook kernels. CI separately checks
   token presence before setup.
 - Added a runtime guard that reports unmarked tests attempting live OEP access.
-- Configured all basic and coverage matrix entries to exclude live OEP tests.
-- Kept the Python 3.12 coverage entry and its 140-minute timeout; it uploads
-  non-OEP coverage without depending on the live job.
-- Added a dedicated Linux/Python 3.12 OEP job with a 140-minute timeout, a shared
-  cross-branch concurrency queue and an early check for a nonempty OEP token.
-  It runs the live suite serially without automatic retries. Push triggers are
-  unchanged; superseded runs on the same branch are still canceled.
-- The dedicated OEP job skips runs triggered by `dependabot[bot]`; all four regular
-  matrix entries remain enabled. Other actors still require the configured token.
+- Configured the three basic matrix entries to exclude live OEP tests.
+- Kept the Linux/Python 3.12 coverage entry and its 140-minute timeout. It now runs
+  regular and live OEP tests together under coverage.py and uploads the combined
+  result directly to Coveralls after all selected tests pass. An OEP failure
+  prevents that upload. There is no separate OEP or coverage-merging job.
+- Moved the early nonempty-token check and shared `edisgo-live-oep` concurrency
+  queue to the coverage entry. Its entire execution is serialized across branches;
+  basic entries stay independent. It uses no parallel pytest workers or automatic
+  retries. Push triggers are unchanged; superseded runs on the same branch are
+  still canceled.
+- Dependabot runs keep all four matrix entries enabled but execute only regular
+  tests. No OEP token is required and no partial coverage is uploaded. Other actors
+  still require the configured token for the coverage entry.
 - Added `--runoep` opt-in in `tests/conftest.py`. `-m oep` selects marked tests,
   but does not enable them without the flag; slow live tests also need `--runslow`.
 - Database/request timeouts are not added. The ordinary suite is OEP-free, not
@@ -272,8 +276,8 @@ function afterwards.
   without downloading. Standalone notebook use retains the GitHub fallback.
 - Retained the simple and electromobility notebooks as slow live end-to-end smoke
   tests so the documented OEP workflows remain covered.
-- Excluded both notebooks from all four regular matrix entries and retained them
-  in the dedicated OEP job with finite notebook and job timeouts.
+- Excluded both notebooks from the three basic entries and retained them in the
+  coverage entry with finite notebook and job timeouts.
 - Notebook completion without a cell exception is the assertion; the electromobility
   input is local, while its renewable feed-in setup still uses the live OEP.
 

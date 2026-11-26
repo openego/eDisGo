@@ -1,5 +1,5 @@
-# Runs regular tests with offline coverage and live OEP tests in a separate job.
-# Coverage is submitted only when the selected non-OEP tests succeed.
+# Basic jobs run regular tests; the coverage entry also runs live OEP tests.
+# Full coverage is submitted only when all selected tests succeed.
 name: "Tests & Coverage"
 
 # Cancel an outdated workflow when a newer commit is pushed to the same branch.
@@ -14,6 +14,15 @@ jobs:
     name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout }}
+    # Only coverage accesses the OEP. Serialize those entries across branches;
+    # basic jobs and OEP-free Dependabot runs use distinct groups.
+    concurrency:
+      group: >-
+        ${{ matrix.name-suffix == 'coverage' && github.actor != 'dependabot[bot]'
+            && 'edisgo-live-oep'
+            || format('edisgo-tests-{0}-{1}-{2}', github.run_id, matrix.os, matrix.python-version) }}
+      cancel-in-progress: false
+      queue: max
 
     strategy:
       fail-fast: false
@@ -40,6 +49,17 @@ jobs:
             timeout: 360
 
     steps:
+      - name: Require OEP token for full coverage
+        if: matrix.name-suffix == 'coverage' && github.actor != 'dependabot[bot]'
+        shell: bash
+        env:
+          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
+        run: |
+          if [[ -z "${OEP_TOKEN//[[:space:]]/}" ]]; then
+            echo "::error::OEP_TOKEN is missing or empty. Configure the OEP_TOKEN repository secret to run live OEP tests."
+            exit 1
+          fi
+
       - name: Checkout repo
         uses: actions/checkout@v7
 
@@ -86,67 +106,31 @@ jobs:
           # This step uses PowerShell, where "\" is not a line continuation.
           python -m pytest --runslow -m "not oep" --disable-warnings --color=yes -v
 
-      - name: Run regular tests with coverage and submit to Coveralls
-        if: matrix.name-suffix == 'coverage'
+      - name: Run all tests with coverage and submit to Coveralls
+        if: matrix.name-suffix == 'coverage' && github.actor != 'dependabot[bot]'
         run: |
           python -m pip install \
             "pytest<9.2.0" \
             "nbclient<0.12.0" \
             coveralls
-          coverage run --source=edisgo -m pytest \
+          python -m coverage run --source=edisgo -m pytest \
+            --runoep \
             --runslow \
             --runonlinux \
-            -m "not oep" \
             --disable-warnings \
             --color=yes \
             -v
           coveralls
         env:
+          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
 
-  oep:
-    if: github.actor != 'dependabot[bot]'
-    name: "Live OEP tests at py3.12 on Linux"
-    runs-on: ubuntu-latest
-    timeout-minutes: 140
-    # Serialize live OEP access across branches in this repository. Superseded
-    # commits on the same branch are still canceled by workflow concurrency.
-    concurrency:
-      group: edisgo-live-oep
-      cancel-in-progress: false
-      queue: max
-
-    steps:
-      - name: Require OEP token
-        shell: bash
-        env:
-          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
+      # Dependabot has no Actions OEP secret. Still run the regular selection,
+      # but do not upload a partial result as full-suite coverage.
+      - name: Run regular tests (Dependabot coverage entry)
+        if: matrix.name-suffix == 'coverage' && github.actor == 'dependabot[bot]'
         run: |
-          if [[ -z "${OEP_TOKEN//[[:space:]]/}" ]]; then
-            echo "::error::OEP_TOKEN is missing or empty. Configure the OEP_TOKEN repository secret to run live OEP tests."
-            exit 1
-          fi
-
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip wheel setuptools
-          python -m pip install -e "."
           python -m pip install "pytest<9.2.0" "nbclient<0.12.0"
-
-      # No parallel pytest workers or automatic retries: the live contracts
-      # and OEP-dependent notebooks run one at a time.
-      - name: Run live OEP tests
-        run: |
-          python -m pytest --runoep --runslow --runonlinux -m "oep" \
+          python -m pytest --runslow --runonlinux -m "not oep" \
             --disable-warnings --color=yes -v
-        env:
-          OEP_TOKEN: ${{ secrets.OEP_TOKEN }}
