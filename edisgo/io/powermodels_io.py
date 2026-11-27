@@ -1439,9 +1439,18 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         ].index,
         flexible_hps,
     )
+
+    from edisgo.tools.tools import align_to_edisgo_timeindex
     if not edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc.empty:
+        heat_decentral_aligned = align_to_edisgo_timeindex(
+            edisgo_obj,
+            edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc,
+            name="OverlyingGrid.thermal_storage_units_decentral_soc",
+            extra_step=True,
+        )
+
         data = pd.concat(
-            [edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc]
+            [heat_decentral_aligned]
             * len(decentral_hps),
             axis=1,
         ).values
@@ -1468,7 +1477,14 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         flexible_hps,
     )
     if not edisgo_obj.overlying_grid.thermal_storage_units_central_soc.empty:
-        data = edisgo_obj.overlying_grid.thermal_storage_units_central_soc[
+        heat_central_aligned = align_to_edisgo_timeindex(
+            edisgo_obj,
+            edisgo_obj.overlying_grid.thermal_storage_units_central_soc,
+            name="OverlyingGrid.thermal_storage_units_central_soc",
+            extra_step=True,
+        )
+
+        data = heat_central_aligned[
             edisgo_obj.topology.loads_df.loc[central_hps]
             .district_heating_id.astype(int)
             .astype(str)

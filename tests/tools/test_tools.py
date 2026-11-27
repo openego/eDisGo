@@ -125,10 +125,12 @@ class TestAggregateDistrictHeatingComponents:
         tools.aggregate_district_heating_components(edisgo)
         assert_allclose(edisgo.heat_pump.cop_df[hp].values, 3.0)
 
-    def test_feedin_above_demand_does_not_produce_a_negative_demand(self, caplog):
+    def test_feedin_above_demand_gives_a_negative_demand(self, caplog):
         """
-        Other heat sources delivering more than the network needs must switch the
-        power-to-heat unit off, not turn it into a generator.
+        Where other heat sources deliver more than the network needs, the remaining
+        heat demand is negative, so that a thermal storage of the unit can take up
+        that heat. The operating strategy switches the power-to-heat unit off there
+        instead of turning it into a generator.
         """
         import logging
 
@@ -143,11 +145,11 @@ class TestAggregateDistrictHeatingComponents:
             )
 
         demand = edisgo.heat_pump.heat_demand_df[hp]
-        assert (demand >= 0).all(), demand.tolist()
-        assert demand.iloc[1] == 0.0
+        assert demand.tolist() == [8.0, -3.0, 8.0]
         assert "exceeds the heat demand" in caplog.text
         # and the resulting load is not an injection
         edisgo.apply_heat_pump_operating_strategy(heat_pump_names=[hp])
+        assert edisgo.timeseries.loads_active_power[hp].iloc[1] == 0.0
         assert (edisgo.timeseries.loads_active_power[hp] >= 0).all()
 
 

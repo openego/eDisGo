@@ -12,6 +12,10 @@ Input/output tasks — persisting results and ingesting external data.
 
 from __future__ import annotations
 
+import os
+
+import pandas as pd
+
 from edisgo.run.registry import register_task
 
 
@@ -200,6 +204,162 @@ def normalise_district_heating_labels(overlying_grid, logger):
             setattr(overlying_grid, attr, df)
 
 
+# Values eGo hands over besides the time series. OverlyingGrid keeps only time
+# series, so the import task reads these itself. All are single values except the
+# central thermal storage capacity, which eGo gives per district heating area.
+_SINGLE_VALUES = (
+    "storage_units_max_hours",
+    "thermal_storage_decentral_capacity",
+    "thermal_storage_decentral_efficiency",
+    "thermal_storage_central_capacity",
+    "thermal_storage_central_efficiency",
+)
+
+_DISTRICT_HEATING_SECTORS = ("district_heating", "district_heating_resistive_heater")
+
+
+def _read_single_values(source, overlying_grid_data, overlying_grid_path):
+    """
+    Read the values eGo hands over besides the time series.
+
+    With ``source: etrago`` they are taken from `overlying_grid_data`, with
+    ``source: csv`` from one CSV file per key in `overlying_grid_path`, as eGo
+    exports them. A missing key or file gives None.
+
+    Returns
+    -------
+    dict
+        Value per key of ``_SINGLE_VALUES``. ``thermal_storage_central_capacity``
+        is a :pandas:`pandas.Series<Series>` indexed by district heating ID, all
+        others are numbers.
+
+    """
+    values = {}
+    for key in _SINGLE_VALUES:
+        if source == "etrago":
+            values[key] = overlying_grid_data.get(key)
+            continue
+        path = os.path.join(overlying_grid_path, f"{key}.csv")
+        if not os.path.isfile(path):
+            values[key] = None
+            continue
+        column = pd.read_csv(path, index_col=0).iloc[:, 0]
+        values[key] = (
+            column if key == "thermal_storage_central_capacity" else column.iloc[0]
+        )
+    return values
+
+
+def _district_heating_label(district_heating_id):
+    """District heating ID as the string of an integer, or None if it is none."""
+    try:
+        return str(int(float(district_heating_id)))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def set_thermal_storage_units(edisgo, values, logger):
+    """
+    Give the heat pumps the thermal storage capacities from eTraGo.
+
+    eTraGo has one thermal storage for individual heating per grid and one per
+    district heating area. In eDisGo each thermal storage belongs to one heat pump:
+
+    * Individual heating: as many heat pumps get a storage as the capacity allows
+      with at least 1 MWh per MW of heat pump power, taken in the order of their
+      names. The capacity is split between them by their nominal power. If the
+      capacity is too small for any of them, the first heat pump gets all of it.
+    * District heating: the whole storage of an area goes to its heat pump, or to
+      its first resistive heater if the area has no heat pump. eGo leaves the
+      storage out of the feed-in of the other heat suppliers, so the remaining heat
+      demand of that unit contains the charging and discharging of the storage (see
+      :func:`~.tools.tools.aggregate_district_heating_components`).
+
+    Rows of :attr:`~.network.heat.HeatPump.thermal_storage_units_df` for other heat
+    pumps are kept.
+
+    Parameters
+    ----------
+    edisgo : edisgo.EDisGo
+    values : dict
+        Capacities in MWh and efficiencies in p.u. from eTraGo, keyed like
+        ``_SINGLE_VALUES``.
+    logger : logging.Logger
+
+    """
+    loads = edisgo.topology.loads_df
+    heat_pumps = loads[loads.type == "heat_pump"]
+    storage_units = []
+
+    capacity = values.get("thermal_storage_decentral_capacity") or 0.0
+    individual = heat_pumps[heat_pumps.sector == "individual_heating"]
+    if capacity > 0 and individual.empty:
+        logger.warning(
+            f"eTraGo has {capacity:.3f} MWh of thermal storage for individual "
+            "heating, but this grid has no heat pumps for individual heating."
+        )
+    elif capacity > 0:
+        p_set_cumsum = individual.p_set.sort_index().cumsum()
+        selected = p_set_cumsum.index[p_set_cumsum <= capacity]
+        if selected.empty:
+            selected = p_set_cumsum.index[:1]
+        p_set = individual.loc[selected, "p_set"]
+        storage_units.append(
+            pd.DataFrame(
+                {
+                    "capacity": p_set * capacity / p_set.sum(),
+                    "efficiency": values.get("thermal_storage_decentral_efficiency"),
+                }
+            )
+        )
+
+    capacities = values.get("thermal_storage_central_capacity")
+    if capacities is None:
+        capacities = pd.Series(dtype=float)
+    district_heating = heat_pumps[heat_pumps.sector.isin(_DISTRICT_HEATING_SECTORS)]
+    labels = district_heating.get(
+        "district_heating_id", pd.Series(index=district_heating.index, dtype=float)
+    ).map(_district_heating_label)
+    for district, capacity in capacities.items():
+        if not capacity > 0:
+            continue
+        units = district_heating[labels == _district_heating_label(district)]
+        if units.empty:
+            logger.warning(
+                f"eTraGo has {capacity:.3f} MWh of thermal storage for district "
+                f"heating area {district}, but this grid has no heat pump there."
+            )
+            continue
+        heat_pump = units[units.sector == "district_heating"]
+        unit = (heat_pump if not heat_pump.empty else units).index[0]
+        storage_units.append(
+            pd.DataFrame(
+                {
+                    "capacity": [capacity],
+                    "efficiency": [values.get("thermal_storage_central_efficiency")],
+                },
+                index=[unit],
+            )
+        )
+
+    if not storage_units:
+        if not heat_pumps.empty:
+            logger.warning(
+                "eTraGo gives no thermal storage capacity for this grid. Its heat "
+                "pumps cannot shift their operation in time."
+            )
+        return
+    new = pd.concat(storage_units)
+    existing = edisgo.heat_pump.thermal_storage_units_df
+    edisgo.heat_pump.thermal_storage_units_df = pd.concat(
+        [existing.drop(index=new.index, errors="ignore"), new]
+    )
+    logger.info(
+        f"task 'import_overlying_grid_data': {new.capacity.sum():.3f} MWh of thermal "
+        f"storage from eTraGo at {len(new)} heat pump(s)."
+    )
+
+
 @register_task("import_overlying_grid_data", provides={"overlying_grid"})
 def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     """
@@ -216,7 +376,10 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     :func:`edisgo.run.run_edisgo`, via
     :meth:`~.network.overlying_grid.OverlyingGrid.from_etrago`. Sets
     overlying-grid attributes and dispatchable/fluctuating generator
-    time series from it.
+    time series from it, the ``max_hours`` of all storage units from
+    ``storage_units_max_hours`` and the thermal storage units from the
+    ``thermal_storage_*_capacity`` and ``_efficiency`` keys (see
+    :func:`set_thermal_storage_units`).
 
     ``source: csv`` loads overlying-grid attributes from CSVs in
     ``overlying_grid.path`` (full directory path for ONE grid — same
@@ -225,7 +388,9 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     :meth:`~.network.overlying_grid.OverlyingGrid.from_csv`.
     ``dispatchable_generators_active_power.csv`` and
     ``renewables_potential.csv``, if present in that dir, are applied
-    as generator time series.
+    as generator time series. ``storage_units_max_hours.csv`` and the
+    ``thermal_storage_*.csv`` files, one value (or one per district heating
+    area) each as eGo exports them, are used as with ``source: etrago``.
 
     Both ``OverlyingGrid`` methods above align the data they load onto
     ``edisgo.timeseries.timeindex`` themselves (see
@@ -289,6 +454,18 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
             )
             return edisgo
         edisgo.overlying_grid.from_csv(overlying_grid_path, edisgo_obj=edisgo)
+    values = _read_single_values(source, overlying_grid_data, overlying_grid_path)
+
+    # the battery state of charge is given in p.u. of eTraGo's storage
+    # capacity, so the storage units take over eTraGo's max_hours
+    max_hours = values["storage_units_max_hours"]
+    if max_hours:
+        edisgo.topology.storage_units_df["max_hours"] = max_hours
+        ctx.logger.info(
+            f"task 'import_overlying_grid_data': storage units take over "
+            f"max_hours = {max_hours} from eTraGo."
+        )
+    set_thermal_storage_units(edisgo, values, ctx.logger)
 
     # normalise the district-heating column labels (eTraGo/CSV data may carry
     # float or integer labels; downstream consumers expect the string of an

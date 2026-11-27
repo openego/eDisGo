@@ -238,6 +238,133 @@ class TestImportOverlyingGridData:
         )
 
 
+def _grid_with_heat_pumps():
+    """
+    The district heating grid of ``_grid_with_district_heating`` plus three heat
+    pumps for individual heating with 1, 2 and 3 MW.
+    """
+    edisgo = _grid_with_district_heating()
+    for p_set, bus_i in ((1.0, 26), (2.0, 30), (3.0, 32)):
+        edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector="individual_heating",
+            ts_active_power=pd.Series(
+                index=edisgo.timeseries.timeindex, data=[0.5, 0.5, 0.5]
+            ),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[bus_i],
+            p_set=p_set,
+        )
+    return edisgo
+
+
+# thermal storage of the grid in eTraGo, as eGo hands it over: 3.5 MWh for
+# individual heating, 50 MWh in district heating area 130
+THERMAL_STORAGE = {
+    "thermal_storage_decentral_capacity": 3.5,
+    "thermal_storage_decentral_efficiency": 0.84,
+    "thermal_storage_central_capacity": pd.Series({130.0: 50.0}),
+    "thermal_storage_central_efficiency": 0.84,
+}
+
+
+class TestThermalStorageFromEtrago:
+    """
+    eGo hands over the thermal storage capacities from eTraGo. Without them every
+    heat pump has a thermal storage of 0 MWh in the OPF and cannot shift its
+    operation.
+    """
+
+    def _check(self, edisgo):
+        loads = edisgo.topology.loads_df
+        storage = edisgo.heat_pump.thermal_storage_units_df
+        # individual heating: the heat pumps in the order of their names, as long
+        # as there is at least 1 MWh per MW (1 + 2 MW of 3.5 MWh, not 3 MW more),
+        # the capacity split by nominal power
+        individual = loads[loads.sector == "individual_heating"].p_set.sort_index()
+        selected = individual.index[:2]
+        pd.testing.assert_series_equal(
+            storage.loc[selected, "capacity"],
+            individual[selected] * 3.5 / individual[selected].sum(),
+            check_names=False,
+        )
+        assert individual.index[2] not in storage.index
+        # district heating: the whole storage of the area at its heat pump
+        hp = loads.index[loads.sector == "district_heating"][0]
+        rh = loads.index[loads.sector == "district_heating_resistive_heater"][0]
+        assert storage.at[hp, "capacity"] == 50.0
+        assert rh not in storage.index
+        assert (storage.efficiency == 0.84).all()
+
+    def test_from_etrago(self):
+        edisgo = _grid_with_heat_pumps()
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}},
+            overlying_grid_data=dict(THERMAL_STORAGE),
+        )
+        task_import_overlying_grid_data(edisgo, ctx)
+        self._check(edisgo)
+
+    def test_from_csv_as_ego_exports_it(self, tmp_path):
+        """eGo writes one file per key, a single value or one per area."""
+        for key, value in THERMAL_STORAGE.items():
+            path = tmp_path / f"{key}.csv"
+            if isinstance(value, pd.Series):
+                value.rename("e_nom_opt").rename_axis("bus0").to_csv(path)
+            else:
+                pd.Series({key: value}, name="value").to_csv(path, header=True)
+        edisgo = _grid_with_heat_pumps()
+        ctx = RunContext(
+            raw_config={
+                "overlying_grid": {
+                    "enabled": True,
+                    "source": "csv",
+                    "path": str(tmp_path),
+                }
+            },
+        )
+        task_import_overlying_grid_data(edisgo, ctx)
+        self._check(edisgo)
+
+    def test_storage_stays_with_the_merged_district_heating_unit(self):
+        """
+        The aggregation merges the resistive heater into the heat pump that holds
+        the storage, and the remaining heat demand may become negative where the
+        storage takes up heat from other sources.
+        """
+        edisgo = _grid_with_heat_pumps()
+        edisgo.overlying_grid.feedin_district_heating = pd.DataFrame(
+            {"130": [1.0, 8.0, 1.0]}, index=edisgo.timeseries.timeindex
+        )
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}},
+            overlying_grid_data=dict(THERMAL_STORAGE),
+        )
+        task_import_overlying_grid_data(edisgo, ctx)
+        task_aggregate_district_heating(edisgo, RunContext())
+
+        hp = edisgo.topology.loads_df.index[
+            edisgo.topology.loads_df.sector == "district_heating"
+        ][0]
+        assert edisgo.heat_pump.thermal_storage_units_df.at[hp, "capacity"] == 50.0
+        # 6 MW heat demand against 8 MW from other sources
+        t = edisgo.timeseries.timeindex[1]
+        assert edisgo.heat_pump.heat_demand_df.at[t, hp] == -2.0
+        assert edisgo.timeseries.loads_active_power.at[t, hp] == 0.0
+
+    def test_no_capacity_warns(self, caplog):
+        edisgo = _grid_with_heat_pumps()
+        ctx = RunContext(
+            raw_config={"overlying_grid": {"enabled": True, "source": "etrago"}},
+            overlying_grid_data={},
+        )
+        with caplog.at_level(logging.WARNING):
+            task_import_overlying_grid_data(edisgo, ctx)
+        assert edisgo.heat_pump.thermal_storage_units_df.empty
+        assert "no thermal storage capacity" in caplog.text
+
+
 def _grid_with_district_heating():
     """
     Small grid with one district heating area holding a heat pump and a
